@@ -64,7 +64,6 @@ export function TagTalentDialog({ open, onOpenChange, photoIds, onSuccess }: Tag
         const filteredResults = results.filter(
           (result) => !selectedTalents.some((selected) => selected.id === result.id),
         );
-        console.log('Search results for:', debouncedSearch, filteredResults);
         setSearchResults(filteredResults);
         setShowResults(true);
       } catch (error) {

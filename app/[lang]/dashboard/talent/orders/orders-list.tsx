@@ -141,15 +141,7 @@ export function OrdersList({ orders }: OrdersListProps) {
                       {formatCurrency(order.total_amount_cents, order.currency)}
                     </div>
                     {order.status === 'completed' && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="mt-1 h-8 text-xs"
-                        onClick={() => {
-                          // TODO: Implement receipt download
-                          console.log('Download receipt for order', order.id);
-                        }}
-                      >
+                      <Button variant="ghost" size="sm" className="mt-1 h-8 text-xs" disabled>
                         <Download className="mr-1 h-3 w-3" />
                         {t('receipt')}
                       </Button>

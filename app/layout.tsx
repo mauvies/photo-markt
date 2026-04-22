@@ -36,7 +36,6 @@ export const metadata: Metadata = {
     'Browse sports event photos from marathons, cycling races, triathlons, and more. Find yourself in high-resolution photos shot by professional event photographers.',
   icons: {
     icon: '/favicon.ico',
-    apple: '/apple-touch-icon.png',
   },
   openGraph: {
     siteName: 'Picdemi',
