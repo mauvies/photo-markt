@@ -261,9 +261,12 @@ export async function searchPublicEvents(
     const lngMin = (filters.lng - deltaLng).toFixed(6);
     const lngMax = (filters.lng + deltaLng).toFixed(6);
 
-    // For text fallback: extract city part from "City, Country" strings
+    // For text fallback: extract city part from searchText, or fall back to the
+    // explicit cities filter (covers the case where the caller matched a city by
+    // name and passed it via `cities` rather than `searchText`).
     const rawText = filters.searchText?.trim() ?? '';
-    const cityPart = rawText.includes(', ') ? rawText.split(', ')[0] : rawText;
+    const cityPartFromText = rawText.includes(', ') ? rawText.split(', ')[0] : rawText;
+    const cityPart = cityPartFromText || (filters.cities?.length ? filters.cities[0] : '');
 
     if (cityPart) {
       // OR: within bounding box (events with coords) | city text match (events without coords)
@@ -298,8 +301,11 @@ export async function searchPublicEvents(
     query = query.in('activity', filters.activities);
   }
 
-  // City filter
-  if (filters.cities && filters.cities.length > 0) {
+  // City filter — skipped when bounding box is active because the city name is
+  // already incorporated into the geo-OR fallback above (applying it again as an
+  // AND would exclude events that have coordinates but a different city spelling,
+  // and would always exclude events without lat/lng coordinates).
+  if (!hasRadius && filters.cities && filters.cities.length > 0) {
     query = query.in('city', filters.cities);
   }
 

@@ -104,7 +104,7 @@ export default async function PublicEventsPage({
       </div>
 
       {/* Content */}
-      <div className="mx-auto max-w-7xl w-full flex-1 px-4 py-6">
+      <div className="mx-auto max-w-7xl w-full flex-1 px-4 pt-6 pb-10">
         <TranslationsProvider translations={{ ...dict.eventFilterBar, ...dict.eventCard }}>
           <ExplorePageContent
             key={searchKey}

@@ -1,7 +1,7 @@
 'use client';
 
 import { format, parseISO } from 'date-fns';
-import { CalendarIcon, Filter, MapPin, Search, User, X } from 'lucide-react';
+import { CalendarIcon, ChevronDown, Filter, MapPin, Search, User, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { Button } from '@/components/ui/button';
@@ -142,8 +142,6 @@ export function EventFilterBar({
     const to = parseDateStr(dateTo);
     return from || to ? { from, to } : undefined;
   });
-  const [localRadiusKm, setLocalRadiusKm] = useState(radiusKm);
-
   // Sync local state when modal opens so it always reflects current applied state
   // biome-ignore lint/correctness/useExhaustiveDependencies: only sync on open
   useEffect(() => {
@@ -153,7 +151,6 @@ export function EventFilterBar({
     setLocalCountry(selectedCountry);
     setLocalSortBy(sortBy);
     setLocalPhotographerQuery(photographerQuery);
-    setLocalRadiusKm(radiusKm);
     const from = parseDateStr(dateFrom);
     const to = parseDateStr(dateTo);
     setLocalDateRange(from || to ? { from, to } : undefined);
@@ -165,7 +162,6 @@ export function EventFilterBar({
     setSelectedCountry(localCountry);
     setSortBy(localSortBy);
     setPhotographerQuery(localPhotographerQuery);
-    setRadiusKm(localRadiusKm);
     setDateFrom(localDateRange?.from ? format(localDateRange.from, 'yyyy-MM-dd') : '');
     setDateTo(localDateRange?.to ? format(localDateRange.to, 'yyyy-MM-dd') : '');
     setHasSearched(true);
@@ -186,12 +182,12 @@ export function EventFilterBar({
     setLocalCountry('all');
     setLocalSortBy('date_desc');
     setLocalPhotographerQuery('');
-    setLocalRadiusKm(0);
     setLocalDateRange(undefined);
   };
 
   // --- Desktop inline "When" date picker state ---
   const [whenPopoverOpen, setWhenPopoverOpen] = useState(false);
+  const [radiusPopoverOpen, setRadiusPopoverOpen] = useState(false);
   const [inlineRange, setInlineRange] = useState<DateRange | undefined>(() => {
     const from = parseDateStr(dateFrom);
     const to = parseDateStr(dateTo);
@@ -274,32 +270,8 @@ export function EventFilterBar({
     { label: 'National', value: 0 },
   ] as const;
 
-  const radiusField = (current: number, onChange: (v: number) => void) => (
-    <div className="w-full">
-      <Label className="mb-2 block text-sm font-medium">Distance</Label>
-      <div className="flex flex-wrap gap-2">
-        {RADIUS_OPTIONS.map(({ label, value }) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => onChange(value)}
-            className={cn(
-              'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
-              current === value
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-border bg-background text-foreground hover:bg-muted',
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
   const simplifiedModalContent = (
     <div className="space-y-4 py-4">
-      {radiusField(localRadiusKm, setLocalRadiusKm)}
       {photographerField(localPhotographerQuery, setLocalPhotographerQuery)}
     </div>
   );
@@ -415,9 +387,40 @@ export function EventFilterBar({
                 {t('showingEventsNear')}{' '}
                 <span className="font-medium text-foreground">{locationLabel}</span>
                 {radiusKm > 0 && (
-                  <span className="ml-1 text-muted-foreground">
-                    · {t('withinKm').replace('{n}', String(radiusKm))}
-                  </span>
+                  <Popover open={radiusPopoverOpen} onOpenChange={setRadiusPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="ml-1 inline-flex items-center gap-0.5 rounded text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        · {t('withinKm').replace('{n}', String(radiusKm))}
+                        <ChevronDown className="h-3 w-3" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-3" align="start">
+                      <div className="flex flex-col gap-1.5">
+                        {RADIUS_OPTIONS.map(({ label, value }) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => {
+                              setRadiusKm(value);
+                              setHasSearched(true);
+                              setRadiusPopoverOpen(false);
+                            }}
+                            className={cn(
+                              'rounded-full border px-3 py-1.5 text-left text-sm font-medium transition-colors',
+                              radiusKm === value
+                                ? 'border-primary bg-primary text-primary-foreground'
+                                : 'border-border bg-background text-foreground hover:bg-muted',
+                            )}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 )}
               </span>
             </>
@@ -434,9 +437,9 @@ export function EventFilterBar({
               >
                 <Filter className="h-4 w-4" />
                 {t('filters')}
-                {(dateFilterCount > 0 || radiusKm > 0) && (
+                {dateFilterCount > 0 && (
                   <span className="rounded-full bg-primary px-1.5 py-0.5 text-xs font-medium text-primary-foreground">
-                    {dateFilterCount + (radiusKm > 0 ? 1 : 0)}
+                    {dateFilterCount}
                   </span>
                 )}
               </button>

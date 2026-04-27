@@ -914,6 +914,7 @@ export function EventSearchBar({
                       </button>
                       <Button
                         onClick={handleSearch}
+                        variant="default"
                         className="h-11 rounded-full px-5 text-sm font-semibold"
                       >
                         <Search className="mr-2 h-4 w-4" />
@@ -1234,6 +1235,7 @@ export function EventSearchBar({
       </div>
       <Button
         onClick={handleSearch}
+        variant="default"
         size="sm"
         className="h-7 w-7 p-0 rounded-full shrink-0"
         aria-label="Search events"

@@ -49,12 +49,11 @@
   --header-height: var(--header-height);
 }
 
-/* 
+/*
   🎨 DREAMLIGHT X UNSPLASH PALETTE
   ------------------------------------------------------
   • Base: Neutral, minimal, inspired by Unsplash UI
   • Accent: Subtle lavender/blue highlights (used sparingly)
-  • Special CTA buttons: Violet gradient (Dreamlight highlight)
 */
 
 :root {
@@ -71,7 +70,7 @@
   --popover-foreground: oklch(0.42 0.00005 270);
 
   /* Primary brand color */
-  --primary: #474747; /* brand neutral gray */
+  --primary: #4b4b4b;
   --primary-foreground: #ffffff;
 
   /* Secondary = light gray surfaces, modals, subtle UI */
@@ -124,7 +123,7 @@
   --popover: oklch(0.27 0.03 270);
   --popover-foreground: oklch(0.94 0 89.876);
 
-  --primary: #474747; /* brand neutral gray */
+  --primary: #4b4b4b;
   --primary-foreground: #ffffff;
 
   --secondary: oklch(0.33 0.03 270);
@@ -180,21 +179,6 @@ h5,
 h6 {
   font-family: var(--font-inter-tight), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   color: var(--foreground);
-}
-
-/* 
-  ✨ Special Button Gradient (Dreamlight Highlight)
-  -------------------------------------------------
-  Use this only for CTAs, “Create” or “Upgrade” actions.
-  Example: <Button className="bg-special-gradient text-white hover:opacity-90">
-*/
-.bg-special-gradient {
-  background: linear-gradient(
-    135deg,
-    rgb(241, 107, 192) 0%,
-    rgb(144, 117, 217) 50%,
-    rgb(103, 86, 198) 100%
-  );
 }
 
 /* Photographer role badge background */

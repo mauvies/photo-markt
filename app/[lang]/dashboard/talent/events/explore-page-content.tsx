@@ -55,7 +55,7 @@ export function ExplorePageContent({
   });
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-6">
       <EventFilterBar
         hideTopFilters={hideTopFilters}
         searchText={search.searchText}
