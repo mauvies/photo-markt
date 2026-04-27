@@ -148,5 +148,5 @@ export async function getActiveRole(): Promise<{
  */
 export async function getDashboardPath(): Promise<string> {
   const { activeRole } = await getActiveRole();
-  return activeRole === 'talent' ? '/dashboard/talent' : '/dashboard/photographer';
+  return activeRole === 'talent' ? '/dashboard/talent/events' : '/dashboard/photographer';
 }
