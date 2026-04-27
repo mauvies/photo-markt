@@ -5,9 +5,12 @@ import {
   createSignedUrl,
   getEventFilterOptions,
   getPhotosForEvents,
+  type PhotographerSearchResult,
   searchPublicEvents,
 } from '@/database/queries';
 import { supabaseAdmin } from '@/database/supabase-admin';
+
+export type { PhotographerSearchResult } from '@/database/queries';
 
 export async function searchEventsAction(filters: {
   searchText?: string;
@@ -106,6 +109,52 @@ export async function getFilterOptionsAction() {
   cacheTag('filter-options', 'events-public');
   cacheLife('hours');
   return getEventFilterOptions(supabaseAdmin);
+}
+
+export async function searchPhotographersAction(
+  query: string,
+): Promise<PhotographerSearchResult[]> {
+  if (!query.trim()) return [];
+
+  const term = `%${query.trim()}%`;
+
+  // Find profiles matching the query that have at least one public event.
+  // We don't restrict by active_role because a user may currently be in
+  // TALENT mode but still have photographer events.
+  const { data: profileMatches } = await supabaseAdmin
+    .from('profiles')
+    .select('id, username, slug, display_name, avatar_url')
+    .or(`username.ilike.${term},display_name.ilike.${term}`)
+    .limit(10);
+
+  if (!profileMatches?.length) return [];
+
+  const userIds = profileMatches.map((p) => p.id);
+
+  // Only include users who have at least one public non-deleted event.
+  const { data: eventRows } = await supabaseAdmin
+    .from('events')
+    .select('user_id')
+    .in('user_id', userIds)
+    .eq('is_public', true)
+    .is('deleted_at', null);
+
+  const countMap = new Map<string, number>();
+  for (const row of eventRows ?? []) {
+    countMap.set(row.user_id, (countMap.get(row.user_id) ?? 0) + 1);
+  }
+
+  return profileMatches
+    .filter((p) => (countMap.get(p.id) ?? 0) > 0)
+    .slice(0, 4)
+    .map((p) => ({
+      id: p.id,
+      username: p.username,
+      slug: p.slug ?? p.username,
+      display_name: p.display_name,
+      avatar_url: p.avatar_url,
+      event_count: countMap.get(p.id) ?? 0,
+    }));
 }
 
 export async function searchEventNamesAction(query: string): Promise<string[]> {

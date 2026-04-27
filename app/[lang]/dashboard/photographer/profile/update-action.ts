@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { updateProfile } from '@/database/queries/profiles';
 import { createClient } from '@/database/server';
 
@@ -30,12 +30,27 @@ export async function updateProfileAction(values: {
     throw new Error('Username is already taken');
   }
 
+  // Fetch current slug so we can revalidate the old public profile cache
+  const { data: currentProfile } = await supabase
+    .from('profiles')
+    .select('slug')
+    .eq('id', user.id)
+    .maybeSingle();
+  const oldSlug = currentProfile?.slug;
+
+  const newSlug = values.username.trim();
+
   await updateProfile(supabase, user.id, {
-    username: values.username.trim(),
+    username: newSlug,
+    slug: newSlug,
     display_name: values.display_name?.trim() || null,
     bio: values.bio?.trim() || null,
   });
 
   revalidatePath('/es/dashboard/photographer/profile');
   revalidatePath('/en/dashboard/photographer/profile');
+
+  // Bust the public profile cache (old slug in case username changed)
+  if (oldSlug) revalidateTag(`photographer-${oldSlug}`, 'max');
+  if (newSlug !== oldSlug) revalidateTag(`photographer-${newSlug}`, 'max');
 }

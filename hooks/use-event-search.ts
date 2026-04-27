@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/activity-options';
 import { searchEventsAction } from '@/app/[lang]/dashboard/talent/events/actions';
@@ -184,6 +184,8 @@ export function useEventSearch({
     initialData:
       initialEvents !== undefined ? { events: initialEvents, total: initialTotal ?? 0 } : undefined,
     initialDataUpdatedAt: initialEvents !== undefined ? Date.now() : undefined,
+    // Prevent UI flicker: keep rendering the previous result while the next queryKey fetches.
+    placeholderData: keepPreviousData,
     enabled: queryEnabled,
   });
 

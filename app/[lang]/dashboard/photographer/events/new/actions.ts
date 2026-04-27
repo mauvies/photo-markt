@@ -210,5 +210,13 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
   updateTag(`photographer-events-${user.id}`);
   updateTag(`dashboard-photographer-${user.id}`);
 
+  // Bust the public photographer profile cache
+  const { data: photographerProfile } = await supabase
+    .from('profiles')
+    .select('slug')
+    .eq('id', user.id)
+    .maybeSingle();
+  if (photographerProfile?.slug) revalidateTag(`photographer-${photographerProfile.slug}`, 'max');
+
   return { eventId: event.id, shareCode };
 };

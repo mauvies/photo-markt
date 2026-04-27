@@ -46,6 +46,12 @@ const nextConfig: NextConfig = {
       } catch {
         // ignore if env is missing or malformed
       }
+
+      // Allow OAuth provider avatars (e.g. Google)
+      patterns.push({
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+      });
       return patterns;
     })(),
     // Disable image optimization for localhost URLs in development

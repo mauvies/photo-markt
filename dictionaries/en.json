@@ -32,6 +32,8 @@
     "heroHeadline2": "delivered fast.",
     "heroSubtitle": "Bridging the gap between photographers and athletes. Discover your photos in seconds through our advanced gallery search.",
     "heroDisclaimer": "No account needed · Buy in minutes · Instant downloads",
+    "haveAccessCode": "Have an access code?",
+    "accessPrivateEvent": "Access private event",
     "howItWorksLabel": "How it works",
     "howItWorksHeadline": "From the lens to your gallery, in seconds.",
     "howItWorksSubtitle": "We connect photographers who love their craft with athletes who live for their passion.",
@@ -302,9 +304,9 @@
   "eventSearchBar": {
     "mobileText": "Search your event",
     "whereLabel": "Where",
-    "nameOrLocation": "Name or location",
+    "nameOrLocation": "Name, location or photographer",
     "wherePlaceholder": "Add location or event name",
-    "nameOrLocationPlaceholder": "Add name or location",
+    "nameOrLocationPlaceholder": "Add event name, location or photographer",
     "whereCompactPlaceholder": "Where...",
     "activityLabel": "Activity",
     "activityPlaceholder": "Add activity",
@@ -318,9 +320,15 @@
     "useCurrentLocation": "Use current location",
     "locationsLabel": "Locations",
     "eventsLabel": "Events",
+    "photographersLabel": "Photographers",
     "presetToday": "Today",
     "presetLast3Days": "Last 3 days",
-    "presetLastWeek": "Last week"
+    "presetLastWeek": "Last week",
+    "eventsTab": "Events",
+    "photographersTab": "Photographers",
+    "photographerLabel": "Photographer",
+    "photographerPlaceholder": "Search photographers...",
+    "photographersMobileText": "Find a photographer"
   },
   "footer": {
     "tagline": "Find yourself in every moment. Connect photographers with athletes and event-goers.",
@@ -574,5 +582,10 @@
     "removePhotoAriaLabel": "Remove photo",
     "upload": "Upload",
     "dragFiles": "Or drag files here"
+  },
+  "photographerProfile": {
+    "events": "Events",
+    "photos": "Photos",
+    "noEvents": "No events yet"
   }
 }

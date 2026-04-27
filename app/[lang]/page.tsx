@@ -73,7 +73,7 @@ export default async function Home({
             </span>
           </h1>
 
-          <p className="mx-auto max-w-2xl text-lg leading-normal text-muted-foreground sm:text-xl">
+          <p className="mx-auto max-w-2xl text-base leading-normal text-muted-foreground sm:text-lg">
             {dict.home.heroSubtitle}
           </p>
 
@@ -81,8 +81,14 @@ export default async function Home({
             <EventSearchBar variant="hero" className="mx-auto" />
           </TranslationsProvider>
 
-          <p className="text-xs text-muted-foreground/80 tracking-wider">
-            {dict.home.heroDisclaimer}
+          <p className="text-xs text-muted-foreground/60">
+            {dict.home.haveAccessCode}{' '}
+            <Link
+              href={localizedPath(lang, '/events/private')}
+              className="underline underline-offset-2 hover:text-muted-foreground transition-colors"
+            >
+              {dict.home.accessPrivateEvent}
+            </Link>
           </p>
         </div>
       </section>

@@ -32,6 +32,8 @@
     "heroHeadline2": "entregadas al instante.",
     "heroSubtitle": "Conectamos fotógrafos con talentos. Encuentra tus fotos en segundos con nuestra búsqueda avanzada.",
     "heroDisclaimer": "Sin cuenta · Compra en minutos · Descarga instantánea",
+    "haveAccessCode": "¿Tienes un código de acceso?",
+    "accessPrivateEvent": "Acceder a evento privado",
     "howItWorksLabel": "Cómo funciona",
     "howItWorksHeadline": "De la cámara a tu galería, en segundos.",
     "howItWorksSubtitle": "Conectamos a los fotógrafos que aman su oficio con los talentos que viven su pasión.",
@@ -302,9 +304,9 @@
   "eventSearchBar": {
     "mobileText": "Busca tu evento",
     "whereLabel": "Dónde",
-    "nameOrLocation": "Nombre o ubicación",
-    "wherePlaceholder": "Añade ubicación o nombre del evento",
-    "nameOrLocationPlaceholder": "Añade nombre o ubicación",
+    "nameOrLocation": "Nombre, ubicación o fotógrafo",
+    "wherePlaceholder": "Añade ubicación",
+    "nameOrLocationPlaceholder": "Busca por nombre del evento, ubicación o fotógrafo",
     "whereCompactPlaceholder": "¿Dónde?",
     "activityLabel": "Actividad",
     "activityPlaceholder": "Añade actividad",
@@ -318,9 +320,15 @@
     "useCurrentLocation": "Usar ubicación actual",
     "locationsLabel": "Ubicaciones",
     "eventsLabel": "Eventos",
+    "photographersLabel": "Fotógrafos",
     "presetToday": "Hoy",
     "presetLast3Days": "Últimos 3 días",
-    "presetLastWeek": "Última semana"
+    "presetLastWeek": "Última semana",
+    "eventsTab": "Eventos",
+    "photographersTab": "Fotógrafos",
+    "photographerLabel": "Fotógrafo",
+    "photographerPlaceholder": "Buscar fotógrafos...",
+    "photographersMobileText": "Encuentra un fotógrafo"
   },
   "footer": {
     "tagline": "Encuéntrate en cada momento. Conectamos fotógrafos con talentos y asistentes a eventos.",
@@ -574,5 +582,10 @@
     "removePhotoAriaLabel": "Eliminar foto",
     "upload": "Subir",
     "dragFiles": "O arrastra tus archivos aquí"
+  },
+  "photographerProfile": {
+    "events": "Eventos",
+    "photos": "Fotos",
+    "noEvents": "Aún no hay eventos"
   }
 }

@@ -18,6 +18,7 @@ module.exports = {
     'next.config.ts',
     '*.ts.snap',
     '.github/**',
+    'supabase/**',
   ],
   words: vscodeConfig['cSpell.words'],
 };

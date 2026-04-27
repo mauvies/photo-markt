@@ -61,7 +61,7 @@ export function TalentDashboardHeader({
             <Image
               src="/logo.svg"
               alt="Picdemi"
-              className="h-12 w-auto mt-2"
+              className="h-9 w-auto mt-2 md:h-12"
               width={80}
               height={80}
             />
