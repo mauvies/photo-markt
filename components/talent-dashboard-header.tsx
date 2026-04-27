@@ -60,7 +60,7 @@ export function TalentDashboardHeader({
           <Link href={lp('/')} className="flex shrink-0 items-center gap-2">
             <Image
               src="/logo.svg"
-              alt="Picdemi"
+              alt="Photo Markt"
               className="h-9 w-auto mt-2 md:h-12"
               width={80}
               height={80}

@@ -140,12 +140,12 @@ const PHOTOGRAPHER_FAQS = [
   {
     question: 'How does watermarking work?',
     answer:
-      'When watermarking is enabled on an event, Picdemi overlays a semi-transparent watermark on all preview images. Buyers receive clean, unwatermarked files after purchase. Toggle watermarking per event in the event settings.',
+      'When watermarking is enabled on an event, Photo Markt overlays a semi-transparent watermark on all preview images. Buyers receive clean, unwatermarked files after purchase. Toggle watermarking per event in the event settings.',
   },
   {
     question: 'How do I handle a copyright infringement report?',
     answer:
-      'Email legal@picdemi.com with the photo URL, your ownership evidence, and your contact details. We respond within 72 hours and will remove content pending investigation if necessary.',
+      'Email legal@photomarkt.com with the photo URL, your ownership evidence, and your contact details. We respond within 72 hours and will remove content pending investigation if necessary.',
   },
 ];
 
@@ -349,7 +349,7 @@ export function SupportPage({ userRole, isPro = false, planName = 'Free' }: Supp
                     </span>
                   </div>
                   <a
-                    href="https://wa.me/message/picdemi-support"
+                    href="https://wa.me/message/photo-markt-support"
                     target="_blank"
                     rel="noopener noreferrer"
                     className={cn(

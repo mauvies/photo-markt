@@ -32,7 +32,8 @@ import { eventSchema, type FormValues } from './wizard.schema';
 
 type NewEventT = Dictionary['newEvent'];
 
-const STORAGE_KEY = 'picdemi_new_event_form';
+const STORAGE_KEY = 'photo-markt_new_event_form';
+const LEGACY_STORAGE_KEY = 'picdemi_new_event_form';
 
 const getDefaultValues = (): FormValues => {
   if (typeof window === 'undefined') {
@@ -50,9 +51,13 @@ const getDefaultValues = (): FormValues => {
   }
 
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
+      if (localStorage.getItem(STORAGE_KEY) === null) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+        localStorage.removeItem(LEGACY_STORAGE_KEY);
+      }
       return {
         name: parsed.name || '',
         activity: parsed.activity || 'OTHER',

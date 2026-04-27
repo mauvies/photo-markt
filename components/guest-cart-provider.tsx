@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { GUEST_CART_KEY, type GuestCartItem } from '@/lib/guest-cart';
+import { GUEST_CART_KEY, type GuestCartItem, LEGACY_GUEST_CART_KEY } from '@/lib/guest-cart';
 
 interface GuestCartContextValue {
   items: GuestCartItem[];
@@ -30,9 +30,16 @@ export function GuestCartProvider({ children }: { children: React.ReactNode }) {
   // Load from localStorage on mount
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(GUEST_CART_KEY);
+      const stored =
+        localStorage.getItem(GUEST_CART_KEY) ?? localStorage.getItem(LEGACY_GUEST_CART_KEY);
       if (stored) {
-        setItems(JSON.parse(stored));
+        const parsed = JSON.parse(stored);
+        setItems(parsed);
+        // Migrate legacy key forward for future reads.
+        if (localStorage.getItem(GUEST_CART_KEY) === null) {
+          localStorage.setItem(GUEST_CART_KEY, JSON.stringify(parsed));
+          localStorage.removeItem(LEGACY_GUEST_CART_KEY);
+        }
       }
     } catch {
       // ignore parse errors

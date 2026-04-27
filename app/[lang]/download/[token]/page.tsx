@@ -161,7 +161,7 @@ export default async function DownloadPage({
                 {photo.eventName && (
                   <p className="mb-2 truncate text-xs text-muted-foreground">{photo.eventName}</p>
                 )}
-                <a href={photo.signedUrl} download={`picdemi-photo-${i + 1}.jpg`}>
+                <a href={photo.signedUrl} download={`photo-markt-photo-${i + 1}.jpg`}>
                   <Button size="sm" className="w-full gap-2" variant="outline">
                     <Download className="h-3.5 w-3.5" />
                     {dict.download.download}

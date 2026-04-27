@@ -291,7 +291,7 @@ export default async function EventPage({
         },
         organizer: {
           '@type': 'Organization',
-          name: 'Picdemi',
+          name: 'Photo Markt',
           url: siteUrl,
         },
         ...(event.price_per_photo !== null

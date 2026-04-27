@@ -30,7 +30,7 @@ export function Nav({ user }: { user: User | null }) {
         <Link href={lp('/')} className="flex items-center gap-2">
           <Image
             src="/logo.svg"
-            alt="Picdemi"
+            alt="Photo Markt"
             className="h-12 w-auto mt-2 md:h-14"
             width={100}
             height={100}

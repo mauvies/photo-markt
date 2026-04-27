@@ -81,7 +81,13 @@ export function AppSidebar({
       <SidebarHeader>
         <div className="relative flex items-center py-1">
           <Link href={lp('/')} className="flex items-center gap-1">
-            <Image src="/logo.svg" alt="Picdemi" className="h-12 w-auto " width={80} height={80} />
+            <Image
+              src="/logo.svg"
+              alt="Photo Markt"
+              className="h-12 w-auto "
+              width={80}
+              height={80}
+            />
           </Link>
         </div>
       </SidebarHeader>

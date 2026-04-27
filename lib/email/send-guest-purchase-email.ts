@@ -24,9 +24,9 @@ export async function sendGuestPurchaseEmail({
   const photoLabel = photoCount === 1 ? 'photo' : 'photos';
 
   await resend.emails.send({
-    from: 'Picdemi <noreply@picdemi.com>',
+    from: 'Photo Markt <noreply@photomarkt.com>',
     to,
-    subject: 'Your Picdemi photos are ready to download!',
+    subject: 'Your Photo Markt photos are ready to download!',
     html: `
 <!DOCTYPE html>
 <html>
@@ -42,7 +42,7 @@ export async function sendGuestPurchaseEmail({
           <!-- Header -->
           <tr>
             <td style="padding: 32px 40px 24px; border-bottom: 1px solid #f3f4f6;">
-              <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #111827;">Picdemi</h1>
+              <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #111827;">Photo Markt</h1>
             </td>
           </tr>
 
@@ -76,7 +76,7 @@ export async function sendGuestPurchaseEmail({
                 Save your photos forever — create a free account
               </p>
               <p style="margin: 0 0 16px; color: #6b7280; font-size: 13px; line-height: 1.5;">
-                With a Picdemi account your purchased photos live in your personal library permanently —
+                With a Photo Markt account your purchased photos live in your personal library permanently —
                 no expiry, easy re-download, and AI-powered search to find yourself in new events.
               </p>
               <a href="${signupUrl}"
@@ -88,7 +88,7 @@ export async function sendGuestPurchaseEmail({
         </table>
 
         <p style="margin: 20px 0 0; color: #9ca3af; font-size: 12px;">
-          You received this email because you purchased photos on Picdemi.
+          You received this email because you purchased photos on Photo Markt.
         </p>
       </td>
     </tr>

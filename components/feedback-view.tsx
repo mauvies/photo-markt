@@ -46,7 +46,7 @@ const CATEGORIES = [
   {
     id: 'feature' as CategoryId,
     label: 'Suggest a Feature',
-    description: 'An idea that would make Picdemi better',
+    description: 'An idea that would make Photo Markt better',
     icon: Lightbulb,
     iconColor: 'text-purple-500',
     selectedBg: 'bg-purple-50 dark:bg-purple-950/30',
@@ -185,7 +185,7 @@ function SuccessState({ onReset }: { onReset: () => void }) {
         transition={{ delay: 0.35 }}
         className="text-muted-foreground max-w-sm mb-2"
       >
-        We're building Picdemi together.
+        We're building Photo Markt together.
       </motion.p>
       <motion.p
         initial={{ opacity: 0, y: 10 }}

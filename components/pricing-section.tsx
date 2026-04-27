@@ -57,7 +57,7 @@ const PLAN_CARDS: PlanCard[] = [
   {
     id: 'free',
     name: 'Free',
-    description: 'Perfect for getting started and testing Picdemi',
+    description: 'Perfect for getting started and testing Photo Markt',
     monthlyPrice: null,
     yearlyMonthlyPrice: null,
     yearlyTotal: null,

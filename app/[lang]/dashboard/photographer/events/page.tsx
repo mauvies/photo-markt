@@ -17,17 +17,29 @@ type PhotoStat = {
   lastTakenAt: string | null;
 };
 
-async function getCachedEventsData(userId: string) {
+// Sign URLs for 55 min so they never expire within the 50-min cache window
+const SIGNED_URL_TTL = 60 * 55;
+
+async function getCachedEventsData(userId: string): Promise<{
+  events: Awaited<ReturnType<typeof getUserEvents>>;
+  stats: Map<string, PhotoStat>;
+  salesCounts: Map<string, number>;
+  coverUrls: Map<string, string>;
+}> {
   'use cache';
   cacheTag(`photographer-events-${userId}`);
-  cacheLife('minutes');
+  cacheLife({ revalidate: 60 * 50 });
 
   const events = await getUserEvents(supabaseAdmin, userId);
   const eventIds = events.map((e) => e.id).filter(Boolean);
 
-  if (eventIds.length === 0) {
-    return { events, stats: new Map<string, PhotoStat>(), salesCounts: new Map<string, number>() };
-  }
+  const empty = {
+    events,
+    stats: new Map<string, PhotoStat>(),
+    salesCounts: new Map<string, number>(),
+    coverUrls: new Map<string, string>(),
+  };
+  if (eventIds.length === 0) return empty;
 
   const [photoRows, salesData] = await Promise.all([
     getPhotosForEvents(supabaseAdmin, eventIds),
@@ -60,14 +72,12 @@ async function getCachedEventsData(userId: string) {
     stats.set(row.event_id, current);
   });
 
-  // Ensure events with zero photos still have stats entry
   events.forEach((event) => {
     if (!stats.has(event.id)) {
       stats.set(event.id, { count: 0, coverPath: null, firstTakenAt: null, lastTakenAt: null });
     }
   });
 
-  // Build sales counts from raw data
   const uniqueOrdersPerEvent = new Map<string, Set<string>>();
   const items = (salesData.data ?? []) as Array<{
     photos: Array<{ event_id: string | null }> | { event_id: string | null };
@@ -87,7 +97,17 @@ async function getCachedEventsData(userId: string) {
     salesCounts.set(eventId, orderSet.size);
   });
 
-  return { events, stats, salesCounts };
+  // Sign cover URLs inside the cache so repeated navigations skip this entirely
+  const coverUrls = new Map<string, string>();
+  await Promise.all(
+    Array.from(stats.entries()).map(async ([eventId, info]) => {
+      if (!info.coverPath) return;
+      const url = await createSignedUrl(supabaseAdmin, 'photos', info.coverPath, SIGNED_URL_TTL);
+      if (url) coverUrls.set(eventId, url);
+    }),
+  );
+
+  return { events, stats, salesCounts, coverUrls };
 }
 
 export default async function EventsPage({ params }: { params: Promise<{ lang: string }> }) {
@@ -107,17 +127,7 @@ export default async function EventsPage({ params }: { params: Promise<{ lang: s
     );
   }
 
-  const { events, stats, salesCounts } = await getCachedEventsData(user.id);
-
-  // Sign covers outside the cache boundary (signed URLs expire in 1 hour)
-  const coverUrls = new Map<string, string>();
-  await Promise.all(
-    Array.from(stats.entries()).map(async ([eventId, info]) => {
-      if (!info.coverPath) return;
-      const signedUrl = await createSignedUrl(supabase, 'photos', info.coverPath, 60 * 60);
-      if (signedUrl) coverUrls.set(eventId, signedUrl);
-    }),
-  );
+  const { events, stats, salesCounts, coverUrls } = await getCachedEventsData(user.id);
 
   return (
     <div>

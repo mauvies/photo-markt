@@ -29,8 +29,8 @@ export const metadata: Metadata = {
   // Absolute base for all relative OG/canonical URLs resolved by Next.js
   metadataBase: new URL(getSiteUrl()),
   title: {
-    default: 'Picdemi — Find Yourself in Every Photo',
-    template: '%s | Picdemi',
+    default: 'Photo Markt — Find Yourself in Every Photo',
+    template: '%s | Photo Markt',
   },
   description:
     'Browse sports event photos from marathons, cycling races, triathlons, and more. Find yourself in high-resolution photos shot by professional event photographers.',
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
   },
   manifest: '/manifest.json',
   openGraph: {
-    siteName: 'Picdemi',
+    siteName: 'Photo Markt',
     type: 'website',
     locale: 'en_US',
   },

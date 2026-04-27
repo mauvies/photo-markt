@@ -1,43 +1,20 @@
-'use client';
+import type { Locale } from '@/lib/i18n/config';
+import { getDictionary } from '@/lib/i18n/get-dictionary';
+import { PrivateEventForm } from './private-event-form';
 
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { useLocalizedPath } from '@/hooks/use-localized-path';
-
-export default function PrivateEventPage() {
-  const [code, setCode] = useState('');
-  const router = useRouter();
-  const lp = useLocalizedPath();
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = code.trim();
-    if (!trimmed) return;
-    router.push(lp(`/events/${trimmed}`));
-  };
+export default async function PrivateEventPage({ params }: { params: Promise<{ lang: string }> }) {
+  const { lang } = await params;
+  const dict = await getDictionary(lang as Locale);
+  const t = dict.privateEvent;
 
   return (
-    <div className="flex min-h-svh items-center justify-center px-4">
+    <div className="flex min-h-[calc(100svh-4rem)] items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">Private event access</h1>
-          <p className="text-sm text-muted-foreground">
-            Enter the code shared by the photographer to view the event.
-          </p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t.title}</h1>
+          <p className="text-sm text-muted-foreground">{t.subtitle}</p>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <Input
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            placeholder="Enter access code"
-            autoFocus
-          />
-          <Button type="submit" className="w-full" disabled={!code.trim()}>
-            Access event
-          </Button>
-        </form>
+        <PrivateEventForm labels={{ placeholder: t.placeholder, button: t.button }} />
       </div>
     </div>
   );

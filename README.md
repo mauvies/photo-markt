@@ -1,4 +1,4 @@
-# Picdemi
+# Photo Markt
 
 A marketplace connecting photographers with athletes and event-goers. Photographers create events and upload photos; talent (athletes, models) browse and purchase photos of themselves.
 

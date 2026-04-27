@@ -4,7 +4,7 @@
  * Preview pipeline (applied in order):
  *   1. Resize  — longest side capped at 1200 px (never upscales)
  *   2. Degrade — -25% saturation, +10% contrast (harder to colour-correct)
- *   3. Watermark — tiled diagonal "PICDEMI.COM" grid at 17% opacity
+ *   3. Watermark — tiled diagonal "PHOTO MARKT" grid at 17% opacity
  *   4. Noise   — subtle grayscale grain at ~3% opacity
  *   5. Encode  — JPEG at quality 65
  */
@@ -71,7 +71,7 @@ export async function addWatermarkToImage(imageBuffer: Buffer): Promise<Buffer> 
 // ---------------------------------------------------------------------------
 
 /**
- * Builds a full-size SVG that tiles "PICDEMI.COM" diagonally across the
+ * Builds a full-size SVG that tiles "PHOTO MARKT" diagonally across the
  * image.  Each tile is individually rotated at −30 °around its own centre
  * so the grid stays fully readable while covering the whole canvas.
  *
@@ -83,7 +83,7 @@ export async function addWatermarkToImage(imageBuffer: Buffer): Promise<Buffer> 
  *    enough not to destroy the preview
  */
 function buildWatermarkSvg(width: number, height: number): string {
-  const TEXT = 'PICDEMI.COM';
+  const TEXT = 'PHOTO MARKT';
   const ANGLE = -30; // degrees
   const OPACITY = 0.17;
 

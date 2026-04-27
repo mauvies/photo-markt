@@ -26,7 +26,7 @@ export const PLANS: Plan[] = [
     name: 'Free',
     price: null,
     priceInterval: null,
-    description: 'Perfect for getting started and testing Picdemi',
+    description: 'Perfect for getting started and testing Photo Markt',
     storageGB: 1,
     maxEvents: 3,
     salesFeePercent: 15,

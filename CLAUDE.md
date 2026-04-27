@@ -17,7 +17,7 @@ pnpm spell        # Spell check .ts/.tsx files
 
 ## Architecture Overview
 
-**Picdemi** is a marketplace connecting photographers with athletes/event-goers. Photographers create events and upload photos; talent (athletes/models) browse and purchase photos of themselves.
+**Photo Markt** is a marketplace connecting photographers with athletes/event-goers. Photographers create events and upload photos; talent (athletes/models) browse and purchase photos of themselves.
 
 ### Tech Stack
 

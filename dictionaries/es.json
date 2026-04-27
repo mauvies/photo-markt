@@ -46,7 +46,7 @@
     "findMyPhotos": "Encontrar mis fotos",
     "startSelling": "Empezar a vender como fotógrafo",
     "ctaHeadline": "¿Listo para ver tus eventos con nueva luz?",
-    "ctaSubtitle": "Únete a fotógrafos y talentos que usan Picdemi para que los grandes momentos nunca se pierdan.",
+    "ctaSubtitle": "Únete a fotógrafos y talentos que usan Photo Markt para que los grandes momentos nunca se pierdan.",
     "ctaCreateAccount": "Crear cuenta gratis",
     "ctaHaveAccount": "Ya tengo una cuenta"
   },
@@ -157,7 +157,7 @@
   },
   "download": {
     "expiredTitle": "Enlace de descarga caducado",
-    "expiredDesc": "Este enlace de descarga ha caducado. Si tienes una cuenta de Picdemi, tus fotos siguen disponibles en tu biblioteca.",
+    "expiredDesc": "Este enlace de descarga ha caducado. Si tienes una cuenta de Photo Markt, tus fotos siguen disponibles en tu biblioteca.",
     "login": "Iniciar sesión",
     "createAccount": "Crear cuenta",
     "expiresSoon": "Tus fotos caducan en",
@@ -200,7 +200,7 @@
     "noPhotosAvailable": "Aún no hay fotos disponibles.",
     "perPhoto": "por foto",
     "shareFeedback": "Comparte tus comentarios",
-    "feedbackSubtitle": "Ayúdanos a construir Picdemi juntos — tu voz define lo que construimos a continuación."
+    "feedbackSubtitle": "Ayúdanos a construir Photo Markt juntos — tu voz define lo que construimos a continuación."
   },
   "photographerDashboard": {
     "overview": "Resumen",
@@ -236,7 +236,7 @@
     "profileSubtitle": "Administra tu información de perfil, detalles de cuenta y configuración de pagos.",
     "profileNotFound": "Perfil no encontrado.",
     "userDetails": "Detalles del usuario",
-    "userDetailsDesc": "Controla cómo aparece tu perfil de fotógrafo en Picdemi: tu nombre de usuario, nombre público y biografía.",
+    "userDetailsDesc": "Controla cómo aparece tu perfil de fotógrafo en Photo Markt: tu nombre de usuario, nombre público y biografía.",
     "accountInformation": "Información de la cuenta",
     "email": "Email",
     "memberSince": "Miembro desde",
@@ -256,7 +256,7 @@
     "billingHelpText": "¿Necesitas ayuda? Contacta al soporte para preguntas de facturación.",
     "viewBillingHistory": "Ver historial de facturación",
     "feedbackTitle": "Comparte tus comentarios",
-    "feedbackSubtitle": "Ayúdanos a construir Picdemi juntos — tu voz define lo que construimos a continuación.",
+    "feedbackSubtitle": "Ayúdanos a construir Photo Markt juntos — tu voz define lo que construimos a continuación.",
     "quickActionsTitle": "Acciones rápidas",
     "quickActionsCreateEvent": "Crear nuevo evento",
     "quickActionsViewEvents": "Ver todos los eventos",
@@ -587,5 +587,11 @@
     "events": "Eventos",
     "photos": "Fotos",
     "noEvents": "Aún no hay eventos"
+  },
+  "privateEvent": {
+    "title": "Acceso a evento privado",
+    "subtitle": "Introduce el código que te ha compartido el fotógrafo para ver el evento.",
+    "placeholder": "Introduce el código de acceso",
+    "button": "Acceder al evento"
   }
 }

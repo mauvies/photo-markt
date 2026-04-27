@@ -27,10 +27,10 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 
   return {
     title: `${name} — Event Photographer`,
-    description: `Browse all events and photos by ${name} on Picdemi.`,
+    description: `Browse all events and photos by ${name} on Photo Markt.`,
     openGraph: {
-      title: `${name} — Event Photographer | Picdemi`,
-      description: `Browse all events and photos by ${name} on Picdemi.`,
+      title: `${name} — Event Photographer | Photo Markt`,
+      description: `Browse all events and photos by ${name} on Photo Markt.`,
       images: profile.avatar_url
         ? [{ url: profile.avatar_url, width: 400, height: 400, alt: name }]
         : [],

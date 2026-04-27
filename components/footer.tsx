@@ -13,7 +13,13 @@ export function Footer({ dict, lang }: { dict: Dictionary; lang: string }) {
           {/* Brand */}
           <div className="space-y-3">
             <Link href={localizedPath(lang, '/')} className="flex items-center gap-2">
-              <Image src="/logo.svg" alt="Picdemi" className="h-12 w-auto" width={80} height={80} />
+              <Image
+                src="/logo.svg"
+                alt="Photo Markt"
+                className="h-12 w-auto"
+                width={80}
+                height={80}
+              />
             </Link>
             <p className="text-sm text-muted-foreground -mt-3">{t.tagline}</p>
             <div className="flex items-center gap-4">
@@ -166,15 +172,15 @@ export function Footer({ dict, lang }: { dict: Dictionary; lang: string }) {
         <div className="mt-12 border-t pt-8">
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <p className="text-sm text-muted-foreground">
-              © {new Date().getFullYear()} Picdemi. {t.allRightsReserved}
+              © {new Date().getFullYear()} Photo Markt. {t.allRightsReserved}
             </p>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Mail className="h-4 w-4" />
               <a
-                href="mailto:hello@picdemi.com"
+                href="mailto:hello@photomarkt.com"
                 className="hover:text-foreground transition-colors"
               >
-                hello@picdemi.com
+                hello@photomarkt.com
               </a>
             </div>
           </div>
