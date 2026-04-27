@@ -28,7 +28,6 @@ const PLAN_FEATURES: Record<string, PlanFeature[]> = {
     { text: 'Face recognition' },
     { text: 'Advanced analytics' },
     { text: 'Priority in search results' },
-    { text: 'Email support' },
   ],
   pro: [
     { text: '5% sales fee', bold: true },
@@ -37,9 +36,7 @@ const PLAN_FEATURES: Record<string, PlanFeature[]> = {
     { text: 'BIB number recognition' },
     { text: 'Face recognition' },
     { text: 'Outfit pattern recognition', badge: 'Coming soon' },
-    { text: 'Advanced analytics & insights' },
     { text: 'Highest priority in search results' },
-    { text: 'Priority support' },
   ],
 };
 
