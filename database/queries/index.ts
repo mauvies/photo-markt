@@ -29,6 +29,8 @@ export * from './orders';
 export * from './payment-accounts';
 // Re-export payout queries
 export * from './payouts';
+// Re-export photographer queries
+export * from './photographers';
 // Re-export photo queries
 export * from './photos';
 // Re-export profile queries

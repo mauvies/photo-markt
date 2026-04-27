@@ -2,19 +2,33 @@
 
 import { format, parseISO } from 'date-fns';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CalendarIcon, ChevronLeft, Clock, MapPin, Navigation, Search, X } from 'lucide-react';
+import {
+  CalendarIcon,
+  ChevronLeft,
+  Clock,
+  MapPin,
+  Navigation,
+  Search,
+  User,
+  X,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { createPortal } from 'react-dom';
 import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/activity-options';
-import { searchEventNamesAction } from '@/app/[lang]/dashboard/talent/events/actions';
+import type { PhotographerSearchResult } from '@/app/[lang]/dashboard/talent/events/actions';
+import {
+  searchEventNamesAction,
+  searchPhotographersAction,
+} from '@/app/[lang]/dashboard/talent/events/actions';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useDebounce } from '@/hooks/use-debounce';
+import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { type PlacePrediction, usePlacesAutocomplete } from '@/hooks/use-places-autocomplete';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
@@ -303,26 +317,36 @@ function WhenPopoverContent({
 function WhereSuggestionsDropdown({
   placePredictions,
   eventNames,
+  photographers,
   hasInput,
   onSelectPlace,
   onSelectEventName,
+  onSelectPhotographer,
   onUseCurrentLocation,
   t,
 }: {
   placePredictions: PlacePrediction[];
   eventNames: string[];
+  photographers: PhotographerSearchResult[];
   hasInput: boolean;
   onSelectPlace: (p: PlacePrediction) => void;
   onSelectEventName: (name: string) => void;
+  onSelectPhotographer: (slug: string) => void;
   onUseCurrentLocation: () => void;
-  t: { useCurrentLocation: string; locationsLabel: string; eventsLabel: string };
+  t: {
+    useCurrentLocation: string;
+    locationsLabel: string;
+    eventsLabel: string;
+    photographersLabel: string;
+  };
 }) {
   const showPlaces = hasInput && placePredictions.length > 0;
   const showEvents = hasInput && eventNames.length > 0;
+  const showPhotographers = hasInput && photographers.length > 0;
   const showCurrentLocation =
     !hasInput && typeof navigator !== 'undefined' && !!navigator.geolocation;
 
-  if (!showPlaces && !showEvents && !showCurrentLocation) return null;
+  if (!showPlaces && !showEvents && !showPhotographers && !showCurrentLocation) return null;
 
   return (
     <div className="absolute left-0 right-0 top-full z-50 mt-1.5 overflow-hidden rounded-2xl border bg-popover shadow-xl">
@@ -390,6 +414,41 @@ function WhereSuggestionsDropdown({
             >
               <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               {name}
+            </button>
+          ))}
+        </>
+      )}
+
+      {/* Photographers */}
+      {(showPlaces || showEvents) && showPhotographers && (
+        <div className="mx-4 my-1 h-px bg-border" />
+      )}
+      {showPhotographers && (
+        <>
+          <p className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+            {t.photographersLabel}
+          </p>
+          {photographers.map((p) => (
+            <button
+              key={p.username}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onSelectPhotographer(p.slug);
+              }}
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
+            >
+              <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <span>
+                {p.display_name ? (
+                  <>
+                    <span className="font-medium">{p.display_name}</span>
+                    <span className="text-muted-foreground"> @{p.username}</span>
+                  </>
+                ) : (
+                  <span className="font-medium">@{p.username}</span>
+                )}
+              </span>
             </button>
           ))}
         </>
@@ -491,11 +550,15 @@ export function EventSearchBar({
 
   const activity = useActivityCombobox(initialActivity, sortedActivities);
 
-  // Places autocomplete + event name suggestions
+  // Places autocomplete + event name + photographer suggestions
   const { getPredictions, getDetails } = usePlacesAutocomplete();
+  const lp = useLocalizedPath();
   const debouncedWhere = useDebounce(where, 250);
   const [placePredictions, setPlacePredictions] = useState<PlacePrediction[]>([]);
   const [eventNameSuggestions, setEventNameSuggestions] = useState<string[]>([]);
+  const [photographerSuggestions, setPhotographerSuggestions] = useState<
+    PhotographerSearchResult[]
+  >([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const whereContainerRef = useRef<HTMLDivElement>(null);
 
@@ -503,6 +566,7 @@ export function EventSearchBar({
     if (!debouncedWhere.trim()) {
       setPlacePredictions([]);
       setEventNameSuggestions([]);
+      setPhotographerSuggestions([]);
       return;
     }
     getPredictions(debouncedWhere)
@@ -511,6 +575,9 @@ export function EventSearchBar({
     searchEventNamesAction(debouncedWhere)
       .then(setEventNameSuggestions)
       .catch(() => setEventNameSuggestions([]));
+    searchPhotographersAction(debouncedWhere)
+      .then(setPhotographerSuggestions)
+      .catch(() => setPhotographerSuggestions([]));
   }, [debouncedWhere, getPredictions]);
 
   const handleSelectPlace = useCallback(
@@ -558,6 +625,7 @@ export function EventSearchBar({
     setWhere('');
     setPlacePredictions([]);
     setEventNameSuggestions([]);
+    setPhotographerSuggestions([]);
     setShowSuggestions(false);
     setSearchLat(undefined);
     setSearchLng(undefined);
@@ -736,19 +804,26 @@ export function EventSearchBar({
                         <WhereSuggestionsDropdown
                           placePredictions={placePredictions}
                           eventNames={eventNameSuggestions}
+                          photographers={photographerSuggestions}
                           hasInput={!!where.trim()}
                           onSelectPlace={handleSelectPlace}
                           onSelectEventName={(name) => {
                             setWhere(name);
                             setPlacePredictions([]);
                             setEventNameSuggestions([]);
+                            setPhotographerSuggestions([]);
                             setShowSuggestions(false);
+                          }}
+                          onSelectPhotographer={(slug) => {
+                            setShowSuggestions(false);
+                            router.push(lp(`/photographer/${slug}`));
                           }}
                           onUseCurrentLocation={handleUseCurrentLocation}
                           t={{
                             useCurrentLocation: t('useCurrentLocation'),
                             locationsLabel: t('locationsLabel'),
                             eventsLabel: t('eventsLabel'),
+                            photographersLabel: t('photographersLabel'),
                           }}
                         />
                       )}
@@ -990,19 +1065,26 @@ export function EventSearchBar({
                 <WhereSuggestionsDropdown
                   placePredictions={placePredictions}
                   eventNames={eventNameSuggestions}
+                  photographers={photographerSuggestions}
                   hasInput={!!where.trim()}
                   onSelectPlace={handleSelectPlace}
                   onSelectEventName={(name) => {
                     setWhere(name);
                     setPlacePredictions([]);
                     setEventNameSuggestions([]);
+                    setPhotographerSuggestions([]);
                     setShowSuggestions(false);
+                  }}
+                  onSelectPhotographer={(slug) => {
+                    setShowSuggestions(false);
+                    router.push(lp(`/photographer/${slug}`));
                   }}
                   onUseCurrentLocation={handleUseCurrentLocation}
                   t={{
                     useCurrentLocation: t('useCurrentLocation'),
                     locationsLabel: t('locationsLabel'),
                     eventsLabel: t('eventsLabel'),
+                    photographersLabel: t('photographersLabel'),
                   }}
                 />
               )}
@@ -1014,7 +1096,7 @@ export function EventSearchBar({
             {/* Activity */}
             <div
               ref={activity.containerRef}
-              className="relative w-[27%] min-w-0 px-5 pt-3 pb-2 sm:py-0 sm:min-h-[60px] sm:flex sm:flex-col sm:justify-center sm:items-start"
+              className="relative w-[25%] min-w-0 px-5 pt-3 pb-2 sm:py-0 sm:min-h-[60px] sm:flex sm:flex-col sm:justify-center sm:items-start"
             >
               <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
                 {t('activityLabel')}
@@ -1071,7 +1153,7 @@ export function EventSearchBar({
             <div className="sm:hidden h-px bg-border mx-5 mt-2" />
 
             {/* When */}
-            <div className="relative w-[27%] min-w-0 px-5 pt-3 pb-2 sm:py-0 sm:min-h-[60px] sm:flex sm:flex-col sm:justify-center sm:items-start">
+            <div className="relative w-[25%] min-w-0 px-5 pt-3 pb-2 sm:py-0 sm:min-h-[60px] sm:flex sm:flex-col sm:justify-center sm:items-start">
               <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
                 {t('whenLabel')}
               </p>

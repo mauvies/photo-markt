@@ -10,7 +10,9 @@ export interface Profile {
   id: string;
   display_name?: string | null;
   username: string;
+  slug?: string | null;
   bio?: string | null;
+  avatar_url?: string | null;
   active_role: UserRole;
   full_name?: string | null;
   country_code?: string | null;
@@ -210,7 +212,9 @@ export async function updateProfile(
       Profile,
       | 'display_name'
       | 'username'
+      | 'slug'
       | 'bio'
+      | 'avatar_url'
       | 'full_name'
       | 'country_code'
       | 'city'

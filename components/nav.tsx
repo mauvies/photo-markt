@@ -31,7 +31,7 @@ export function Nav({ user }: { user: User | null }) {
           <Image
             src="/logo.svg"
             alt="Picdemi"
-            className="h-14 w-auto mt-2"
+            className="h-12 w-auto mt-2 md:h-14"
             width={100}
             height={100}
           />
@@ -49,8 +49,10 @@ export function Nav({ user }: { user: User | null }) {
           ))}
         </nav> */}
 
-        <div className="flex items-center gap-2 md:gap-4">
-          <LanguageSwitcher />
+        <div className="flex items-center gap-2 md:gap-5">
+          <div className="-mr-2">
+            <LanguageSwitcher />
+          </div>
           {user ? (
             <UserAvatar user={user} />
           ) : (

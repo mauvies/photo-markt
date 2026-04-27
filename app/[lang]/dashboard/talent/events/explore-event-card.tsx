@@ -8,6 +8,7 @@ import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/
 
 type ExploreEventCardProps = {
   id: string;
+  hrefParam?: string;
   name: string;
   date: string;
   city: string;
@@ -24,6 +25,7 @@ type ExploreEventCardProps = {
 
 export function ExploreEventCard({
   id,
+  hrefParam,
   name,
   date,
   city,
@@ -54,7 +56,7 @@ export function ExploreEventCard({
       : t.free;
 
   return (
-    <Link href={`${linkPrefix}/${id}`} className="group block">
+    <Link href={`${linkPrefix}/${hrefParam ?? id}`} className="group block">
       {/* Image */}
       <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-xl bg-muted">
         {coverUrl ? (
