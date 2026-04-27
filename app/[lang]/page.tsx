@@ -49,8 +49,8 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
           <div className="absolute right-1/4 bottom-1/4 h-80 w-80 rounded-full bg-primary/5 blur-3xl" />
         </div>
 
-        <div className="relative z-10 max-w-4xl text-center space-y-4 px-4 sm:px-6 lg:px-8">
-          <h1 className="text-balance text-5xl font-semibold tracking-tight lg:text-7xl">
+        <div className="relative z-10 max-w-5xl text-center space-y-4 px-4 sm:px-6 lg:px-8">
+          <h1 className="text-balance text-5xl font-semibold tracking-tight sm:text-6xl lg:text-8xl">
             {dict.home.heroHeadline1}
             <span className="block bg-linear-to-r from-primary via-primary/80 to-primary/60 bg-clip-text text-transparent pb-2">
               {dict.home.heroHeadline2}
