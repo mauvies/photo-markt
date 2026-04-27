@@ -156,9 +156,7 @@ export default async function Home({
       <section className="bg-linear-to-br from-primary/10 via-primary/5 to-background py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-3xl text-center">
-            <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-              {dict.home.ctaHeadline}
-            </h2>
+            <h2 className="text-3xl font-semibold sm:text-4xl">{dict.home.ctaHeadline}</h2>
             <p className="mt-4 text-base text-muted-foreground sm:text-lg">
               {dict.home.ctaSubtitle}
             </p>

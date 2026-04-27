@@ -231,7 +231,7 @@ export function SupportPage({ userRole, isPro = false, planName = 'Free' }: Supp
         </Link>
         <div className="flex items-center gap-3">
           <LifeBuoy className="h-7 w-7 text-muted-foreground" />
-          <h1 className="text-3xl font-semibold tracking-tight">Support</h1>
+          <h1 className="text-3xl font-semibold">Support</h1>
         </div>
         <p className="text-sm text-muted-foreground">
           {isPhotographer

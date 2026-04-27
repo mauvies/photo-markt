@@ -108,7 +108,7 @@
   --sidebar-accent-foreground: oklch(0.42 0.00005 270);
   --sidebar-border: oklch(0.92 0 0);
   --sidebar-ring: oklch(0.65 0.1 280);
-  --header-height: 4rem;
+  --header-height: 4.5rem;
 }
 
 /* 
@@ -155,7 +155,7 @@
   --sidebar-accent-foreground: oklch(0.94 0 89.876);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.58 0.1 280);
-  --header-height: 4rem;
+  --header-height: 4.5rem;
 }
 
 /* 

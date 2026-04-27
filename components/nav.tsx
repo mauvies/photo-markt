@@ -1,6 +1,7 @@
 'use client';
 
 import type { User } from '@supabase/supabase-js';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LanguageSwitcher } from '@/components/language-switcher';
@@ -27,7 +28,13 @@ export function Nav({ user }: { user: User | null }) {
     <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur supports-backdrop-filter:bg-background/80">
       <div className="mx-auto flex h-(--header-height) max-w-[1600px] items-center justify-between px-4">
         <Link href={lp('/')} className="flex items-center gap-2">
-          <span className="font-wordmark text-2xl font-bold tracking-wider">PICDEMI</span>
+          <Image
+            src="/logo.svg"
+            alt="Picdemi"
+            className="h-14 w-auto mt-2"
+            width={100}
+            height={100}
+          />
         </Link>
 
         {/* <nav className="hidden md:flex items-center gap-6">
@@ -58,7 +65,9 @@ export function Nav({ user }: { user: User | null }) {
                 <span className="hidden md:inline-flex">{t('login')}</span>
               </Link>
               <Link href={lp('/signup')} tabIndex={-1} className="hidden md:inline-flex">
-                <Button size="md">{t('getStarted')}</Button>
+                <Button size="md" className="p-5">
+                  {t('getStarted')}
+                </Button>
               </Link>
             </>
           )}

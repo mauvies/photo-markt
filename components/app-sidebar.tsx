@@ -12,6 +12,7 @@ import {
   User,
   WalletMinimal,
 } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import type { ComponentProps } from 'react';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
@@ -78,11 +79,9 @@ export function AppSidebar({
   return (
     <Sidebar collapsible="icon" className="h-svh" {...props}>
       <SidebarHeader>
-        <div className="relative flex items-center px-2 py-1">
+        <div className="relative flex items-center py-1">
           <Link href={lp('/')} className="flex items-center gap-1">
-            <span className="font-[family-name:var(--font-wordmark)] text-lg font-bold tracking-widest">
-              PICDEMI
-            </span>
+            <Image src="/logo.svg" alt="Picdemi" className="h-12 w-auto " width={80} height={80} />
           </Link>
         </div>
       </SidebarHeader>
