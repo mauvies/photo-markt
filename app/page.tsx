@@ -1,7 +1,14 @@
 import { redirect } from 'next/navigation';
 
-// The proxy handles locale detection and redirects before this page ever renders.
-// This is a safety-net only.
-export default function RootPage() {
+export default async function RootPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string>>;
+}) {
+  const params = await searchParams;
+  if (params.code) {
+    const qs = new URLSearchParams(params).toString();
+    redirect(`/auth/callback?${qs}`);
+  }
   redirect('/es');
 }

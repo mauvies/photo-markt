@@ -1,6 +1,7 @@
 import { ArrowRight, Camera, Download, Search } from 'lucide-react';
 import { cacheLife, cacheTag } from 'next/cache';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { EventSearchBar } from '@/components/event-search-bar';
 import { Footer } from '@/components/footer';
 import { PricingSection } from '@/components/pricing-section';
@@ -20,8 +21,23 @@ async function getCachedDictionary(lang: string) {
   return getDictionary(lang as Locale);
 }
 
-export default async function Home({ params }: { params: Promise<{ lang: string }> }) {
+export default async function Home({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ lang: string }>;
+  searchParams: Promise<Record<string, string>>;
+}) {
   const { lang } = await params;
+  const sp = await searchParams;
+
+  // Supabase may redirect back here instead of /auth/callback when the callback
+  // URL isn't in the allowed redirect list. Forward to the real handler.
+  if (sp.code) {
+    const qs = new URLSearchParams(sp).toString();
+    redirect(`/auth/callback?${qs}`);
+  }
+
   const dict = await getCachedDictionary(lang);
   const supabase = await createClient();
 
