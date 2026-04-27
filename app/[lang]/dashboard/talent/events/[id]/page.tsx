@@ -4,6 +4,7 @@ import { AIMatchingButton } from '@/app/[lang]/dashboard/talent/photos/ai-matchi
 import { DashboardHeader } from '@/components/dashboard-header';
 import { createPhotoUrls, getEventPhotosPublic, isPhotoInCart } from '@/database/queries';
 import { createClient } from '@/database/server';
+import { supabaseAdmin } from '@/database/supabase-admin';
 import { getBaseUrl } from '@/lib/get-base-url';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
@@ -18,20 +19,21 @@ export default async function ExploreEventDetailPage({
   const dict = await getDictionary(lang as Locale);
   const supabase = await createClient();
 
-  // Get event by ID - must be public
-  const { data: event, error } = await supabase
+  // Get event by ID - must be public (use admin to bypass RLS)
+  const { data: event } = await supabaseAdmin
     .from('events')
     .select('*')
     .eq('id', id)
     .eq('is_public', true)
+    .is('deleted_at', null)
     .single();
 
-  if (error || !event) {
+  if (!event) {
     notFound();
   }
 
-  // Get photos for the event
-  const photos = await getEventPhotosPublic(supabase, event.id);
+  // Get photos for the event (use admin to bypass RLS)
+  const photos = await getEventPhotosPublic(supabaseAdmin, event.id);
 
   // Get user info for watermark and cart check
   const {
@@ -80,7 +82,7 @@ export default async function ExploreEventDetailPage({
 
   if (paths.length > 0) {
     const baseUrl = await getBaseUrl();
-    const photoUrls = await createPhotoUrls(supabase, 'photos', paths, {
+    const photoUrls = await createPhotoUrls(supabaseAdmin, 'photos', paths, {
       expiresIn: 60 * 60, // 1 hour
       useWatermark,
       baseUrl,
