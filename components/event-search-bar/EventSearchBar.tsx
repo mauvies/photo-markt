@@ -24,8 +24,8 @@ import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
 import { ActivityDropdown } from './ActivityDropdown';
-import type { EventSearchBarProps } from './EventSearchBar.types';
 import { useActivityCombobox } from './EventSearchBar.hooks';
+import type { EventSearchBarProps } from './EventSearchBar.types';
 import {
   BLUR_DISMISS_DELAY_MS,
   DEFAULT_RADIUS_KM,
@@ -76,14 +76,18 @@ export function EventSearchBar({
   const [presetLabel, setPresetLabel] = useState<string | null>(initialPreset ?? null);
   const [searchLat, setSearchLat] = useState<number | undefined>(initialLat);
   const [searchLng, setSearchLng] = useState<number | undefined>(initialLng);
-  const [radius, setRadius] = useState<number>(initialRadius ?? (initialLat ? DEFAULT_RADIUS_KM : 0));
+  const [radius, setRadius] = useState<number>(
+    initialRadius ?? (initialLat ? DEFAULT_RADIUS_KM : 0),
+  );
   const [mobileDialogOpen, setMobileDialogOpen] = useState(false);
   const [mobileWhenOpen, setMobileWhenOpen] = useState(false);
   const [whenOpen, setWhenOpen] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [placePredictions, setPlacePredictions] = useState<PlacePrediction[]>([]);
   const [eventNameSuggestions, setEventNameSuggestions] = useState<string[]>([]);
-  const [photographerSuggestions, setPhotographerSuggestions] = useState<PhotographerSearchResult[]>([]);
+  const [photographerSuggestions, setPhotographerSuggestions] = useState<
+    PhotographerSearchResult[]
+  >([]);
 
   const sortedActivities = useMemo(
     () => [...activityOptions].sort((a, b) => a.label.localeCompare(b.label)),
@@ -576,9 +580,7 @@ export function EventSearchBar({
                     setShowSuggestions(true);
                   }}
                   onFocus={() => setShowSuggestions(true)}
-                  onBlur={() =>
-                    setTimeout(() => setShowSuggestions(false), BLUR_DISMISS_DELAY_MS)
-                  }
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), BLUR_DISMISS_DELAY_MS)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       setShowSuggestions(false);
