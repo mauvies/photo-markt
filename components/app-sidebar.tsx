@@ -35,16 +35,10 @@ interface NavLabels {
 
 export function AppSidebar({
   activeRole,
-  user: _user,
   navLabels,
   ...props
 }: ComponentProps<typeof Sidebar> & {
   activeRole: 'photographer' | 'talent';
-  user: {
-    name: string;
-    email: string;
-    avatar?: string | null;
-  };
   navLabels: NavLabels;
 }) {
   const lp = useLocalizedPath();
@@ -84,7 +78,7 @@ export function AppSidebar({
             <Image
               src="/logo.svg"
               alt="Photo Markt"
-              className="h-12 w-auto "
+              className="h-12 w-auto"
               width={80}
               height={80}
             />

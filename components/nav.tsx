@@ -31,23 +31,11 @@ export function Nav({ user }: { user: User | null }) {
           <Image
             src="/logo.svg"
             alt="Photo Markt"
-            className="h-12 w-auto mt-2 md:h-14"
-            width={100}
-            height={100}
+            className="h-12 w-auto mt-2"
+            width={80}
+            height={80}
           />
         </Link>
-
-        {/* <nav className="hidden md:flex items-center gap-6">
-          {links.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="hover:text-foreground/70 transition-colors"
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav> */}
 
         <div className="flex items-center gap-2 md:gap-5">
           <div className="-mr-2">

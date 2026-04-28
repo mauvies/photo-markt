@@ -38,7 +38,6 @@ export default async function PhotographerLayout({ children }: { children: React
     <SidebarProvider>
       <AppSidebar
         activeRole={activeRole}
-        user={sidebarUser}
         navLabels={{
           overview: dict.dashboard.overview,
           createEvent: dict.dashboard.createEvent,
