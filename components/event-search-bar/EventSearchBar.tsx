@@ -1,21 +1,11 @@
 'use client';
 
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { AnimatePresence, motion } from 'framer-motion';
-import {
-  CalendarIcon,
-  ChevronLeft,
-  Clock,
-  MapPin,
-  Navigation,
-  Search,
-  User,
-  X,
-} from 'lucide-react';
+import { Clock, Search, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
-import { createPortal } from 'react-dom';
 import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/activity-options';
 import type { PhotographerSearchResult } from '@/app/[lang]/dashboard/talent/events/actions';
 import {
@@ -33,473 +23,21 @@ import { type PlacePrediction, usePlacesAutocomplete } from '@/hooks/use-places-
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
-
-interface EventSearchBarProps {
-  variant?: 'hero' | 'compact';
-  initialWhere?: string;
-  initialActivity?: string;
-  initialDateFrom?: string;
-  initialDateTo?: string;
-  initialPreset?: string;
-  initialLat?: number;
-  initialLng?: number;
-  initialRadius?: number;
-  onSearch?: (where: string, activity: string, dateFrom: string, dateTo: string) => void;
-  searchHref?: string;
-  className?: string;
-}
-
-interface ActivityOption {
-  value: string;
-  label: string;
-}
-
-const DROPDOWN_MAX_H = 240;
-const DROPDOWN_GAP = 8;
-
-// ─── Date preset helpers ──────────────────────────────────────────────────────
-
-function todayRange(): DateRange {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return { from: d, to: d };
-}
-
-function last3DaysRange(): DateRange {
-  const to = new Date();
-  const from = new Date();
-  from.setDate(from.getDate() - 2);
-  from.setHours(0, 0, 0, 0);
-  return { from, to };
-}
-
-function lastWeekRange(): DateRange {
-  const to = new Date();
-  const from = new Date();
-  from.setDate(from.getDate() - 6);
-  from.setHours(0, 0, 0, 0);
-  return { from, to };
-}
-
-// ─── Activity dropdown ────────────────────────────────────────────────────────
-
-function ActivityDropdown({
-  filtered,
-  anchorRef,
-  onSelect,
-  compact,
-}: {
-  filtered: ActivityOption[];
-  anchorRef: React.RefObject<HTMLDivElement | null>;
-  onSelect: (opt: ActivityOption) => void;
-  compact?: boolean;
-}) {
-  const [style, setStyle] = useState<CSSProperties>({ opacity: 0 });
-  const [openUpward, setOpenUpward] = useState(false);
-
-  useEffect(() => {
-    const el = anchorRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const goUp = spaceBelow < DROPDOWN_MAX_H + DROPDOWN_GAP && rect.top > spaceBelow;
-
-    setOpenUpward(goUp);
-    setStyle({
-      position: 'fixed',
-      left: rect.left,
-      width: Math.max(rect.width, compact ? 200 : 220),
-      zIndex: 9999,
-      ...(goUp
-        ? { bottom: window.innerHeight - rect.top + DROPDOWN_GAP }
-        : { top: rect.bottom + DROPDOWN_GAP }),
-    });
-  }, [anchorRef, compact]);
-
-  return createPortal(
-    <div
-      style={style}
-      className={cn(
-        'bg-background border shadow-xl overflow-y-auto py-1',
-        'max-h-60',
-        openUpward
-          ? 'rounded-t-2xl rounded-b-lg animate-[dropdown-up_0.15s_ease-out]'
-          : 'rounded-2xl animate-[dropdown-down_0.15s_ease-out]',
-      )}
-    >
-      {filtered.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            onSelect(opt);
-          }}
-          className="w-full text-left px-4 py-2.5 text-sm hover:bg-muted transition-colors"
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>,
-    document.body,
-  );
-}
-
-// ─── Activity combobox hook ───────────────────────────────────────────────────
-
-function useActivityCombobox(initialActivity: string, sortedActivities: ActivityOption[]) {
-  const initialLabel = sortedActivities.find((a) => a.value === initialActivity)?.label ?? '';
-  const [inputValue, setInputValue] = useState(initialLabel);
-  const [selectedValue, setSelectedValue] = useState(initialActivity || '');
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const filtered = useMemo(() => {
-    if (!inputValue.trim()) return sortedActivities;
-    return sortedActivities.filter((a) => a.label.toLowerCase().includes(inputValue.toLowerCase()));
-  }, [inputValue, sortedActivities]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (!containerRef.current?.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  const select = useCallback((opt: ActivityOption) => {
-    setInputValue(opt.label);
-    setSelectedValue(opt.value);
-    setError(false);
-    setOpen(false);
-  }, []);
-
-  const clear = useCallback(() => {
-    setInputValue('');
-    setSelectedValue('');
-    setError(false);
-  }, []);
-
-  const validate = useCallback((): string | null => {
-    if (!inputValue.trim()) return '';
-    const match = sortedActivities.find((a) => a.label.toLowerCase() === inputValue.toLowerCase());
-    if (!match) {
-      setError(true);
-      setTimeout(() => setError(false), 600);
-      return null;
-    }
-    return match.value;
-  }, [inputValue, sortedActivities]);
-
-  return {
-    inputValue,
-    setInputValue,
-    selectedValue,
-    open,
-    setOpen,
-    error,
-    filtered,
-    containerRef,
-    select,
-    clear,
-    validate,
-  };
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function parseDateStr(s: string): Date | undefined {
-  if (!s) return undefined;
-  try {
-    return parseISO(s);
-  } catch {
-    return undefined;
-  }
-}
-
-function whenLabel(from: Date | undefined, to: Date | undefined): string | null {
-  if (from && to) {
-    const sameDay = format(from, 'yyyy-MM-dd') === format(to, 'yyyy-MM-dd');
-    return sameDay ? format(from, 'MMM d') : `${format(from, 'MMM d')} – ${format(to, 'MMM d')}`;
-  }
-  if (from) return format(from, 'MMM d');
-  if (to) return `Until ${format(to, 'MMM d')}`;
-  return null;
-}
-
-// ─── When popover content ─────────────────────────────────────────────────────
-
-function WhenPopoverContent({
-  dateRange,
-  onSelectPreset,
-  onSelectCustom,
-  mobile = false,
-  t,
-}: {
-  dateRange: DateRange | undefined;
-  onSelectPreset: (label: string, range: DateRange) => void;
-  onSelectCustom: (range: DateRange | undefined) => void;
-  mobile?: boolean;
-  t: {
-    quickOptions: string;
-    customDate: string;
-    presetToday: string;
-    presetLast3Days: string;
-    presetLastWeek: string;
-  };
-}) {
-  const [showCalendar, setShowCalendar] = useState(false);
-
-  if (showCalendar) {
-    return (
-      <div className={mobile ? 'w-full' : undefined}>
-        <button
-          type="button"
-          onClick={() => setShowCalendar(false)}
-          className="flex items-center gap-1 px-3 pt-3 pb-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" />
-          {t.quickOptions}
-        </button>
-        <Calendar
-          mode="range"
-          selected={dateRange}
-          onSelect={(range) => {
-            onSelectCustom(range);
-          }}
-          numberOfMonths={1}
-          {...(mobile && {
-            className: '!p-0',
-            classNames: { root: 'w-full max-w-full' },
-          })}
-        />
-      </div>
-    );
-  }
-
-  const presets = [
-    { label: t.presetToday, getRange: todayRange },
-    { label: t.presetLast3Days, getRange: last3DaysRange },
-    { label: t.presetLastWeek, getRange: lastWeekRange },
-  ];
-
-  return (
-    <div className="w-48 p-3">
-      {presets.map(({ label, getRange }) => (
-        <button
-          key={label}
-          type="button"
-          onClick={() => onSelectPreset(label, getRange())}
-          className="flex w-full items-center gap-2.5 rounded-lg py-2.5 text-sm font-medium text-foreground hover:bg-muted transition-colors text-left"
-        >
-          <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          {label}
-        </button>
-      ))}
-      <div className="my-1.5 h-px bg-border" />
-      <button
-        type="button"
-        onClick={() => setShowCalendar(true)}
-        className="flex w-full items-center gap-2.5 rounded-lg py-2.5 text-sm font-medium text-foreground hover:bg-muted transition-colors text-left"
-      >
-        <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        {t.customDate}
-      </button>
-    </div>
-  );
-}
-
-// ─── Where suggestions dropdown ───────────────────────────────────────────────
-
-function WhereSuggestionsDropdown({
-  placePredictions,
-  eventNames,
-  photographers,
-  hasInput,
-  onSelectPlace,
-  onSelectEventName,
-  onSelectPhotographer,
-  onUseCurrentLocation,
-  t,
-}: {
-  placePredictions: PlacePrediction[];
-  eventNames: string[];
-  photographers: PhotographerSearchResult[];
-  hasInput: boolean;
-  onSelectPlace: (p: PlacePrediction) => void;
-  onSelectEventName: (name: string) => void;
-  onSelectPhotographer: (slug: string) => void;
-  onUseCurrentLocation: () => void;
-  t: {
-    useCurrentLocation: string;
-    locationsLabel: string;
-    eventsLabel: string;
-    photographersLabel: string;
-  };
-}) {
-  const showPlaces = hasInput && placePredictions.length > 0;
-  const showEvents = hasInput && eventNames.length > 0;
-  const showPhotographers = hasInput && photographers.length > 0;
-  const showCurrentLocation =
-    !hasInput && typeof navigator !== 'undefined' && !!navigator.geolocation;
-
-  if (!showPlaces && !showEvents && !showPhotographers && !showCurrentLocation) return null;
-
-  return (
-    <div className="absolute left-0 right-0 top-full z-50 mt-1.5 overflow-hidden rounded-2xl border bg-popover shadow-xl">
-      {/* Current location — shown when input is empty */}
-      {showCurrentLocation && (
-        <button
-          type="button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            onUseCurrentLocation();
-          }}
-          className="flex w-full items-center gap-3 px-4 py-3 text-sm font-medium text-foreground hover:bg-muted transition-colors text-left"
-        >
-          <Navigation className="h-4 w-4 shrink-0 text-primary" />
-          {t.useCurrentLocation}
-        </button>
-      )}
-
-      {/* Google Places suggestions */}
-      {showPlaces && (
-        <>
-          <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-            {t.locationsLabel}
-          </p>
-          {placePredictions.map((p) => (
-            <button
-              key={p.placeId}
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onSelectPlace(p);
-              }}
-              className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
-            >
-              <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              <span>
-                <span className="font-medium">{p.mainText}</span>
-                {p.secondaryText && (
-                  <span className="text-muted-foreground">, {p.secondaryText}</span>
-                )}
-              </span>
-            </button>
-          ))}
-        </>
-      )}
-
-      {/* Divider */}
-      {showPlaces && showEvents && <div className="mx-4 my-1 h-px bg-border" />}
-
-      {/* Event name suggestions */}
-      {showEvents && (
-        <>
-          <p className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-            {t.eventsLabel}
-          </p>
-          {eventNames.map((name) => (
-            <button
-              key={name}
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onSelectEventName(name);
-              }}
-              className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
-            >
-              <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              {name}
-            </button>
-          ))}
-        </>
-      )}
-
-      {/* Photographers */}
-      {(showPlaces || showEvents) && showPhotographers && (
-        <div className="mx-4 my-1 h-px bg-border" />
-      )}
-      {showPhotographers && (
-        <>
-          <p className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-            {t.photographersLabel}
-          </p>
-          {photographers.map((p) => (
-            <button
-              key={p.username}
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onSelectPhotographer(p.slug);
-              }}
-              className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
-            >
-              <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              <span>
-                {p.display_name ? (
-                  <>
-                    <span className="font-medium">{p.display_name}</span>
-                    <span className="text-muted-foreground"> @{p.username}</span>
-                  </>
-                ) : (
-                  <span className="font-medium">@{p.username}</span>
-                )}
-              </span>
-            </button>
-          ))}
-        </>
-      )}
-
-      {/* Bottom padding */}
-      {/* <div className="h-1.5" /> */}
-    </div>
-  );
-}
-
-// ─── Mobile calendar semantic table components ────────────────────────────────
-
-function MobileMonthGrid({ className, ...props }: React.TableHTMLAttributes<HTMLTableElement>) {
-  return <table className={className} {...props} />;
-}
-function MobileWeeks({ className, ...props }: React.HTMLAttributes<HTMLTableSectionElement>) {
-  return <tbody className={className} {...props} />;
-}
-function MobileWeekdays({ className, ...props }: React.HTMLAttributes<HTMLTableRowElement>) {
-  return <tr className={className} {...props} />;
-}
-function MobileWeekday({ className, ...props }: React.ThHTMLAttributes<HTMLTableCellElement>) {
-  return <th scope="col" className={className} {...props} />;
-}
-function MobileWeek({
-  week: _week,
-  className,
-  ...props
-}: { week: unknown } & React.HTMLAttributes<HTMLTableRowElement>) {
-  return <tr className={className} {...(props as React.HTMLAttributes<HTMLTableRowElement>)} />;
-}
-function MobileDay({
-  day: _day,
-  modifiers: _modifiers,
-  className,
-  ...props
-}: { day: unknown; modifiers: unknown } & React.TdHTMLAttributes<HTMLTableCellElement>) {
-  return <td className={className} {...props} />;
-}
-
-const MOBILE_CALENDAR_COMPONENTS = {
-  MonthGrid: MobileMonthGrid,
-  Weeks: MobileWeeks,
-  Weekdays: MobileWeekdays,
-  Weekday: MobileWeekday,
-  Week: MobileWeek,
-  Day: MobileDay,
-};
-
-// ─── Main component ───────────────────────────────────────────────────────────
+import { ActivityDropdown } from './ActivityDropdown';
+import type { EventSearchBarProps } from './EventSearchBar.types';
+import { useActivityCombobox } from './EventSearchBar.hooks';
+import {
+  BLUR_DISMISS_DELAY_MS,
+  DEFAULT_RADIUS_KM,
+  last3DaysRange,
+  lastWeekRange,
+  parseDateStr,
+  todayRange,
+  whenLabel,
+} from './EventSearchBar.utils';
+import { MOBILE_CALENDAR_COMPONENTS } from './MobileCalendarComponents';
+import { WhenPopoverContent } from './WhenPopoverContent';
+import { WhereSuggestionsDropdown } from './WhereSuggestionsDropdown';
 
 export function EventSearchBar({
   variant = 'hero',
@@ -517,9 +55,12 @@ export function EventSearchBar({
 }: EventSearchBarProps) {
   const router = useRouter();
   const { t } = useTranslations<Dictionary['eventSearchBar']>();
+  const lp = useLocalizedPath();
+
   const [where, setWhere] = useState(initialWhere);
   const whereRef = useRef<HTMLInputElement>(null);
   const activityInputRef = useRef<HTMLInputElement>(null);
+  const whereContainerRef = useRef<HTMLDivElement>(null);
 
   // If a known preset is passed, recompute its range so "Today" is always fresh
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
@@ -532,35 +73,26 @@ export function EventSearchBar({
     return undefined;
   });
 
-  // Track the preset label (null = any dates / custom)
   const [presetLabel, setPresetLabel] = useState<string | null>(initialPreset ?? null);
-
   const [searchLat, setSearchLat] = useState<number | undefined>(initialLat);
   const [searchLng, setSearchLng] = useState<number | undefined>(initialLng);
-  const [radius, setRadius] = useState<number>(initialRadius ?? (initialLat ? 25 : 0));
+  const [radius, setRadius] = useState<number>(initialRadius ?? (initialLat ? DEFAULT_RADIUS_KM : 0));
   const [mobileDialogOpen, setMobileDialogOpen] = useState(false);
   const [mobileWhenOpen, setMobileWhenOpen] = useState(false);
-
   const [whenOpen, setWhenOpen] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [placePredictions, setPlacePredictions] = useState<PlacePrediction[]>([]);
+  const [eventNameSuggestions, setEventNameSuggestions] = useState<string[]>([]);
+  const [photographerSuggestions, setPhotographerSuggestions] = useState<PhotographerSearchResult[]>([]);
 
   const sortedActivities = useMemo(
     () => [...activityOptions].sort((a, b) => a.label.localeCompare(b.label)),
     [],
   );
-
   const activity = useActivityCombobox(initialActivity, sortedActivities);
 
-  // Places autocomplete + event name + photographer suggestions
   const { getPredictions, getDetails } = usePlacesAutocomplete();
-  const lp = useLocalizedPath();
   const debouncedWhere = useDebounce(where, 250);
-  const [placePredictions, setPlacePredictions] = useState<PlacePrediction[]>([]);
-  const [eventNameSuggestions, setEventNameSuggestions] = useState<string[]>([]);
-  const [photographerSuggestions, setPhotographerSuggestions] = useState<
-    PhotographerSearchResult[]
-  >([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const whereContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!debouncedWhere.trim()) {
@@ -588,7 +120,7 @@ export function EventSearchBar({
       if (details) {
         setSearchLat(details.lat);
         setSearchLng(details.lng);
-        setRadius(25);
+        setRadius(DEFAULT_RADIUS_KM);
       }
     },
     [getDetails],
@@ -602,16 +134,16 @@ export function EventSearchBar({
         const { latitude, longitude } = pos.coords;
         setSearchLat(latitude);
         setSearchLng(longitude);
-        setRadius(25);
+        setRadius(DEFAULT_RADIUS_KM);
 
         try {
           const res = await fetch(
             `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
             { headers: { 'Accept-Language': 'en' } },
           );
-          const data = await res.json();
+          const geoData = await res.json();
           const city: string =
-            data.address?.city ?? data.address?.town ?? data.address?.village ?? 'Nearby';
+            geoData.address?.city ?? geoData.address?.town ?? geoData.address?.village ?? 'Nearby';
           setWhere(city);
         } catch {
           setWhere('Nearby');
@@ -621,7 +153,7 @@ export function EventSearchBar({
     );
   }, []);
 
-  const clearAll = useCallback(() => {
+  const handleClearAll = useCallback(() => {
     setWhere('');
     setPlacePredictions([]);
     setEventNameSuggestions([]);
@@ -634,6 +166,27 @@ export function EventSearchBar({
     setDateRange(undefined);
     setPresetLabel(null);
   }, [activity]);
+
+  const handleClearDateRange = useCallback(() => {
+    setDateRange(undefined);
+    setPresetLabel(null);
+  }, []);
+
+  const handleSelectPreset = useCallback((label: string, range: DateRange) => {
+    setPresetLabel(label);
+    setDateRange(range);
+    setWhenOpen(false);
+    setMobileWhenOpen(false);
+  }, []);
+
+  const handleSelectCustom = useCallback((range: DateRange | undefined) => {
+    setDateRange(range);
+    setPresetLabel(null);
+    if (range?.from && range?.to) {
+      setWhenOpen(false);
+      setMobileWhenOpen(false);
+    }
+  }, []);
 
   const handleSearch = useCallback(() => {
     setShowSuggestions(false);
@@ -676,26 +229,45 @@ export function EventSearchBar({
 
   const displayLabel = presetLabel ?? whenLabel(dateRange?.from, dateRange?.to);
 
-  const clearDateRange = useCallback(() => {
-    setDateRange(undefined);
-    setPresetLabel(null);
+  const suggestionTranslations = {
+    useCurrentLocation: t('useCurrentLocation'),
+    locationsLabel: t('locationsLabel'),
+    eventsLabel: t('eventsLabel'),
+    photographersLabel: t('photographersLabel'),
+  };
+
+  const whenTranslations = {
+    quickOptions: t('quickOptions'),
+    customDate: t('customDate'),
+    presetToday: t('presetToday'),
+    presetLast3Days: t('presetLast3Days'),
+    presetLastWeek: t('presetLastWeek'),
+  };
+
+  const handleSelectEventName = useCallback((name: string) => {
+    setWhere(name);
+    setPlacePredictions([]);
+    setEventNameSuggestions([]);
+    setPhotographerSuggestions([]);
+    setShowSuggestions(false);
   }, []);
 
-  const handleSelectPreset = useCallback((label: string, range: DateRange) => {
-    setPresetLabel(label);
-    setDateRange(range);
-    setWhenOpen(false);
-    setMobileWhenOpen(false);
-  }, []);
+  const handleSelectPhotographer = useCallback(
+    (slug: string) => {
+      setShowSuggestions(false);
+      router.push(lp(`/photographer/${slug}`));
+    },
+    [router, lp],
+  );
 
-  const handleSelectCustom = useCallback((range: DateRange | undefined) => {
-    setDateRange(range);
-    setPresetLabel(null);
-
-    if (range?.from && range?.to) {
-      setWhenOpen(false);
-      setMobileWhenOpen(false);
-    }
+  const handleWhereClear = useCallback(() => {
+    setWhere('');
+    setSearchLat(undefined);
+    setSearchLng(undefined);
+    setRadius(0);
+    setPlacePredictions([]);
+    setEventNameSuggestions([]);
+    whereRef.current?.focus();
   }, []);
 
   if (variant === 'hero') {
@@ -772,7 +344,9 @@ export function EventSearchBar({
                             setShowSuggestions(true);
                           }}
                           onFocus={() => setShowSuggestions(true)}
-                          onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                          onBlur={() =>
+                            setTimeout(() => setShowSuggestions(false), BLUR_DISMISS_DELAY_MS)
+                          }
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               setShowSuggestions(false);
@@ -785,15 +359,7 @@ export function EventSearchBar({
                         {where && (
                           <button
                             type="button"
-                            onClick={() => {
-                              setWhere('');
-                              setSearchLat(undefined);
-                              setSearchLng(undefined);
-                              setRadius(0);
-                              setPlacePredictions([]);
-                              setEventNameSuggestions([]);
-                              whereRef.current?.focus();
-                            }}
+                            onClick={handleWhereClear}
                             className="shrink-0 text-muted-foreground hover:text-foreground"
                           >
                             <X className="h-4 w-4" />
@@ -807,24 +373,10 @@ export function EventSearchBar({
                           photographers={photographerSuggestions}
                           hasInput={!!where.trim()}
                           onSelectPlace={handleSelectPlace}
-                          onSelectEventName={(name) => {
-                            setWhere(name);
-                            setPlacePredictions([]);
-                            setEventNameSuggestions([]);
-                            setPhotographerSuggestions([]);
-                            setShowSuggestions(false);
-                          }}
-                          onSelectPhotographer={(slug) => {
-                            setShowSuggestions(false);
-                            router.push(lp(`/photographer/${slug}`));
-                          }}
+                          onSelectEventName={handleSelectEventName}
+                          onSelectPhotographer={handleSelectPhotographer}
                           onUseCurrentLocation={handleUseCurrentLocation}
-                          t={{
-                            useCurrentLocation: t('useCurrentLocation'),
-                            locationsLabel: t('locationsLabel'),
-                            eventsLabel: t('eventsLabel'),
-                            photographersLabel: t('photographersLabel'),
-                          }}
+                          t={suggestionTranslations}
                         />
                       )}
                     </section>
@@ -919,7 +471,7 @@ export function EventSearchBar({
                               onMouseDown={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                clearDateRange();
+                                handleClearDateRange();
                               }}
                               className="shrink-0 text-muted-foreground hover:text-foreground"
                             >
@@ -933,14 +485,8 @@ export function EventSearchBar({
                           <div className="flex flex-wrap gap-2 px-3 py-3">
                             {[
                               { label: t('presetToday'), getRange: todayRange },
-                              {
-                                label: t('presetLast3Days'),
-                                getRange: last3DaysRange,
-                              },
-                              {
-                                label: t('presetLastWeek'),
-                                getRange: lastWeekRange,
-                              },
+                              { label: t('presetLast3Days'), getRange: last3DaysRange },
+                              { label: t('presetLastWeek'), getRange: lastWeekRange },
                             ].map(({ label, getRange }) => (
                               <button
                                 key={label}
@@ -982,7 +528,7 @@ export function EventSearchBar({
                     <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3">
                       <button
                         type="button"
-                        onClick={clearAll}
+                        onClick={handleClearAll}
                         className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
                       >
                         {t('clearAll')}
@@ -1030,7 +576,9 @@ export function EventSearchBar({
                     setShowSuggestions(true);
                   }}
                   onFocus={() => setShowSuggestions(true)}
-                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                  onBlur={() =>
+                    setTimeout(() => setShowSuggestions(false), BLUR_DISMISS_DELAY_MS)
+                  }
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       setShowSuggestions(false);
@@ -1042,15 +590,7 @@ export function EventSearchBar({
                 />
                 <button
                   type="button"
-                  onClick={() => {
-                    setWhere('');
-                    setSearchLat(undefined);
-                    setSearchLng(undefined);
-                    setRadius(0);
-                    setPlacePredictions([]);
-                    setEventNameSuggestions([]);
-                    whereRef.current?.focus();
-                  }}
+                  onClick={handleWhereClear}
                   className={cn(
                     'mt-0.5 shrink-0 text-muted-foreground hover:text-foreground transition-opacity',
                     where ? 'opacity-100' : 'opacity-0 pointer-events-none',
@@ -1060,7 +600,6 @@ export function EventSearchBar({
                 </button>
               </div>
 
-              {/* Combined dropdown */}
               {showSuggestions && (
                 <WhereSuggestionsDropdown
                   placePredictions={placePredictions}
@@ -1068,24 +607,10 @@ export function EventSearchBar({
                   photographers={photographerSuggestions}
                   hasInput={!!where.trim()}
                   onSelectPlace={handleSelectPlace}
-                  onSelectEventName={(name) => {
-                    setWhere(name);
-                    setPlacePredictions([]);
-                    setEventNameSuggestions([]);
-                    setPhotographerSuggestions([]);
-                    setShowSuggestions(false);
-                  }}
-                  onSelectPhotographer={(slug) => {
-                    setShowSuggestions(false);
-                    router.push(lp(`/photographer/${slug}`));
-                  }}
+                  onSelectEventName={handleSelectEventName}
+                  onSelectPhotographer={handleSelectPhotographer}
                   onUseCurrentLocation={handleUseCurrentLocation}
-                  t={{
-                    useCurrentLocation: t('useCurrentLocation'),
-                    locationsLabel: t('locationsLabel'),
-                    eventsLabel: t('eventsLabel'),
-                    photographersLabel: t('photographersLabel'),
-                  }}
+                  t={suggestionTranslations}
                 />
               )}
             </div>
@@ -1179,7 +704,7 @@ export function EventSearchBar({
                       type="button"
                       onMouseDown={(e) => {
                         e.preventDefault();
-                        clearDateRange();
+                        handleClearDateRange();
                       }}
                       className="shrink-0 text-muted-foreground hover:text-foreground"
                     >
@@ -1192,13 +717,7 @@ export function EventSearchBar({
                     dateRange={dateRange}
                     onSelectPreset={handleSelectPreset}
                     onSelectCustom={handleSelectCustom}
-                    t={{
-                      quickOptions: t('quickOptions'),
-                      customDate: t('customDate'),
-                      presetToday: t('presetToday'),
-                      presetLast3Days: t('presetLast3Days'),
-                      presetLastWeek: t('presetLastWeek'),
-                    }}
+                    t={whenTranslations}
                   />
                 </PopoverContent>
               </Popover>
