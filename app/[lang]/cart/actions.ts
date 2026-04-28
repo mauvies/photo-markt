@@ -5,6 +5,10 @@ import { getBaseUrl } from '@/lib/get-base-url';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import { stripe } from '@/lib/stripe/config';
 
+/**
+ * Create a Stripe checkout session for guest (unauthenticated) cart purchases.
+ * Validates all prices server-side and encodes cart items in Stripe metadata.
+ */
 export async function createGuestCheckoutSessionAction(
   items: GuestCartItem[],
 ): Promise<{ url: string }> {

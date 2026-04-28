@@ -5,16 +5,17 @@ import { getUserEvents } from '@/database/queries/events';
 import { getSalesOverTime, getSalesSummary, getTopSellingEvents } from '@/database/queries/sales';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { getPlanById } from '@/lib/plans';
 
 async function getCachedDashboardData(userId: string) {
   'use cache';
   cacheTag(`dashboard-photographer-${userId}`, `photographer-events-${userId}`);
   cacheLife('minutes');
 
-  // Calculate date range for last 30 days
+  const LOOKBACK_DAYS = 30;
   const endDate = new Date();
   const startDate = new Date();
-  startDate.setDate(startDate.getDate() - 30);
+  startDate.setDate(startDate.getDate() - LOOKBACK_DAYS);
   const startDateStr = startDate.toISOString();
   const endDateStr = endDate.toISOString();
 
@@ -26,17 +27,14 @@ async function getCachedDashboardData(userId: string) {
     getUserEvents(supabaseAdmin, userId),
   ]);
 
-  // Calculate total photos count (estimate storage)
+  const ESTIMATED_MB_PER_PHOTO = 5;
+
   const { count: totalPhotosCount } = await supabaseAdmin
     .from('photos')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId);
 
-  // Estimate storage: assume average 5MB per photo
-  const estimatedStorageMB = (totalPhotosCount ?? 0) * 5;
-  const estimatedStorageGB = estimatedStorageMB / 1024;
-
-  const { getPlanById } = await import('@/lib/plans');
+  const estimatedStorageGB = ((totalPhotosCount ?? 0) * ESTIMATED_MB_PER_PHOTO) / 1024;
   const currentPlan = getPlanById('free');
   const storageLimitGB = currentPlan?.storageGB ?? 1;
   const storageUsedGB = estimatedStorageGB;
@@ -56,6 +54,9 @@ async function getCachedDashboardData(userId: string) {
   };
 }
 
+/**
+ * Fetch cached analytics and storage data for the photographer dashboard overview.
+ */
 export async function getDashboardData() {
   const supabase = await createClient();
   const {

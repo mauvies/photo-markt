@@ -1,9 +1,10 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { updateProfile } from '@/database/queries/profiles';
+import { getProfile, updateProfile } from '@/database/queries/profiles';
 import { createClient } from '@/database/server';
 
+/** Save the photographer's payout profile details and mark completion status. */
 export async function updatePayoutProfileAction(updates: {
   full_name: string;
   country_code: string;
@@ -44,7 +45,6 @@ export async function getPayoutProfileStatusAction(): Promise<{
     throw new Error('Unauthorized');
   }
 
-  const { getProfile } = await import('@/database/queries/profiles');
   const profile = await getProfile(supabase, user.id);
 
   return {

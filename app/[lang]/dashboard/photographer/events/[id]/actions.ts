@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import {
+  getTagsForPhotos,
   isPhotoTaggedForTalent,
   tagPhotosForTalent,
   untagPhotoForTalent,
@@ -41,15 +42,10 @@ export async function searchTalentUsers(
   });
 
   if (error) {
-    console.error('Error searching users:', error);
-    console.error('Search text was:', searchText.trim());
     throw new Error(`Failed to search users: ${error.message}`);
   }
 
-  if (!data) {
-    console.warn('No data returned from search_users_by_text');
-    return [];
-  }
+  if (!data) return [];
 
   // Get usernames from profiles
   const userIds = data.map((user: { id: string }) => user.id);
@@ -115,11 +111,7 @@ export async function getPhotoTags(photoIds: string[]): Promise<
     return {};
   }
 
-  const { getTagsForPhotos } = await import('@/database/queries');
-  const tagsByPhoto = await getTagsForPhotos(supabase, photoIds);
-
-  // Tags already have username from getTagsForPhotos, so we can return them directly
-  return tagsByPhoto;
+  return getTagsForPhotos(supabase, photoIds);
 }
 
 /**

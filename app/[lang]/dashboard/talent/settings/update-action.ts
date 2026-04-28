@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { updateProfile } from '@/database/queries/profiles';
 import { createClient } from '@/database/server';
 
+/** Update the talent user's profile from the settings page (username, display name, bio). */
 export async function updateProfileAction(values: {
   username: string;
   display_name?: string | null;

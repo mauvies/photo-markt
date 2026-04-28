@@ -12,6 +12,9 @@ import {
 } from '@/database/queries';
 import { createClient } from '@/database/server';
 
+/**
+ * Soft-delete an event along with all its photos from storage and the database.
+ */
 export const deleteEventAction = async (eventId: string) => {
   if (!eventId) {
     throw new Error('Event id is required.');
@@ -57,6 +60,7 @@ export const deleteEventAction = async (eventId: string) => {
   updateTag(`dashboard-photographer-${user.id}`);
 };
 
+/** Delete a single photo from an event (database + storage). */
 export const deletePhoto = async (photoId: string, eventId: string) => {
   if (!photoId) {
     throw new Error('Photo id is required.');

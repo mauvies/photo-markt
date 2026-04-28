@@ -7,6 +7,7 @@ import {
   upsertUserRole as dbUpsertUserRole,
   getProfileActiveRole,
   getUserRoles,
+  updateProfile,
 } from '@/database/queries';
 import { createClient } from '@/database/server';
 import { getLangFromHeaders } from '@/lib/i18n/get-lang-from-headers';
@@ -47,13 +48,14 @@ async function enableTalentRoleInternal(supabase: SupabaseServerClient, userId: 
   await dbUpsertProfileRole(supabase, userId, ROLES.TALENT);
 }
 
+/**
+ * Finish onboarding: assign the chosen role and optionally set the username, then redirect.
+ */
 export async function completeOnboarding(initialRole: UserRole, username?: string) {
   const role = userRoleSchema.parse(initialRole);
   const { supabase, user } = await getAuthenticatedClient();
 
-  // Update profile with username
   if (username) {
-    const { updateProfile } = await import('@/database/queries');
     await updateProfile(supabase, user.id, { username });
   }
 
@@ -62,12 +64,12 @@ export async function completeOnboarding(initialRole: UserRole, username?: strin
 
   revalidatePath('/es/dashboard');
   revalidatePath('/en/dashboard');
-  // Redirect to the role-specific dashboard
   const dashboardPath = role === ROLES.TALENT ? '/dashboard/talent' : '/dashboard/photographer';
   const lang = await getLangFromHeaders();
   localizedRedirect(lang, dashboardPath);
 }
 
+/** Enable the talent role for the current user if not already present. */
 export async function enableTalentRole(): Promise<SwitchRoleResult> {
   const { supabase, user } = await getAuthenticatedClient();
   await enableTalentRoleInternal(supabase, user.id);
@@ -80,6 +82,7 @@ export async function enableTalentRole(): Promise<SwitchRoleResult> {
   return { activeRole: roleEnumToSlug(ROLES.TALENT) };
 }
 
+/** Switch the active role for the current user, enabling talent if needed. */
 export async function switchRole(
   input: RoleSlug,
   options?: { skipRevalidation?: boolean },
@@ -114,6 +117,7 @@ export async function switchRole(
   return { activeRole: slug };
 }
 
+/** Return the active role for the current user, falling back to photographer if none is set. */
 export async function getActiveRole(): Promise<{
   activeRole: RoleSlug;
 }> {

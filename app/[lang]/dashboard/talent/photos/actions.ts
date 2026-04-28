@@ -10,6 +10,8 @@ import {
 import { createClient } from '@/database/server';
 import { getBaseUrl } from '@/lib/get-base-url';
 
+// --- Types ---
+
 export interface TaggedPhotoGroup {
   event_id: string | null;
   event_name: string | null;
@@ -36,112 +38,66 @@ export interface ListMyTaggedPhotosResult {
   photosInCart: string[];
 }
 
-/**
- * List photos where the current user (talent) is tagged
- * Grouped by event and date
- */
-export async function listMyTaggedPhotos(options?: {
-  limit?: number;
-  offset?: number;
-}): Promise<ListMyTaggedPhotosResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+type TaggedPhoto = Awaited<ReturnType<typeof getTaggedPhotosForTalent>>[number];
 
-  if (!user) {
-    throw new Error('You must be signed in to view your tagged photos.');
+// --- Helpers ---
+
+async function buildSignedUrlsMap(
+  supabase: SupabaseClient,
+  photos: TaggedPhoto[],
+): Promise<Record<string, string | null>> {
+  const photoPaths = photos.map((p) => p.photo_url).filter((url): url is string => url !== null);
+  if (photoPaths.length === 0) return {};
+
+  const byWatermark = new Map<boolean, string[]>();
+  for (const photo of photos) {
+    if (!photo.photo_url) continue;
+    const needsWatermark = photo.event_watermark_enabled === true;
+    const existing = byWatermark.get(needsWatermark) ?? [];
+    existing.push(photo.photo_url);
+    byWatermark.set(needsWatermark, existing);
   }
 
-  const limit = options?.limit ?? 50;
-  const offset = options?.offset ?? 0;
-
-  // Get tagged photos
-  const taggedPhotos = await getTaggedPhotosForTalent(supabase, user.id, {
-    limit,
-    offset,
-  });
-
-  // Get total count
-  const totalCount = await getTaggedPhotosCountForTalent(supabase, user.id);
-
-  // Get all photo IDs to check which are in cart
-  const allPhotoIds = taggedPhotos.map((p) => p.photo_id);
-  const photosInCart: string[] = [];
-  for (const photoId of allPhotoIds) {
-    const inCart = await isPhotoInCart(supabase, user.id, photoId);
-    if (inCart) {
-      photosInCart.push(photoId);
-    }
-  }
-
-  // Generate URLs for photos (with watermark if event has watermark enabled)
-  const photoPaths = taggedPhotos
-    .map((p) => p.photo_url)
-    .filter((url): url is string => url !== null);
-
+  const baseUrl = await getBaseUrl();
   const signedUrlsMap: Record<string, string | null> = {};
-  if (photoPaths.length > 0) {
-    // Group photos by watermark requirement
-    const photosByWatermark = new Map<boolean, string[]>();
-    for (const photo of taggedPhotos) {
-      const needsWatermark = photo.event_watermark_enabled === true;
-      const path = photo.photo_url;
-      if (path) {
-        const existing = photosByWatermark.get(needsWatermark) ?? [];
-        existing.push(path);
-        photosByWatermark.set(needsWatermark, existing);
-      }
-    }
 
-    const baseUrl = await getBaseUrl();
-
-    // Generate URLs for each group
-    for (const [needsWatermark, paths] of photosByWatermark.entries()) {
-      const photoUrls = await createPhotoUrls(supabase, 'photos', paths, {
-        expiresIn: 3600,
-        useWatermark: needsWatermark,
-        baseUrl,
-      });
-      for (const item of photoUrls) {
-        signedUrlsMap[item.path] = item.signedUrl;
-      }
+  for (const [needsWatermark, paths] of byWatermark.entries()) {
+    const photoUrls = await createPhotoUrls(supabase, 'photos', paths, {
+      expiresIn: 3600,
+      useWatermark: needsWatermark,
+      baseUrl,
+    });
+    for (const item of photoUrls) {
+      signedUrlsMap[item.path] = item.signedUrl;
     }
   }
 
-  // Group by event and date
+  return signedUrlsMap;
+}
+
+function groupPhotosByEvent(
+  photos: TaggedPhoto[],
+  signedUrlsMap: Record<string, string | null>,
+): TaggedPhotoGroup[] {
   const groupsMap = new Map<string, TaggedPhotoGroup>();
 
-  for (const photo of taggedPhotos) {
+  for (const photo of photos) {
     const eventKey = photo.event_id ?? 'no-event';
-    const eventName = photo.event_name ?? 'Uncategorized';
-    const eventDate = photo.event_date ?? null;
-    const eventCity = photo.event_city ?? null;
-    const eventCountry = photo.event_country ?? null;
-    const eventWatermarkEnabled = photo.event_watermark_enabled ?? null;
 
     if (!groupsMap.has(eventKey)) {
       groupsMap.set(eventKey, {
         event_id: photo.event_id,
-        event_name: eventName,
-        event_date: eventDate,
-        event_city: eventCity,
-        event_country: eventCountry,
-        event_watermark_enabled: eventWatermarkEnabled,
+        event_name: photo.event_name ?? 'Uncategorized',
+        event_date: photo.event_date ?? null,
+        event_city: photo.event_city ?? null,
+        event_country: photo.event_country ?? null,
+        event_watermark_enabled: photo.event_watermark_enabled ?? null,
         dates: [],
       });
     }
 
-    const group = groupsMap.get(eventKey) ?? {
-      event_id: photo.event_id,
-      event_name: eventName,
-      event_date: eventDate,
-      event_city: eventCity,
-      event_country: eventCountry,
-      event_watermark_enabled: eventWatermarkEnabled,
-      dates: [],
-    };
-
+    const group = groupsMap.get(eventKey)!;
     const photoDate = photo.taken_at
       ? new Date(photo.taken_at).toISOString().split('T')[0]
       : 'unknown';
@@ -161,10 +117,8 @@ export async function listMyTaggedPhotos(options?: {
     });
   }
 
-  // Sort dates within each event
   for (const group of groupsMap.values()) {
     group.dates.sort((a, b) => b.date.localeCompare(a.date));
-    // Sort photos within each date by tagged_at
     for (const dateGroup of group.dates) {
       dateGroup.photos.sort(
         (a, b) => new Date(b.tagged_at).getTime() - new Date(a.tagged_at).getTime(),
@@ -172,13 +126,64 @@ export async function listMyTaggedPhotos(options?: {
     }
   }
 
-  // Convert map to array and sort by event date
-  const groups = Array.from(groupsMap.values()).sort((a, b) => {
+  return Array.from(groupsMap.values()).sort((a, b) => {
     if (!a.event_date && !b.event_date) return 0;
     if (!a.event_date) return 1;
     if (!b.event_date) return -1;
     return new Date(b.event_date).getTime() - new Date(a.event_date).getTime();
   });
+}
+
+async function getPhotosInCart(
+  supabase: SupabaseClient,
+  userId: string,
+  photoIds: string[],
+): Promise<string[]> {
+  const inCart: string[] = [];
+  for (const photoId of photoIds) {
+    if (await isPhotoInCart(supabase, userId, photoId)) {
+      inCart.push(photoId);
+    }
+  }
+  return inCart;
+}
+
+// --- Exports ---
+
+/**
+ * List photos where the current talent user is tagged, grouped by event and date.
+ */
+export async function listMyTaggedPhotos(options?: {
+  limit?: number;
+  offset?: number;
+}): Promise<ListMyTaggedPhotosResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('You must be signed in to view your tagged photos.');
+  }
+
+  const limit = options?.limit ?? 50;
+  const offset = options?.offset ?? 0;
+
+  const [taggedPhotos, totalCount] = await Promise.all([
+    getTaggedPhotosForTalent(supabase, user.id, { limit, offset }),
+    getTaggedPhotosCountForTalent(supabase, user.id),
+  ]);
+
+  const [signedUrlsMap, photosInCart] = await Promise.all([
+    buildSignedUrlsMap(supabase, taggedPhotos),
+    getPhotosInCart(
+      supabase,
+      user.id,
+      taggedPhotos.map((p) => p.photo_id),
+    ),
+  ]);
+
+  const groups = groupPhotosByEvent(taggedPhotos, signedUrlsMap);
 
   return {
     groups,
