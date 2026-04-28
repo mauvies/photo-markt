@@ -303,9 +303,9 @@
   },
   "eventSearchBar": {
     "mobileText": "Busca tu evento",
-    "whereLabel": "Dónde",
+    "whereLabel": "Nombre, ubicación o fotógrafo",
     "nameOrLocation": "Nombre, ubicación o fotógrafo",
-    "wherePlaceholder": "Añade ubicación",
+    "wherePlaceholder": "Nombre del evento, ubicación o fotógrafo",
     "nameOrLocationPlaceholder": "Busca por nombre del evento, ubicación o fotógrafo",
     "whereCompactPlaceholder": "¿Dónde?",
     "activityLabel": "Actividad",
