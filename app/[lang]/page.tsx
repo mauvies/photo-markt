@@ -66,14 +66,14 @@ export default async function Home({
         </div>
 
         <div className="relative z-10 max-w-5xl text-center space-y-4 px-4 sm:px-6 lg:px-8">
-          <h1 className="text-balance text-5xl font-semibold tracking-tight sm:text-6xl lg:text-8xl">
+          <h1 className="text-balance text-5xl font-bold sm:text-6xl lg:text-[5rem]">
             {dict.home.heroHeadline1}
             <span className="block bg-linear-to-r from-primary via-primary/80 to-primary/60 bg-clip-text text-transparent pb-2">
               {dict.home.heroHeadline2}
             </span>
           </h1>
 
-          <p className="mx-auto max-w-2xl text-base leading-normal text-muted-foreground sm:text-lg">
+          <p className="mx-auto max-w-2xl text-lg leading-normal text-muted-foreground sm:text-xl">
             {dict.home.heroSubtitle}
           </p>
 
