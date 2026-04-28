@@ -9,6 +9,9 @@ import {
 } from '@/database/queries';
 import { createClient } from '@/database/server';
 
+/**
+ * Submit user feedback with optional screenshot attachment.
+ */
 export async function submitFeedbackAction(formData: FormData): Promise<void> {
   const supabase = await createClient();
   const {
@@ -53,6 +56,7 @@ export async function submitFeedbackAction(formData: FormData): Promise<void> {
   });
 }
 
+/** Toggle the current user's vote for a roadmap feature. */
 export async function toggleVoteAction(featureKey: string): Promise<{ voted: boolean }> {
   const supabase = await createClient();
   const {
@@ -62,6 +66,7 @@ export async function toggleVoteAction(featureKey: string): Promise<{ voted: boo
   return toggleRoadmapVote(supabase, user.id, featureKey);
 }
 
+/** Return the feature keys the current user has voted for. */
 export async function getInitialVotesAction(): Promise<string[]> {
   const supabase = await createClient();
   const {

@@ -7,6 +7,7 @@ import {
   type PhotographerEarning,
 } from '@/database/queries/earnings';
 import { createPayout, getPayouts, type Payout } from '@/database/queries/payouts';
+import { getProfile } from '@/database/queries/profiles';
 import { createClient } from '@/database/server';
 
 /**
@@ -79,19 +80,15 @@ export async function createPayoutRequestAction(
     throw new Error('Unauthorized');
   }
 
-  // Check if payout profile is complete
-  const { getProfile } = await import('@/database/queries/profiles');
   const profile = await getProfile(supabase, user.id);
   if (!profile?.is_payout_profile_complete) {
-    throw new Error('Please complete your payout profile before requesting withdrawals');
+    throw new Error('Please complete your payout profile before requesting withdrawals.');
   }
-
   if (amountCents <= 0) {
-    throw new Error('Payout amount must be greater than 0');
+    throw new Error('Payout amount must be greater than 0.');
   }
-
   if (!paymentAccountId) {
-    throw new Error('Payment account is required');
+    throw new Error('Payment account is required.');
   }
 
   // Check available balance

@@ -4,6 +4,10 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import { updateProfile } from '@/database/queries/profiles';
 import { createClient } from '@/database/server';
 
+/**
+ * Update the photographer's public profile (username, display name, bio).
+ * Also busts the public photographer profile cache for both old and new slugs.
+ */
 export async function updateProfileAction(values: {
   username: string;
   display_name?: string | null;

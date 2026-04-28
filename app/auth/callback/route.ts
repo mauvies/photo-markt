@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getDashboardPath } from '@/app/[lang]/actions/roles';
+import { getProfileActiveRole, getUserRoles } from '@/database/queries';
+import { claimDownloadToken, getDownloadTokenByToken } from '@/database/queries/download-tokens';
 import { createClient } from '@/database/server';
+import { supabaseAdmin } from '@/database/supabase-admin';
 import { defaultLocale, type Locale } from '@/lib/i18n/config';
 import { localizedPath } from '@/lib/i18n/localized-path';
 
@@ -46,14 +49,8 @@ export async function GET(request: Request) {
     );
   }
 
-  // Claim a guest download token if one was passed from signup flow
   if (downloadToken) {
     try {
-      const { getDownloadTokenByToken, claimDownloadToken } = await import(
-        '@/database/queries/download-tokens'
-      );
-      const { supabaseAdmin } = await import('@/database/supabase-admin');
-
       const tokenRow = await getDownloadTokenByToken(supabaseAdmin, downloadToken);
       if (tokenRow && !tokenRow.claimed_by_user_id) {
         await claimDownloadToken(supabaseAdmin, tokenRow.id, user.id);
@@ -63,11 +60,8 @@ export async function GET(request: Request) {
       );
     } catch (err) {
       console.error('Failed to claim download token:', err);
-      // Fall through to normal redirect
     }
   }
-
-  const { getProfileActiveRole, getUserRoles } = await import('@/database/queries');
 
   const activeRole = await getProfileActiveRole(supabase, user.id);
   if (activeRole) {

@@ -9,11 +9,19 @@ import {
   deletePhoto as dbDeletePhoto,
   deleteStorageFiles,
   eventExists,
+  getEvent,
   getPhoto,
   updateEvent,
   uploadFile,
 } from '@/database/queries';
 import { createClient } from '@/database/server';
+
+// --- Constants ---
+
+const SHARE_CODE_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const SHARE_CODE_LENGTH = 8;
+
+// --- Schema ---
 
 const eventSchema = z.object({
   name: z.string().trim().min(1, 'Name is required.'),
@@ -47,8 +55,82 @@ const eventSchema = z.object({
     }),
 });
 
-type EventPayload = z.infer<typeof eventSchema>;
+// --- Types ---
 
+type EventPayload = z.infer<typeof eventSchema>;
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+
+// --- Helpers ---
+
+function generateShareCode(): string {
+  return Array.from({ length: SHARE_CODE_LENGTH }, () =>
+    SHARE_CODE_CHARSET.charAt(Math.floor(Math.random() * SHARE_CODE_CHARSET.length)),
+  ).join('');
+}
+
+function buildPhotoPath(userId: string, eventId: string, file: File): string {
+  const fileId = crypto.randomUUID();
+  const extension = file.name.split('.').pop();
+  const safeName = extension ? `${fileId}.${extension.toLowerCase()}` : fileId;
+  return `${userId}/${eventId}/${safeName}`;
+}
+
+async function uploadPhotos(
+  supabase: SupabaseClient,
+  userId: string,
+  eventId: string,
+  files: File[],
+  date: string,
+  location: { city: string; country: string; state: string },
+): Promise<void> {
+  const uploadedPaths: string[] = [];
+  try {
+    for (const file of files) {
+      const path = buildPhotoPath(userId, eventId, file);
+      const buffer = Buffer.from(await file.arrayBuffer());
+      await uploadFile(supabase, 'photos', path, buffer, {
+        contentType: file.type || undefined,
+        upsert: false,
+      });
+      await createPhoto(supabase, userId, {
+        event_id: eventId,
+        original_url: path,
+        taken_at: new Date(date).toISOString(),
+        city: location.city,
+        country: location.country,
+        state: location.state,
+      });
+      uploadedPaths.push(path);
+    }
+  } catch (error) {
+    console.error('Photo upload failed', error);
+    if (uploadedPaths.length > 0) {
+      await deleteStorageFiles(supabase, 'photos', uploadedPaths);
+    }
+    throw error;
+  }
+}
+
+function revalidateAfterEventMutation(userId: string, eventId: string): void {
+  revalidatePath('/es/dashboard/photographer/events');
+  revalidatePath('/en/dashboard/photographer/events');
+  revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
+  revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
+  revalidatePath(`/es/dashboard/photographer/events/${eventId}/edit`);
+  revalidatePath(`/en/dashboard/photographer/events/${eventId}/edit`);
+  revalidateTag('events-public', 'max');
+  revalidateTag(`event-${eventId}`, 'max');
+  revalidateTag(`photographer-events-${userId}`, 'max');
+  revalidateTag(`dashboard-photographer-${userId}`, 'max');
+  updateTag(`event-${eventId}`);
+  updateTag(`photographer-events-${userId}`);
+}
+
+// --- Exports ---
+
+/**
+ * Update event metadata, optionally add new photos and/or delete existing ones.
+ */
 export async function updateEventAction(
   eventId: string,
   formData: FormData,
@@ -64,58 +146,33 @@ export async function updateEventAction(
     throw new Error('You must be signed in to update an event.');
   }
 
-  const rawPayload: Record<string, FormDataEntryValue | null> = {
-    name: formData.get('name'),
-    activity: formData.get('activity'),
-    date: formData.get('date'),
-    country: formData.get('country'),
-    state: formData.get('state'),
-    city: formData.get('city'),
-    is_public: formData.get('is_public'),
-    watermark_enabled: formData.get('watermark_enabled'),
-    price_per_photo: formData.get('price_per_photo'),
-  };
-
   const parsed = eventSchema.safeParse({
-    name: rawPayload.name?.toString() ?? '',
-    activity: rawPayload.activity?.toString() ?? '',
-    date: rawPayload.date?.toString() ?? '',
-    country: rawPayload.country?.toString() ?? '',
-    state: rawPayload.state?.toString(),
-    city: rawPayload.city?.toString(),
-    is_public: rawPayload.is_public?.toString() ?? 'true',
-    watermark_enabled: rawPayload.watermark_enabled?.toString() ?? 'true',
-    price_per_photo: rawPayload.price_per_photo?.toString(),
+    name: formData.get('name')?.toString() ?? '',
+    activity: formData.get('activity')?.toString() ?? '',
+    date: formData.get('date')?.toString() ?? '',
+    country: formData.get('country')?.toString() ?? '',
+    state: formData.get('state')?.toString(),
+    city: formData.get('city')?.toString(),
+    is_public: formData.get('is_public')?.toString() ?? 'true',
+    watermark_enabled: formData.get('watermark_enabled')?.toString() ?? 'true',
+    price_per_photo: formData.get('price_per_photo')?.toString(),
   });
-
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? 'Invalid event data provided.');
   }
 
   const payload: EventPayload = parsed.data;
 
-  // Get current event to check if privacy changed
-  const { getEvent } = await import('@/database/queries');
   const currentEvent = await getEvent(supabase, eventId, user.id);
+  if (!currentEvent) throw new Error('Event not found.');
 
-  if (!currentEvent) {
-    throw new Error('Event not found.');
-  }
-
-  // Handle share code: generate if switching from public to private, keep if already private
   let shareCode: string | null = currentEvent.share_code;
   if (!payload.is_public && !shareCode) {
-    // Generate a random 8-character alphanumeric code
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluding ambiguous chars
-    shareCode = Array.from({ length: 8 }, () =>
-      chars.charAt(Math.floor(Math.random() * chars.length)),
-    ).join('');
+    shareCode = generateShareCode();
   } else if (payload.is_public) {
-    // Remove share code if switching to public
     shareCode = null;
   }
 
-  // Watermark only applies to public events
   const watermarkEnabled = payload.is_public && payload.watermark_enabled;
 
   await updateEvent(supabase, eventId, user.id, {
@@ -131,7 +188,6 @@ export async function updateEventAction(
     watermark_enabled: watermarkEnabled,
   });
 
-  // Delete photos if any
   if (photoIdsToDelete && photoIdsToDelete.length > 0) {
     for (const photoId of photoIdsToDelete) {
       const photo = await getPhoto(supabase, photoId, eventId, user.id);
@@ -144,74 +200,28 @@ export async function updateEventAction(
     }
   }
 
-  // Add new photos if any
   if (photoFormData) {
     const uploadedFiles = photoFormData
       .getAll('photos')
       .filter((value): value is File => value instanceof File && value.size > 0);
 
     if (uploadedFiles.length > 0) {
-      const photoRecords: { original_path: string }[] = [];
-
-      try {
-        for (const file of uploadedFiles) {
-          const fileId = crypto.randomUUID();
-          const extension = file.name.split('.').pop();
-          const safeName = extension ? `${fileId}.${extension.toLowerCase()}` : `${fileId}`;
-          const path = `${user.id}/${currentEvent.id}/${safeName}`;
-          const arrayBuffer = await file.arrayBuffer();
-          const buffer = Buffer.from(arrayBuffer);
-
-          await uploadFile(supabase, 'photos', path, buffer, {
-            contentType: file.type || undefined,
-            upsert: false,
-          });
-
-          await createPhoto(supabase, user.id, {
-            event_id: currentEvent.id,
-            original_url: path,
-            taken_at: new Date(payload.date).toISOString(),
-            city: payload.city || '',
-            country: payload.country,
-            state: payload.state,
-          });
-
-          photoRecords.push({ original_path: path });
-        }
-      } catch (error) {
-        console.error('updateEventAction: photo upload failed', error);
-        // Clean up any uploaded files if photo creation fails
-        if (photoRecords.length > 0) {
-          await deleteStorageFiles(
-            supabase,
-            'photos',
-            photoRecords.map((record) => record.original_path),
-          );
-        }
-        throw error;
-      }
+      await uploadPhotos(supabase, user.id, eventId, uploadedFiles, payload.date, {
+        city: payload.city || '',
+        country: payload.country,
+        state: payload.state,
+      });
     }
   }
 
-  revalidatePath('/es/dashboard/photographer/events');
-  revalidatePath('/en/dashboard/photographer/events');
-  revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
-  revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
-  revalidatePath(`/es/dashboard/photographer/events/${eventId}/edit`);
-  revalidatePath(`/en/dashboard/photographer/events/${eventId}/edit`);
-  revalidateTag('events-public', 'max');
+  revalidateAfterEventMutation(user.id, eventId);
   revalidateTag('filter-options', 'max');
-  revalidateTag(`event-${eventId}`, 'max');
-  revalidateTag(`photographer-events-${user.id}`, 'max');
-  revalidateTag(`dashboard-photographer-${user.id}`, 'max');
-  updateTag(`event-${eventId}`);
-  updateTag(`photographer-events-${user.id}`);
 
   return { success: true };
 }
 
 /**
- * Delete a photo from an event
+ * Delete a single photo from an event.
  */
 export async function deletePhotoAction(photoId: string, eventId: string): Promise<void> {
   const supabase = await createClient();
@@ -223,41 +233,24 @@ export async function deletePhotoAction(photoId: string, eventId: string): Promi
     throw new Error('You must be signed in to delete a photo.');
   }
 
-  // Verify event belongs to user
   if (!(await eventExists(supabase, eventId, user.id))) {
     throw new Error('Event not found or access denied.');
   }
 
   const photo = await getPhoto(supabase, photoId, eventId, user.id);
+  if (!photo) throw new Error('Photo not found.');
 
-  if (!photo) {
-    throw new Error('Photo not found.');
-  }
-
-  // Delete photo from database
   await dbDeletePhoto(supabase, photoId, user.id);
 
-  // Delete file from storage
   if (photo.original_url) {
     await deleteStorageFiles(supabase, 'photos', [photo.original_url]);
   }
 
-  revalidatePath('/es/dashboard/photographer/events');
-  revalidatePath('/en/dashboard/photographer/events');
-  revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
-  revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
-  revalidatePath(`/es/dashboard/photographer/events/${eventId}/edit`);
-  revalidatePath(`/en/dashboard/photographer/events/${eventId}/edit`);
-  revalidateTag('events-public', 'max');
-  revalidateTag(`event-${eventId}`, 'max');
-  revalidateTag(`photographer-events-${user.id}`, 'max');
-  revalidateTag(`dashboard-photographer-${user.id}`, 'max');
-  updateTag(`event-${eventId}`);
-  updateTag(`photographer-events-${user.id}`);
+  revalidateAfterEventMutation(user.id, eventId);
 }
 
 /**
- * Add photos to an existing event
+ * Add new photos to an existing event.
  */
 export async function addPhotosAction(eventId: string, formData: FormData): Promise<void> {
   const supabase = await createClient();
@@ -269,79 +262,19 @@ export async function addPhotosAction(eventId: string, formData: FormData): Prom
     throw new Error('You must be signed in to add photos.');
   }
 
-  // Verify event belongs to user
-  const { getEvent } = await import('@/database/queries');
   const event = await getEvent(supabase, eventId, user.id);
-
-  if (!event) {
-    throw new Error('Event not found or access denied.');
-  }
+  if (!event) throw new Error('Event not found or access denied.');
 
   const uploadedFiles = formData
     .getAll('photos')
     .filter((value): value is File => value instanceof File && value.size > 0);
+  if (uploadedFiles.length === 0) throw new Error('No photos provided.');
 
-  if (uploadedFiles.length === 0) {
-    throw new Error('No photos provided.');
-  }
+  await uploadPhotos(supabase, user.id, event.id, uploadedFiles, event.date, {
+    city: event.city,
+    country: event.country,
+    state: event.state || '',
+  });
 
-  const photoRecords: { original_path: string }[] = [];
-
-  try {
-    for (const file of uploadedFiles) {
-      const fileId = crypto.randomUUID();
-      const extension = file.name.split('.').pop();
-      const safeName = extension ? `${fileId}.${extension.toLowerCase()}` : `${fileId}`;
-      const path = `${user.id}/${event.id}/${safeName}`;
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-
-      await uploadFile(supabase, 'photos', path, buffer, {
-        contentType: file.type || undefined,
-        upsert: false,
-      });
-
-      await createPhoto(supabase, user.id, {
-        event_id: event.id,
-        original_url: path,
-        taken_at: new Date(event.date).toISOString(),
-        city: event.city,
-        country: event.country,
-        state: event.state || '',
-      });
-
-      photoRecords.push({ original_path: path });
-    }
-  } catch (error) {
-    console.error('addPhotosAction: upload failed', error);
-    // Clean up any uploaded files if photo creation fails
-    if (photoRecords.length > 0) {
-      await deleteStorageFiles(
-        supabase,
-        'photos',
-        photoRecords.map((record) => record.original_path),
-      );
-    }
-
-    const message =
-      error instanceof Error
-        ? error.message
-        : typeof error === 'object' && error !== null
-          ? JSON.stringify(error)
-          : 'Unable to upload photos. Please try again.';
-    throw new Error(message);
-  }
-
-  revalidatePath('/es/dashboard/photographer/events');
-  revalidatePath('/en/dashboard/photographer/events');
-  revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
-  revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
-  revalidatePath(`/es/dashboard/photographer/events/${eventId}/edit`);
-  revalidatePath(`/en/dashboard/photographer/events/${eventId}/edit`);
-  revalidateTag('events-public', 'max');
-  revalidateTag(`event-${eventId}`, 'max');
-  revalidateTag(`photographer-events-${user.id}`, 'max');
-  revalidateTag(`dashboard-photographer-${user.id}`, 'max');
-  updateTag(`event-${eventId}`);
-  updateTag(`photographer-events-${user.id}`);
+  revalidateAfterEventMutation(user.id, eventId);
 }

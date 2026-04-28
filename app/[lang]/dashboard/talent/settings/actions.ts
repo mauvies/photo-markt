@@ -5,6 +5,7 @@ import { getProfile } from '@/database/queries/profiles';
 import { getTaggedPhotosCountForTalent } from '@/database/queries/talent-photo-tags';
 import { createClient } from '@/database/server';
 
+/** Fetch the current talent user's profile and account stats for the settings page. */
 export async function getProfileData() {
   const supabase = await createClient();
   const {

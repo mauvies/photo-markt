@@ -15,6 +15,13 @@ import { createClient } from '@/database/server';
 import { generateEventSlug } from '@/lib/slugify';
 import { activityValues } from './activity-options';
 
+// --- Constants ---
+
+const SHARE_CODE_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const SHARE_CODE_LENGTH = 8;
+
+// --- Schema ---
+
 const eventSchema = z.object({
   name: z.string().trim().min(1, 'Name is required.'),
   activity: z
@@ -47,71 +54,141 @@ const eventSchema = z.object({
     }),
 });
 
-type EventPayload = z.infer<typeof eventSchema>;
+// --- Types ---
 
-type CreateEventResult = {
+type EventPayload = z.infer<typeof eventSchema>;
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+
+export type CreateEventResult = {
   eventId: string;
   shareCode: string | null;
 };
 
+// --- Helpers ---
+
+function generateShareCode(): string {
+  return Array.from({ length: SHARE_CODE_LENGTH }, () =>
+    SHARE_CODE_CHARSET.charAt(Math.floor(Math.random() * SHARE_CODE_CHARSET.length)),
+  ).join('');
+}
+
+function buildPhotoPath(userId: string, eventId: string, file: File): string {
+  const fileId = crypto.randomUUID();
+  const extension = file.name.split('.').pop();
+  const safeName = extension ? `${fileId}.${extension.toLowerCase()}` : fileId;
+  return `${userId}/${eventId}/${safeName}`;
+}
+
+async function resolvePublicEventSlug(
+  supabase: SupabaseClient,
+  name: string,
+  city: string,
+  date: string,
+  eventId: string,
+): Promise<string> {
+  const year = new Date(date).getFullYear();
+  const baseSlug = generateEventSlug(name, city, year);
+  const { data: existing } = await supabase
+    .from('events')
+    .select('id')
+    .eq('slug', baseSlug)
+    .maybeSingle();
+  return existing ? generateEventSlug(name, city, year, eventId.slice(0, 6)) : baseSlug;
+}
+
+async function uploadEventPhotos(
+  supabase: SupabaseClient,
+  userId: string,
+  event: { id: string },
+  files: File[],
+  payload: Pick<EventPayload, 'date' | 'city' | 'country' | 'state'>,
+): Promise<void> {
+  const uploadedPaths: string[] = [];
+  try {
+    for (const file of files) {
+      const path = buildPhotoPath(userId, event.id, file);
+      const buffer = Buffer.from(await file.arrayBuffer());
+      await uploadFile(supabase, 'photos', path, buffer, {
+        contentType: file.type || undefined,
+        upsert: false,
+      });
+      await createPhoto(supabase, userId, {
+        event_id: event.id,
+        original_url: path,
+        taken_at: new Date(payload.date).toISOString(),
+        city: payload.city || '',
+        country: payload.country,
+        state: payload.state || null,
+      });
+      uploadedPaths.push(path);
+    }
+  } catch (error) {
+    if (uploadedPaths.length > 0) {
+      await deleteStorageFiles(supabase, 'photos', uploadedPaths);
+    }
+    throw error;
+  }
+}
+
+async function revalidateAfterEventCreate(
+  supabase: SupabaseClient,
+  userId: string,
+  eventId: string,
+): Promise<void> {
+  revalidatePath('/es/dashboard/photographer/events');
+  revalidatePath('/en/dashboard/photographer/events');
+  revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
+  revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
+  revalidateTag('events-public', 'max');
+  revalidateTag('filter-options', 'max');
+  revalidateTag(`photographer-events-${userId}`, 'max');
+  revalidateTag(`dashboard-photographer-${userId}`, 'max');
+  updateTag(`photographer-events-${userId}`);
+  updateTag(`dashboard-photographer-${userId}`);
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('slug')
+    .eq('id', userId)
+    .maybeSingle();
+  if (profile?.slug) revalidateTag(`photographer-${profile.slug}`, 'max');
+}
+
+// --- Export ---
+
+/**
+ * Create a new event with photos from the given form data.
+ * Private events receive a random share code; public events get a SEO slug.
+ */
 export const createEvent = async (formData: FormData): Promise<CreateEventResult> => {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error('You must be signed in to create an event.');
-  }
-
-  const rawPayload: Record<string, FormDataEntryValue | null> = {
-    name: formData.get('name'),
-    activity: formData.get('activity'),
-    date: formData.get('date'),
-    country: formData.get('country'),
-    state: formData.get('state'),
-    city: formData.get('city'),
-    is_public: formData.get('is_public'),
-    watermark_enabled: formData.get('watermark_enabled'),
-    price_per_photo: formData.get('price_per_photo'),
-  };
+  if (!user) throw new Error('You must be signed in to create an event.');
 
   const parsed = eventSchema.safeParse({
-    name: rawPayload.name?.toString() ?? '',
-    activity: rawPayload.activity?.toString() ?? '',
-    date: rawPayload.date?.toString() ?? '',
-    country: rawPayload.country?.toString() ?? '',
-    state: rawPayload.state?.toString(),
-    city: rawPayload.city?.toString(),
-    is_public: rawPayload.is_public?.toString() ?? 'true',
-    watermark_enabled: rawPayload.watermark_enabled?.toString() ?? 'true',
-    price_per_photo: rawPayload.price_per_photo?.toString(),
+    name: formData.get('name')?.toString() ?? '',
+    activity: formData.get('activity')?.toString() ?? '',
+    date: formData.get('date')?.toString() ?? '',
+    country: formData.get('country')?.toString() ?? '',
+    state: formData.get('state')?.toString(),
+    city: formData.get('city')?.toString(),
+    is_public: formData.get('is_public')?.toString() ?? 'true',
+    watermark_enabled: formData.get('watermark_enabled')?.toString() ?? 'true',
+    price_per_photo: formData.get('price_per_photo')?.toString(),
   });
-
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? 'Invalid event data provided.');
   }
 
-  const payload: EventPayload = parsed.data;
+  const payload = parsed.data;
   const uploadedFiles = formData
     .getAll('photos')
     .filter((value): value is File => value instanceof File && value.size > 0);
+  if (uploadedFiles.length === 0) throw new Error('Add at least one photo to continue.');
 
-  if (uploadedFiles.length === 0) {
-    throw new Error('Add at least one photo to continue.');
-  }
-
-  // Generate share code for private events
-  let shareCode: string | null = null;
-  if (!payload.is_public) {
-    // Generate a random 8-character alphanumeric code
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluding ambiguous chars
-    shareCode = Array.from({ length: 8 }, () =>
-      chars.charAt(Math.floor(Math.random() * chars.length)),
-    ).join('');
-  }
-
-  // Watermark only applies to public events
+  const shareCode = payload.is_public ? null : generateShareCode();
   const watermarkEnabled = payload.is_public && payload.watermark_enabled;
 
   const event = await dbCreateEvent(supabase, user.id, {
@@ -125,98 +202,32 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     share_code: shareCode,
     price_per_photo: payload.price_per_photo ?? null,
     watermark_enabled: watermarkEnabled,
-    // Slug is only set on public events (private events use share codes)
     slug: null,
   });
 
-  // Generate SEO slug for public events after we have the event ID.
-  // We first try the clean base slug; if it's already taken we append
-  // the first 6 chars of the event UUID to guarantee uniqueness.
   if (payload.is_public) {
-    const year = new Date(payload.date).getFullYear();
-    const baseSlug = generateEventSlug(payload.name, payload.city || '', year);
-
-    const { data: existing } = await supabase
-      .from('events')
-      .select('id')
-      .eq('slug', baseSlug)
-      .maybeSingle();
-
-    const finalSlug = existing
-      ? generateEventSlug(payload.name, payload.city || '', year, event.id.slice(0, 6))
-      : baseSlug;
-
-    await supabase
-      .from('events')
-      .update({ slug: finalSlug })
-      .eq('id', event.id)
-      .eq('user_id', user.id);
+    const slug = await resolvePublicEventSlug(
+      supabase,
+      payload.name,
+      payload.city || '',
+      payload.date,
+      event.id,
+    );
+    await supabase.from('events').update({ slug }).eq('id', event.id).eq('user_id', user.id);
   }
 
-  const photoRecords: { original_path: string }[] = [];
-
   try {
-    for (const file of uploadedFiles) {
-      const fileId = crypto.randomUUID();
-      const extension = file.name.split('.').pop();
-      const safeName = extension ? `${fileId}.${extension.toLowerCase()}` : `${fileId}`;
-      const path = `${user.id}/${event.id}/${safeName}`;
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-
-      await uploadFile(supabase, 'photos', path, buffer, {
-        contentType: file.type || undefined,
-        upsert: false,
-      });
-
-      await createPhoto(supabase, user.id, {
-        event_id: event.id,
-        original_url: path,
-        taken_at: new Date(payload.date).toISOString(),
-        city: payload.city || '',
-        country: payload.country,
-        state: payload.state || null,
-      });
-
-      photoRecords.push({ original_path: path });
-    }
+    await uploadEventPhotos(supabase, user.id, event, uploadedFiles, payload);
   } catch (error) {
     console.error('createEvent: upload failed', error);
     await deleteEventPhotos(supabase, event.id, user.id);
-    await deleteStorageFiles(
-      supabase,
-      'photos',
-      photoRecords.map((record) => record.original_path),
-    );
     await deleteEvent(supabase, event.id, user.id);
-
-    const message =
-      error instanceof Error
-        ? error.message
-        : typeof error === 'object' && error !== null
-          ? JSON.stringify(error)
-          : 'Unable to upload photos. Please try again.';
-    throw new Error(message);
+    throw new Error(
+      error instanceof Error ? error.message : 'Unable to upload photos. Please try again.',
+    );
   }
 
-  revalidatePath('/es/dashboard/photographer/events');
-  revalidatePath('/en/dashboard/photographer/events');
-  revalidatePath(`/es/dashboard/photographer/events/${event.id}`);
-  revalidatePath(`/en/dashboard/photographer/events/${event.id}`);
-  revalidateTag('events-public', 'max');
-  revalidateTag('filter-options', 'max');
-  revalidateTag(`photographer-events-${user.id}`, 'max');
-  revalidateTag(`dashboard-photographer-${user.id}`, 'max');
-  updateTag(`photographer-events-${user.id}`);
-  updateTag(`dashboard-photographer-${user.id}`);
-
-  // Bust the public photographer profile cache
-  const { data: photographerProfile } = await supabase
-    .from('profiles')
-    .select('slug')
-    .eq('id', user.id)
-    .maybeSingle();
-  if (photographerProfile?.slug) revalidateTag(`photographer-${photographerProfile.slug}`, 'max');
+  await revalidateAfterEventCreate(supabase, user.id, event.id);
 
   return { eventId: event.id, shareCode };
 };

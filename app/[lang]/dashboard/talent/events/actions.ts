@@ -12,6 +12,9 @@ import { supabaseAdmin } from '@/database/supabase-admin';
 
 export type { PhotographerSearchResult } from '@/database/queries';
 
+/**
+ * Search public events with optional filters, enriched with photo counts and signed cover URLs.
+ */
 export async function searchEventsAction(filters: {
   searchText?: string;
   activities?: string[];
@@ -54,18 +57,15 @@ export async function searchEventsAction(filters: {
     }
   >();
 
-  (photoRows ?? []).forEach((row) => {
-    if (!row.event_id) return;
-    const current = stats.get(row.event_id) ?? {
-      count: 0,
-      coverPath: null,
-    };
+  for (const row of photoRows ?? []) {
+    if (!row.event_id) continue;
+    const current = stats.get(row.event_id) ?? { count: 0, coverPath: null };
     current.count += 1;
     if (!current.coverPath && row.original_url) {
       current.coverPath = row.original_url;
     }
     stats.set(row.event_id, current);
-  });
+  }
 
   // Sign cover URLs
   const coverUrls = new Map<string, string>();
@@ -104,6 +104,7 @@ export async function searchEventsAction(filters: {
   };
 }
 
+/** Return available filter options (activities, cities, countries) for the event search UI. */
 export async function getFilterOptionsAction() {
   'use cache';
   cacheTag('filter-options', 'events-public');
@@ -111,6 +112,10 @@ export async function getFilterOptionsAction() {
   return getEventFilterOptions(supabaseAdmin);
 }
 
+/**
+ * Search photographers by username or display name.
+ * Only returns users who have at least one public event.
+ */
 export async function searchPhotographersAction(
   query: string,
 ): Promise<PhotographerSearchResult[]> {
@@ -157,6 +162,7 @@ export async function searchPhotographersAction(
     }));
 }
 
+/** Return up to 6 distinct event names matching the query (for autocomplete). */
 export async function searchEventNamesAction(query: string): Promise<string[]> {
   if (!query.trim()) return [];
   const { data } = await supabaseAdmin
