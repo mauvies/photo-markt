@@ -1,0 +1,95 @@
+# ==========================================
+# .claudeignore - Picdemi Project
+# Objetivo: Ahorrar tokens y evitar fugas de secretos.
+# ==========================================
+
+# --- Dependencias (¡El mayor ahorro!) ---
+node_modules/
+jspm_packages/
+web_modules/
+# Si usas Python
+venv/
+.venv/
+env/
+__pycache__/
+
+# --- Directorios de Build y Output ---
+.next/
+build/
+dist/
+out/
+.docusaurus/
+.cache/
+
+# --- Variables de Entorno y Secretos (¡CRÍTICO!) ---
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+*.pem
+*.key
+auth_token*
+secrets.json
+
+# --- Logs y Archivos Temporales ---
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+pnpm-debug.log*
+.npm/
+.eslintcache
+.stylelintcache
+*.log
+*.tmp
+*.temp
+
+# --- Multimedia y Assets Grandes (Claude no lee binarios) ---
+# Esto ahorra muchísimos tokens de input.
+public/assets/
+public/images/
+public/videos/
+public/fonts/
+# O genérico si tienes los assets en otros sitios
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.ico
+*.mp4
+*.webp
+*.avif
+*.ttf
+*.otf
+
+# --- Configuración de IDEs y Herramientas ---
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.history/
+
+# --- Control de Versiones ---
+.git/
+.hg/
+.svn/
+
+# --- Base de Datos Local (si usas SQLite u otros dumps) ---
+# Mantén schema.prisma, pero ignora los datos reales.
+*.db
+*.sqlite
+*.sqlite-journal
+# Si tienes dumps de SQL grandes
+*.sql
+
+# --- Otros ---
+coverage/
+.nyc_output/
+.vercel/
+.turbo/

@@ -78,7 +78,7 @@ export function AppSidebar({
             <Image
               src="/logo.svg"
               alt="Photo Markt"
-              className="h-12 w-auto"
+              className="h-10 w-auto"
               width={80}
               height={80}
             />

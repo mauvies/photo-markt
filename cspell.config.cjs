@@ -19,6 +19,7 @@ module.exports = {
     '*.ts.snap',
     '.github/**',
     'supabase/**',
+    '.claudeignore',
   ],
   words: vscodeConfig['cSpell.words'],
 };
