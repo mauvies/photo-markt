@@ -37,7 +37,6 @@ import {
   getPhotographerEarningsAction,
 } from './actions';
 import { getPaymentAccountsAction } from './payment-accounts-actions';
-import { PaymentAccountsSection } from './payment-accounts-section';
 import { PayoutProfileBanner } from './payout-profile-banner';
 
 type EarningsT = Dictionary['earnings'];
@@ -271,9 +270,10 @@ function PayoutRequestDialog({
 
 interface PayoutHistoryProps {
   payouts: Payout[];
+  className?: string;
 }
 
-function PayoutHistory({ payouts }: PayoutHistoryProps) {
+function PayoutHistory({ payouts, className }: PayoutHistoryProps) {
   const { t } = useTranslations<EarningsT>();
 
   if (payouts.length === 0) {
@@ -301,7 +301,7 @@ function PayoutHistory({ payouts }: PayoutHistoryProps) {
   };
 
   return (
-    <div className="rounded-xl border bg-card p-6 shadow-sm">
+    <div className={cn('rounded-xl border bg-card p-6 shadow-sm', className)}>
       <h3 className="mb-4 text-lg font-semibold">{t('payoutHistoryTitle')}</h3>
       <div className="space-y-3">
         {payouts.map((payout) => (
@@ -339,14 +339,15 @@ function PayoutHistory({ payouts }: PayoutHistoryProps) {
 
 interface EarningsTableProps {
   earnings: PhotographerEarning[];
+  className?: string;
 }
 
-function EarningsTable({ earnings }: EarningsTableProps) {
+function EarningsTable({ earnings, className }: EarningsTableProps) {
   const { t } = useTranslations<EarningsT>();
 
   if (earnings.length === 0) {
     return (
-      <div className="rounded-xl border bg-card p-6 shadow-sm">
+      <div className={cn('rounded-xl border bg-card p-6 shadow-sm', className)}>
         <h3 className="mb-4 text-lg font-semibold">{t('recentEarningsTitle')}</h3>
         <p className="text-sm text-muted-foreground">{t('noEarningsYet')}</p>
       </div>
@@ -354,7 +355,7 @@ function EarningsTable({ earnings }: EarningsTableProps) {
   }
 
   return (
-    <div className="rounded-xl border bg-card p-6 shadow-sm">
+    <div className={cn('rounded-xl border bg-card p-6 shadow-sm', className)}>
       <h3 className="mb-4 text-lg font-semibold">{t('recentEarningsTitle')}</h3>
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -480,12 +481,18 @@ export function EarningsContent() {
             />
           </div>
 
-          {/* Payment Accounts */}
-          <PaymentAccountsSection />
-
-          {/* Payout Request & History */}
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
+          {/* Payment Accounts & Requests */}
+          <div className="flex flex-col gap-4 xl:flex-row">
+            <div className="rounded-xl border bg-card p-6 shadow-sm xl:w-[60%]">
+              <h3 className="text-lg font-semibold mb-2">{t('payoutMethodCardTitle')}</h3>
+              <p className="text-sm text-muted-foreground mb-4">{t('payoutMethodCardDesc')}</p>
+              <Link href="/dashboard/photographer/profile/payout-profile">
+                <Button variant="outline" size="sm">
+                  {t('payoutMethodCardButton')}
+                </Button>
+              </Link>
+            </div>
+            <div className="rounded-xl border bg-card p-6 shadow-sm flex-1">
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-lg font-semibold">{t('requestPayoutTitle')}</h3>
               </div>
@@ -496,11 +503,15 @@ export function EarningsContent() {
                 isPayoutProfileComplete={isPayoutProfileComplete}
               />
             </div>
-            <PayoutHistory payouts={payouts} />
           </div>
 
-          {/* Earnings Table */}
-          <EarningsTable earnings={earnings} />
+          {/* Earnings Table & History */}
+          <div className="flex flex-col gap-4 xl:flex-row">
+            <EarningsTable earnings={earnings} className="xl:w-[60%]" />
+            <div className="flex-1">
+              <PayoutHistory payouts={payouts} />
+            </div>
+          </div>
         </>
       ) : null}
     </div>

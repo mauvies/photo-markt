@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 import { Calendar, Image as ImageIcon, Loader2, ShoppingCart, Trash2, User, X } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, useTransition } from 'react';
+import { useLayoutEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { CART_MERGE_STATE_KEY } from '@/components/guest-cart-merge';
 import {
@@ -22,6 +22,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { GUEST_CART_KEY, LEGACY_GUEST_CART_KEY } from '@/lib/guest-cart';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
   type CartData,
@@ -36,25 +37,51 @@ interface CartContentProps {
 }
 
 export function CartContent({ initialCartData }: CartContentProps) {
-  const [cartData, setCartData] = useState(initialCartData);
   const [isPending, startTransition] = useTransition();
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  // Sync server-rendered cart data when router.refresh() delivers a new RSC payload
-  useEffect(() => {
-    setCartData(initialCartData);
-  }, [initialCartData]);
+  // If localStorage has guest cart items, signal the skeleton immediately —
+  // before the SIGNED_IN event fires — so the user never sees the empty state.
+  // useLayoutEffect runs synchronously before the browser paints, preventing
+  // the empty-cart flash on the post-login redirect.
+  useLayoutEffect(() => {
+    try {
+      const stored =
+        localStorage.getItem(GUEST_CART_KEY) ?? localStorage.getItem(LEGACY_GUEST_CART_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          queryClient.setQueryData(CART_MERGE_STATE_KEY, true);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [queryClient]);
 
-  // Show skeleton while guest cart merge is writing to the DB
+  // Cart items come from a client-side query so that invalidateQueries() after
+  // merge/remove/clear can await the refetch — eliminating the race where the
+  // skeleton cleared before the new data arrived.
+  const { data: cartData = initialCartData } = useQuery({
+    queryKey: ['cart-data'],
+    queryFn: getCurrentCart,
+    initialData: initialCartData,
+    // Never auto-refetch; only re-fetch on explicit invalidation.
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+
+  // Skeleton shown while merge is in progress (set by both useLayoutEffect above
+  // and GuestCartMerge's onAuthStateChange handler).
   const { data: isMerging = false } = useQuery<boolean>({
     queryKey: CART_MERGE_STATE_KEY,
     queryFn: () => false,
     initialData: false,
     staleTime: Number.POSITIVE_INFINITY,
   });
+
   const lp = useLocalizedPath();
   const { t } = useTranslations<{
     empty: string;
@@ -87,11 +114,10 @@ export function CartContent({ initialCartData }: CartContentProps) {
     startTransition(async () => {
       try {
         await removePhotoFromCartAction(photoId);
-        const updated = await getCurrentCart();
-        setCartData(updated);
+        // Await the refetch so the UI updates before the spinner stops.
+        await queryClient.invalidateQueries({ queryKey: ['cart-data'] });
         queryClient.invalidateQueries({ queryKey: ['cart-count'] });
         toast.success(t('removedFromCart'));
-        router.refresh();
       } catch (error) {
         const message = error instanceof Error ? error.message : t('failedRemoveItem');
         toast.error(message);
@@ -105,11 +131,9 @@ export function CartContent({ initialCartData }: CartContentProps) {
     startTransition(async () => {
       try {
         await clearCartAction();
-        const updated = await getCurrentCart();
-        setCartData(updated);
+        await queryClient.invalidateQueries({ queryKey: ['cart-data'] });
         queryClient.invalidateQueries({ queryKey: ['cart-count'] });
         toast.success(t('cartCleared'));
-        router.refresh();
       } catch (error) {
         const message = error instanceof Error ? error.message : t('failedClearCart');
         toast.error(message);

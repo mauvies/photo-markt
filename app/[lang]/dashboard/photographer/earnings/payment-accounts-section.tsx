@@ -27,6 +27,7 @@ import { Textarea } from '@/components/ui/textarea';
 import type { PaymentAccount, PaymentAccountType } from '@/database/queries/payment-accounts';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
+import { cn } from '@/lib/utils';
 import {
   type BankAccountFields,
   COMMON_COUNTRIES,
@@ -413,7 +414,7 @@ function PaymentAccountForm({ onSuccess, onCancel, initialData }: PaymentAccount
   );
 }
 
-export function PaymentAccountsSection() {
+export function PaymentAccountsSection({ className }: { className?: string }) {
   const { t } = useTranslations<EarningsT>();
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -454,7 +455,7 @@ export function PaymentAccountsSection() {
   };
 
   return (
-    <div className="rounded-xl border bg-card p-6 shadow-sm">
+    <div className={cn('rounded-xl border bg-card p-6 shadow-sm', className)}>
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">{t('paymentAccountsTitle')}</h3>

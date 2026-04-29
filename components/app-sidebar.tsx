@@ -74,7 +74,7 @@ export function AppSidebar({
     <Sidebar collapsible="icon" className="h-svh" {...props}>
       <SidebarHeader>
         <div className="relative flex items-center py-1">
-          <Link href={lp('/')} className="flex items-center gap-1">
+          <Link href={lp('/')} className="flex items-center gap-1 px-2">
             <Image
               src="/logo.svg"
               alt="Photo Markt"
