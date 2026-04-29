@@ -61,7 +61,7 @@ export function TalentDashboardHeader({
             <Image
               src="/logo.svg"
               alt="Photo Markt"
-              className="h-9 w-auto mt-2 md:h-12"
+              className="h-10 w-auto mt-1"
               width={80}
               height={80}
             />

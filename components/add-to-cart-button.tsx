@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, Minus, Plus, ShoppingCart } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
@@ -39,6 +40,7 @@ export function AddToCartButton({
   const [isInCart, setIsInCart] = useState(initialInCart);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const handleAddToCart = (e?: React.MouseEvent) => {
     if (e) {
@@ -54,6 +56,7 @@ export function AddToCartButton({
       try {
         await addPhotoToCartAction(photoId);
         setIsInCart(true);
+        queryClient.invalidateQueries({ queryKey: ['cart-count'] });
         toast.success('Added to cart');
         router.refresh();
       } catch (error) {
@@ -77,6 +80,7 @@ export function AddToCartButton({
       try {
         await removePhotoFromCartAction(photoId);
         setIsInCart(false);
+        queryClient.invalidateQueries({ queryKey: ['cart-count'] });
         toast.success('Removed from cart');
         router.refresh();
       } catch (error) {

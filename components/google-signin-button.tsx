@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 
 interface GoogleSignInButtonProps {
   plan?: string;
+  next?: string;
   variant?: 'default' | 'outline' | 'ghost' | 'link' | 'destructive' | 'secondary';
   className?: string;
   label?: string;
@@ -15,6 +16,7 @@ interface GoogleSignInButtonProps {
 
 export function GoogleSignInButton({
   plan,
+  next,
   variant = 'outline',
   className,
   label,
@@ -24,7 +26,7 @@ export function GoogleSignInButton({
 
   const handleClick = () => {
     startTransition(async () => {
-      const result = await signInWithGoogle(plan);
+      const result = await signInWithGoogle(plan, next);
       if (result.error) {
         router.push(`/login?message=Could not sign in with Google. Reason: ${result.error}`);
       } else if (result.url) {

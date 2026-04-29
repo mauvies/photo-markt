@@ -26,6 +26,7 @@ export default async function Login({
     success?: string;
     reset?: string;
     token?: string;
+    next?: string;
   }>;
 }) {
   const { lang } = await routeParams;
@@ -83,7 +84,8 @@ export default async function Login({
     if (error) {
       console.error(error);
       const errorKey = error.code === 'invalid_credentials' ? 'invalid_credentials' : 'generic';
-      return localizedRedirect(lang, `/login?error=${errorKey}`);
+      const nextQuery = params.next ? `&next=${encodeURIComponent(params.next)}` : '';
+      return localizedRedirect(lang, `/login?error=${errorKey}${nextQuery}`);
     }
     // After successful login, check role to decide where to send the user.
     const {
@@ -113,6 +115,12 @@ export default async function Login({
       }
     }
 
+    // Safe redirect to `next` param (relative paths only, no protocol-relative)
+    const nextPath = params.next;
+    if (nextPath?.startsWith('/') && !nextPath.startsWith('//')) {
+      return localizedRedirect(lang, nextPath);
+    }
+
     const activeRole = await getProfileActiveRole(supabase, user.id);
     if (activeRole) {
       const dashboardPath = await getDashboardPath();
@@ -138,6 +146,7 @@ export default async function Login({
           <div className="mt-4">
             <GoogleSignInButton
               plan={params.plan}
+              next={params.next}
               label={dict.auth.continueWithGoogle}
               className="w-full h-10 border-1 rounded-full"
             />

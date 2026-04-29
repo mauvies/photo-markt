@@ -1,10 +1,23 @@
 'use client';
 
-import { Download, Share2 } from 'lucide-react';
+import { Download, Share2, Trash2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { type Photo, type RenderPhotoContext, RowsPhotoAlbum } from 'react-photo-album';
 import { toast } from 'sonner';
+import { removePhotosFromMyPhotosAction } from '@/app/[lang]/dashboard/talent/photos/actions';
 import { PhotoLightbox, type PhotoLightboxItem } from '@/components/photo-lightbox';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
 import { getPhotoDownloadUrl } from './actions';
 import 'react-photo-album/rows.css';
@@ -35,9 +48,24 @@ export function ProfilePhotoViewer({
   currentIndex,
   onIndexChange,
 }: ProfilePhotoViewerProps) {
+  const router = useRouter();
+  const { t } = useTranslations<{
+    downloadStarted: string;
+    downloadFailed: string;
+    downloadError: string;
+    linkCopied: string;
+    shared: string;
+    shareFailed: string;
+    removePhotoTitle: string;
+    removePhotoDesc: string;
+    removePhotoConfirm: string;
+    removePhotoSuccess: string;
+    removePhotoFailed: string;
+  }>();
   const [dimensions, setDimensions] = useState<Record<string, { width: number; height: number }>>(
     {},
   );
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   useEffect(() => {
     items.forEach((item) => {
@@ -108,7 +136,7 @@ export function ProfilePhotoViewer({
       try {
         const downloadUrl = await getPhotoDownloadUrl(metadata.download_url);
         if (!downloadUrl) {
-          toast.error('Failed to generate download link');
+          toast.error(t('downloadFailed'));
           return;
         }
 
@@ -135,13 +163,13 @@ export function ProfilePhotoViewer({
           URL.revokeObjectURL(blobUrl);
         }, 100);
 
-        toast.success('Download started');
+        toast.success(t('downloadStarted'));
       } catch (error) {
         console.error('Download error:', error);
-        toast.error(error instanceof Error ? error.message : 'Failed to download photo');
+        toast.error(error instanceof Error ? error.message : t('downloadError'));
       }
     },
-    [photoMetadata],
+    [photoMetadata, t],
   );
 
   const handleShare = useCallback(
@@ -164,16 +192,16 @@ export function ProfilePhotoViewer({
 
           if (navigator.canShare(shareData)) {
             await navigator.share(shareData);
-            toast.success('Shared successfully');
+            toast.success(t('shared'));
           } else {
             // Fallback: copy to clipboard
             await navigator.clipboard.writeText(shareUrl);
-            toast.success('Link copied to clipboard');
+            toast.success(t('linkCopied'));
           }
         } else {
           // Fallback: copy to clipboard
           await navigator.clipboard.writeText(shareUrl);
-          toast.success('Link copied to clipboard');
+          toast.success(t('linkCopied'));
         }
       } catch (error) {
         // User cancelled or error - fallback to clipboard
@@ -184,15 +212,28 @@ export function ProfilePhotoViewer({
             const baseUrl = window.location.origin + window.location.pathname;
             const shareUrl = `${baseUrl}#photo-${photoId}`;
             await navigator.clipboard.writeText(shareUrl);
-            toast.success('Link copied to clipboard');
+            toast.success(t('linkCopied'));
           } catch {
-            toast.error('Failed to share');
+            toast.error(t('shareFailed'));
           }
         }
       }
     },
-    [photoMetadata],
+    [photoMetadata, t],
   );
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteConfirm) return;
+    try {
+      await removePhotosFromMyPhotosAction([deleteConfirm]);
+      toast.success(t('removePhotoSuccess'));
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('removePhotoFailed'));
+    } finally {
+      setDeleteConfirm(null);
+    }
+  }, [deleteConfirm, router, t]);
 
   const extractPhotoId = useCallback((photo: Photo & { id?: string }) => {
     if (typeof photo.id === 'string' && photo.id.length > 0) return photo.id;
@@ -214,7 +255,7 @@ export function ProfilePhotoViewer({
             )}
           />
 
-          {/* Download and Share buttons (top right) */}
+          {/* Action buttons (top right) */}
           <div className="relative z-10 flex w-full items-start justify-end gap-1.5">
             {/* Download button */}
             {metadata?.download_url && (
@@ -255,6 +296,25 @@ export function ProfilePhotoViewer({
               tabIndex={0}
             >
               <Share2 className="size-3" />
+            </div>
+            {/* Delete button */}
+            {/* biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons */}
+            <div
+              role="button"
+              className={cn(
+                'pointer-events-auto flex size-6 items-center justify-center rounded-full bg-background/70 text-destructive opacity-0 shadow-sm transition-all group-hover:opacity-100 hover:bg-destructive hover:text-destructive-foreground',
+              )}
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteConfirm(photoId);
+              }}
+              onKeyDown={(event) => {
+                event.stopPropagation();
+              }}
+              aria-label="Remove from library"
+              tabIndex={0}
+            >
+              <Trash2 className="size-3" />
             </div>
           </div>
         </div>
@@ -315,56 +375,26 @@ export function ProfilePhotoViewer({
         }}
       />
 
-      {/* Custom overlay with photo info and actions */}
-      {/* {currentIndex >= 0 && currentMetadata && (
-        <div className="fixed bottom-0 left-0 right-0 z-9998 bg-background/95 backdrop-blur-sm border-t p-4 md:left-auto md:right-4 md:bottom-4 md:w-80 md:rounded-lg md:border md:shadow-lg pointer-events-auto">
-          <div className="flex flex-col gap-3">
-            {currentMetadata.event_name && (
-              <h3 className="font-semibold text-sm">
-                {currentMetadata.event_name}
-              </h3>
-            )}
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              {currentMetadata.event_date && (
-                <span>
-                  {format(new Date(currentMetadata.event_date), "MMMM d, yyyy")}
-                </span>
-              )}
-              {currentMetadata.photographer_display_name && (
-                <>
-                  {currentMetadata.event_date && <span>•</span>}
-                  <span>
-                    Photo by{" "}
-                    {currentMetadata.photographer_display_name ||
-                      currentMetadata.photographer_username}
-                  </span>
-                </>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <Button
-                onClick={() => currentPhotoId && handleDownload(currentPhotoId)}
-                disabled={isDownloading || !currentMetadata?.download_url}
-                size="sm"
-                className="flex-1"
-              >
-                <Download className="mr-2 h-4 w-4" />
-                {isDownloading ? "Preparing..." : "Download"}
-              </Button>
-              <Button
-                onClick={() => currentPhotoId && handleShare(currentPhotoId)}
-                disabled={isSharing || !currentPhotoId}
-                variant="outline"
-                size="sm"
-                className="flex-1"
-              >
-                <Share2 className="mr-2 h-4 w-4" />
-                {isSharing ? "Sharing..." : "Share"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )} */}
+      {/* Delete confirmation dialog */}
+      <AlertDialog
+        open={deleteConfirm !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteConfirm(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('removePhotoTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('removePhotoDesc')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleDeleteConfirm()}>
+              {t('removePhotoConfirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

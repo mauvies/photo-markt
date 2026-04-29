@@ -4,8 +4,10 @@ import { createClient } from '@/database/server';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedRedirect } from '@/lib/i18n/redirect';
+import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { getCurrentCart } from './actions';
 import { CartContent } from './cart-content';
+import { CartPurchaseSuccess } from './cart-purchase-success';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,9 +37,9 @@ export default async function CartPage({ params: routeParams, searchParams }: Ca
   const params = await searchParams;
   const status = params.status;
 
-  // If success, redirect to profile page after a moment
+  // If success, use client component to invalidate cart-count query before navigating
   if (status === 'success') {
-    return localizedRedirect(lang, '/dashboard/talent/profile?purchased=true');
+    return <CartPurchaseSuccess lang={lang} />;
   }
 
   const cartData = await getCurrentCart();
@@ -48,7 +50,9 @@ export default async function CartPage({ params: routeParams, searchParams }: Ca
         <DashboardHeader title={dict.talentDashboard.shoppingCart} />
         <p className="text-sm text-muted-foreground mt-1">{dict.talentDashboard.reviewPhotos}</p>
       </div>
-      <CartContent initialCartData={cartData} />
+      <TranslationsProvider translations={dict.cart}>
+        <CartContent initialCartData={cartData} />
+      </TranslationsProvider>
     </div>
   );
 }

@@ -326,15 +326,14 @@ export default async function EventPage({
   };
 
   return (
-    <div className="min-h-screen max-w-7xl mx-auto bg-background py-6">
+    <div className="flex min-h-screen flex-col">
       {/* Structured data — server-generated, not user input */}
       <script
         type="application/ld+json"
         // biome-ignore lint/security/noDangerouslySetInnerHtml: server-generated structured data
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-
-      <div className="container py-3">
+      <div className="mx-auto max-w-7xl w-full flex-1 px-4 py-6">
         <div className="mb-6 flex items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold">{event.name}</h1>

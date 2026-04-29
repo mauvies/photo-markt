@@ -185,49 +185,67 @@ export function PhotoLightbox({
     onDownload(currentPhoto.id);
   }, [currentPhoto, onDownload]);
 
-  const handleAddToPhotos = useCallback(() => {
+  const handleAddToPhotos = useCallback(async () => {
     if (!currentPhoto) return;
 
     if (isInMyPhotos) {
-      // Remove from photos
-      if (onRemoveFromPhotos) {
-        onRemoveFromPhotos(currentPhoto.id);
-      }
       setAddedPhotos((prev) => {
         const next = new Set(prev);
         next.delete(currentPhoto.id);
         return next;
       });
-    } else {
-      // Add to photos
-      if (onAddToPhotos) {
-        onAddToPhotos(currentPhoto.id);
+      if (onRemoveFromPhotos) {
+        try {
+          await onRemoveFromPhotos(currentPhoto.id);
+        } catch {
+          setAddedPhotos((prev) => new Set(prev).add(currentPhoto.id));
+        }
       }
-      // Optimistically update local state
+    } else {
       setAddedPhotos((prev) => new Set(prev).add(currentPhoto.id));
+      if (onAddToPhotos) {
+        try {
+          await onAddToPhotos(currentPhoto.id);
+        } catch {
+          setAddedPhotos((prev) => {
+            const next = new Set(prev);
+            next.delete(currentPhoto.id);
+            return next;
+          });
+        }
+      }
     }
   }, [currentPhoto, onAddToPhotos, onRemoveFromPhotos, isInMyPhotos]);
 
-  const handleAddToCart = useCallback(() => {
+  const handleAddToCart = useCallback(async () => {
     if (!currentPhoto) return;
 
     if (isInCart) {
-      // Remove from cart
-      if (onRemoveFromCart) {
-        onRemoveFromCart(currentPhoto.id);
-      }
       setAddedToCart((prev) => {
         const next = new Set(prev);
         next.delete(currentPhoto.id);
         return next;
       });
-    } else {
-      // Add to cart
-      if (onAddToCart) {
-        onAddToCart(currentPhoto.id);
+      if (onRemoveFromCart) {
+        try {
+          await onRemoveFromCart(currentPhoto.id);
+        } catch {
+          setAddedToCart((prev) => new Set(prev).add(currentPhoto.id));
+        }
       }
-      // Optimistically update local state
+    } else {
       setAddedToCart((prev) => new Set(prev).add(currentPhoto.id));
+      if (onAddToCart) {
+        try {
+          await onAddToCart(currentPhoto.id);
+        } catch {
+          setAddedToCart((prev) => {
+            const next = new Set(prev);
+            next.delete(currentPhoto.id);
+            return next;
+          });
+        }
+      }
     }
   }, [currentPhoto, onAddToCart, onRemoveFromCart, isInCart]);
 

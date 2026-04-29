@@ -4,14 +4,12 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { EventSearchBar } from '@/components/event-search-bar';
 import { Footer } from '@/components/footer';
+import { HomeAuthRedirect } from '@/components/home-auth-redirect';
 import { PricingSection } from '@/components/pricing-section';
 import { Button } from '@/components/ui/button';
-import { getProfileFields } from '@/database/queries';
-import { createClient } from '@/database/server';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedPath } from '@/lib/i18n/localized-path';
-import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 
 async function getCachedDictionary(lang: string) {
@@ -39,24 +37,11 @@ export default async function Home({
   }
 
   const dict = await getCachedDictionary(lang);
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (user) {
-    const profile = await getProfileFields(supabase, user.id, ['active_role']);
-    if (profile?.active_role === 'PHOTOGRAPHER') {
-      localizedRedirect(lang, '/dashboard/photographer');
-    }
-    localizedRedirect(lang, '/dashboard/talent');
-  }
-
   const isAuthenticated = false;
 
   return (
     <div className="flex min-h-svh flex-col">
+      <HomeAuthRedirect lang={lang} />
       {/* Hero Section */}
       <section className="relative flex min-h-[calc(100svh-4rem)] flex-col items-center justify-center overflow-hidden bg-linear-to-br from-background via-background to-primary/5">
         {/* Decorative background */}

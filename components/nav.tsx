@@ -31,7 +31,7 @@ export function Nav({ user }: { user: User | null }) {
           <Image
             src="/logo.svg"
             alt="Photo Markt"
-            className="h-10 w-auto mt-2"
+            className="h-10 w-auto mt-1"
             width={80}
             height={80}
           />

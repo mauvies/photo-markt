@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { getDashboardPath } from '@/app/[lang]/actions/roles';
 import { getProfileActiveRole, getUserRoles } from '@/database/queries';
@@ -13,8 +14,6 @@ export async function GET(request: Request) {
   // https://supabase.com/docs/guides/auth/server-side/nextjs
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
-  const plan = requestUrl.searchParams.get('plan');
-  const downloadToken = requestUrl.searchParams.get('token');
   const origin = requestUrl.origin;
 
   // Read locale preference set before OAuth flow
@@ -25,6 +24,31 @@ export async function GET(request: Request) {
   if (!code) {
     return NextResponse.redirect(`${origin}${localizedPath(lang, '/login?error=missing_code')}`);
   }
+
+  // Read OAuth state stored by signInWithGoogle before the OAuth redirect.
+  // This avoids putting state in the redirectTo URL, which must exactly match
+  // Supabase's configured allowed redirect URLs (query params break the match).
+  let plan: string | null = null;
+  let downloadToken: string | null = null;
+  let nextParam: string | null = null;
+
+  const cookieStore = await cookies();
+  const oauthStateCookie = cookieStore.get('oauth_redirect_state');
+  if (oauthStateCookie?.value) {
+    try {
+      const state = JSON.parse(oauthStateCookie.value) as Record<string, string>;
+      plan = state.plan ?? null;
+      nextParam = state.next ?? null;
+    } catch {
+      // Ignore malformed cookie — fall through to query param fallback
+    }
+    cookieStore.delete('oauth_redirect_state');
+  }
+
+  // Fall back to query params for any non-Google flows that still pass them directly
+  if (!plan) plan = requestUrl.searchParams.get('plan');
+  if (!downloadToken) downloadToken = requestUrl.searchParams.get('token');
+  if (!nextParam) nextParam = requestUrl.searchParams.get('next');
 
   const supabase = await createClient();
   const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
@@ -61,6 +85,11 @@ export async function GET(request: Request) {
     } catch (err) {
       console.error('Failed to claim download token:', err);
     }
+  }
+
+  // Safe redirect to `next` param (relative paths only, no protocol-relative)
+  if (nextParam?.startsWith('/') && !nextParam.startsWith('//')) {
+    return NextResponse.redirect(`${origin}${localizedPath(lang, nextParam)}`);
   }
 
   const activeRole = await getProfileActiveRole(supabase, user.id);

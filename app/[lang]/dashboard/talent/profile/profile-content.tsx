@@ -7,27 +7,34 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import type { ProfileData } from './actions';
 import { ProfilePhotoViewer } from './profile-photo-viewer';
 
 type ProfileContentProps = {
   initialData: ProfileData;
   showSuccessMessage?: boolean;
+  translations: Record<string, string>;
 };
 
-export function ProfileContent({ initialData, showSuccessMessage = false }: ProfileContentProps) {
+export function ProfileContent({
+  initialData,
+  showSuccessMessage = false,
+  translations,
+}: ProfileContentProps) {
   const { profile, stats, photos } = initialData;
   const [index, setIndex] = useState<number>(-1);
   const router = useRouter();
 
   useEffect(() => {
-    if (showSuccessMessage) {
-      toast.success('Purchase successful! Your photos are now available.', {
-        duration: 5000,
-      });
-      // Clean up URL
+    if (!showSuccessMessage) return;
+    toast.success('Purchase successful! Your photos are now available.', { duration: 5000 });
+    // Re-fetch server data after a delay to allow the Stripe webhook to process, then clean URL
+    const timer = setTimeout(() => {
+      router.refresh();
       router.replace('/dashboard/talent/profile', { scroll: false });
-    }
+    }, 3000);
+    return () => clearTimeout(timer);
   }, [showSuccessMessage, router]);
 
   const displayName = profile?.display_name || profile?.username || 'User';
@@ -133,12 +140,14 @@ export function ProfileContent({ initialData, showSuccessMessage = false }: Prof
         </div>
       ) : (
         <div className="w-full pt-2 sm:pt-4">
-          <ProfilePhotoViewer
-            items={photoItems}
-            photoMetadata={photoMetadata}
-            currentIndex={index}
-            onIndexChange={setIndex}
-          />
+          <TranslationsProvider translations={translations}>
+            <ProfilePhotoViewer
+              items={photoItems}
+              photoMetadata={photoMetadata}
+              currentIndex={index}
+              onIndexChange={setIndex}
+            />
+          </TranslationsProvider>
         </div>
       )}
     </>

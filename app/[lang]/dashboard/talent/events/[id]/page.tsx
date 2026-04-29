@@ -8,6 +8,7 @@ import { supabaseAdmin } from '@/database/supabase-admin';
 import { getBaseUrl } from '@/lib/get-base-url';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
+import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { EventPhotoViewer } from './event-photo-viewer';
 
 export default async function ExploreEventDetailPage({
@@ -48,7 +49,7 @@ export default async function ExploreEventDetailPage({
     if (user) {
       const { activeRole } = await getActiveRole();
       // Only show watermark for talent users if watermark is enabled
-      useWatermark = activeRole === 'talent' && event.watermark_enabled === true;
+      useWatermark = activeRole === 'talent';
 
       // Check which photos are in cart and in "my photos" (only for talent users)
       if (activeRole === 'talent') {
@@ -139,12 +140,14 @@ export default async function ExploreEventDetailPage({
           <div className="flex justify-end">
             <AIMatchingButton className="h-9 rounded-full" />
           </div>
-          <EventPhotoViewer
-            items={photoItems}
-            showAddToCart={user !== null}
-            photosInCart={new Set(photosInCart)}
-            photosInMyPhotos={new Set(photosInMyPhotos)}
-          />
+          <TranslationsProvider translations={dict.eventPhotoViewer}>
+            <EventPhotoViewer
+              items={photoItems}
+              showAddToCart={user !== null}
+              photosInCart={new Set(photosInCart)}
+              photosInMyPhotos={new Set(photosInMyPhotos)}
+            />
+          </TranslationsProvider>
         </div>
       )}
     </div>

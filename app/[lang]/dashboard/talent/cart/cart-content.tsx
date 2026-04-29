@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { Calendar, Image as ImageIcon, Loader2, ShoppingCart, Trash2, User, X } from 'lucide-react';
 import Image from 'next/image';
@@ -19,6 +20,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
   type CartData,
   clearCartAction,
@@ -37,7 +39,33 @@ export function CartContent({ initialCartData }: CartContentProps) {
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const router = useRouter();
+  const queryClient = useQueryClient();
   const lp = useLocalizedPath();
+  const { t } = useTranslations<{
+    empty: string;
+    emptyCartAuthDesc: string;
+    browseEvents: string;
+    viewMyPhotos: string;
+    item: string;
+    items: string;
+    clearCart: string;
+    clearCartTitle: string;
+    clearCartDesc: string;
+    cancel: string;
+    photoAlt: string;
+    free: string;
+    remove: string;
+    subtotal: string;
+    allItemsFree: string;
+    proceedToCheckout: string;
+    processing: string;
+    continueShopping: string;
+    removedFromCart: string;
+    failedRemoveItem: string;
+    cartCleared: string;
+    failedClearCart: string;
+    failedStartCheckout: string;
+  }>();
 
   const handleRemove = (photoId: string) => {
     setRemovingId(photoId);
@@ -46,10 +74,11 @@ export function CartContent({ initialCartData }: CartContentProps) {
         await removePhotoFromCartAction(photoId);
         const updated = await getCurrentCart();
         setCartData(updated);
-        toast.success('Removed from cart');
+        queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+        toast.success(t('removedFromCart'));
         router.refresh();
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to remove item';
+        const message = error instanceof Error ? error.message : t('failedRemoveItem');
         toast.error(message);
       } finally {
         setRemovingId(null);
@@ -63,10 +92,11 @@ export function CartContent({ initialCartData }: CartContentProps) {
         await clearCartAction();
         const updated = await getCurrentCart();
         setCartData(updated);
-        toast.success('Cart cleared');
+        queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+        toast.success(t('cartCleared'));
         router.refresh();
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to clear cart';
+        const message = error instanceof Error ? error.message : t('failedClearCart');
         toast.error(message);
       }
     });
@@ -74,7 +104,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
 
   const handleCheckout = () => {
     if (cartData.items.length === 0) {
-      toast.error('Your cart is empty');
+      toast.error(t('empty'));
       return;
     }
 
@@ -82,19 +112,16 @@ export function CartContent({ initialCartData }: CartContentProps) {
     startTransition(async () => {
       try {
         const { url } = await createCheckoutSessionAction();
-        // Redirect to Stripe Checkout
         window.location.href = url;
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to start checkout';
+        const message = error instanceof Error ? error.message : t('failedStartCheckout');
         toast.error(message);
         setIsCheckingOut(false);
       }
     });
   };
 
-  const formatPrice = (cents: number) => {
-    return `$${(cents / 100).toFixed(2)}`;
-  };
+  const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
   if (cartData.items.length === 0) {
     return (
@@ -105,16 +132,14 @@ export function CartContent({ initialCartData }: CartContentProps) {
             <X className="h-3 w-3 text-muted-foreground" />
           </div>
         </div>
-        <h3 className="text-2xl font-semibold mb-2">Your cart is empty</h3>
-        <p className="text-sm text-muted-foreground mb-6 max-w-md">
-          Start adding photos to your cart from events you've attended or discovered.
-        </p>
+        <h3 className="text-2xl font-semibold mb-2">{t('empty')}</h3>
+        <p className="text-sm text-muted-foreground mb-6 max-w-md">{t('emptyCartAuthDesc')}</p>
         <div className="flex gap-3">
           <Button onClick={() => router.push(lp('/dashboard/talent/events'))} variant="default">
-            Browse Events
+            {t('browseEvents')}
           </Button>
           <Button onClick={() => router.push(lp('/dashboard/talent/photos'))} variant="outline">
-            View My Photos
+            {t('viewMyPhotos')}
           </Button>
         </div>
       </div>
@@ -123,34 +148,30 @@ export function CartContent({ initialCartData }: CartContentProps) {
 
   return (
     <div className="relative">
-      {/* Header with clear cart - spans full width */}
       <div className="flex items-center justify-between mb-2 md:mb-0">
         <p className="text-sm text-muted-foreground mt-1">
-          {cartData.itemCount} {cartData.itemCount === 1 ? 'item' : 'items'}
+          {cartData.itemCount} {cartData.itemCount === 1 ? t('item') : t('items')}
         </p>
         {cartData.items.length > 0 && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="ghost" size="sm" className="text-muted-foreground">
                 <Trash2 className="h-4 w-4 mr-2" />
-                Clear cart
+                {t('clearCart')}
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Clear cart?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to remove all items from your cart? This action cannot be
-                  undone.
-                </AlertDialogDescription>
+                <AlertDialogTitle>{t('clearCartTitle')}</AlertDialogTitle>
+                <AlertDialogDescription>{t('clearCartDesc')}</AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={handleClearCart}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
-                  Clear cart
+                  {t('clearCart')}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -159,21 +180,19 @@ export function CartContent({ initialCartData }: CartContentProps) {
       </div>
 
       <div className="flex flex-col md:flex-row gap-6 pb-20 md:pb-0">
-        {/* Left side - Cart items (2/3 width on desktop, full width on mobile) */}
+        {/* Left side - Cart items */}
         <div className="flex-2 min-w-0">
-          {/* Cart items */}
           <div className="space-y-3">
             {cartData.items.map((item) => (
               <div
                 key={item.photoId}
                 className="group flex gap-4 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/50 hover:shadow-md"
               >
-                {/* Photo thumbnail */}
                 <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-muted">
                   {item.previewUrl ? (
                     <Image
                       src={item.previewUrl}
-                      alt={item.eventTitle || 'Photo'}
+                      alt={item.eventTitle || t('photoAlt')}
                       fill
                       className="object-cover transition-transform group-hover:scale-105"
                       sizes="80px"
@@ -185,7 +204,6 @@ export function CartContent({ initialCartData }: CartContentProps) {
                   )}
                 </div>
 
-                {/* Item details */}
                 <div className="flex flex-1 flex-col gap-2 min-w-0">
                   <div>
                     {item.eventTitle && (
@@ -216,7 +234,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
                       </span>
                       {item.unitPriceCents === 0 && (
                         <span className="text-xs font-medium text-green-600 dark:text-green-400">
-                          Free
+                          {t('free')}
                         </span>
                       )}
                     </div>
@@ -232,7 +250,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
                       ) : (
                         <>
                           <Trash2 className="h-4 w-4 mr-2" />
-                          <span className="hidden sm:inline">Remove</span>
+                          <span className="hidden sm:inline">{t('remove')}</span>
                         </>
                       )}
                     </Button>
@@ -243,21 +261,19 @@ export function CartContent({ initialCartData }: CartContentProps) {
           </div>
         </div>
 
-        {/* Right side - Summary (1/3 width, sticky) - Desktop only */}
+        {/* Right side - Summary (desktop only) */}
         <div className="hidden md:block flex-1 min-w-0">
           <div className="sticky top-4 self-start rounded-lg border border-border bg-card p-6 shadow-lg">
             <div className="space-y-4">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-muted-foreground">Subtotal</span>
+                  <span className="text-sm font-medium text-muted-foreground">{t('subtotal')}</span>
                   <span className="text-xl font-bold text-foreground">
                     {formatPrice(cartData.subtotalCents)}
                   </span>
                 </div>
                 {cartData.subtotalCents === 0 && (
-                  <p className="text-xs text-muted-foreground text-center">
-                    All items in your cart are free
-                  </p>
+                  <p className="text-xs text-muted-foreground text-center">{t('allItemsFree')}</p>
                 )}
               </div>
 
@@ -271,14 +287,14 @@ export function CartContent({ initialCartData }: CartContentProps) {
                   {isCheckingOut ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Processing...
+                      {t('processing')}
                     </>
                   ) : (
-                    'Proceed to Checkout'
+                    t('proceedToCheckout')
                   )}
                 </Button>
                 <p className="text-xs text-center text-muted-foreground mt-3">
-                  You can continue shopping and add more items
+                  {t('continueShopping')}
                 </p>
               </div>
             </div>
@@ -286,11 +302,11 @@ export function CartContent({ initialCartData }: CartContentProps) {
         </div>
       </div>
 
-      {/* Mobile Summary - Sticky at bottom */}
+      {/* Mobile summary - sticky footer */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card shadow-lg">
         <div className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium text-muted-foreground">Subtotal</span>
+            <span className="text-sm font-medium text-muted-foreground">{t('subtotal')}</span>
             <span className="text-lg font-bold text-foreground">
               {formatPrice(cartData.subtotalCents)}
             </span>
@@ -304,10 +320,10 @@ export function CartContent({ initialCartData }: CartContentProps) {
             {isCheckingOut ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing...
+                {t('processing')}
               </>
             ) : (
-              'Proceed to Checkout'
+              t('proceedToCheckout')
             )}
           </Button>
         </div>

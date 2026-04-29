@@ -10,14 +10,18 @@ interface TalentProfilePageProps {
 
 export default async function TalentProfilePage({ params, searchParams }: TalentProfilePageProps) {
   const { lang } = await params;
-  await getDictionary(lang as Locale);
+  const dict = await getDictionary(lang as Locale);
   const data = await getProfileData();
   const searchParamsData = await searchParams;
   const showSuccessMessage = searchParamsData.purchased === 'true';
 
   return (
     <div className="flex flex-1 flex-col">
-      <ProfileContent initialData={data} showSuccessMessage={showSuccessMessage} />
+      <ProfileContent
+        initialData={data}
+        showSuccessMessage={showSuccessMessage}
+        translations={dict.profilePhotoViewer}
+      />
     </div>
   );
 }

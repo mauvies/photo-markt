@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { useTranslations } from '@/lib/i18n/translations-provider';
 
 export function GuestCartContent() {
   const { items, removeItem, clearCart, subtotalCents } = useGuestCart();
@@ -39,6 +40,31 @@ export function GuestCartContent() {
   const canceled = searchParams.get('canceled') === 'true';
   const [isPending, startTransition] = useTransition();
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const { t } = useTranslations<{
+    browseEventsDesc: string;
+    signInNudgeTitle: string;
+    signInNudgeDesc: string;
+    logIn: string;
+    signUpFree: string;
+    item: string;
+    items: string;
+    clearCart: string;
+    clearCartTitle: string;
+    clearCartDesc: string;
+    cancel: string;
+    checkoutCanceled: string;
+    subtotal: string;
+    emailNotice: string;
+    proceedToCheckout: string;
+    processing: string;
+    continueShopping: string;
+    remove: string;
+    free: string;
+    checkoutFailed: string;
+    empty: string;
+    browseEvents: string;
+    photoAlt: string;
+  }>();
 
   const handleCheckout = () => {
     setIsCheckingOut(true);
@@ -47,13 +73,13 @@ export function GuestCartContent() {
         const { url } = await createGuestCheckoutSessionAction(items);
         window.location.href = url;
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Checkout failed. Please try again.');
+        toast.error(err instanceof Error ? err.message : t('checkoutFailed'));
         setIsCheckingOut(false);
       }
     });
   };
 
-  const formatPrice = (cents: number) => (cents === 0 ? 'Free' : `$${(cents / 100).toFixed(2)}`);
+  const formatPrice = (cents: number) => (cents === 0 ? t('free') : `$${(cents / 100).toFixed(2)}`);
 
   if (items.length === 0) {
     return (
@@ -64,11 +90,9 @@ export function GuestCartContent() {
             <X className="h-3 w-3 text-muted-foreground" />
           </div>
         </div>
-        <h3 className="text-2xl font-semibold mb-2">Your cart is empty</h3>
-        <p className="text-sm text-muted-foreground mb-6 max-w-md">
-          Browse events to find and add your photos.
-        </p>
-        <Button onClick={() => router.push(lp('/events'))}>Browse Events</Button>
+        <h3 className="text-2xl font-semibold mb-2">{t('empty')}</h3>
+        <p className="text-sm text-muted-foreground mb-6 max-w-md">{t('browseEventsDesc')}</p>
+        <Button onClick={() => router.push(lp('/events'))}>{t('browseEvents')}</Button>
       </div>
     );
   }
@@ -76,24 +100,22 @@ export function GuestCartContent() {
   return (
     <div className="relative">
       {/* Sign-in nudge */}
-      <div className="mb-4 flex text-sm items-center gap-3 rounded-xl  border bg-primary/5 px-4 py-3">
-        <div className="flex-1 flex items-center gap-2">
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border bg-primary/5 px-4 py-3 text-sm">
+        <div className="flex items-start gap-2">
           <UserPlus className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
           <div>
-            <p className="font-medium">Have an account? </p>
-            <p className="text-muted-foreground">
-              Sign in to save your photos to your library after purchase.
-            </p>
+            <p className="font-medium">{t('signInNudgeTitle')}</p>
+            <p className="text-muted-foreground">{t('signInNudgeDesc')}</p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Link href="/login">
+        <div className="flex shrink-0 gap-2 sm:ml-auto">
+          <Link href={lp('/login?next=/cart')}>
             <Button variant="outline" size="sm">
-              Log in
+              {t('logIn')}
             </Button>
           </Link>
           <Link href="/signup">
-            <Button size="sm">Sign up free</Button>
+            <Button size="sm">{t('signUpFree')}</Button>
           </Link>
         </div>
       </div>
@@ -101,29 +123,27 @@ export function GuestCartContent() {
       {/* Header row */}
       <div className="flex items-center justify-between mb-1">
         <p className="text-sm text-muted-foreground">
-          {items.length} {items.length === 1 ? 'item' : 'items'}
+          {items.length} {items.length === 1 ? t('item') : t('items')}
         </p>
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="ghost" size="sm" className="text-muted-foreground">
               <Trash2 className="h-4 w-4 mr-2" />
-              Clear cart
+              {t('clearCart')}
             </Button>
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Clear cart?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to remove all items from your cart?
-              </AlertDialogDescription>
+              <AlertDialogTitle>{t('clearCartTitle')}</AlertDialogTitle>
+              <AlertDialogDescription>{t('clearCartDesc')}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
               <AlertDialogAction
                 onClick={clearCart}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
-                Clear cart
+                {t('clearCart')}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -132,7 +152,7 @@ export function GuestCartContent() {
 
       {canceled && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-          Checkout was canceled. Your cart has been saved.
+          {t('checkoutCanceled')}
         </div>
       )}
 
@@ -148,7 +168,7 @@ export function GuestCartContent() {
                 {item.previewUrl ? (
                   <Image
                     src={item.previewUrl}
-                    alt={item.eventName ?? 'Photo'}
+                    alt={item.eventName ?? t('photoAlt')}
                     fill
                     className="object-cover transition-transform group-hover:scale-105"
                     sizes="128px"
@@ -187,7 +207,7 @@ export function GuestCartContent() {
                     className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
-                    <span className="hidden sm:inline">Remove</span>
+                    <span className="hidden sm:inline">{t('remove')}</span>
                   </Button>
                 </div>
               </div>
@@ -200,14 +220,12 @@ export function GuestCartContent() {
           <div className="sticky top-4 self-start rounded-lg border border-border bg-card p-6 shadow-lg">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-muted-foreground">Subtotal</span>
+                <span className="text-sm font-medium text-muted-foreground">{t('subtotal')}</span>
                 <span className="text-xl font-bold text-foreground">
                   {formatPrice(subtotalCents)}
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Your email will be collected during checkout to send your download link.
-              </p>
+              <p className="text-xs text-muted-foreground">{t('emailNotice')}</p>
               <div className="pt-4 border-t border-border">
                 <Button
                   className="w-full"
@@ -218,14 +236,14 @@ export function GuestCartContent() {
                   {isCheckingOut ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Processing...
+                      {t('processing')}
                     </>
                   ) : (
-                    'Proceed to Checkout'
+                    t('proceedToCheckout')
                   )}
                 </Button>
                 <p className="text-xs text-center text-muted-foreground mt-3">
-                  You can continue shopping and add more items
+                  {t('continueShopping')}
                 </p>
               </div>
             </div>
@@ -237,7 +255,7 @@ export function GuestCartContent() {
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card shadow-lg">
         <div className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium text-muted-foreground">Subtotal</span>
+            <span className="text-sm font-medium text-muted-foreground">{t('subtotal')}</span>
             <span className="text-lg font-bold text-foreground">{formatPrice(subtotalCents)}</span>
           </div>
           <Button
@@ -249,10 +267,10 @@ export function GuestCartContent() {
             {isCheckingOut ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing...
+                {t('processing')}
               </>
             ) : (
-              'Proceed to Checkout'
+              t('proceedToCheckout')
             )}
           </Button>
         </div>

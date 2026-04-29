@@ -11,6 +11,7 @@
  * - customer.subscription.deleted: Cancel subscription
  */
 
+import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import type Stripe from 'stripe';
 import { clearCart } from '@/database/queries/carts';
@@ -347,6 +348,11 @@ export async function POST(request: Request) {
 
         // Clear cart after successful order using admin client
         await clearCart(supabaseAdmin, cartId);
+
+        // Invalidate Next.js RSC cache for affected pages
+        revalidatePath('/[lang]/dashboard/talent/cart', 'page');
+        revalidatePath('/[lang]/dashboard/talent/orders', 'page');
+        revalidatePath('/[lang]/dashboard/talent/profile', 'page');
 
         console.log(`Order created: ${order.id} for user ${userId}`);
         break;

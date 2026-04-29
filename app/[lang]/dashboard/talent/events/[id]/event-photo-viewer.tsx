@@ -2,13 +2,14 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
   addPhotoToCartAction,
   removePhotoFromCartAction,
 } from '@/app/[lang]/dashboard/talent/cart/actions';
 import PhotoAlbumViewer, { type PhotoAlbumItem } from '@/components/photo-album-viewer';
+import { useTranslations } from '@/lib/i18n/translations-provider';
 import { addPhotoToMyPhotosAction, removePhotoFromMyPhotosAction } from './actions';
 
 type EventPhotoViewerProps = {
@@ -24,9 +25,18 @@ export function EventPhotoViewer({
   photosInCart = new Set(),
   photosInMyPhotos: initialPhotosInMyPhotos = new Set(),
 }: EventPhotoViewerProps) {
-  const [, startTransition] = useTransition();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { t } = useTranslations<{
+    addedToPhotos: string;
+    removedFromPhotos: string;
+    addedToCart: string;
+    removedFromCart: string;
+    failedAddPhotos: string;
+    failedRemovePhotos: string;
+    failedAddCart: string;
+    failedRemoveCart: string;
+  }>();
 
   // Optimistic state for "my photos" — initialized from server prop, updates instantly on click
   const [myPhotos, setMyPhotos] = useState<Set<string>>(initialPhotosInMyPhotos);
@@ -36,68 +46,60 @@ export function EventPhotoViewer({
     setMyPhotos(initialPhotosInMyPhotos);
   }, [initialPhotosInMyPhotos]);
 
-  const handleAddToPhotos = (photoId: string) => {
+  const handleAddToPhotos = async (photoId: string) => {
     setMyPhotos((prev) => new Set([...prev, photoId]));
-    startTransition(async () => {
-      try {
-        await addPhotoToMyPhotosAction(photoId);
-        toast.success('Added to my photos');
-      } catch (error) {
-        setMyPhotos((prev) => {
-          const next = new Set(prev);
-          next.delete(photoId);
-          return next;
-        });
-        toast.error(error instanceof Error ? error.message : 'Failed to add photo to your library');
-      }
-    });
+    try {
+      await addPhotoToMyPhotosAction(photoId);
+      toast.success(t('addedToPhotos'));
+    } catch (error) {
+      setMyPhotos((prev) => {
+        const next = new Set(prev);
+        next.delete(photoId);
+        return next;
+      });
+      toast.error(error instanceof Error ? error.message : t('failedAddPhotos'));
+      throw error;
+    }
   };
 
-  const handleRemoveFromPhotos = (photoId: string) => {
+  const handleRemoveFromPhotos = async (photoId: string) => {
     setMyPhotos((prev) => {
       const next = new Set(prev);
       next.delete(photoId);
       return next;
     });
-    startTransition(async () => {
-      try {
-        await removePhotoFromMyPhotosAction(photoId);
-        toast.success('Removed from my photos');
-      } catch (error) {
-        setMyPhotos((prev) => new Set([...prev, photoId]));
-        toast.error(
-          error instanceof Error ? error.message : 'Failed to remove photo from your library',
-        );
-      }
-    });
+    try {
+      await removePhotoFromMyPhotosAction(photoId);
+      toast.success(t('removedFromPhotos'));
+    } catch (error) {
+      setMyPhotos((prev) => new Set([...prev, photoId]));
+      toast.error(error instanceof Error ? error.message : t('failedRemovePhotos'));
+      throw error;
+    }
   };
 
-  const handleAddToCart = (photoId: string) => {
-    startTransition(async () => {
-      try {
-        await addPhotoToCartAction(photoId);
-        toast.success('Added to cart');
-        queryClient.invalidateQueries({ queryKey: ['cart-count'] });
-        router.refresh();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to add photo to cart';
-        toast.error(message);
-      }
-    });
+  const handleAddToCart = async (photoId: string) => {
+    try {
+      await addPhotoToCartAction(photoId);
+      toast.success(t('addedToCart'));
+      queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('failedAddCart'));
+      throw error;
+    }
   };
 
-  const handleRemoveFromCart = (photoId: string) => {
-    startTransition(async () => {
-      try {
-        await removePhotoFromCartAction(photoId);
-        toast.success('Removed from cart');
-        queryClient.invalidateQueries({ queryKey: ['cart-count'] });
-        router.refresh();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to remove photo from cart';
-        toast.error(message);
-      }
-    });
+  const handleRemoveFromCart = async (photoId: string) => {
+    try {
+      await removePhotoFromCartAction(photoId);
+      toast.success(t('removedFromCart'));
+      queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('failedRemoveCart'));
+      throw error;
+    }
   };
 
   return (
