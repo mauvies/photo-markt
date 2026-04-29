@@ -24,7 +24,8 @@ function formatPrice(cents: number): string {
 }
 
 function formatDate(dateString: string, locale: string): string {
-  const date = new Date(dateString);
+  const [year, month, day] = dateString.split('-').map(Number);
+  const date = new Date(year, (month ?? 1) - 1, day ?? 1);
   return date.toLocaleDateString(locale, {
     month: 'short',
     day: 'numeric',
@@ -99,12 +100,7 @@ function SalesChart({ data, lang }: SalesChartProps) {
                 style={{ height: `${Math.max(height, 2)}%` }}
                 title={`${formatDate(item.date, lang)}: ${formatPrice(item.revenue_cents)} (${item.sales_count} ${item.sales_count !== 1 ? t('sales') : t('sale')})`}
               />
-              <span className="text-xs text-muted-foreground">
-                {new Date(item.date).toLocaleDateString(lang, {
-                  month: 'short',
-                  day: 'numeric',
-                })}
-              </span>
+              <span className="text-xs text-muted-foreground">{formatDate(item.date, lang)}</span>
             </div>
           );
         })}

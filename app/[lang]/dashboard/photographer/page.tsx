@@ -157,7 +157,11 @@ export default async function PhotographerDashboardPage({
                 <span>{dict.photographerDashboard['30days']}</span>
               </div>
             </div>
-            <PerformanceChart data={salesOverTime} />
+            <PerformanceChart
+              data={salesOverTime}
+              emptyMessage={dict.photographerDashboard.noSalesDataAvailable}
+              lang={lang}
+            />
           </div>
 
           {/* Top Event & Quick Actions */}

@@ -14,8 +14,12 @@ import {
 } from '@/components/ui/select';
 import type { Profile } from '@/database/queries/profiles';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import type { Dictionary } from '@/lib/i18n/get-dictionary';
+import { useTranslations } from '@/lib/i18n/translations-provider';
 import { COMMON_COUNTRIES, getBankAccountFields } from '../../earnings/bank-account-fields';
 import { updatePayoutProfileAction } from './actions';
+
+type PayoutProfileT = Dictionary['payoutProfile'];
 
 interface PayoutProfileFormProps {
   initialData?: Profile | null;
@@ -24,6 +28,8 @@ interface PayoutProfileFormProps {
 export function PayoutProfileForm({ initialData }: PayoutProfileFormProps) {
   const router = useRouter();
   const lp = useLocalizedPath();
+  const { t } = useTranslations<PayoutProfileT>();
+
   const [fullName, setFullName] = useState(initialData?.full_name ?? '');
   const [countryCode, setCountryCode] = useState(initialData?.country_code ?? '');
   const [city, setCity] = useState(initialData?.city ?? '');
@@ -42,31 +48,23 @@ export function PayoutProfileForm({ initialData }: PayoutProfileFormProps) {
 
   const bankFields = countryCode ? getBankAccountFields(countryCode) : null;
 
-  // Load existing payout details if available
   useEffect(() => {
     if (initialData?.payout_details_json) {
       const details = initialData.payout_details_json as Record<string, unknown>;
       if (initialData.payout_method === 'paypal') {
         setPayoutDetails((details.email as string) ?? '');
       } else if (initialData.payout_method === 'bank_transfer') {
-        // Extract bank details based on what's stored
         if (details.iban) {
           setPayoutDetails(details.iban as string);
         } else {
-          // Try to get first field value
           const firstKey = Object.keys(details)[0];
           if (firstKey && firstKey !== 'country_code') {
             setPayoutDetails(details[firstKey] as string);
           }
         }
-        // Try to get second field
         const keys = Object.keys(details).filter((k) => k !== 'country_code');
-        if (keys.length > 1) {
-          setPayoutDetails2(details[keys[1]] as string);
-        }
-        if (keys.length > 2) {
-          setPayoutDetails3(details[keys[2]] as string);
-        }
+        if (keys.length > 1) setPayoutDetails2(details[keys[1]] as string);
+        if (keys.length > 2) setPayoutDetails3(details[keys[2]] as string);
       } else {
         setPayoutDetails((details.other as string) ?? '');
       }
@@ -77,61 +75,62 @@ export function PayoutProfileForm({ initialData }: PayoutProfileFormProps) {
     e.preventDefault();
     setError(null);
 
-    // Validate required fields
     if (!fullName.trim()) {
-      setError('Full name is required');
+      setError(t('errorFullNameRequired'));
       return;
     }
     if (!countryCode) {
-      setError('Country is required');
+      setError(t('errorCountryRequired'));
       return;
     }
     if (!city.trim()) {
-      setError('City is required');
+      setError(t('errorCityRequired'));
       return;
     }
     if (!addressLine1.trim()) {
-      setError('Address line 1 is required');
+      setError(t('errorAddressLine1Required'));
       return;
     }
     if (!postalCode.trim()) {
-      setError('Postal code is required');
+      setError(t('errorPostalCodeRequired'));
       return;
     }
     if (!payoutMethod) {
-      setError('Payout method is required');
+      setError(t('errorPayoutMethodRequired'));
       return;
     }
 
-    // Validate payout details based on method
     let payoutDetailsJson: Record<string, unknown> = {};
+
     if (payoutMethod === 'paypal') {
       if (!payoutDetails.trim() || !payoutDetails.includes('@')) {
-        setError('Valid PayPal email is required');
+        setError(t('errorPaypalEmailRequired'));
         return;
       }
       payoutDetailsJson = { email: payoutDetails.trim() };
     } else if (payoutMethod === 'bank_transfer') {
       if (!payoutDetails.trim()) {
-        setError(`${bankFields?.label1 || 'Bank account details'} is required`);
+        setError(
+          bankFields?.label1
+            ? `${bankFields.label1} ${t('errorFieldRequired')}`
+            : t('errorBankDetailsRequired'),
+        );
         return;
       }
       if (bankFields?.label2 && !payoutDetails2.trim()) {
-        setError(`${bankFields.label2} is required`);
+        setError(`${bankFields.label2} ${t('errorFieldRequired')}`);
         return;
       }
       if (bankFields?.label3 && !payoutDetails3.trim()) {
-        setError(`${bankFields.label3} is required`);
+        setError(`${bankFields.label3} ${t('errorFieldRequired')}`);
         return;
       }
 
-      // Store bank details - format depends on country
       if (bankFields?.label1 === 'IBAN') {
         payoutDetailsJson = {
           iban: payoutDetails.trim().replace(/\s/g, '').toUpperCase(),
         };
       } else {
-        // Store country-specific fields
         const field1Key = bankFields?.label1?.toLowerCase().replace(/\s/g, '_') ?? '';
         payoutDetailsJson[field1Key] = payoutDetails.trim();
         if (bankFields?.label2 && payoutDetails2.trim()) {
@@ -142,12 +141,11 @@ export function PayoutProfileForm({ initialData }: PayoutProfileFormProps) {
           const field3Key = bankFields?.label3?.toLowerCase().replace(/\s/g, '_') ?? '';
           payoutDetailsJson[field3Key] = payoutDetails3.trim();
         }
-        // Store country for reference
         payoutDetailsJson.country_code = countryCode;
       }
     } else {
       if (!payoutDetails.trim()) {
-        setError('Account details are required');
+        setError(t('errorAccountDetailsRequired'));
         return;
       }
       payoutDetailsJson = { other: payoutDetails.trim() };
@@ -170,38 +168,38 @@ export function PayoutProfileForm({ initialData }: PayoutProfileFormProps) {
         router.push(lp('/dashboard/photographer/profile'));
         router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to save profile');
+        setError(err instanceof Error ? err.message : t('errorSaveFailed'));
       }
     });
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Personal Information */}
       <div className="rounded-xl border bg-card p-6 shadow-sm">
-        <h3 className="mb-4 text-lg font-semibold">Personal Information</h3>
+        <h3 className="mb-4 text-lg font-semibold">{t('sectionPersonalInfo')}</h3>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="fullName">Full Legal Name *</Label>
+            <Label htmlFor="fullName">{t('labelFullName')} *</Label>
             <Input
               id="fullName"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder="John Doe"
+              placeholder={t('placeholderFullName')}
               disabled={isPending}
               required
             />
-            <p className="text-xs text-muted-foreground">
-              Your legal name as it appears on official documents
-            </p>
+            <p className="text-xs text-muted-foreground">{t('helperFullName')}</p>
           </div>
         </div>
       </div>
 
+      {/* Address */}
       <div className="rounded-xl border bg-card p-6 shadow-sm">
-        <h3 className="mb-4 text-lg font-semibold">Address</h3>
+        <h3 className="mb-4 text-lg font-semibold">{t('sectionAddress')}</h3>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="countryCode">Country *</Label>
+            <Label htmlFor="countryCode">{t('labelCountry')} *</Label>
             <Select
               value={countryCode}
               onValueChange={setCountryCode}
@@ -209,7 +207,7 @@ export function PayoutProfileForm({ initialData }: PayoutProfileFormProps) {
               required
             >
               <SelectTrigger id="countryCode">
-                <SelectValue placeholder="Select country" />
+                <SelectValue placeholder={t('placeholderCountry')} />
               </SelectTrigger>
               <SelectContent>
                 {COMMON_COUNTRIES.map((country) => (
@@ -223,23 +221,23 @@ export function PayoutProfileForm({ initialData }: PayoutProfileFormProps) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="city">City *</Label>
+              <Label htmlFor="city">{t('labelCity')} *</Label>
               <Input
                 id="city"
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
-                placeholder="City"
+                placeholder={t('placeholderCity')}
                 disabled={isPending}
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="postalCode">Postal Code *</Label>
+              <Label htmlFor="postalCode">{t('labelPostalCode')} *</Label>
               <Input
                 id="postalCode"
                 value={postalCode}
                 onChange={(e) => setPostalCode(e.target.value)}
-                placeholder="Postal code"
+                placeholder={t('placeholderPostalCode')}
                 disabled={isPending}
                 required
               />
@@ -247,49 +245,48 @@ export function PayoutProfileForm({ initialData }: PayoutProfileFormProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="addressLine1">Address Line 1 *</Label>
+            <Label htmlFor="addressLine1">{t('labelAddressLine1')} *</Label>
             <Input
               id="addressLine1"
               value={addressLine1}
               onChange={(e) => setAddressLine1(e.target.value)}
-              placeholder="Street address"
+              placeholder={t('placeholderAddressLine1')}
               disabled={isPending}
               required
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="addressLine2">Address Line 2</Label>
+            <Label htmlFor="addressLine2">{t('labelAddressLine2')}</Label>
             <Input
               id="addressLine2"
               value={addressLine2}
               onChange={(e) => setAddressLine2(e.target.value)}
-              placeholder="Apartment, suite, etc. (optional)"
+              placeholder={t('placeholderAddressLine2')}
               disabled={isPending}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="stateOrRegion">State / Region</Label>
+            <Label htmlFor="stateOrRegion">{t('labelStateOrRegion')}</Label>
             <Input
               id="stateOrRegion"
               value={stateOrRegion}
               onChange={(e) => setStateOrRegion(e.target.value)}
-              placeholder="State or region (optional)"
+              placeholder={t('placeholderStateOrRegion')}
               disabled={isPending}
             />
-            <p className="text-xs text-muted-foreground">
-              Required for some countries (e.g., US states)
-            </p>
+            <p className="text-xs text-muted-foreground">{t('helperStateOrRegion')}</p>
           </div>
         </div>
       </div>
 
+      {/* Payout Method */}
       <div className="rounded-xl border bg-card p-6 shadow-sm">
-        <h3 className="mb-4 text-lg font-semibold">Payout Method</h3>
+        <h3 className="mb-4 text-lg font-semibold">{t('sectionPayoutMethod')}</h3>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="payoutMethod">Preferred Payout Method *</Label>
+            <Label htmlFor="payoutMethod">{t('labelPreferredMethod')} *</Label>
             <Select
               value={payoutMethod}
               onValueChange={(value) => {
@@ -302,12 +299,12 @@ export function PayoutProfileForm({ initialData }: PayoutProfileFormProps) {
               required
             >
               <SelectTrigger id="payoutMethod">
-                <SelectValue placeholder="Select payout method" />
+                <SelectValue placeholder={t('placeholderSelectMethod')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                <SelectItem value="paypal">PayPal</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
+                <SelectItem value="bank_transfer">{t('optionBankTransfer')}</SelectItem>
+                <SelectItem value="paypal">{t('optionPaypal')}</SelectItem>
+                <SelectItem value="other">{t('optionOther')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -316,10 +313,10 @@ export function PayoutProfileForm({ initialData }: PayoutProfileFormProps) {
             <div className="space-y-2">
               <Label htmlFor="payoutDetails">
                 {payoutMethod === 'paypal'
-                  ? 'PayPal Email *'
+                  ? `${t('labelPaypalEmail')} *`
                   : payoutMethod === 'bank_transfer' && bankFields
                     ? `${bankFields.label1} *`
-                    : 'Account Details *'}
+                    : `${t('labelAccountDetails')} *`}
               </Label>
               <Input
                 id="payoutDetails"
@@ -327,18 +324,17 @@ export function PayoutProfileForm({ initialData }: PayoutProfileFormProps) {
                 value={payoutDetails}
                 onChange={(e) => {
                   if (payoutMethod === 'bank_transfer' && bankFields?.format1) {
-                    const formatted = bankFields.format1(e.target.value);
-                    setPayoutDetails(formatted);
+                    setPayoutDetails(bankFields.format1(e.target.value));
                   } else {
                     setPayoutDetails(e.target.value);
                   }
                 }}
                 placeholder={
                   payoutMethod === 'paypal'
-                    ? 'your@email.com'
+                    ? t('placeholderPaypalEmail')
                     : payoutMethod === 'bank_transfer' && bankFields
                       ? bankFields.placeholder1
-                      : 'Account details'
+                      : t('placeholderAccountDetails')
                 }
                 disabled={isPending}
                 required
@@ -348,13 +344,11 @@ export function PayoutProfileForm({ initialData }: PayoutProfileFormProps) {
                   <Label htmlFor="payoutDetails2">{bankFields.label2} *</Label>
                   <Input
                     id="payoutDetails2"
-                    type="text"
                     value={payoutDetails2}
                     onChange={(e) => {
-                      const formatted = bankFields.format2
-                        ? bankFields.format2(e.target.value)
-                        : e.target.value;
-                      setPayoutDetails2(formatted);
+                      setPayoutDetails2(
+                        bankFields.format2 ? bankFields.format2(e.target.value) : e.target.value,
+                      );
                     }}
                     placeholder={bankFields.placeholder2 || ''}
                     disabled={isPending}
@@ -367,13 +361,11 @@ export function PayoutProfileForm({ initialData }: PayoutProfileFormProps) {
                   <Label htmlFor="payoutDetails3">{bankFields.label3} *</Label>
                   <Input
                     id="payoutDetails3"
-                    type="text"
                     value={payoutDetails3}
                     onChange={(e) => {
-                      const formatted = bankFields.format3
-                        ? bankFields.format3(e.target.value)
-                        : e.target.value;
-                      setPayoutDetails3(formatted);
+                      setPayoutDetails3(
+                        bankFields.format3 ? bankFields.format3(e.target.value) : e.target.value,
+                      );
                     }}
                     placeholder={bankFields.placeholder3 || ''}
                     disabled={isPending}
@@ -383,10 +375,10 @@ export function PayoutProfileForm({ initialData }: PayoutProfileFormProps) {
               )}
               <p className="text-xs text-muted-foreground">
                 {payoutMethod === 'paypal'
-                  ? "We'll send payments to this PayPal email"
+                  ? t('helperPaypal')
                   : payoutMethod === 'bank_transfer'
-                    ? 'Your bank account details for receiving payments'
-                    : 'Provide details for your preferred payout method'}
+                    ? t('helperBankTransfer')
+                    : t('helperOther')}
               </p>
             </div>
           )}
@@ -401,10 +393,10 @@ export function PayoutProfileForm({ initialData }: PayoutProfileFormProps) {
 
       <div className="flex justify-end gap-4">
         <Button type="button" variant="outline" onClick={() => router.back()} disabled={isPending}>
-          Cancel
+          {t('buttonCancel')}
         </Button>
         <Button type="submit" disabled={isPending}>
-          {isPending ? 'Saving...' : 'Complete Profile'}
+          {isPending ? t('buttonSaving') : t('buttonComplete')}
         </Button>
       </div>
     </form>
