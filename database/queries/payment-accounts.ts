@@ -13,7 +13,6 @@ export interface PaymentAccount {
   photographer_id: string;
   type: PaymentAccountType;
   account_holder_name: string | null;
-  country_code: string | null;
   account_details: Record<string, unknown>;
   display_name: string;
   is_default: boolean;
@@ -102,7 +101,6 @@ export async function createPaymentAccount(
     type: PaymentAccountType;
     display_name: string;
     account_holder_name?: string | null;
-    country_code?: string | null;
     account_details?: Record<string, unknown>;
     is_default?: boolean;
   },
@@ -123,10 +121,9 @@ export async function createPaymentAccount(
       type: accountData.type,
       display_name: accountData.display_name,
       account_holder_name: accountData.account_holder_name ?? null,
-      country_code: accountData.country_code ?? null,
       account_details: accountData.account_details ?? {},
       is_default: accountData.is_default ?? false,
-      is_verified: false, // New accounts start as unverified
+      is_verified: false,
     })
     .select()
     .single();
@@ -148,7 +145,6 @@ export async function updatePaymentAccount(
   updates: {
     display_name?: string;
     account_holder_name?: string | null;
-    country_code?: string | null;
     account_details?: Record<string, unknown>;
     is_default?: boolean;
   },

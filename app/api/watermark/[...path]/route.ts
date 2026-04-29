@@ -1,11 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { type NextRequest, NextResponse } from 'next/server';
-import { createClient as createServerClient } from '@/database/server';
 import { env } from '@/env.mjs';
 import { addWatermarkToImage } from '@/lib/watermark';
 
 /**
- * API route to serve watermarked images
+ * API route to serve watermarked images — accessible without authentication.
  * Path format: /api/watermark/photos/userId/eventId/filename
  */
 export async function GET(
@@ -13,16 +12,6 @@ export async function GET(
   { params }: { params: Promise<{ path: string[] }> },
 ) {
   try {
-    const authClient = await createServerClient();
-
-    const {
-      data: { user },
-    } = await authClient.auth.getUser();
-
-    if (!user) {
-      return new NextResponse('Unauthorized', { status: 401 });
-    }
-
     const { path: pathSegments } = await params;
     const fullPath = pathSegments.join('/');
 

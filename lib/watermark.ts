@@ -1,12 +1,11 @@
 /**
- * Server-side image watermarking and degradation utilities.
+ * Server-side image watermarking utilities.
  *
  * Preview pipeline (applied in order):
  *   1. Resize  — longest side capped at 1200 px (never upscales)
- *   2. Degrade — -25% saturation, +10% contrast (harder to colour-correct)
- *   3. Watermark — tiled diagonal "PHOTO MARKT" grid at 17% opacity
- *   4. Noise   — subtle grayscale grain at ~3% opacity
- *   5. Encode  — JPEG at quality 65
+ *   2. Watermark — tiled diagonal "PHOTO MARKT" grid at 17% opacity
+ *   3. Noise   — subtle grayscale grain at ~3% opacity
+ *   4. Encode  — JPEG at quality 82
  */
 
 import { randomBytes } from 'node:crypto';
@@ -30,10 +29,6 @@ export async function addWatermarkToImage(imageBuffer: Buffer): Promise<Buffer> 
       fit: 'inside',
       withoutEnlargement: true,
     })
-    // Reduce saturation by 25 % so the preview is harder to colour-correct
-    .modulate({ saturation: 0.75 })
-    // Contrast boost centred on mid-grey: output = 1.1 * input − 12.8
-    .linear(1.1, -12.8)
     .toBuffer({ resolveWithObject: true });
 
   const { width: w, height: h } = info;
@@ -62,7 +57,7 @@ export async function addWatermarkToImage(imageBuffer: Buffer): Promise<Buffer> 
         blend: 'over',
       },
     ])
-    .jpeg({ quality: 65 })
+    .jpeg({ quality: 70 })
     .toBuffer();
 }
 

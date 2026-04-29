@@ -69,7 +69,6 @@ export async function createPaymentAccountAction(accountData: {
   type: PaymentAccountType;
   display_name: string;
   account_holder_name?: string | null;
-  country_code?: string | null;
   account_details?: Record<string, unknown>;
   is_default?: boolean;
 }): Promise<PaymentAccount> {

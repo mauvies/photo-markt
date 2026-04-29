@@ -1,7 +1,10 @@
 import { DashboardHeader } from '@/components/dashboard-header';
 import { createSignedUrls, getEvent, getEventPhotos } from '@/database/queries';
 import { createClient } from '@/database/server';
+import type { Locale } from '@/lib/i18n/config';
+import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedRedirect } from '@/lib/i18n/redirect';
+import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { EditEventForm } from './edit-event-form';
 
 export default async function EditEventPage({
@@ -10,7 +13,7 @@ export default async function EditEventPage({
   params: Promise<{ lang: string; id: string }>;
 }) {
   const { lang, id } = await params;
-  const supabase = await createClient();
+  const [supabase, dict] = await Promise.all([createClient(), getDictionary(lang as Locale)]);
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -60,7 +63,9 @@ export default async function EditEventPage({
         Update your event details and manage photos.
       </p>
       <div className="mt-6">
-        <EditEventForm event={event} initialPhotos={photosWithUrls} />
+        <TranslationsProvider translations={dict.newEvent}>
+          <EditEventForm event={event} initialPhotos={photosWithUrls} />
+        </TranslationsProvider>
       </div>
     </div>
   );

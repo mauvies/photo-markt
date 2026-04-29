@@ -218,7 +218,7 @@ export default async function Login({
             <SubmitButton formAction={signIn} className="mb-2 h-10">
               {dict.auth.loginButton}
             </SubmitButton>
-            <p className="text-center">
+            <p className="text-center text-sm">
               {dict.auth.noAccount}{' '}
               <Link className="text-sky-600 hover:underline" href="/signup">
                 {dict.auth.signUpHere}
