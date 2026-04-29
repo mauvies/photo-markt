@@ -1,12 +1,13 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { Calendar, Image as ImageIcon, Loader2, ShoppingCart, Trash2, User, X } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
+import { CART_MERGE_STATE_KEY } from '@/components/guest-cart-merge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,6 +20,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
@@ -40,6 +42,19 @@ export function CartContent({ initialCartData }: CartContentProps) {
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const router = useRouter();
   const queryClient = useQueryClient();
+
+  // Sync server-rendered cart data when router.refresh() delivers a new RSC payload
+  useEffect(() => {
+    setCartData(initialCartData);
+  }, [initialCartData]);
+
+  // Show skeleton while guest cart merge is writing to the DB
+  const { data: isMerging = false } = useQuery<boolean>({
+    queryKey: CART_MERGE_STATE_KEY,
+    queryFn: () => false,
+    initialData: false,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
   const lp = useLocalizedPath();
   const { t } = useTranslations<{
     empty: string;
@@ -124,6 +139,28 @@ export function CartContent({ initialCartData }: CartContentProps) {
   const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
   if (cartData.items.length === 0) {
+    if (isMerging) {
+      return (
+        <div className="space-y-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex gap-4 rounded-lg border border-border bg-card p-3">
+              <Skeleton className="h-24 w-24 shrink-0 rounded-lg" />
+              <div className="flex flex-1 flex-col gap-2 justify-between py-1">
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-6 w-16" />
+                  <Skeleton className="h-8 w-20" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
     return (
       <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
         <div className="relative mb-6">

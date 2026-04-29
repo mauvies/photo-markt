@@ -1,5 +1,6 @@
 import { Toaster } from 'sonner';
 import { ConditionalHeader } from '@/components/conditional-header';
+import { GuestCartMerge } from '@/components/guest-cart-merge';
 import { GuestCartProvider } from '@/components/guest-cart-provider';
 import Header from '@/components/header';
 import { Main } from '@/components/main';
@@ -27,6 +28,7 @@ export default async function LangLayout({
     <QueryProvider>
       <ScrollToTop />
       <GuestCartProvider>
+        <GuestCartMerge cartRestoredMessage={dict.cart.cartRestored} />
         <ConditionalHeader>
           <TranslationsProvider translations={dict.nav}>
             <Header />

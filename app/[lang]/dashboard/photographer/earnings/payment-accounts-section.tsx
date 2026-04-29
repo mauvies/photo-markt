@@ -66,7 +66,7 @@ function formatAccountDetails(account: PaymentAccount, t: TFn): string {
   if (account.type === 'bank_account') {
     const bankName = account.account_details?.bank_name as string | undefined;
     const last4 = account.account_details?.account_number_last4 as string | undefined;
-    const country = account.country_code;
+    const country = account.account_details?.country_code as string | undefined;
     const countryName = COMMON_COUNTRIES.find((c) => c.code === country)?.name || country;
     if (bankName && last4) {
       return `${bankName} ••••${last4}${countryName ? ` (${countryName})` : ''}`;
@@ -89,7 +89,9 @@ function PaymentAccountForm({ onSuccess, onCancel, initialData }: PaymentAccount
   const [accountHolderName, setAccountHolderName] = useState(
     initialData?.account_holder_name ?? '',
   );
-  const [countryCode, setCountryCode] = useState<string>(initialData?.country_code ?? '');
+  const [countryCode, setCountryCode] = useState<string>(
+    (initialData?.account_details?.country_code as string) ?? '',
+  );
   const [isLoadingCountry, setIsLoadingCountry] = useState(!initialData);
 
   // Load photographer's country from profile if not provided
@@ -200,7 +202,6 @@ function PaymentAccountForm({ onSuccess, onCancel, initialData }: PaymentAccount
           type,
           display_name: displayName.trim(),
           account_holder_name: accountHolderName.trim() || null,
-          country_code: countryCode || null,
           account_details: accountDetails,
           is_default: isDefault,
         });
