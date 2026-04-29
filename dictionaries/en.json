@@ -158,7 +158,8 @@
     "failedStartCheckout": "Failed to start checkout",
     "emptyCartAuthDesc": "Start adding photos to your cart from events you've attended or discovered.",
     "viewMyPhotos": "View My Photos",
-    "allItemsFree": "All items in your cart are free"
+    "allItemsFree": "All items in your cart are free",
+    "cartRestored": "Your cart has been restored"
   },
   "signup": {
     "title": "Create an account",

@@ -15,6 +15,7 @@ import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { getBaseUrl } from '@/lib/get-base-url';
 import { getSiteUrl } from '@/lib/get-site-url';
+import type { GuestCartItem } from '@/lib/guest-cart';
 
 export interface CartItemDetail {
   photoId: string;
@@ -317,4 +318,54 @@ export async function createCheckoutSessionAction(): Promise<{ url: string }> {
   }
 
   return { url: session.url };
+}
+
+/**
+ * Merge guest cart items into the authenticated user's DB cart.
+ * Returns the number of items successfully added (duplicates skipped silently).
+ * No role check — merge runs immediately after sign-in before role is confirmed.
+ */
+export async function mergeGuestCartAction(items: GuestCartItem[]): Promise<number> {
+  if (items.length === 0) return 0;
+
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return 0;
+
+  const cart = await getOrCreateCart(supabase, user.id);
+  let merged = 0;
+
+  for (const item of items) {
+    try {
+      // Re-validate photo exists and get current price from DB
+      const { data: photo } = await supabaseAdmin
+        .from('photos')
+        .select('id, user_id, event_id')
+        .eq('id', item.photoId)
+        .maybeSingle();
+
+      if (!photo) continue;
+
+      const { data: event } = await supabaseAdmin
+        .from('events')
+        .select('id, price_per_photo')
+        .eq('id', photo.event_id)
+        .maybeSingle();
+
+      if (!event) continue;
+
+      const unitPriceCents = event.price_per_photo ? Math.round(event.price_per_photo * 100) : 0;
+
+      await dbAddPhotoToCart(supabase, cart.id, item.photoId, photo.user_id, unitPriceCents);
+      merged++;
+    } catch {
+      // skip individual failures — best-effort merge
+    }
+  }
+
+  return merged;
 }
