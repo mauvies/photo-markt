@@ -55,7 +55,10 @@ export function Nav({ user }: { user: User | null }) {
                 <span className="hidden md:inline-flex">{t('login')}</span>
               </Link>
               <Link href={lp('/signup')} tabIndex={-1} className="hidden md:inline-flex">
-                <Button size="md" className="p-5">
+                <Button
+                  size="md"
+                  className="bg-gradient-starter p-5 text-white hover:opacity-90 transition-opacity"
+                >
                   {t('getStarted')}
                 </Button>
               </Link>

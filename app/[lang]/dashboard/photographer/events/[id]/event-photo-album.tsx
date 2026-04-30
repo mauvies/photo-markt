@@ -7,6 +7,7 @@ import { useCallback, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import PhotoAlbumViewer, { type PhotoAlbumItem } from '@/components/photo-album-viewer';
+import type { PhotoIconTooltips } from '@/components/photo-icon-buttons';
 import { TagTalentDialog } from '@/components/tag-talent-dialog';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -15,9 +16,10 @@ import { deletePhotoAction } from './edit/actions';
 type EventPhotoAlbumProps = {
   items: PhotoAlbumItem[];
   eventId: string;
+  iconTooltips?: Partial<PhotoIconTooltips>;
 };
 
-export function EventPhotoAlbum({ items, eventId }: EventPhotoAlbumProps) {
+export function EventPhotoAlbum({ items, eventId, iconTooltips }: EventPhotoAlbumProps) {
   const router = useRouter();
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -144,6 +146,7 @@ export function EventPhotoAlbum({ items, eventId }: EventPhotoAlbumProps) {
         showTagTalent={true}
         onRemove={handleDeleteSinglePhoto}
         onTagTalent={handleTagSinglePhoto}
+        iconTooltips={iconTooltips}
       />
       <TagTalentDialog
         open={tagDialogOpen}

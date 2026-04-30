@@ -146,6 +146,7 @@ export default async function ExploreEventDetailPage({
               showAddToCart={user !== null}
               photosInCart={new Set(photosInCart)}
               photosInMyPhotos={new Set(photosInMyPhotos)}
+              iconTooltips={dict.photoIconButtons}
             />
           </TranslationsProvider>
         </div>

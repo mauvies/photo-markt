@@ -58,6 +58,7 @@
 
 :root {
   --radius: 0.625rem;
+  --gradient-starter: linear-gradient(135deg, #ed737d 0%, #e12e3d 100%);
 
   /* Base background &  — clean, neutral Unsplash style */
   --background: oklch(0.985 0 0); /* near white (#FAFAFA) */
@@ -203,4 +204,17 @@ h6 {
 /* Utility class for applying Inter Tight to titles that aren't headings */
 .font-heading {
   font-family: var(--font-inter-tight), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Brand gradient utilities — defined outside @layer so they override Tailwind's bg-primary */
+.bg-gradient-starter {
+  background: var(--gradient-starter);
+}
+
+.bg-gradient-starter-card {
+  background-image: linear-gradient(
+    135deg,
+    rgba(237, 115, 125, 0.04) 0%,
+    rgba(225, 46, 61, 0.04) 100%
+  );
 }

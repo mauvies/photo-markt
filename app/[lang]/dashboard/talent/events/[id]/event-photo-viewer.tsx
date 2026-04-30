@@ -9,6 +9,7 @@ import {
   removePhotoFromCartAction,
 } from '@/app/[lang]/dashboard/talent/cart/actions';
 import PhotoAlbumViewer, { type PhotoAlbumItem } from '@/components/photo-album-viewer';
+import type { PhotoIconTooltips } from '@/components/photo-icon-buttons';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { addPhotoToMyPhotosAction, removePhotoFromMyPhotosAction } from './actions';
 
@@ -17,6 +18,7 @@ type EventPhotoViewerProps = {
   showAddToCart?: boolean;
   photosInCart?: Set<string>;
   photosInMyPhotos?: Set<string>;
+  iconTooltips?: Partial<PhotoIconTooltips>;
 };
 
 export function EventPhotoViewer({
@@ -24,6 +26,7 @@ export function EventPhotoViewer({
   showAddToCart = false,
   photosInCart = new Set(),
   photosInMyPhotos: initialPhotosInMyPhotos = new Set(),
+  iconTooltips,
 }: EventPhotoViewerProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -113,6 +116,7 @@ export function EventPhotoViewer({
       photosInMyPhotos={myPhotos}
       onAddToPhotos={handleAddToPhotos}
       onRemoveFromPhotos={handleRemoveFromPhotos}
+      iconTooltips={iconTooltips}
     />
   );
 }

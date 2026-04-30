@@ -375,6 +375,7 @@ export default async function EventPage({
             photographerId={event.user_id}
             isAuthenticated={!!user}
             initialPhotosInCart={photosInCart}
+            iconTooltips={dict.photoIconButtons}
           />
         </Suspense>
       </div>

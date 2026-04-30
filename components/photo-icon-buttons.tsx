@@ -1,12 +1,34 @@
 'use client';
 
-import { Check, Heart, UserPlus } from 'lucide-react';
 import { useCallback } from 'react';
-import { AddToCartButton } from '@/components/add-to-cart-button';
 import { PhotoTagsIndicator } from '@/components/photo-tags-indicator';
+import { PhotoActionIcon } from '@/components/ui/photo-action-icon';
 import { cn } from '@/lib/utils';
-import { Button } from './ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+
+export interface PhotoIconTooltips {
+  addToCart: string;
+  removeFromCart: string;
+  selectPhoto: string;
+  tagPeople: string;
+  nPeopleTagged: string;
+  saveToPhotos: string;
+  removeFromMyPhotos: string;
+}
+
+const DEFAULT_TOOLTIPS: PhotoIconTooltips = {
+  addToCart: 'Add to cart',
+  removeFromCart: 'Remove from cart',
+  selectPhoto: 'Select photo',
+  tagPeople: 'Tag people',
+  nPeopleTagged: '{n} people tagged',
+  saveToPhotos: 'Save to my photos',
+  removeFromMyPhotos: 'Remove from my photos',
+};
+
+// Applied to every icon wrapper: visible on mobile, hidden on desktop until group-hover.
+// Active overrides add md:opacity-100 to always show regardless of hover.
+const ICON_WRAP =
+  'pointer-events-auto transition-opacity duration-150 opacity-100 md:opacity-0 md:group-hover:opacity-100';
 
 interface PhotoIconButtonsProps {
   photoId: string;
@@ -21,25 +43,21 @@ interface PhotoIconButtonsProps {
   }>;
   isPopoverOpen?: boolean;
   onPopoverOpenChange?: (open: boolean) => void;
-  // Selection
   canSelect?: boolean;
   onToggleSelect?: (photoId: string) => void;
   selectionActive?: boolean;
-  // Tagging
   onTagPhoto?: (photoId: string) => void;
   onUntag?: () => void;
-  // Cart
   showAddToCart?: boolean;
   photosInCart?: Set<string>;
   onAddToCart?: (photoId: string) => void;
   onRemoveFromCart?: (photoId: string) => void;
-  // My Photos (heart)
   showAddToPhotos?: boolean;
   photosInMyPhotos?: Set<string>;
   onAddToPhotos?: (photoId: string) => void;
   onRemoveFromPhotos?: (photoId: string) => void;
-  isMobile?: boolean;
   className?: string;
+  tooltips?: Partial<PhotoIconTooltips>;
 }
 
 export function PhotoIconButtons({
@@ -62,44 +80,50 @@ export function PhotoIconButtons({
   photosInMyPhotos = new Set(),
   onAddToPhotos,
   onRemoveFromPhotos,
-  isMobile = false,
   className,
+  tooltips,
 }: PhotoIconButtonsProps) {
+  const tt: PhotoIconTooltips = { ...DEFAULT_TOOLTIPS, ...tooltips };
   const hasAnyOpen = isPopoverOpen;
+  const inCart = photosInCart.has(photoId);
+  const inMyPhotos = photosInMyPhotos.has(photoId);
 
-  const handleToggleSelect = useCallback(
-    (event: React.MouseEvent) => {
-      event.stopPropagation();
-      onToggleSelect?.(photoId);
-    },
-    [photoId, onToggleSelect],
-  );
+  const handleToggleSelect = useCallback(() => {
+    onToggleSelect?.(photoId);
+  }, [photoId, onToggleSelect]);
 
-  const handleTagClick = useCallback(
-    (event: React.MouseEvent) => {
-      event.stopPropagation();
-      onTagPhoto?.(photoId);
-    },
-    [photoId, onTagPhoto],
-  );
+  const handleTagClick = useCallback(() => {
+    onTagPhoto?.(photoId);
+  }, [photoId, onTagPhoto]);
 
-  const handleHeartClick = useCallback(
-    (event: React.MouseEvent) => {
-      event.stopPropagation();
-      if (photosInMyPhotos.has(photoId)) {
-        onRemoveFromPhotos?.(photoId);
-      } else {
-        onAddToPhotos?.(photoId);
-      }
-    },
-    [photoId, photosInMyPhotos, onAddToPhotos, onRemoveFromPhotos],
-  );
+  const handleHeartClick = useCallback(() => {
+    if (inMyPhotos) {
+      onRemoveFromPhotos?.(photoId);
+    } else {
+      onAddToPhotos?.(photoId);
+    }
+  }, [photoId, inMyPhotos, onAddToPhotos, onRemoveFromPhotos]);
+
+  const handleCartClick = useCallback(() => {
+    if (inCart) {
+      onRemoveFromCart?.(photoId);
+    } else {
+      onAddToCart?.(photoId);
+    }
+  }, [photoId, inCart, onAddToCart, onRemoveFromCart]);
+
+  const tagTooltip = hasTags ? tt.nPeopleTagged.replace('{n}', String(tags.length)) : tt.tagPeople;
 
   return (
+    // pointer-events-none so the overlay div doesn't absorb clicks on the photo itself.
+    // Individual wrapper divs re-enable pointer events for interactive icons.
     <div
-      className={cn('absolute inset-0 flex flex-col items-start justify-between p-2', className)}
+      className={cn(
+        'pointer-events-none absolute inset-0 flex flex-col items-start justify-between p-2',
+        className,
+      )}
     >
-      {/* Gradient overlays for better icon contrast */}
+      {/* Gradient overlays for ambient photo contrast */}
       <div
         className={cn(
           'pointer-events-none absolute inset-x-0 top-0 h-14 bg-linear-to-b from-black/30 via-black/10 to-transparent z-0 opacity-0 transition-opacity group-hover:opacity-100',
@@ -113,53 +137,29 @@ export function PhotoIconButtons({
         )}
       />
 
-      {/* Top row: Select and Cart buttons */}
+      {/* Top row: Select (left) and Cart (right) */}
       <div className="relative z-10 flex w-full items-start justify-between">
-        {/* Select button (top left) */}
+        {/* Select button — visible on hover; always visible when selected */}
         {canSelect && (
-          <div
-            className={cn(
-              'pointer-events-auto flex size-6 items-center justify-center rounded-full bg-background/70 text-foreground/90 opacity-0 shadow-sm transition-all group-hover:opacity-100 hover:bg-background',
-              (isSelected || hasAnyOpen) && 'opacity-100',
-              isSelected && 'bg-background',
-            )}
-            onClick={handleToggleSelect}
-            onPointerDown={(event) => {
-              event.stopPropagation();
-            }}
-            aria-hidden="true"
-          >
-            <Check className="size-3" />
+          <div className={cn(ICON_WRAP, (isSelected || hasAnyOpen) && 'md:opacity-100')}>
+            <PhotoActionIcon
+              icon="check"
+              active={isSelected}
+              onClick={handleToggleSelect}
+              tooltip={tt.selectPhoto}
+            />
           </div>
         )}
 
-        {/* Cart button (top right) */}
+        {/* Cart button — visible on hover; always visible when in cart */}
         <div className="ml-auto flex items-start gap-1.5">
           {showAddToCart && !selectionActive && (
-            <div
-              className={cn(
-                'pointer-events-auto transition-opacity',
-                isMobile || photosInCart.has(photoId)
-                  ? 'opacity-100'
-                  : 'opacity-0 group-hover:opacity-100',
-                hasAnyOpen && 'opacity-100',
-              )}
-              onPointerDown={(e) => e.stopPropagation()}
-            >
-              <AddToCartButton
-                photoId={photoId}
-                variant="default"
-                size="sm"
-                showText={false}
-                initialInCart={photosInCart.has(photoId)}
-                asDiv={true}
-                customSize="size-6"
-                className={cn(
-                  'rounded-full bg-background/70 text-foreground/90 opacity-0 shadow-sm hover:bg-background group-hover:opacity-100',
-                  photosInCart.has(photoId) && 'bg-background opacity-100',
-                )}
-                onAddToCart={onAddToCart}
-                onRemoveFromCart={onRemoveFromCart}
+            <div className={cn(ICON_WRAP, (inCart || hasAnyOpen) && 'md:opacity-100')}>
+              <PhotoActionIcon
+                icon="cart"
+                active={inCart}
+                onClick={handleCartClick}
+                tooltip={inCart ? tt.removeFromCart : tt.addToCart}
               />
             </div>
           )}
@@ -169,80 +169,50 @@ export function PhotoIconButtons({
       {/* Bottom row: Tag (left) + Heart (right) */}
       {!selectionActive && (
         <div className="relative z-10 mt-auto flex w-full items-end justify-between">
-          {/* Tag button (bottom left) */}
+          {/* Tag button */}
           <div className="pointer-events-auto">
             {onTagPhoto && !hasTags && (
-              <button
-                type="button"
-                className={cn(
-                  'pointer-events-auto flex size-6 items-center justify-center rounded-full bg-background/70 text-foreground/90 opacity-0 shadow-sm transition-all group-hover:opacity-100 hover:bg-background',
-                  hasAnyOpen && 'opacity-100',
-                )}
-                onClick={handleTagClick}
-                onPointerDown={(e) => e.stopPropagation()}
-                aria-label="Tag talent"
-              >
-                <UserPlus className="size-3" />
-              </button>
+              <div className={cn(ICON_WRAP, hasAnyOpen && 'md:opacity-100')}>
+                <PhotoActionIcon
+                  icon="tag"
+                  active={false}
+                  onClick={handleTagClick}
+                  tooltip={tt.tagPeople}
+                />
+              </div>
             )}
             {onTagPhoto && hasTags && (
-              <PhotoTagsIndicator
-                tags={tags}
-                photoId={photoId}
-                onUntag={onUntag}
-                onTagPhoto={onTagPhoto}
-                isDropdownOpen={isPopoverOpen}
-                onDropdownOpenChange={onPopoverOpenChange}
-              />
+              // Always visible when tags exist (active state)
+              <div
+                className={cn(
+                  'pointer-events-auto transition-opacity duration-150',
+                  hasAnyOpen
+                    ? 'opacity-100'
+                    : 'opacity-100 md:opacity-0 md:group-hover:opacity-100',
+                )}
+              >
+                <PhotoTagsIndicator
+                  tags={tags}
+                  photoId={photoId}
+                  onUntag={onUntag}
+                  onTagPhoto={onTagPhoto}
+                  isDropdownOpen={isPopoverOpen}
+                  onDropdownOpenChange={onPopoverOpenChange}
+                  tooltip={tagTooltip}
+                />
+              </div>
             )}
           </div>
 
-          {/* Heart button (bottom right) */}
+          {/* Heart / Save button — visible on hover; always visible when saved */}
           {showAddToPhotos && (
-            <div
-              className={cn(
-                'pointer-events-auto transition-opacity',
-                isMobile || photosInMyPhotos.has(photoId)
-                  ? 'opacity-100'
-                  : 'opacity-0 group-hover:opacity-100',
-                hasAnyOpen && 'opacity-100',
-              )}
-              onPointerDown={(e) => e.stopPropagation()}
-            >
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleHeartClick}
-                    className="h-9 w-9 text-white hover:bg-white/15"
-                    aria-label="Add to photos"
-                  >
-                    <Heart
-                      className="h-5 w-5"
-                      strokeWidth={1.5}
-                      fill={photosInMyPhotos.has(photoId) ? 'white' : 'none'}
-                    />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{photosInMyPhotos.has(photoId) ? 'Remove from photos' : 'Add to photos'}</p>
-                </TooltipContent>
-              </Tooltip>
-              {/* <button
-                type="button"
-                className="flex items-center justify-center rounded-full bg-black/30 text-white shadow-sm hover:bg-black/50"
+            <div className={cn(ICON_WRAP, (inMyPhotos || hasAnyOpen) && 'md:opacity-100')}>
+              <PhotoActionIcon
+                icon="save"
+                active={inMyPhotos}
                 onClick={handleHeartClick}
-                aria-label={
-                  photosInMyPhotos.has(photoId) ? 'Remove from my photos' : 'Add to my photos'
-                }
-              >
-                <Heart
-                  className="size-3"
-                  strokeWidth={1.5}
-                  fill={photosInMyPhotos.has(photoId) ? 'white' : 'none'}
-                />
-              </button> */}
+                tooltip={inMyPhotos ? tt.removeFromMyPhotos : tt.saveToPhotos}
+              />
             </div>
           )}
         </div>

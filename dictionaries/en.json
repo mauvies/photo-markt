@@ -745,5 +745,14 @@
     "proFeature5": "Face recognition",
     "proFeature6": "Outfit pattern recognition",
     "proFeature7": "Highest priority in search results"
+  },
+  "photoIconButtons": {
+    "addToCart": "Add to cart",
+    "removeFromCart": "Remove from cart",
+    "selectPhoto": "Select photo",
+    "tagPeople": "Tag people",
+    "nPeopleTagged": "{n} people tagged",
+    "saveToPhotos": "Save to my photos",
+    "removeFromMyPhotos": "Remove from my photos"
   }
 }

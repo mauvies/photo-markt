@@ -745,5 +745,14 @@
     "proFeature5": "Reconocimiento facial",
     "proFeature6": "Reconocimiento de patrones de ropa",
     "proFeature7": "Máxima prioridad en resultados de búsqueda"
+  },
+  "photoIconButtons": {
+    "addToCart": "Añadir al carrito",
+    "removeFromCart": "Eliminar del carrito",
+    "selectPhoto": "Seleccionar foto",
+    "tagPeople": "Etiquetar personas",
+    "nPeopleTagged": "{n} personas etiquetadas",
+    "saveToPhotos": "Guardar en mis fotos",
+    "removeFromMyPhotos": "Eliminar de mis fotos"
   }
 }

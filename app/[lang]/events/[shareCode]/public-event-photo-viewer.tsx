@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { addPhotoToCartAction } from '@/app/[lang]/dashboard/talent/cart/actions';
 import { useGuestCart } from '@/components/guest-cart-provider';
 import PhotoAlbumViewer from '@/components/photo-album-viewer';
+import type { PhotoIconTooltips } from '@/components/photo-icon-buttons';
 import type { GuestCartItem } from '@/lib/guest-cart';
 
 interface PhotoItem {
@@ -23,6 +24,7 @@ interface PublicEventPhotoViewerProps {
   photographerId: string;
   isAuthenticated: boolean;
   initialPhotosInCart: string[];
+  iconTooltips?: Partial<PhotoIconTooltips>;
 }
 
 export function PublicEventPhotoViewer({
@@ -34,6 +36,7 @@ export function PublicEventPhotoViewer({
   photographerId,
   isAuthenticated,
   initialPhotosInCart,
+  iconTooltips,
 }: PublicEventPhotoViewerProps) {
   const guestCart = useGuestCart();
   const [authCartPhotos, setAuthCartPhotos] = useState<Set<string>>(new Set(initialPhotosInCart));
@@ -124,6 +127,7 @@ export function PublicEventPhotoViewer({
           photosInCart={photosInCart}
           onAddToCart={handleAddToCart}
           onRemoveFromCart={handleRemoveFromCart}
+          iconTooltips={iconTooltips}
         />
       )}
     </div>

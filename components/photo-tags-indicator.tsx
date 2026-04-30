@@ -5,6 +5,7 @@ import { useTransition } from 'react';
 import { toast } from 'sonner';
 import { untagPhotoForTalentAction } from '@/app/[lang]/dashboard/photographer/events/[id]/actions';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 interface PhotoTag {
@@ -23,6 +24,7 @@ interface PhotoTagsIndicatorProps {
   onTagPhoto?: (photoId: string) => void;
   isDropdownOpen?: boolean;
   onDropdownOpenChange?: (open: boolean) => void;
+  tooltip?: string;
 }
 
 export function PhotoTagsIndicator({
@@ -33,6 +35,7 @@ export function PhotoTagsIndicator({
   onTagPhoto,
   isDropdownOpen: _isDropdownOpen = false,
   onDropdownOpenChange,
+  tooltip,
 }: PhotoTagsIndicatorProps) {
   const [isUntagging, startUntagging] = useTransition();
 
@@ -54,43 +57,44 @@ export function PhotoTagsIndicator({
   };
 
   return (
-    <Popover
-      onOpenChange={(open) => {
-        onDropdownOpenChange?.(open);
-      }}
-    >
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            'pointer-events-auto flex size-6 items-center justify-center rounded-full bg-background text-foreground/90 opacity-0 shadow-sm transition-all group-hover:opacity-100 hover:bg-background border-0 p-0',
-            _isDropdownOpen && 'opacity-100',
-            className,
-          )}
-          onClick={(e) => {
-            e.stopPropagation();
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              e.stopPropagation();
-            }
-          }}
-          onPointerDown={(e) => {
-            e.stopPropagation();
-          }}
-          onMouseDown={(e) => {
-            e.stopPropagation();
-          }}
-        >
-          <Users className="size-3" />
-          {tags.length > 1 && (
-            <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
-              {tags.length}
-            </span>
-          )}
-        </button>
-      </PopoverTrigger>
+    <Popover onOpenChange={onDropdownOpenChange}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                'pointer-events-auto relative flex size-6 items-center justify-center rounded-full',
+                'bg-gray-900/60 backdrop-blur-sm text-white shadow-sm',
+                'transition-colors hover:bg-gray-900/80 border-0 p-0',
+                _isDropdownOpen && 'bg-gray-900/80',
+                className,
+              )}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <Users className="size-3" fill="currentColor" />
+              {tags.length > 1 && (
+                <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+                  {tags.length}
+                </span>
+              )}
+            </button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        {tooltip && (
+          <TooltipContent>
+            <p>{tooltip}</p>
+          </TooltipContent>
+        )}
+      </Tooltip>
       <PopoverContent
         className="w-64 p-3"
         side="top"

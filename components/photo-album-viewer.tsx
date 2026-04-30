@@ -2,9 +2,8 @@
 
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { type Photo, type RenderPhotoContext, RowsPhotoAlbum } from 'react-photo-album';
-import { PhotoIconButtons } from '@/components/photo-icon-buttons';
+import { PhotoIconButtons, type PhotoIconTooltips } from '@/components/photo-icon-buttons';
 import { PhotoLightbox, type PhotoLightboxItem } from '@/components/photo-lightbox';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import 'react-photo-album/rows.css';
 
@@ -46,6 +45,7 @@ type PhotoAlbumViewerProps = {
   showTagTalent?: boolean;
   // Track which photos are in "my photos"
   photosInMyPhotos?: Set<string>;
+  iconTooltips?: Partial<PhotoIconTooltips>;
 };
 
 export default function PhotoAlbumViewer({
@@ -69,6 +69,7 @@ export default function PhotoAlbumViewer({
   showRemove = false,
   showTagTalent = false,
   photosInMyPhotos = new Set(),
+  iconTooltips,
 }: PhotoAlbumViewerProps) {
   const [index, setIndex] = useState<number>(-1);
   const [dimensions, setDimensions] = useState<Record<string, { width: number; height: number }>>(
@@ -78,7 +79,6 @@ export default function PhotoAlbumViewer({
   const selectedSet = useMemo(() => new Set(selectedIds ?? []), [selectedIds]);
   const canSelect = Boolean(onToggleSelect);
   const selectionActive = selectionMode || selectedSet.size > 0;
-  const isMobile = useIsMobile();
 
   const extractPhotoId = useCallback((photo: Photo & { id?: string }) => {
     if (typeof photo.id === 'string' && photo.id.length > 0) return photo.id;
@@ -198,7 +198,7 @@ export default function PhotoAlbumViewer({
           photosInMyPhotos={photosInMyPhotos}
           onAddToPhotos={onAddToPhotos}
           onRemoveFromPhotos={onRemoveFromPhotos}
-          isMobile={isMobile}
+          tooltips={iconTooltips}
         />
       );
     },
@@ -220,7 +220,7 @@ export default function PhotoAlbumViewer({
       onAddToPhotos,
       onRemoveFromPhotos,
       selectionActive,
-      isMobile,
+      iconTooltips,
     ],
   );
 

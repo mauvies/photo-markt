@@ -141,7 +141,7 @@ export default async function Home({
       )}
 
       {/* How It Works */}
-      <section className="bg-background py-24 sm:py-32">
+      <section className="bg-background py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           {/* Header */}
           <div className="mx-auto max-w-2xl text-center">

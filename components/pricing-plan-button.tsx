@@ -7,8 +7,6 @@ import { useTransition } from 'react';
 import { createBillingCheckoutAction } from '@/app/[lang]/dashboard/photographer/billing/actions';
 import { Button } from '@/components/ui/button';
 
-const STARTER_GRADIENT = 'linear-gradient(135deg, #ed737d 0%, #e12e3d 100%)';
-
 interface PricingPlanButtonProps {
   planId: 'free' | 'starter' | 'pro';
   isFree: boolean;
@@ -45,11 +43,10 @@ export function PricingPlanButton({
     );
   }
 
-  const starterStyle = isStarter ? { background: STARTER_GRADIENT } : undefined;
   const buttonClassName = [
     'w-full justify-center gap-2 text-sm font-medium tracking-tight',
     isStarter
-      ? 'text-white hover:opacity-90 transition-opacity'
+      ? 'bg-gradient-starter text-white hover:opacity-90 transition-opacity'
       : 'bg-primary text-primary-foreground hover:bg-primary/90',
     className,
   ]
@@ -59,7 +56,7 @@ export function PricingPlanButton({
   if (!isAuthenticated) {
     return (
       <Link href={`/signup?plan=${planId}`} className={className}>
-        <Button variant="default" size="lg" style={starterStyle} className={buttonClassName}>
+        <Button variant="default" size="lg" className={buttonClassName}>
           {label}
           <ArrowRight className="h-4 w-4" />
         </Button>
@@ -89,7 +86,6 @@ export function PricingPlanButton({
       size="lg"
       onClick={handleUpgrade}
       disabled={isPending}
-      style={starterStyle}
       className={buttonClassName}
     >
       {isPending ? (

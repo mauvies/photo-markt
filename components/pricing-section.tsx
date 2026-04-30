@@ -12,10 +12,6 @@ type PricingT = Dictionary['pricingSection'];
 
 type BillingPeriod = 'monthly' | 'yearly';
 
-const STARTER_GRADIENT = 'linear-gradient(135deg, #ed737d 0%, #e12e3d 100%)';
-const STARTER_CARD_GRADIENT =
-  'linear-gradient(135deg, rgba(237, 115, 125, 0.04) 0%, rgba(225, 46, 61, 0.04) 100%)';
-
 export function PricingSection({ isAuthenticated, t }: { isAuthenticated: boolean; t: PricingT }) {
   const [billing, setBilling] = useState<BillingPeriod>('yearly');
   const isYearly = billing === 'yearly';
@@ -124,25 +120,16 @@ export function PricingSection({ isAuthenticated, t }: { isAuthenticated: boolea
         <div className="mx-auto mt-10 grid max-w-6xl gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {plans.map((plan) => {
             const isFree = plan.id === 'free';
-            const isStarter = plan.id === 'starter';
             const price = isYearly ? plan.yearlyMonthlyPrice : plan.monthlyPrice;
             const features = planFeatures[plan.id];
 
             return (
               <div
                 key={plan.id}
-                style={
-                  isStarter
-                    ? {
-                        backgroundImage: STARTER_CARD_GRADIENT,
-                        borderColor: STARTER_CARD_GRADIENT,
-                      }
-                    : undefined
-                }
                 className={[
                   'relative flex flex-col rounded-2xl border bg-card p-6 shadow-sm transition-all duration-200',
                   'hover:translate-y-[-2px] hover:border-primary/40 hover:shadow-md',
-                  plan.popular && 'sm:-mt-2 shadow-lg',
+                  plan.popular && 'sm:-mt-2 shadow-lg bg-gradient-starter-card',
                 ]
                   .filter(Boolean)
                   .join(' ')}
@@ -150,8 +137,8 @@ export function PricingSection({ isAuthenticated, t }: { isAuthenticated: boolea
                 {plan.popular && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                     <span
-                      style={{ background: STARTER_GRADIENT, borderColor: 'rgb(225, 46, 61)' }}
-                      className="rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white shadow-sm"
+                      style={{ borderColor: 'rgb(225, 46, 61)' }}
+                      className="bg-gradient-starter rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white shadow-sm"
                     >
                       {t.mostPopular}
                     </span>
