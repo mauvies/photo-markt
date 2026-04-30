@@ -2,6 +2,7 @@ import { ArrowRight, Camera, Download, Search } from 'lucide-react';
 import { cacheLife, cacheTag } from 'next/cache';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { ExploreEventCard } from '@/app/[lang]/dashboard/talent/events/explore-event-card';
 import { EventSearchBar } from '@/components/event-search-bar';
 import { Footer } from '@/components/footer';
 import { HomeAuthRedirect } from '@/components/home-auth-redirect';
@@ -11,6 +12,7 @@ import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedPath } from '@/lib/i18n/localized-path';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
+import { getCachedTopEvents } from './top-events-actions';
 
 async function getCachedDictionary(lang: string) {
   'use cache';
@@ -36,7 +38,7 @@ export default async function Home({
     redirect(`/auth/callback?${qs}`);
   }
 
-  const dict = await getCachedDictionary(lang);
+  const [dict, topEvents] = await Promise.all([getCachedDictionary(lang), getCachedTopEvents()]);
   const isAuthenticated = false;
 
   return (
@@ -77,6 +79,66 @@ export default async function Home({
           </p>
         </div>
       </section>
+
+      {/* Top Events */}
+      {topEvents.length > 0 && (
+        <section className="bg-background py-16 sm:py-20">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="mb-8 flex items-center justify-between">
+              <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+                {dict.home.featuredEventsTitle}
+              </h2>
+              <Link href={localizedPath(lang, '/events')}>
+                <Button variant="ghost" size="sm" className="hidden gap-1 xl:flex">
+                  {dict.home.exploreAllEvents}
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+
+            <div className="flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:grid xl:grid-cols-4 xl:overflow-visible xl:pb-0">
+              {topEvents.map((event) => (
+                <div
+                  key={event.id}
+                  className="w-[80vw] shrink-0 snap-start sm:w-[45vw] xl:w-auto xl:shrink"
+                >
+                  <ExploreEventCard
+                    id={event.id}
+                    hrefParam={event.slug ?? event.id}
+                    name={event.name}
+                    date={event.date}
+                    city={event.city}
+                    country={event.country}
+                    activity={event.activity}
+                    photoCount={event.photoCount}
+                    coverUrl={event.coverUrl}
+                    pricePerPhoto={event.pricePerPhoto}
+                    photographerUsername={event.photographerUsername}
+                    photographerDisplayName={event.photographerDisplayName}
+                    linkPrefix={localizedPath(lang, '/events')}
+                    t={{
+                      photo: dict.eventCard.photo,
+                      photos: dict.eventCard.photos,
+                      from: dict.eventCard.from,
+                      free: dict.eventCard.free,
+                      noPhotosYet: dict.eventCard.noPhotosYet,
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 flex justify-center xl:hidden">
+              <Link href={localizedPath(lang, '/events')}>
+                <Button variant="outline" size="sm">
+                  {dict.home.exploreAllEvents}
+                  <ArrowRight className="ml-1 h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* How It Works */}
       <section className="bg-background py-24 sm:py-32">
@@ -141,7 +203,7 @@ export default async function Home({
       </section>
 
       {/* Pricing */}
-      <PricingSection isAuthenticated={isAuthenticated} />
+      <PricingSection isAuthenticated={isAuthenticated} t={dict.pricingSection} />
 
       {/* Final CTA */}
       <section className="bg-linear-to-br from-primary/10 via-primary/5 to-background py-20 sm:py-24">

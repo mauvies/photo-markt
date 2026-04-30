@@ -119,6 +119,7 @@ function revalidateAfterEventMutation(userId: string, eventId: string): void {
   revalidatePath(`/es/dashboard/photographer/events/${eventId}/edit`);
   revalidatePath(`/en/dashboard/photographer/events/${eventId}/edit`);
   revalidateTag('events-public', 'max');
+  revalidateTag('top-events', 'max');
   revalidateTag(`event-${eventId}`, 'max');
   revalidateTag(`photographer-events-${userId}`, 'max');
   revalidateTag(`dashboard-photographer-${userId}`, 'max');
