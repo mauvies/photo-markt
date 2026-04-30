@@ -8,9 +8,10 @@ import {
   Images,
   LifeBuoy,
   Package,
+  Receipt,
   Send,
+  TrendingUp,
   User,
-  WalletMinimal,
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -25,6 +26,7 @@ interface NavLabels {
   createEvent: string;
   events: string;
   ventas: string;
+  ganancias: string;
   myPhotos: string;
   profile: string;
   explore: string;
@@ -47,7 +49,8 @@ export function AppSidebar({
     { title: navLabels.overview, url: '/dashboard/photographer', icon: Home },
     { title: navLabels.createEvent, url: '/dashboard/photographer/events/new', icon: CalendarPlus },
     { title: navLabels.events, url: '/dashboard/photographer/events', icon: CalendarDays },
-    { title: navLabels.ventas, url: '/dashboard/photographer/ventas', icon: WalletMinimal },
+    { title: navLabels.ventas, url: '/dashboard/photographer/ventas', icon: Receipt },
+    { title: navLabels.ganancias, url: '/dashboard/photographer/ganancias', icon: TrendingUp },
   ];
 
   const talentNav = [

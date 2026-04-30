@@ -8,10 +8,11 @@ import {
   Home,
   LifeBuoy,
   LogOut,
+  Receipt,
   Send,
   Settings,
+  TrendingUp,
   User,
-  WalletMinimal,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -45,6 +46,7 @@ export function PhotographerBottomNav({
     events: string;
     createEvent: string;
     ventas: string;
+    ganancias: string;
     account: string;
     roleLabel: string;
     profile: string;
@@ -95,10 +97,19 @@ export function PhotographerBottomNav({
     {
       href: '/dashboard/photographer/ventas',
       label: navLabels.ventas,
-      icon: WalletMinimal,
+      icon: Receipt,
       isActive: (p: string) => {
         const clean = p.replace(/^\/(es|en)/, '');
         return clean.startsWith('/dashboard/photographer/ventas');
+      },
+    },
+    {
+      href: '/dashboard/photographer/ganancias',
+      label: navLabels.ganancias,
+      icon: TrendingUp,
+      isActive: (p: string) => {
+        const clean = p.replace(/^\/(es|en)/, '');
+        return clean.startsWith('/dashboard/photographer/ganancias');
       },
     },
   ];

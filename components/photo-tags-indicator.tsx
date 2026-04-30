@@ -65,7 +65,7 @@ export function PhotoTagsIndicator({
               type="button"
               className={cn(
                 'pointer-events-auto relative flex size-6 items-center justify-center rounded-full',
-                'bg-gray-900/60 backdrop-blur-sm text-white shadow-sm',
+                'bg-gray-900/45 backdrop-blur-sm text-white shadow-sm',
                 'transition-colors hover:bg-gray-900/80 border-0 p-0',
                 _isDropdownOpen && 'bg-gray-900/80',
                 className,

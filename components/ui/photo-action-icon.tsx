@@ -48,7 +48,7 @@ export function PhotoActionIcon({
           type="button"
           className={cn(
             'flex size-6 items-center justify-center rounded-full',
-            'bg-gray-900/60 backdrop-blur-sm text-white shadow-sm',
+            'bg-gray-900/45 backdrop-blur-sm text-white shadow-sm',
             'transition-colors hover:bg-gray-900/80',
             active && 'bg-gray-900/80',
             className,

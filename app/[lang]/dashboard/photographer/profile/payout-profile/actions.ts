@@ -61,6 +61,8 @@ export async function updatePayoutProfileAction(updates: {
   revalidatePath('/en/dashboard/photographer/earnings');
   revalidatePath('/es/dashboard/photographer/ventas');
   revalidatePath('/en/dashboard/photographer/ventas');
+  revalidatePath('/es/dashboard/photographer/ganancias');
+  revalidatePath('/en/dashboard/photographer/ganancias');
 }
 
 export async function getPayoutProfileStatusAction(): Promise<{
