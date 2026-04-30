@@ -140,6 +140,7 @@ async function revalidateAfterEventCreate(
   revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
   revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
   revalidateTag('events-public', 'max');
+  revalidateTag('top-events', 'max');
   revalidateTag('filter-options', 'max');
   revalidateTag(`photographer-events-${userId}`, 'max');
   revalidateTag(`dashboard-photographer-${userId}`, 'max');

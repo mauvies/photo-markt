@@ -52,6 +52,7 @@ export const deleteEventAction = async (eventId: string) => {
   revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
   revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
   revalidateTag('events-public', 'max');
+  revalidateTag('top-events', 'max');
   revalidateTag('filter-options', 'max');
   revalidateTag(`event-${eventId}`, 'max');
   revalidateTag(`photographer-events-${user.id}`, 'max');
@@ -97,6 +98,7 @@ export const deletePhoto = async (photoId: string, eventId: string) => {
   revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
   revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
   revalidateTag('events-public', 'max');
+  revalidateTag('top-events', 'max');
   revalidateTag(`event-${eventId}`, 'max');
   revalidateTag(`photographer-events-${user.id}`, 'max');
   updateTag(`photographer-events-${user.id}`);

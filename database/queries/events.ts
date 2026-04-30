@@ -426,6 +426,39 @@ export async function updateEvent(
   }
 }
 
+export interface TopEventCandidate {
+  id: string;
+  user_id: string;
+  name: string;
+  date: string;
+  city: string;
+  country: string;
+  activity: string;
+  slug: string | null;
+  price_per_photo: number | null;
+  created_at: string;
+}
+
+/**
+ * Fetch recent public events as candidates for the home page "Top Events" section.
+ * Returns a larger set than needed so the caller can score and filter down.
+ */
+export async function getTopEvents(
+  supabase: SupabaseServerClient,
+  candidateLimit = 50,
+): Promise<TopEventCandidate[]> {
+  const { data, error } = await supabase
+    .from('events')
+    .select('id, user_id, name, date, city, country, activity, slug, price_per_photo, created_at')
+    .eq('is_public', true)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(candidateLimit);
+
+  if (error) throw new Error(`Failed to get top event candidates: ${getErrorMessage(error)}`);
+  return (data ?? []) as TopEventCandidate[];
+}
+
 /**
  * Delete an event (soft delete - sets deleted_at timestamp)
  * This preserves the event data for historical metrics and analytics

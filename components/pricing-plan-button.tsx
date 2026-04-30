@@ -7,10 +7,14 @@ import { useTransition } from 'react';
 import { createBillingCheckoutAction } from '@/app/[lang]/dashboard/photographer/billing/actions';
 import { Button } from '@/components/ui/button';
 
+const STARTER_GRADIENT = 'linear-gradient(135deg, #ed737d 0%, #e12e3d 100%)';
+
 interface PricingPlanButtonProps {
   planId: 'free' | 'starter' | 'pro';
   isFree: boolean;
   isAuthenticated?: boolean;
+  label: string;
+  loadingLabel: string;
   className?: string;
 }
 
@@ -18,12 +22,14 @@ export function PricingPlanButton({
   planId,
   isFree,
   isAuthenticated = false,
+  label,
+  loadingLabel,
   className,
 }: PricingPlanButtonProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const isStarter = planId === 'starter';
 
-  // For free plan, always link to signup
   if (isFree) {
     return (
       <Link href="/signup" className={className}>
@@ -32,44 +38,45 @@ export function PricingPlanButton({
           size="lg"
           className="w-full justify-center gap-2 text-sm font-medium tracking-tight"
         >
-          Start for free
+          {label}
           <ArrowRight className="h-4 w-4" />
         </Button>
       </Link>
     );
   }
 
-  // If not authenticated, link to signup with plan parameter
+  const starterStyle = isStarter ? { background: STARTER_GRADIENT } : undefined;
+  const buttonClassName = [
+    'w-full justify-center gap-2 text-sm font-medium tracking-tight',
+    isStarter
+      ? 'text-white hover:opacity-90 transition-opacity'
+      : 'bg-primary text-primary-foreground hover:bg-primary/90',
+    className,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   if (!isAuthenticated) {
     return (
       <Link href={`/signup?plan=${planId}`} className={className}>
-        <Button
-          variant="default"
-          size="lg"
-          className="w-full justify-center gap-2 text-sm font-medium tracking-tight bg-primary text-primary-foreground hover:bg-primary/90"
-        >
-          {planId === 'starter' ? 'Get Starter' : 'Go Pro'}
+        <Button variant="default" size="lg" style={starterStyle} className={buttonClassName}>
+          {label}
           <ArrowRight className="h-4 w-4" />
         </Button>
       </Link>
     );
   }
 
-  // For authenticated users with paid plans, create checkout
   const handleUpgrade = () => {
     startTransition(async () => {
       try {
         const result = await createBillingCheckoutAction(planId as 'starter' | 'pro');
-
         if ('url' in result) {
-          // Redirect to Stripe Checkout
           window.location.href = result.url;
         } else if (result.updated) {
-          // Subscription was updated directly
           router.push('/dashboard/photographer/settings?updated=true');
         }
       } catch (error) {
-        // On error, redirect to signup as fallback
         console.error('Checkout error:', error);
         router.push(`/signup?plan=${planId}`);
       }
@@ -82,22 +89,17 @@ export function PricingPlanButton({
       size="lg"
       onClick={handleUpgrade}
       disabled={isPending}
-      className={[
-        'w-full justify-center gap-2 text-sm font-medium tracking-tight',
-        'bg-primary text-primary-foreground hover:bg-primary/90',
-        className,
-      ]
-        .filter(Boolean)
-        .join(' ')}
+      style={starterStyle}
+      className={buttonClassName}
     >
       {isPending ? (
         <>
           <Loader2 className="h-4 w-4 animate-spin" />
-          Processing...
+          {loadingLabel}
         </>
       ) : (
         <>
-          {planId === 'starter' ? 'Get Starter' : 'Go Pro'}
+          {label}
           <ArrowRight className="h-4 w-4" />
         </>
       )}

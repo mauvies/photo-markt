@@ -6,93 +6,90 @@ import { useState } from 'react';
 import { PricingPlanButton } from '@/components/pricing-plan-button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import type { Dictionary } from '@/lib/i18n/get-dictionary';
+
+type PricingT = Dictionary['pricingSection'];
 
 type BillingPeriod = 'monthly' | 'yearly';
 
-type PlanFeature = { text: string; bold?: boolean; badge?: string };
+const STARTER_GRADIENT = 'linear-gradient(135deg, #ed737d 0%, #e12e3d 100%)';
+const STARTER_CARD_GRADIENT =
+  'linear-gradient(135deg, rgba(237, 115, 125, 0.04) 0%, rgba(225, 46, 61, 0.04) 100%)';
 
-const PLAN_FEATURES: Record<string, PlanFeature[]> = {
-  free: [
-    { text: '12% sales fee', bold: true },
-    { text: '20GB storage' },
-    { text: 'Up to 5 active events' },
-    { text: 'BIB number recognition' },
-    { text: 'Face recognition (100 searches/month)' },
-    { text: 'Basic analytics' },
-  ],
-  starter: [
-    { text: '8% sales fee', bold: true },
-    { text: '50GB storage' },
-    { text: 'Unlimited events' },
-    { text: 'BIB number recognition' },
-    { text: 'Face recognition' },
-    { text: 'Advanced analytics' },
-    { text: 'Priority in search results' },
-  ],
-  pro: [
-    { text: '5% sales fee', bold: true },
-    { text: '250GB storage' },
-    { text: 'Unlimited events' },
-    { text: 'BIB number recognition' },
-    { text: 'Face recognition' },
-    { text: 'Outfit pattern recognition', badge: 'Coming soon' },
-    { text: 'Highest priority in search results' },
-  ],
-};
-
-type PlanCard = {
-  id: 'free' | 'starter' | 'pro';
-  name: string;
-  description: string;
-  monthlyPrice: number | null;
-  yearlyMonthlyPrice: number | null;
-  yearlyTotal: number | null;
-  popular?: boolean;
-};
-
-const PLAN_CARDS: PlanCard[] = [
-  {
-    id: 'free',
-    name: 'Free',
-    description: 'Perfect for getting started and testing Photo Markt',
-    monthlyPrice: null,
-    yearlyMonthlyPrice: null,
-    yearlyTotal: null,
-  },
-  {
-    id: 'starter',
-    name: 'Starter',
-    description: 'For active photographers who publish events regularly',
-    monthlyPrice: 14.99,
-    yearlyMonthlyPrice: 11.99,
-    yearlyTotal: 143.88,
-    popular: true,
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    description: 'For professional photographers and studios',
-    monthlyPrice: 29.99,
-    yearlyMonthlyPrice: 23.99,
-    yearlyTotal: 287.88,
-  },
-];
-
-export function PricingSection({ isAuthenticated }: { isAuthenticated: boolean }) {
+export function PricingSection({ isAuthenticated, t }: { isAuthenticated: boolean; t: PricingT }) {
   const [billing, setBilling] = useState<BillingPeriod>('yearly');
   const isYearly = billing === 'yearly';
+
+  const planFeatures = {
+    free: [
+      { text: t.freeFeature1, bold: true },
+      { text: t.freeFeature2 },
+      { text: t.freeFeature3 },
+      { text: t.freeFeature4 },
+      { text: t.freeFeature5 },
+      { text: t.freeFeature6 },
+    ],
+    starter: [
+      { text: t.starterFeature1, bold: true },
+      { text: t.starterFeature2 },
+      { text: t.starterFeature3 },
+      { text: t.starterFeature4 },
+      { text: t.starterFeature5 },
+      { text: t.starterFeature6 },
+      { text: t.starterFeature7 },
+    ],
+    pro: [
+      { text: t.proFeature1, bold: true },
+      { text: t.proFeature2 },
+      { text: t.proFeature3 },
+      { text: t.proFeature4 },
+      { text: t.proFeature5 },
+      { text: t.proFeature6, badge: t.comingSoon },
+      { text: t.proFeature7 },
+    ],
+  };
+
+  const plans = [
+    {
+      id: 'free' as const,
+      name: t.freeName,
+      description: t.freeDesc,
+      monthlyPrice: 0,
+      yearlyMonthlyPrice: 0,
+      yearlyTotal: 0,
+    },
+    {
+      id: 'starter' as const,
+      name: t.starterName,
+      description: t.starterDesc,
+      monthlyPrice: 14.99,
+      yearlyMonthlyPrice: 11.99,
+      yearlyTotal: 143.88,
+      popular: true,
+    },
+    {
+      id: 'pro' as const,
+      name: t.proName,
+      description: t.proDesc,
+      monthlyPrice: 29.99,
+      yearlyMonthlyPrice: 23.99,
+      yearlyTotal: 287.88,
+    },
+  ];
+
+  const ctaLabel = (planId: 'free' | 'starter' | 'pro') => {
+    if (planId === 'free') return t.ctaFree;
+    if (planId === 'starter') return t.ctaStarter;
+    return t.ctaPro;
+  };
 
   return (
     <section className="bg-linear-to-b from-muted/20 via-background to-background py-16 sm:py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="mt-4 text-3xl font-semibold text-foreground sm:text-4xl">
-            Simple pricing for photographers.
-          </h2>
-          <p className="mt-3 text-sm text-muted-foreground sm:text-base">
-            Start for free and scale as your gallery grows. No hidden fees.
-          </p>
+          <h2 className="mt-4 text-3xl font-semibold text-foreground sm:text-4xl">{t.headline}</h2>
+          <p className="mt-3 text-sm text-muted-foreground sm:text-base">{t.subheadline}</p>
         </div>
 
         {/* Billing toggle */}
@@ -102,7 +99,7 @@ export function PricingSection({ isAuthenticated }: { isAuthenticated: boolean }
               !isYearly ? 'text-sm font-medium text-foreground' : 'text-sm text-muted-foreground'
             }
           >
-            Monthly
+            {t.monthly}
           </span>
           <Switch
             checked={isYearly}
@@ -114,38 +111,49 @@ export function PricingSection({ isAuthenticated }: { isAuthenticated: boolean }
               isYearly ? 'text-sm font-medium text-foreground' : 'text-sm text-muted-foreground'
             }
           >
-            Yearly
+            {t.yearly}
           </span>
           {isYearly && (
-            <Badge variant="secondary" className="ml-1 text-[11px]">
-              2 months free
+            <Badge variant="outline" className="ml-1 text-[11px]">
+              {t.twoMonthsFree}
             </Badge>
           )}
         </div>
 
         {/* Plan cards */}
         <div className="mx-auto mt-10 grid max-w-6xl gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {PLAN_CARDS.map((plan) => {
+          {plans.map((plan) => {
             const isFree = plan.id === 'free';
+            const isStarter = plan.id === 'starter';
             const price = isYearly ? plan.yearlyMonthlyPrice : plan.monthlyPrice;
-            const features = PLAN_FEATURES[plan.id] ?? [];
+            const features = planFeatures[plan.id];
 
             return (
               <div
                 key={plan.id}
+                style={
+                  isStarter
+                    ? {
+                        backgroundImage: STARTER_CARD_GRADIENT,
+                        borderColor: STARTER_CARD_GRADIENT,
+                      }
+                    : undefined
+                }
                 className={[
-                  'relative flex flex-col rounded-2xl border border-border bg-card p-6 shadow-sm transition-all duration-200',
-                  'hover:-translate-y-[2px] hover:border-primary/40 hover:shadow-md',
-                  plan.popular &&
-                    'sm:-mt-2 bg-linear-to-b from-primary/5 to-card ring-1 ring-primary/40 ring-offset-1 ring-offset-background shadow-lg',
+                  'relative flex flex-col rounded-2xl border bg-card p-6 shadow-sm transition-all duration-200',
+                  'hover:translate-y-[-2px] hover:border-primary/40 hover:shadow-md',
+                  plan.popular && 'sm:-mt-2 shadow-lg',
                 ]
                   .filter(Boolean)
                   .join(' ')}
               >
                 {plan.popular && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                    <span className="rounded-full bg-primary px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground shadow-sm">
-                      Most popular
+                    <span
+                      style={{ background: STARTER_GRADIENT, borderColor: 'rgb(225, 46, 61)' }}
+                      className="rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white shadow-sm"
+                    >
+                      {t.mostPopular}
                     </span>
                   </div>
                 )}
@@ -155,20 +163,18 @@ export function PricingSection({ isAuthenticated }: { isAuthenticated: boolean }
                   <h3 className="text-xl font-semibold">{plan.name}</h3>
 
                   <div className="mt-3 flex items-baseline gap-2">
-                    {price !== null ? (
-                      <>
-                        <span className="text-3xl font-semibold">${price}</span>
-                        <span className="text-xs text-muted-foreground">/mo</span>
-                      </>
-                    ) : (
-                      <span className="text-3xl font-semibold">Free</span>
+                    <span className="text-3xl font-semibold">
+                      {price === 0 ? t.freeName : `$${price}`}
+                    </span>
+                    {price !== 0 && (
+                      <span className="text-xs text-muted-foreground">{t.perMonth}</span>
                     )}
                   </div>
 
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    {isYearly && plan.yearlyTotal !== null
-                      ? `Billed $${plan.yearlyTotal}/year`
-                      : '\u00a0'}
+                    {isYearly && plan.yearlyTotal !== null && plan.yearlyTotal > 0
+                      ? `${t.billedYearlyPrefix}${plan.yearlyTotal}${t.billedYearlySuffix}`
+                      : ' '}
                   </p>
                 </div>
 
@@ -181,8 +187,8 @@ export function PricingSection({ isAuthenticated }: { isAuthenticated: boolean }
                       </div>
                       <span className={f.bold ? 'text-[13px] font-semibold' : 'text-[13px]'}>
                         {f.text}
-                        {f.badge && (
-                          <Badge variant="secondary" className="ml-1.5 text-[10px] py-0">
+                        {'badge' in f && f.badge && (
+                          <Badge variant="secondary" className="ml-1.5 py-0 text-[10px]">
                             {f.badge}
                           </Badge>
                         )}
@@ -197,6 +203,8 @@ export function PricingSection({ isAuthenticated }: { isAuthenticated: boolean }
                     planId={plan.id}
                     isFree={isFree}
                     isAuthenticated={isAuthenticated}
+                    label={ctaLabel(plan.id)}
+                    loadingLabel={t.ctaProcessing}
                   />
                 </div>
               </div>
@@ -207,9 +215,9 @@ export function PricingSection({ isAuthenticated }: { isAuthenticated: boolean }
         {/* Footer */}
         <div className="mx-auto mt-10 max-w-6xl border-t border-border/40 pt-6 text-center">
           <p className="text-[11px] text-muted-foreground">
-            Need a custom plan for large studios or organizers?{' '}
+            {t.footerNote}{' '}
             <Link href="/contact" className="underline underline-offset-4 hover:text-foreground">
-              Contact us
+              {t.footerContact}
             </Link>
             .
           </p>
