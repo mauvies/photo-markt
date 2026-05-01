@@ -4,11 +4,22 @@
  *
  * Handles Stripe webhook events:
  * - checkout.session.completed: Create order/order_items (payment) or update subscription (subscription)
- * - payment_intent.succeeded: Update order status
+ * - payment_intent.succeeded: Update order status + create Stripe transfers to photographers
  * - payment_intent.payment_failed: Update order status
  * - customer.subscription.created: Create/update subscription
  * - customer.subscription.updated: Update subscription
  * - customer.subscription.deleted: Cancel subscription
+ * - account.updated: Sync photographer Stripe Connect status
+ * - charge.refunded: Mark order as refunded
+ *
+ * Stripe Dashboard setup required:
+ * - Enable Stripe Connect with Express accounts (Connect > Get started)
+ * - Set payout schedule to Weekly, minimum $25 (Connect > Settings > Payouts)
+ * - Subscribe this endpoint to: account.updated, charge.refunded
+ * - In production: https://picdemi.com/api/stripe/webhook
+ *
+ * NOTE: Transfer reversal on refund is NOT automatic. Reverse manually via Stripe Dashboard
+ * for refunded orders — Stripe does not auto-reverse transfers to connected accounts.
  */
 
 import { revalidatePath } from 'next/cache';
@@ -28,11 +39,98 @@ import {
   getOrderByPaymentIntentId,
   updateOrderStatus,
 } from '@/database/queries/orders';
+import { createPayoutFromTransfer } from '@/database/queries/payouts';
+import {
+  getPhotographerConnectStatuses,
+  getProfileByStripeConnectAccountId,
+  updateProfileStripeConnect,
+} from '@/database/queries/profiles';
+import { getPhotographerPlanIds } from '@/database/queries/subscriptions';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { env } from '@/env.mjs';
 import { sendGuestPurchaseEmail } from '@/lib/email/send-guest-purchase-email';
+import { getPhotographerNetCents } from '@/lib/plans';
 import { stripe } from '@/lib/stripe/config';
+import { createTransfer } from '@/lib/stripe/connect';
 import { STRIPE_PRICE_TO_PLAN } from '@/lib/stripe/plans-stripe';
+
+/**
+ * Determine Stripe Connect account status from account fields.
+ */
+function deriveConnectStatus(account: Stripe.Account): 'pending' | 'active' | 'restricted' {
+  if (account.charges_enabled && account.payouts_enabled) return 'active';
+  if (account.details_submitted) return 'restricted';
+  return 'pending';
+}
+
+/**
+ * Create Stripe transfers for all active-connect photographers in an order.
+ * Called after payment succeeds to distribute photographer earnings.
+ */
+async function createTransfersForOrderItems(
+  items: Array<{ photographer_id: string; total_price_cents: number }>,
+  chargeId: string,
+  orderId: string,
+): Promise<void> {
+  if (items.length === 0) return;
+
+  const photographerIds = [...new Set(items.map((i) => i.photographer_id))];
+
+  const [connectStatuses, planIds] = await Promise.all([
+    getPhotographerConnectStatuses(supabaseAdmin, photographerIds),
+    getPhotographerPlanIds(supabaseAdmin, photographerIds),
+  ]);
+
+  // Group totals by photographer
+  const totals = new Map<string, number>();
+  for (const item of items) {
+    totals.set(
+      item.photographer_id,
+      (totals.get(item.photographer_id) ?? 0) + item.total_price_cents,
+    );
+  }
+
+  for (const status of connectStatuses) {
+    const grossCents = totals.get(status.id) ?? 0;
+    if (grossCents === 0) continue;
+
+    if (status.stripe_connect_status !== 'active' || !status.stripe_connect_account_id) {
+      console.warn(
+        `Photographer ${status.id} has no active Connect account — transfer of ${grossCents} cents held in platform account.`,
+      );
+      continue;
+    }
+
+    const netCents = getPhotographerNetCents(grossCents, planIds.get(status.id));
+
+    if (netCents < 50) {
+      console.warn(
+        `Skipping transfer for photographer ${status.id}: net ${netCents} cents below Stripe minimum.`,
+      );
+      continue;
+    }
+
+    try {
+      const transfer = await createTransfer({
+        amountCents: netCents,
+        destination: status.stripe_connect_account_id,
+        sourceTransaction: chargeId,
+        transferGroup: orderId,
+        idempotencyKey: `transfer_${chargeId}_${status.id}`,
+      });
+
+      await createPayoutFromTransfer(supabaseAdmin, {
+        photographer_id: status.id,
+        amount_cents: netCents,
+        stripe_transfer_id: transfer.id,
+      });
+
+      console.log(`Transfer ${transfer.id} created: ${netCents} cents → photographer ${status.id}`);
+    } catch (err) {
+      console.error(`Failed to create transfer for photographer ${status.id}:`, err);
+    }
+  }
+}
 
 export async function POST(request: Request) {
   if (!env.STRIPE_WEBHOOK_SECRET) {
@@ -66,7 +164,6 @@ export async function POST(request: Request) {
           const customerId = typeof session.customer === 'string' ? session.customer : null;
 
           if (!userId && customerId) {
-            // Try to find user by customer_id in subscriptions table
             const { data: existingSub } = await supabaseAdmin
               .from('subscriptions')
               .select('user_id')
@@ -78,7 +175,6 @@ export async function POST(request: Request) {
               console.log(
                 `Found user ${existingSub.user_id} for subscription checkout via customer_id lookup`,
               );
-              // Subscription will be updated via customer.subscription.created webhook
               break;
             }
           }
@@ -90,8 +186,6 @@ export async function POST(request: Request) {
             break;
           }
 
-          // Subscription will be created/updated via customer.subscription.created webhook
-          // This event just confirms the checkout completed
           console.log(`Subscription checkout completed for user ${userId}, session ${session.id}`);
           break;
         }
@@ -114,7 +208,6 @@ export async function POST(request: Request) {
             break;
           }
 
-          // Decode cart items from Stripe metadata (no DB lookup needed)
           const cartCount = Number.parseInt(session.metadata?.cart_count ?? '0', 10);
           const cartItems: Array<{
             photoId: string;
@@ -165,10 +258,8 @@ export async function POST(request: Request) {
             guestOrderId: guestOrder.id,
           });
 
-          // Determine base URL for links in email
           const baseUrl = env.SITE_URL;
 
-          // Get event names for the email from DB
           const photoIds = cartItems.map((i) => i.photoId);
           const { data: photoRows } = await supabaseAdmin
             .from('photos')
@@ -185,7 +276,6 @@ export async function POST(request: Request) {
             ),
           ];
 
-          // Send download link email
           try {
             await sendGuestPurchaseEmail({
               to: guestEmail,
@@ -196,15 +286,36 @@ export async function POST(request: Request) {
             });
           } catch (emailErr) {
             console.error('Failed to send guest purchase email:', emailErr);
-            // Don't fail the webhook — order already created
+          }
+
+          // Create transfers to photographers for guest orders
+          const piId = typeof session.payment_intent === 'string' ? session.payment_intent : null;
+          if (piId) {
+            try {
+              const pi = await stripe.paymentIntents.retrieve(piId, {
+                expand: ['latest_charge'],
+              });
+              const chargeId =
+                typeof pi.latest_charge === 'string'
+                  ? pi.latest_charge
+                  : ((pi.latest_charge as Stripe.Charge | null)?.id ?? null);
+              if (chargeId) {
+                const orderItems = cartItems.map((i) => ({
+                  photographer_id: i.photographerId,
+                  total_price_cents: i.unitPriceCents,
+                }));
+                await createTransfersForOrderItems(orderItems, chargeId, guestOrder.id);
+              }
+            } catch (transferErr) {
+              console.error('Failed to create transfers for guest order:', transferErr);
+            }
           }
 
           console.log(`Guest order created: ${guestOrder.id} for ${guestEmail}`);
           break;
         }
 
-        // Handle payment checkout (cart-based orders)
-        // Check if order already exists
+        // Handle authenticated payment checkout (cart-based orders)
         const existingOrder = await getOrderByCheckoutSessionId(supabaseAdmin, session.id);
 
         if (existingOrder) {
@@ -212,7 +323,6 @@ export async function POST(request: Request) {
           break;
         }
 
-        // Get user_id from metadata
         const userId = session.metadata?.user_id;
         const cartId = session.client_reference_id ?? session.metadata?.cart_id;
 
@@ -221,14 +331,11 @@ export async function POST(request: Request) {
           break;
         }
 
-        // Get cart items
         if (!cartId) {
           console.error('Missing cart_id in session');
           break;
         }
 
-        // Use admin client to bypass RLS for webhook operations
-        // First verify cart belongs to user
         const { data: cart } = await supabaseAdmin
           .from('carts')
           .select('*')
@@ -241,7 +348,6 @@ export async function POST(request: Request) {
           break;
         }
 
-        // Get cart items with admin client
         const { data: cartItemsData, error: cartItemsError } = await supabaseAdmin
           .from('cart_items')
           .select(
@@ -268,7 +374,6 @@ export async function POST(request: Request) {
           break;
         }
 
-        // Map cart items to CartItemWithDetails format
         const cartItems = (cartItemsData ?? []).map(
           (item: {
             id: string;
@@ -308,17 +413,15 @@ export async function POST(request: Request) {
               unit_price_cents: item.unit_price_cents,
               created_at: item.created_at,
               photo_url: photo?.original_url ?? null,
-              photographer_name: null, // Not needed for order creation
+              photographer_name: null,
               event_name: event?.name ?? null,
               event_date: event?.date ?? null,
             };
           },
         );
 
-        // Calculate total
         const totalAmountCents = cartItems.reduce((sum, item) => sum + item.unit_price_cents, 0);
 
-        // Create order using admin client
         const order = await createOrder(supabaseAdmin, userId, {
           cart_id: cartId,
           stripe_checkout_session_id: session.id,
@@ -334,7 +437,6 @@ export async function POST(request: Request) {
           },
         });
 
-        // Add order items using admin client
         await addOrderItems(
           supabaseAdmin,
           order.id,
@@ -346,10 +448,8 @@ export async function POST(request: Request) {
           })),
         );
 
-        // Clear cart after successful order using admin client
         await clearCart(supabaseAdmin, cartId);
 
-        // Invalidate Next.js RSC cache for affected pages
         revalidatePath('/[lang]/dashboard/talent/cart', 'page');
         revalidatePath('/[lang]/dashboard/talent/orders', 'page');
         revalidatePath('/[lang]/dashboard/talent/profile', 'page');
@@ -368,6 +468,28 @@ export async function POST(request: Request) {
             payment_intent_succeeded_at: new Date().toISOString(),
           });
         }
+
+        // Create Stripe transfers to photographers for authenticated orders
+        if (order) {
+          const chargeId =
+            typeof paymentIntent.latest_charge === 'string'
+              ? paymentIntent.latest_charge
+              : ((paymentIntent.latest_charge as Stripe.Charge | null)?.id ?? null);
+
+          if (!chargeId) {
+            console.error(
+              `No charge ID on payment_intent ${paymentIntent.id} — cannot create transfers`,
+            );
+            break;
+          }
+
+          const { data: orderItems } = await supabaseAdmin
+            .from('order_items')
+            .select('photographer_id, total_price_cents')
+            .eq('order_id', order.id);
+
+          await createTransfersForOrderItems(orderItems ?? [], chargeId, order.id);
+        }
         break;
       }
 
@@ -385,6 +507,35 @@ export async function POST(request: Request) {
         break;
       }
 
+      case 'account.updated': {
+        const account = event.data.object as Stripe.Account;
+        const status = deriveConnectStatus(account);
+        const profile = await getProfileByStripeConnectAccountId(supabaseAdmin, account.id);
+        if (profile) {
+          await updateProfileStripeConnect(supabaseAdmin, profile.id, {
+            stripe_connect_status: status,
+          });
+          console.log(`Connect status updated for account ${account.id}: ${status}`);
+        }
+        break;
+      }
+
+      case 'charge.refunded': {
+        const charge = event.data.object as Stripe.Charge;
+        const piId = typeof charge.payment_intent === 'string' ? charge.payment_intent : null;
+        if (piId) {
+          const order = await getOrderByPaymentIntentId(supabaseAdmin, piId);
+          if (order && order.status !== 'refunded') {
+            await updateOrderStatus(supabaseAdmin, order.id, 'refunded', {
+              refunded_at: new Date().toISOString(),
+            });
+            console.log(`Order ${order.id} marked as refunded`);
+          }
+        }
+        // NOTE: Transfer reversal is NOT automatic — reverse manually via Stripe Dashboard
+        break;
+      }
+
       // --- SUBSCRIPTION EVENTS -----------------------------------------
       case 'customer.subscription.created':
       case 'customer.subscription.updated': {
@@ -392,12 +543,10 @@ export async function POST(request: Request) {
         const customerId = subscription.customer as string;
         const status = subscription.status;
 
-        // Retrieve customer metadata (contains supabase_user_id)
         const customer = await stripe.customers.retrieve(customerId);
         // biome-ignore lint/suspicious/noExplicitAny: customer metadata
         let supabaseUserId = (customer as any).metadata?.supabase_user_id;
 
-        // If metadata is missing (e.g., in test scenarios), try to find user by customer_id
         if (!supabaseUserId) {
           const { data: existingSub } = await supabaseAdmin
             .from('subscriptions')
@@ -419,7 +568,6 @@ export async function POST(request: Request) {
           break;
         }
 
-        // Determine plan_id from price
         const priceId = subscription.items.data[0]?.price?.id ?? null;
         const planId = priceId ? STRIPE_PRICE_TO_PLAN[priceId] : 'free';
 
@@ -431,7 +579,6 @@ export async function POST(request: Request) {
             ? new Date(sub.current_period_end * 1000).toISOString()
             : null;
 
-        // Check if subscription already exists
         const { data: existingSubscription } = await supabaseAdmin
           .from('subscriptions')
           .select('id')
@@ -450,14 +597,12 @@ export async function POST(request: Request) {
 
         let error: { message: string; code?: string } | null = null;
         if (existingSubscription) {
-          // Update existing subscription
           const { error: updateError } = await supabaseAdmin
             .from('subscriptions')
             .update(subscriptionData)
             .eq('user_id', supabaseUserId);
           error = updateError;
         } else {
-          // Insert new subscription
           const { error: insertError } = await supabaseAdmin
             .from('subscriptions')
             .insert(subscriptionData);
@@ -483,7 +628,6 @@ export async function POST(request: Request) {
         // biome-ignore lint/suspicious/noExplicitAny: customer metadata
         let supabaseUserId = (customer as any).metadata?.supabase_user_id;
 
-        // If metadata is missing, try to find user by customer_id
         if (!supabaseUserId) {
           const { data: existingSub } = await supabaseAdmin
             .from('subscriptions')

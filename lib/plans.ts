@@ -82,6 +82,26 @@ export const PLANS: Plan[] = [
   },
 ];
 
+export const PLATFORM_FEE_RATES: Record<PlanId, number> = {
+  free: 0.15,
+  starter: 0.08,
+  pro: 0.05,
+};
+
+export function getPlatformFeeRate(planId: string | null | undefined): number {
+  if (planId && planId in PLATFORM_FEE_RATES) {
+    return PLATFORM_FEE_RATES[planId as PlanId];
+  }
+  return PLATFORM_FEE_RATES.free;
+}
+
+export function getPhotographerNetCents(
+  totalPriceCents: number,
+  planId: string | null | undefined,
+): number {
+  return Math.floor(totalPriceCents * (1 - getPlatformFeeRate(planId)));
+}
+
 export function getPlanById(id: PlanId): Plan | undefined {
   return PLANS.find((plan) => plan.id === id);
 }

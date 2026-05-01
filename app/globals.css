@@ -62,21 +62,21 @@
 
   /* Base background &  — clean, neutral Unsplash style */
   --background: oklch(0.985 0 0); /* near white (#FAFAFA) */
-  --foreground: oklch(0.42 0.00005 270); /* charcoal text (#2C2C2C) */
+  --foreground: oklch(0.47 0 270); /* charcoal text (#2C2C2C) */
 
   --card: oklch(0.985 0 0);
-  --card-foreground: oklch(0.42 0.00005 270);
+  --card-foreground: oklch(0.47 0 270);
 
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.42 0.00005 270);
+  --popover-foreground: oklch(0.47 0 270);
 
   /* Primary brand color */
-  --primary: #4b4b4b;
+  --primary: oklch(0.47 0 270);
   --primary-foreground: #ffffff;
 
   /* Secondary = light gray surfaces, modals, subtle UI */
   --secondary: oklch(0.95 0.02 250); /* light gray-blue (#F1F3F6) */
-  --secondary-foreground: oklch(0.42 0.00005 270);
+  --secondary-foreground: oklch(0.47 0 270);
 
   /* Muted = lighter gray for backgrounds of inputs, cards */
   --muted: oklch(0.93 0.01 250); /* soft gray (#ECEEF0) */
@@ -84,7 +84,7 @@
 
   /* Accent = neutral hover background */
   --accent: #f3f4f6; /* gray-100 */
-  --accent-foreground: oklch(0.42 0.00005 270);
+  --accent-foreground: oklch(0.47 0 270);
 
   /* Functional tokens */
   --destructive: oklch(0.68 0.2 25); /* coral red (#F87171) */
@@ -101,11 +101,11 @@
 
   /* Sidebar — neutral grayscale palette */
   --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.42 0.00005 270);
+  --sidebar-foreground: oklch(0.47 0 270);
   --sidebar-primary: oklch(0.72 0.08 254);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.93 0.01 250);
-  --sidebar-accent-foreground: oklch(0.42 0.00005 270);
+  --sidebar-accent-foreground: oklch(0.47 0 270);
   --sidebar-border: oklch(0.92 0 0);
   --sidebar-ring: oklch(0.65 0.1 280);
   --header-height: 4.5rem;

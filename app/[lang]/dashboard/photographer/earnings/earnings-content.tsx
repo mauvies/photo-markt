@@ -1,43 +1,22 @@
 'use client';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { DollarSign, TrendingUp, Wallet, XCircle } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { CalendarClock, DollarSign, TrendingUp, Wallet } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { PhotographerEarning } from '@/database/queries/earnings';
 import type { Payout } from '@/database/queries/payouts';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
-import { getPayoutProfileStatusAction } from '../profile/payout-profile/actions';
 import {
-  createPayoutRequestAction,
+  getConnectStatusForEarningsAction,
   getEarningsSummaryAction,
   getPayoutsAction,
   getPhotographerEarningsAction,
+  getStripeConnectBalanceAction,
 } from './actions';
-import { getPaymentAccountsAction } from './payment-accounts-actions';
-import { PayoutProfileBanner } from './payout-profile-banner';
 
 type EarningsT = Dictionary['earnings'];
 
@@ -92,182 +71,6 @@ function SummaryCard({ title, value, icon, description, className }: SummaryCard
   );
 }
 
-interface PayoutRequestDialogProps {
-  availableBalance: number;
-  onSuccess: () => void;
-  isPayoutProfileComplete: boolean;
-}
-
-function PayoutRequestDialog({
-  availableBalance,
-  onSuccess,
-  isPayoutProfileComplete,
-}: PayoutRequestDialogProps) {
-  const { t } = useTranslations<EarningsT>();
-  const [open, setOpen] = useState(false);
-  const [amount, setAmount] = useState('');
-  const [paymentAccountId, setPaymentAccountId] = useState<string>('');
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  const { data: paymentAccounts = [] } = useQuery({
-    queryKey: ['payment-accounts'] as const,
-    queryFn: () => getPaymentAccountsAction(),
-    enabled: open,
-    staleTime: 2 * 60 * 1000,
-  });
-
-  useEffect(() => {
-    if (paymentAccounts.length > 0 && !paymentAccountId) {
-      const defaultAccount = paymentAccounts.find((a) => a.is_default);
-      setPaymentAccountId(defaultAccount?.id ?? paymentAccounts[0].id);
-    }
-  }, [paymentAccounts, paymentAccountId]);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    if (!paymentAccountId) {
-      setError(t('errorSelectAccount'));
-      return;
-    }
-
-    const amountCents = Math.round(Number.parseFloat(amount) * 100);
-
-    if (!amount || Number.isNaN(amountCents) || amountCents <= 0) {
-      setError(t('errorValidAmount'));
-      return;
-    }
-
-    if (amountCents > availableBalance) {
-      setError(`${t('errorExceedsBalance')} ${formatPrice(availableBalance)}`);
-      return;
-    }
-
-    startTransition(async () => {
-      try {
-        await createPayoutRequestAction(amountCents, paymentAccountId);
-        setOpen(false);
-        setAmount('');
-        setPaymentAccountId('');
-        onSuccess();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : t('errorFailedPayout'));
-      }
-    });
-  };
-
-  const maxAmount = (availableBalance / 100).toFixed(2);
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        setOpen(v);
-        if (!v) setPaymentAccountId('');
-      }}
-    >
-      <DialogTrigger asChild>
-        <Button size="lg" disabled={!isPayoutProfileComplete}>
-          {t('requestPayoutButton')}
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t('requestPayoutTitle')}</DialogTitle>
-          <DialogDescription>
-            {!isPayoutProfileComplete ? (
-              t('completeProfileFirst')
-            ) : (
-              <>
-                {t('enterAmountDesc')}{' '}
-                <span className="font-semibold">{formatPrice(availableBalance)}</span>
-              </>
-            )}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-4 py-4">
-            {!isPayoutProfileComplete ? (
-              <div className="rounded-lg border border-dashed p-4 text-center">
-                <p className="text-sm text-muted-foreground mb-2">{t('payoutProfileIncomplete')}</p>
-                <p className="text-xs text-muted-foreground mb-4">
-                  {t('completePayoutProfileToEnable')}
-                </p>
-                <Link href="/dashboard/photographer/profile/payout-profile">
-                  <Button variant="outline" size="sm">
-                    {t('completeProfile')}
-                  </Button>
-                </Link>
-              </div>
-            ) : paymentAccounts.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-4 text-center">
-                <p className="text-sm text-muted-foreground mb-2">{t('noPaymentAccountsFound')}</p>
-                <p className="text-xs text-muted-foreground">{t('addPaymentAccountFirst')}</p>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="paymentAccount">{t('paymentAccountLabel')} *</Label>
-                  <Select
-                    value={paymentAccountId}
-                    onValueChange={setPaymentAccountId}
-                    disabled={isPending}
-                  >
-                    <SelectTrigger id="paymentAccount">
-                      <SelectValue placeholder={t('selectPaymentAccount')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {paymentAccounts.map((account) => (
-                        <SelectItem key={account.id} value={account.id}>
-                          {account.display_name}
-                          {account.is_default && ` ${t('defaultSuffix')}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="amount">{t('amountLabel')}</Label>
-                  <Input
-                    id="amount"
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    max={maxAmount}
-                    value={amount}
-                    onChange={(e) => {
-                      setAmount(e.target.value);
-                      setError(null);
-                    }}
-                    placeholder={`${t('maxPrefix')} ${maxAmount}`}
-                    disabled={isPending}
-                  />
-                </div>
-              </>
-            )}
-            {error && <p className="text-sm text-destructive">{error}</p>}
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setOpen(false)}
-              disabled={isPending}
-            >
-              {t('cancel')}
-            </Button>
-            <Button type="submit" disabled={isPending || paymentAccounts.length === 0}>
-              {isPending ? t('submitting') : t('submitRequest')}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 interface PayoutHistoryProps {
   payouts: Payout[];
   className?: string;
@@ -276,7 +79,9 @@ interface PayoutHistoryProps {
 function PayoutHistory({ payouts, className }: PayoutHistoryProps) {
   const { t } = useTranslations<EarningsT>();
 
-  if (payouts.length === 0) {
+  const stripPayouts = payouts.filter((p) => p.stripe_transfer_id);
+
+  if (stripPayouts.length === 0) {
     return (
       <div className="rounded-xl border bg-card p-6 shadow-sm">
         <h3 className="mb-4 text-lg font-semibold">{t('payoutHistoryTitle')}</h3>
@@ -285,51 +90,25 @@ function PayoutHistory({ payouts, className }: PayoutHistoryProps) {
     );
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'paid':
-        return 'text-green-600 dark:text-green-400';
-      case 'approved':
-        return 'text-blue-600 dark:text-blue-400';
-      case 'pending':
-        return 'text-yellow-600 dark:text-yellow-400';
-      case 'cancelled':
-        return 'text-red-600 dark:text-red-400';
-      default:
-        return 'text-muted-foreground';
-    }
-  };
-
   return (
     <div className={cn('rounded-xl border bg-card p-6 shadow-sm', className)}>
       <h3 className="mb-4 text-lg font-semibold">{t('payoutHistoryTitle')}</h3>
       <div className="space-y-3">
-        {payouts.map((payout) => (
+        {stripPayouts.map((payout) => (
           <div
             key={payout.id}
             className="flex items-center justify-between rounded-lg border bg-background p-4"
           >
             <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <p className="font-semibold">{formatPrice(payout.amount_cents)}</p>
-                <span className={cn('text-xs font-medium', getStatusColor(payout.status))}>
-                  {payout.status.charAt(0).toUpperCase() + payout.status.slice(1)}
-                </span>
-              </div>
+              <p className="font-semibold">{formatPrice(payout.amount_cents)}</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {t('requestedLabel')} {formatDateTime(payout.created_at)}
+                {t('paidLabel')}{' '}
+                {payout.paid_at
+                  ? formatDateTime(payout.paid_at)
+                  : formatDateTime(payout.created_at)}
               </p>
-              {payout.paid_at && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t('paidLabel')} {formatDateTime(payout.paid_at)}
-                </p>
-              )}
-              {payout.admin_notes && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t('noteLabel')} {payout.admin_notes}
-                </p>
-              )}
             </div>
+            <span className="text-xs font-medium text-green-600 dark:text-green-400">Paid</span>
           </div>
         ))}
       </div>
@@ -413,22 +192,24 @@ function EarningsTable({ earnings, className }: EarningsTableProps) {
 
 export function EarningsContent() {
   const { t } = useTranslations<EarningsT>();
-  const queryClient = useQueryClient();
 
   const { data, isFetching } = useQuery({
     queryKey: ['earnings'] as const,
     queryFn: async () => {
-      const [summaryData, earningsData, payoutsData, profileStatus] = await Promise.all([
-        getEarningsSummaryAction(),
-        getPhotographerEarningsAction(20),
-        getPayoutsAction(),
-        getPayoutProfileStatusAction(),
-      ]);
+      const [summaryData, earningsData, payoutsData, connectStatus, stripeBalance] =
+        await Promise.all([
+          getEarningsSummaryAction(),
+          getPhotographerEarningsAction(20),
+          getPayoutsAction(),
+          getConnectStatusForEarningsAction(),
+          getStripeConnectBalanceAction(),
+        ]);
       return {
         summary: summaryData,
         earnings: earningsData,
         payouts: payoutsData,
-        isPayoutProfileComplete: profileStatus.isComplete,
+        connectStatus: connectStatus.stripe_connect_status,
+        stripeBalance,
       };
     },
     staleTime: 2 * 60 * 1000,
@@ -437,13 +218,31 @@ export function EarningsContent() {
   const summary = data?.summary ?? null;
   const earnings = data?.earnings ?? [];
   const payouts = data?.payouts ?? [];
-  const isPayoutProfileComplete = data?.isPayoutProfileComplete ?? true;
+  const connectStatus = data?.connectStatus ?? 'not_connected';
+  const stripeBalance = data?.stripeBalance ?? null;
   const isLoading = isFetching && !data;
+
+  const feePercent = summary ? Math.round(summary.platformFeeRate * 100) : null;
 
   return (
     <div className="space-y-6">
-      {/* Payout Profile Banner */}
-      {!isPayoutProfileComplete && <PayoutProfileBanner isComplete={isPayoutProfileComplete} />}
+      {/* Connect account banner if not active */}
+      {connectStatus !== 'active' && (
+        <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-950 flex items-center justify-between gap-4">
+          <p className="text-sm text-yellow-800 dark:text-yellow-200">
+            {connectStatus === 'not_connected'
+              ? t('connectBannerNotConnected')
+              : connectStatus === 'pending'
+                ? t('connectBannerPending')
+                : t('connectBannerRestricted')}
+          </p>
+          <Link href="/dashboard/photographer/profile/payout-profile">
+            <Button size="sm" variant="outline">
+              {t('connectBannerButton')}
+            </Button>
+          </Link>
+        </div>
+      )}
 
       {/* Summary Cards */}
       {isLoading && !summary ? (
@@ -464,8 +263,10 @@ export function EarningsContent() {
             <SummaryCard
               title={t('platformFees')}
               value={formatPrice(summary.platformFeeCents)}
-              icon={<XCircle className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />}
-              description={t('tenPercentFee')}
+              icon={<TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />}
+              description={
+                feePercent !== null ? `${feePercent}% ${t('platformFeeDesc')}` : t('tenPercentFee')
+              }
             />
             <SummaryCard
               title={t('netEarnings')}
@@ -481,31 +282,35 @@ export function EarningsContent() {
             />
           </div>
 
-          {/* Payment Accounts & Requests */}
-          <div className="flex flex-col gap-4 xl:flex-row">
-            <div className="rounded-xl border bg-card p-6 shadow-sm xl:w-[60%]">
-              <h3 className="text-lg font-semibold mb-2">{t('payoutMethodCardTitle')}</h3>
-              <p className="text-sm text-muted-foreground mb-4">{t('payoutMethodCardDesc')}</p>
-              <Link href="/dashboard/photographer/profile/payout-profile">
-                <Button variant="outline" size="sm">
-                  {t('payoutMethodCardButton')}
-                </Button>
-              </Link>
-            </div>
-            <div className="rounded-xl border bg-card p-6 shadow-sm flex-1">
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-semibold">{t('requestPayoutTitle')}</h3>
-              </div>
-              <p className="mb-4 text-sm text-muted-foreground">{t('requestPayoutDesc')}</p>
-              <PayoutRequestDialog
-                availableBalance={summary.withdrawableBalanceCents}
-                onSuccess={() => queryClient.invalidateQueries({ queryKey: ['earnings'] })}
-                isPayoutProfileComplete={isPayoutProfileComplete}
+          {/* Stripe Connect balance (live from Stripe API) */}
+          {stripeBalance && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <SummaryCard
+                title={t('stripeAvailable')}
+                value={formatPrice(stripeBalance.available)}
+                icon={<Wallet className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />}
+                description={t('stripeAvailableDesc')}
               />
+              <SummaryCard
+                title={t('stripePending')}
+                value={formatPrice(stripeBalance.pending)}
+                icon={<CalendarClock className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />}
+                description={t('stripePendingDesc')}
+              />
+            </div>
+          )}
+
+          {/* Payout schedule info */}
+          <div className="rounded-xl border bg-card p-6 shadow-sm flex items-start gap-4">
+            <CalendarClock className="h-6 w-6 text-primary shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-semibold mb-1">{t('payoutScheduleTitle')}</h3>
+              <p className="text-sm text-muted-foreground">{t('payoutScheduleDesc')}</p>
+              <p className="text-xs text-muted-foreground mt-1">{t('payoutMinimumThreshold')}</p>
             </div>
           </div>
 
-          {/* Earnings Table & History */}
+          {/* Earnings Table & Payout History */}
           <div className="flex flex-col gap-4 xl:flex-row">
             <EarningsTable earnings={earnings} className="xl:w-[60%]" />
             <div className="flex-1">

@@ -128,8 +128,10 @@ export function PricingSection({ isAuthenticated, t }: { isAuthenticated: boolea
                 key={plan.id}
                 className={[
                   'relative flex flex-col rounded-2xl border bg-card p-6 shadow-sm transition-all duration-200',
-                  'hover:translate-y-[-2px] hover:border-primary/40 hover:shadow-md',
-                  plan.popular && 'sm:-mt-2 shadow-lg bg-gradient-starter-card',
+                  'hover:translate-y-[-2px] hover:shadow-md',
+                  plan.popular
+                    ? 'sm:-mt-2 shadow-lg border-[#ee9da4] bg-gradient-starter-card hover:border-[#ed737d]'
+                    : 'hover:border-primary/40',
                 ]
                   .filter(Boolean)
                   .join(' ')}
@@ -150,12 +152,8 @@ export function PricingSection({ isAuthenticated, t }: { isAuthenticated: boolea
                   <h3 className="text-xl font-semibold">{plan.name}</h3>
 
                   <div className="mt-3 flex items-baseline gap-2">
-                    <span className="text-3xl font-semibold">
-                      {price === 0 ? t.freeName : `$${price}`}
-                    </span>
-                    {price !== 0 && (
-                      <span className="text-xs text-muted-foreground">{t.perMonth}</span>
-                    )}
+                    <span className="text-3xl font-semibold">{`$${price}`}</span>
+                    <span className="text-xs text-muted-foreground">{t.perMonth}</span>
                   </div>
 
                   <p className="mt-1 text-[11px] text-muted-foreground">

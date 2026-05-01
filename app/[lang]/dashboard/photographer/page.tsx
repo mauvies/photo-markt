@@ -1,6 +1,16 @@
 import { format } from 'date-fns';
-import { Calendar, DollarSign, HardDrive, Image as ImageIcon, TrendingUp } from 'lucide-react';
+import {
+  AlertTriangle,
+  Calendar,
+  DollarSign,
+  HardDrive,
+  Image as ImageIcon,
+  TrendingUp,
+} from 'lucide-react';
+import Link from 'next/link';
 import { DashboardHeader } from '@/components/dashboard-header';
+import { getProfile } from '@/database/queries/profiles';
+import { createClient } from '@/database/server';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { cn } from '@/lib/utils';
@@ -30,13 +40,40 @@ export default async function PhotographerDashboardPage({
   params: Promise<{ lang: string }>;
 }) {
   const { lang } = await params;
-  const dict = await getDictionary(lang as Locale);
-  const data = await getDashboardData();
+  const [supabase, dict] = await Promise.all([createClient(), getDictionary(lang as Locale)]);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const [data, profile] = await Promise.all([
+    getDashboardData(),
+    user ? getProfile(supabase, user.id) : null,
+  ]);
   const { salesSummary, salesOverTime, topEvent, totalEvents, storage } = data;
+
+  const connectStatus = profile?.stripe_connect_status ?? 'not_connected';
 
   return (
     <div className="flex flex-1 flex-col gap-4 sm:gap-6">
       <DashboardHeader title={dict.photographerDashboard.overview} />
+
+      {/* Stripe Connect banner if account not active */}
+      {connectStatus !== 'active' && (
+        <div className="flex items-center gap-3 rounded-xl border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-950">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-yellow-600 dark:text-yellow-400" />
+          <div className="flex-1 text-sm text-yellow-800 dark:text-yellow-200">
+            {connectStatus === 'not_connected' && dict.stripeConnect.banner.connectAccount}
+            {connectStatus === 'pending' && dict.stripeConnect.banner.pendingReview}
+            {connectStatus === 'restricted' && dict.stripeConnect.banner.actionRequired}
+          </div>
+          <Link
+            href={`/${lang}/dashboard/photographer/profile/payout-profile`}
+            className="shrink-0 text-sm font-medium text-yellow-800 underline dark:text-yellow-200"
+          >
+            {dict.stripeConnect.banner.goToPayoutProfile}
+          </Link>
+        </div>
+      )}
 
       <div className="flex flex-1 flex-col gap-4">
         {/* Stats Cards */}

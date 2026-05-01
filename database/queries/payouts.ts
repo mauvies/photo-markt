@@ -15,6 +15,7 @@ export interface Payout {
   status: PayoutStatus;
   admin_notes: string | null;
   payment_account_id: string | null;
+  stripe_transfer_id: string | null;
   created_at: string;
   updated_at: string;
   paid_at: string | null;
@@ -127,6 +128,31 @@ export async function updatePayoutStatus(
   }
 
   return data as Payout;
+}
+
+/**
+ * Log a Stripe transfer as a paid payout. Idempotent — ignores conflicts on stripe_transfer_id.
+ */
+export async function createPayoutFromTransfer(
+  supabase: SupabaseServerClient,
+  params: {
+    photographer_id: string;
+    amount_cents: number;
+    stripe_transfer_id: string;
+  },
+): Promise<void> {
+  const { error } = await supabase.from('payouts').insert({
+    photographer_id: params.photographer_id,
+    amount_cents: params.amount_cents,
+    stripe_transfer_id: params.stripe_transfer_id,
+    status: 'paid',
+    paid_at: new Date().toISOString(),
+  });
+
+  if (error && error.code !== '23505') {
+    // 23505 = unique_violation (duplicate transfer_id) — safe to ignore
+    throw new Error(`Failed to log payout from transfer: ${getErrorMessage(error)}`);
+  }
 }
 
 /**
