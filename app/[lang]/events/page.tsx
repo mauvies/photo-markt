@@ -21,26 +21,11 @@ export default async function PublicEventsPage({
     dateFrom?: string;
     dateTo?: string;
     preset?: string;
-    lat?: string;
-    lng?: string;
-    radius?: string;
   }>;
 }) {
   const { lang } = await params;
   const dict = await getDictionary(lang as Locale);
-  const {
-    where,
-    activity,
-    dateFrom,
-    dateTo,
-    preset,
-    lat: latStr,
-    lng: lngStr,
-    radius: radiusStr,
-  } = await searchParams;
-  const parsedLat = latStr ? Number.parseFloat(latStr) : undefined;
-  const parsedLng = lngStr ? Number.parseFloat(lngStr) : undefined;
-  const parsedRadius = radiusStr ? Number.parseInt(radiusStr, 10) : undefined;
+  const { where, activity, dateFrom, dateTo, preset } = await searchParams;
   const filterOptions = await getFilterOptionsAction();
 
   // Pre-fetch events server-side so the client skips the duplicate POST on mount.
@@ -64,9 +49,6 @@ export default async function PublicEventsPage({
         countries: matchedCountry ? [matchedCountry] : undefined,
         dateFrom: dateFrom || undefined,
         dateTo: dateTo || undefined,
-        lat: parsedLat,
-        lng: parsedLng,
-        radiusKm: parsedRadius && parsedRadius > 0 ? parsedRadius : undefined,
       });
 
       initialEvents = result.events.map((e) => ({
@@ -79,7 +61,7 @@ export default async function PublicEventsPage({
     }
   }
 
-  const searchKey = `${where ?? ''}-${activity ?? ''}-${dateFrom ?? ''}-${dateTo ?? ''}-${preset ?? ''}-${latStr ?? ''}-${radiusStr ?? ''}`;
+  const searchKey = `${where ?? ''}-${activity ?? ''}-${dateFrom ?? ''}-${dateTo ?? ''}-${preset ?? ''}`;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -95,9 +77,6 @@ export default async function PublicEventsPage({
               initialDateFrom={dateFrom ?? ''}
               initialDateTo={dateTo ?? ''}
               initialPreset={preset}
-              initialLat={parsedLat}
-              initialLng={parsedLng}
-              initialRadius={parsedRadius}
             />
           </TranslationsProvider>
         </div>
@@ -111,9 +90,6 @@ export default async function PublicEventsPage({
             initialFilterOptions={filterOptions}
             initialEvents={initialEvents}
             initialTotal={initialTotal}
-            initialLat={parsedLat}
-            initialLng={parsedLng}
-            initialRadius={parsedRadius}
             eventLinkPrefix="/events"
             loadOnMount={true}
             initialWhere={where}

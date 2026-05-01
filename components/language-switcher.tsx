@@ -2,6 +2,7 @@
 
 import { Globe } from 'lucide-react';
 import { useParams, usePathname, useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -17,7 +18,9 @@ const labels: Record<Locale, string> = {
   en: 'English',
 };
 
-export function LanguageSwitcher() {
+// Separated so the Suspense boundary is explicit on both server and client,
+// preventing useSearchParams() from causing a useId() counter mismatch.
+function LanguageSwitcherInner() {
   const params = useParams();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -25,7 +28,6 @@ export function LanguageSwitcher() {
   const currentLang = (params?.lang as Locale) ?? 'es';
 
   function buildHref(targetLang: Locale): string {
-    // Strip the current locale prefix from the pathname
     const pathWithoutLang = pathname.replace(/^\/(es|en)/, '') || '/';
     const search = searchParams.toString();
     return localizedPath(targetLang, search ? `${pathWithoutLang}?${search}` : pathWithoutLang);
@@ -52,5 +54,21 @@ export function LanguageSwitcher() {
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function LanguageSwitcherFallback() {
+  return (
+    <Button variant="ghost" size="icon" aria-label="Switch language" disabled>
+      <Globe className="h-5 w-5" />
+    </Button>
+  );
+}
+
+export function LanguageSwitcher() {
+  return (
+    <Suspense fallback={<LanguageSwitcherFallback />}>
+      <LanguageSwitcherInner />
+    </Suspense>
   );
 }

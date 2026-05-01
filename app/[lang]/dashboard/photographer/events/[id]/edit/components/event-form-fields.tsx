@@ -1,7 +1,6 @@
 'use client';
 
 import type { ReactFormExtendedApi } from '@tanstack/react-form';
-import { Country, State } from 'country-state-city';
 import { format } from 'date-fns';
 import { ChevronDownIcon } from 'lucide-react';
 import { useId } from 'react';
@@ -13,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { LocationAutocomplete } from '@/components/ui/location-autocomplete';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Select,
@@ -125,145 +125,20 @@ export function EventFormFields({
         </form.Field>
       </div>
 
-      {/* Row 2: Location (Country, State, City) */}
-      <form.Field
-        name="country"
-        validators={{
-          onChange: ({ value }) => (value.trim().length === 0 ? 'Country is required.' : undefined),
-        }}
-      >
-        {(countryField) => (
-          <form.Field
-            name="state"
-            validators={{
-              onChange: ({ value }) =>
-                value.trim().length === 0 ? 'State/Province is required.' : undefined,
-            }}
-          >
-            {(stateField) => (
-              <form.Field
-                name="city"
-                validators={{
-                  onChange: () => undefined,
-                }}
-              >
-                {(cityField) => {
-                  const showFeedback =
-                    submitAttempted ||
-                    countryField.state.meta.isTouched ||
-                    stateField.state.meta.isTouched ||
-                    cityField.state.meta.isTouched;
-                  const countryError = showFeedback ? countryField.state.meta.errors?.[0] : null;
-                  const stateError = showFeedback ? stateField.state.meta.errors?.[0] : null;
-                  const states = State.getStatesOfCountry(countryField.state.value);
-                  return (
-                    <div className="space-y-4">
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div className="grid gap-2">
-                          <Label htmlFor="country">Country</Label>
-                          <Select
-                            value={countryField.state.value}
-                            onValueChange={(value: string) => {
-                              countryField.handleChange(value);
-                              countryField.handleBlur();
-                            }}
-                          >
-                            <SelectTrigger
-                              id="country"
-                              aria-invalid={showFeedback && !!countryError}
-                              className={cn(
-                                'w-full',
-                                showFeedback && countryError && 'border-destructive',
-                              )}
-                            >
-                              <SelectValue placeholder="Select a country" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Country.getAllCountries()
-                                .sort((a, b) => a.name.localeCompare(b.name))
-                                .map((c) => (
-                                  <SelectItem key={c.isoCode} value={c.isoCode}>
-                                    {c.name}
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
-                          {showFeedback && countryError ? (
-                            <p className="text-xs text-destructive">{countryError}</p>
-                          ) : null}
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label htmlFor="state">State / Province</Label>
-                          {states.length > 0 ? (
-                            <Select
-                              value={stateField.state.value}
-                              onValueChange={(value: string) => {
-                                stateField.handleChange(value);
-                                stateField.handleBlur();
-                              }}
-                            >
-                              <SelectTrigger
-                                id="state"
-                                aria-invalid={showFeedback && !!stateError}
-                                className={cn(
-                                  'w-full',
-                                  showFeedback && stateError && 'border-destructive',
-                                )}
-                              >
-                                <SelectValue placeholder="Select a state or province" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {states
-                                  .sort((a, b) => a.name.localeCompare(b.name))
-                                  .map((s) => (
-                                    <SelectItem key={s.isoCode} value={s.isoCode}>
-                                      {s.name}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Input
-                              id="state"
-                              value={stateField.state.value}
-                              onChange={(e) => {
-                                stateField.handleChange(e.target.value);
-                                stateField.handleBlur();
-                              }}
-                              placeholder="Enter state or province name"
-                              aria-invalid={showFeedback && !!stateError}
-                              className={cn(showFeedback && stateError && 'border-destructive')}
-                              autoComplete="address-level1"
-                              suppressHydrationWarning
-                            />
-                          )}
-                          {showFeedback && stateError ? (
-                            <p className="text-xs text-destructive">{stateError}</p>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label htmlFor="city">City (Optional)</Label>
-                        <Input
-                          id="city"
-                          value={cityField.state.value || ''}
-                          onChange={(e) => {
-                            cityField.handleChange(e.target.value);
-                            cityField.handleBlur();
-                          }}
-                          placeholder="Enter city name"
-                          autoComplete="address-level2"
-                          suppressHydrationWarning
-                        />
-                      </div>
-                    </div>
-                  );
-                }}
-              </form.Field>
-            )}
-          </form.Field>
+      {/* Row 2: Location */}
+      <form.Field name="city">
+        {(field) => (
+          <div className="grid gap-2">
+            <Label htmlFor="city">Location</Label>
+            <LocationAutocomplete
+              id="city"
+              value={field.state.value || ''}
+              onChange={(val) => field.handleChange(val)}
+              onBlur={field.handleBlur}
+              placeholder="Search for a location..."
+              noResultsText="No locations found"
+            />
+          </div>
         )}
       </form.Field>
 

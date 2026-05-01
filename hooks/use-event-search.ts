@@ -13,6 +13,7 @@ export type FilterOptions = {
 
 export type EventWithStats = {
   id: string;
+  slug: string | null;
   name: string;
   date: string;
   city: string;

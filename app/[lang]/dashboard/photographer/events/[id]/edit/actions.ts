@@ -34,8 +34,8 @@ const eventSchema = z.object({
       'Activity is required.',
     ),
   date: z.string().min(1, 'Date is required.'),
-  country: z.string().trim().min(1, 'Country is required.'),
-  state: z.string().trim().min(1, 'State/Province is required.'),
+  country: z.string().trim().optional().default(''),
+  state: z.string().trim().optional().default(''),
   city: z.string().trim().optional(),
   is_public: z
     .string()

@@ -621,6 +621,8 @@
     "activityRequired": "La actividad es obligatoria.",
     "locationLabel": "Ubicación",
     "locationPlaceholder": "Ciudad, región o lugar",
+    "locationSearchPlaceholder": "Busca una ubicación...",
+    "locationNoResults": "No se encontraron ubicaciones",
     "dateLabel": "Fecha",
     "dateSelectPlaceholder": "Seleccionar fecha",
     "dateRequired": "La fecha es obligatoria.",
