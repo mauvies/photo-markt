@@ -16,15 +16,17 @@ export default async function ExploreEventDetailPage({
 }: {
   params: Promise<{ lang: string; id: string }>;
 }) {
-  const { lang, id } = await params;
+  const { lang, id: param } = await params;
   const dict = await getDictionary(lang as Locale);
   const supabase = await createClient();
 
-  // Get event by ID - must be public (use admin to bypass RLS)
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  // Accept both UUID and slug in the route parameter
   const { data: event } = await supabaseAdmin
     .from('events')
     .select('*')
-    .eq('id', id)
+    .eq(UUID_REGEX.test(param) ? 'id' : 'slug', param)
     .eq('is_public', true)
     .is('deleted_at', null)
     .single();

@@ -114,6 +114,7 @@ export function EventGrid({
           <ExploreEventCard
             key={event.id}
             id={event.id}
+            hrefParam={event.slug ?? event.id}
             name={event.name}
             date={event.date}
             city={event.city}

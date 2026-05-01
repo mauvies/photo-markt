@@ -175,3 +175,79 @@ export async function searchEventNamesAction(query: string): Promise<string[]> {
     .limit(6);
   return [...new Set((data ?? []).map((r: { name: string }) => r.name))];
 }
+
+export type EventSuggestion = {
+  id: string;
+  name: string;
+  slug: string | null;
+  city: string;
+};
+
+/**
+ * Combined search for the "where" dropdown: returns events matching name or city,
+ * and photographers matching display_name — all via Supabase ILIKE, no external APIs.
+ */
+export async function searchSuggestionsAction(query: string): Promise<{
+  events: EventSuggestion[];
+  photographers: PhotographerSearchResult[];
+}> {
+  if (!query.trim()) return { events: [], photographers: [] };
+  const term = `%${query.trim()}%`;
+
+  const [eventsResult, profileMatches] = await Promise.all([
+    supabaseAdmin
+      .from('events')
+      .select('id, name, slug, city')
+      .eq('is_public', true)
+      .is('deleted_at', null)
+      .or(`name.ilike.${term},city.ilike.${term}`)
+      .order('name')
+      .limit(5),
+    supabaseAdmin
+      .from('profiles')
+      .select('id, username, slug, display_name, avatar_url')
+      .or(`username.ilike.${term},display_name.ilike.${term}`)
+      .limit(10),
+  ]);
+
+  const events = (eventsResult.data ?? []) as EventSuggestion[];
+
+  const profileIds = (profileMatches.data ?? []).map((p: { id: string }) => p.id);
+  let photographers: PhotographerSearchResult[] = [];
+
+  if (profileIds.length > 0) {
+    const { data: eventRows } = await supabaseAdmin
+      .from('events')
+      .select('user_id')
+      .in('user_id', profileIds)
+      .eq('is_public', true)
+      .is('deleted_at', null);
+
+    const countMap = new Map<string, number>();
+    for (const row of eventRows ?? []) {
+      countMap.set(row.user_id, (countMap.get(row.user_id) ?? 0) + 1);
+    }
+
+    photographers = (profileMatches.data ?? [])
+      .filter((p: { id: string }) => (countMap.get(p.id) ?? 0) > 0)
+      .slice(0, 4)
+      .map(
+        (p: {
+          id: string;
+          username: string;
+          slug: string | null;
+          display_name: string | null;
+          avatar_url: string | null;
+        }) => ({
+          id: p.id,
+          username: p.username,
+          slug: p.slug ?? p.username,
+          display_name: p.display_name,
+          avatar_url: p.avatar_url,
+          event_count: countMap.get(p.id) ?? 0,
+        }),
+      );
+  }
+
+  return { events, photographers };
+}

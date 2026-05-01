@@ -85,7 +85,7 @@ const MOCK_DETAILS: Record<string, PlaceDetails> = {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
+const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY ?? '';
 export const isMockMode = !API_KEY;
 
 export function usePlacesAutocomplete() {
@@ -118,9 +118,9 @@ export function usePlacesAutocomplete() {
     sessionTokenRef.current = null;
   }, []);
 
-  /** Fetch city/town predictions for the given input string. */
+  /** Fetch place predictions for the given input string. */
   const getPredictions = useCallback(
-    (input: string): Promise<PlacePrediction[]> => {
+    (input: string, options?: { types?: string[] }): Promise<PlacePrediction[]> => {
       if (!input.trim()) return Promise.resolve([]);
 
       if (isMockMode) {
@@ -136,7 +136,7 @@ export function usePlacesAutocomplete() {
         serviceRef.current!.getPlacePredictions(
           {
             input,
-            types: ['(cities)'],
+            types: options?.types ?? ['(cities)'],
             sessionToken: getOrCreateToken(),
           },
           (predictions, status) => {

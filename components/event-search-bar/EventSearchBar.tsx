@@ -9,8 +9,8 @@ import type { DateRange } from 'react-day-picker';
 import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/activity-options';
 import type { PhotographerSearchResult } from '@/app/[lang]/dashboard/talent/events/actions';
 import {
-  searchEventNamesAction,
-  searchPhotographersAction,
+  type EventSuggestion,
+  searchSuggestionsAction,
 } from '@/app/[lang]/dashboard/talent/events/actions';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -19,7 +19,6 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
-import { type PlacePrediction, usePlacesAutocomplete } from '@/hooks/use-places-autocomplete';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
@@ -28,7 +27,6 @@ import { useActivityCombobox } from './EventSearchBar.hooks';
 import type { EventSearchBarProps } from './EventSearchBar.types';
 import {
   BLUR_DISMISS_DELAY_MS,
-  DEFAULT_RADIUS_KM,
   last3DaysRange,
   lastWeekRange,
   parseDateStr,
@@ -46,9 +44,9 @@ export function EventSearchBar({
   initialDateFrom = '',
   initialDateTo = '',
   initialPreset,
-  initialLat,
-  initialLng,
-  initialRadius,
+  initialLat: _initialLat,
+  initialLng: _initialLng,
+  initialRadius: _initialRadius,
   onSearch,
   searchHref = '/events',
   className,
@@ -74,17 +72,11 @@ export function EventSearchBar({
   });
 
   const [presetLabel, setPresetLabel] = useState<string | null>(initialPreset ?? null);
-  const [searchLat, setSearchLat] = useState<number | undefined>(initialLat);
-  const [searchLng, setSearchLng] = useState<number | undefined>(initialLng);
-  const [radius, setRadius] = useState<number>(
-    initialRadius ?? (initialLat ? DEFAULT_RADIUS_KM : 0),
-  );
   const [mobileDialogOpen, setMobileDialogOpen] = useState(false);
   const [mobileWhenOpen, setMobileWhenOpen] = useState(false);
   const [whenOpen, setWhenOpen] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [placePredictions, setPlacePredictions] = useState<PlacePrediction[]>([]);
-  const [eventNameSuggestions, setEventNameSuggestions] = useState<string[]>([]);
+  const [eventSuggestions, setEventSuggestions] = useState<EventSuggestion[]>([]);
   const [photographerSuggestions, setPhotographerSuggestions] = useState<
     PhotographerSearchResult[]
   >([]);
@@ -94,78 +86,30 @@ export function EventSearchBar({
     [],
   );
   const activity = useActivityCombobox(initialActivity, sortedActivities);
-
-  const { getPredictions, getDetails } = usePlacesAutocomplete();
-  const debouncedWhere = useDebounce(where, 250);
+  const debouncedWhere = useDebounce(where, 150);
 
   useEffect(() => {
     if (!debouncedWhere.trim()) {
-      setPlacePredictions([]);
-      setEventNameSuggestions([]);
+      setEventSuggestions([]);
       setPhotographerSuggestions([]);
       return;
     }
-    getPredictions(debouncedWhere)
-      .then(setPlacePredictions)
-      .catch(() => setPlacePredictions([]));
-    searchEventNamesAction(debouncedWhere)
-      .then(setEventNameSuggestions)
-      .catch(() => setEventNameSuggestions([]));
-    searchPhotographersAction(debouncedWhere)
-      .then(setPhotographerSuggestions)
-      .catch(() => setPhotographerSuggestions([]));
-  }, [debouncedWhere, getPredictions]);
-
-  const handleSelectPlace = useCallback(
-    async (prediction: PlacePrediction) => {
-      setShowSuggestions(false);
-      setWhere(prediction.mainText);
-      const details = await getDetails(prediction.placeId);
-      if (details) {
-        setSearchLat(details.lat);
-        setSearchLng(details.lng);
-        setRadius(DEFAULT_RADIUS_KM);
-      }
-    },
-    [getDetails],
-  );
-
-  const handleUseCurrentLocation = useCallback(() => {
-    if (!navigator.geolocation) return;
-    setShowSuggestions(false);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude, longitude } = pos.coords;
-        setSearchLat(latitude);
-        setSearchLng(longitude);
-        setRadius(DEFAULT_RADIUS_KM);
-
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
-            { headers: { 'Accept-Language': 'en' } },
-          );
-          const geoData = await res.json();
-          const city: string =
-            geoData.address?.city ?? geoData.address?.town ?? geoData.address?.village ?? 'Nearby';
-          setWhere(city);
-        } catch {
-          setWhere('Nearby');
-        }
-      },
-      () => {}, // permission denied — silently ignore
-    );
-  }, []);
+    searchSuggestionsAction(debouncedWhere)
+      .then(({ events, photographers }) => {
+        setEventSuggestions(events);
+        setPhotographerSuggestions(photographers);
+      })
+      .catch(() => {
+        setEventSuggestions([]);
+        setPhotographerSuggestions([]);
+      });
+  }, [debouncedWhere]);
 
   const handleClearAll = useCallback(() => {
     setWhere('');
-    setPlacePredictions([]);
-    setEventNameSuggestions([]);
+    setEventSuggestions([]);
     setPhotographerSuggestions([]);
     setShowSuggestions(false);
-    setSearchLat(undefined);
-    setSearchLng(undefined);
-    setRadius(0);
     activity.clear();
     setDateRange(undefined);
     setPresetLabel(null);
@@ -211,31 +155,13 @@ export function EventSearchBar({
     if (df) params.set('dateFrom', df);
     if (dt) params.set('dateTo', dt);
     if (presetLabel) params.set('preset', presetLabel);
-    if (searchLat !== undefined && searchLng !== undefined) {
-      params.set('lat', searchLat.toFixed(6));
-      params.set('lng', searchLng.toFixed(6));
-      params.set('radius', radius.toString());
-    }
     setMobileDialogOpen(false);
     router.push(`${searchHref}?${params.toString()}`);
-  }, [
-    activity,
-    where,
-    dateRange,
-    onSearch,
-    searchHref,
-    router,
-    presetLabel,
-    searchLat,
-    searchLng,
-    radius,
-  ]);
+  }, [activity, where, dateRange, onSearch, searchHref, router, presetLabel]);
 
   const displayLabel = presetLabel ?? whenLabel(dateRange?.from, dateRange?.to);
 
   const suggestionTranslations = {
-    useCurrentLocation: t('useCurrentLocation'),
-    locationsLabel: t('locationsLabel'),
     eventsLabel: t('eventsLabel'),
     photographersLabel: t('photographersLabel'),
   };
@@ -248,13 +174,13 @@ export function EventSearchBar({
     presetLastWeek: t('presetLastWeek'),
   };
 
-  const handleSelectEventName = useCallback((name: string) => {
-    setWhere(name);
-    setPlacePredictions([]);
-    setEventNameSuggestions([]);
-    setPhotographerSuggestions([]);
-    setShowSuggestions(false);
-  }, []);
+  const handleSelectEvent = useCallback(
+    (event: EventSuggestion) => {
+      setShowSuggestions(false);
+      router.push(lp(`/events/${event.slug ?? event.id}`));
+    },
+    [router, lp],
+  );
 
   const handleSelectPhotographer = useCallback(
     (slug: string) => {
@@ -266,11 +192,7 @@ export function EventSearchBar({
 
   const handleWhereClear = useCallback(() => {
     setWhere('');
-    setSearchLat(undefined);
-    setSearchLng(undefined);
-    setRadius(0);
-    setPlacePredictions([]);
-    setEventNameSuggestions([]);
+    setEventSuggestions([]);
     whereRef.current?.focus();
   }, []);
 
@@ -342,9 +264,6 @@ export function EventSearchBar({
                           value={where}
                           onChange={(e) => {
                             setWhere(e.target.value);
-                            setSearchLat(undefined);
-                            setSearchLng(undefined);
-                            setRadius(0);
                             setShowSuggestions(true);
                           }}
                           onFocus={() => setShowSuggestions(true)}
@@ -372,14 +291,11 @@ export function EventSearchBar({
                       </div>
                       {showSuggestions && (
                         <WhereSuggestionsDropdown
-                          placePredictions={placePredictions}
-                          eventNames={eventNameSuggestions}
+                          events={eventSuggestions}
                           photographers={photographerSuggestions}
                           hasInput={!!where.trim()}
-                          onSelectPlace={handleSelectPlace}
-                          onSelectEventName={handleSelectEventName}
+                          onSelectEvent={handleSelectEvent}
                           onSelectPhotographer={handleSelectPhotographer}
-                          onUseCurrentLocation={handleUseCurrentLocation}
                           t={suggestionTranslations}
                         />
                       )}
@@ -574,9 +490,6 @@ export function EventSearchBar({
                   value={where}
                   onChange={(e) => {
                     setWhere(e.target.value);
-                    setSearchLat(undefined);
-                    setSearchLng(undefined);
-                    setRadius(0);
                     setShowSuggestions(true);
                   }}
                   onFocus={() => setShowSuggestions(true)}
@@ -604,14 +517,11 @@ export function EventSearchBar({
 
               {showSuggestions && (
                 <WhereSuggestionsDropdown
-                  placePredictions={placePredictions}
-                  eventNames={eventNameSuggestions}
+                  events={eventSuggestions}
                   photographers={photographerSuggestions}
                   hasInput={!!where.trim()}
-                  onSelectPlace={handleSelectPlace}
-                  onSelectEventName={handleSelectEventName}
+                  onSelectEvent={handleSelectEvent}
                   onSelectPhotographer={handleSelectPhotographer}
-                  onUseCurrentLocation={handleUseCurrentLocation}
                   t={suggestionTranslations}
                 />
               )}

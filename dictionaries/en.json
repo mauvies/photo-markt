@@ -621,6 +621,8 @@
     "activityRequired": "Activity is required.",
     "locationLabel": "Location",
     "locationPlaceholder": "City, region or venue",
+    "locationSearchPlaceholder": "Search for a location...",
+    "locationNoResults": "No locations found",
     "dateLabel": "Date",
     "dateSelectPlaceholder": "Select date",
     "dateRequired": "Date is required.",

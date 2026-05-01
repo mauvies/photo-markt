@@ -49,8 +49,6 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
     name: event.name,
     activity: event.activity as FormValues['activity'],
     date: eventDate,
-    country: event.country,
-    state: event.state || '',
     city: event.city,
     is_public: event.is_public,
     watermark_enabled: event.watermark_enabled,
@@ -114,8 +112,6 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
         formData.append('name', parsed.name.trim());
         formData.append('activity', parsed.activity);
         formData.append('date', parsed.date);
-        formData.append('country', parsed.country.trim());
-        formData.append('state', parsed.state.trim());
         if (parsed.city?.trim()) {
           formData.append('city', parsed.city.trim());
         }
@@ -167,7 +163,7 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
   return (
     <div className="mx-auto w-full max-w-7xl">
       <form
-        className="flex flex-col gap-5"
+        className="flex flex-col gap-5 pb-24"
         onSubmit={(event) => {
           event.preventDefault();
           setSubmitAttempted(true);
@@ -183,7 +179,7 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
         )}
 
         {/* Top Row: Form and Upload Section */}
-        <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+        <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
           <EventFormFields
             form={form}
             submitAttempted={submitAttempted}
@@ -194,20 +190,20 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
           {/* Right Half: Upload Section */}
           <div className="flex flex-col gap-2 lg:sticky lg:top-4">
             <Label>Add Photos</Label>
-            <p className="text-xs text-muted-foreground">
+            {/* <p className="text-xs text-muted-foreground">
               Photos will be added when you save changes
-            </p>
+            </p> */}
             <Dropzone
               accept=".jpg,.jpeg,.png,.heic"
               onSelect={handleFiles}
-              className="rounded-lg lg:min-h-[400px]"
+              className="flex-1 rounded-lg"
             />
           </div>
         </div>
 
         {/* Photos Section - Full Width */}
         <div className="space-y-2">
-          <h3 className="text-lg font-semibold">Event Photos</h3>
+          {/* <h3 className="text-lg font-semibold">Event Photos</h3> */}
           <EventPhotoGrid
             visiblePhotos={visiblePhotos}
             pendingDeletions={pendingDeletions}
@@ -218,7 +214,7 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex justify-end gap-4">
+        <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-end gap-4 border-t bg-background px-6 py-3">
           <Button
             type="button"
             variant="outline"

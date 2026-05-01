@@ -1,118 +1,68 @@
 'use client';
 
-import { MapPin, Navigation, Search, User } from 'lucide-react';
-import type { PhotographerSearchResult } from '@/app/[lang]/dashboard/talent/events/actions';
-import type { PlacePrediction } from '@/hooks/use-places-autocomplete';
+import { Search, User } from 'lucide-react';
+import type {
+  EventSuggestion,
+  PhotographerSearchResult,
+} from '@/app/[lang]/dashboard/talent/events/actions';
 
 interface WhereSuggestionsDropdownProps {
-  placePredictions: PlacePrediction[];
-  eventNames: string[];
+  events: EventSuggestion[];
   photographers: PhotographerSearchResult[];
   hasInput: boolean;
-  onSelectPlace: (p: PlacePrediction) => void;
-  onSelectEventName: (name: string) => void;
+  onSelectEvent: (event: EventSuggestion) => void;
   onSelectPhotographer: (slug: string) => void;
-  onUseCurrentLocation: () => void;
   t: {
-    useCurrentLocation: string;
-    locationsLabel: string;
     eventsLabel: string;
     photographersLabel: string;
   };
 }
 
 export function WhereSuggestionsDropdown({
-  placePredictions,
-  eventNames,
+  events,
   photographers,
   hasInput,
-  onSelectPlace,
-  onSelectEventName,
+  onSelectEvent,
   onSelectPhotographer,
-  onUseCurrentLocation,
   t,
 }: WhereSuggestionsDropdownProps) {
-  const showPlaces = hasInput && placePredictions.length > 0;
-  const showEvents = hasInput && eventNames.length > 0;
+  const showEvents = hasInput && events.length > 0;
   const showPhotographers = hasInput && photographers.length > 0;
-  const showCurrentLocation =
-    !hasInput && typeof navigator !== 'undefined' && !!navigator.geolocation;
 
-  if (!showPlaces && !showEvents && !showPhotographers && !showCurrentLocation) return null;
+  if (!showEvents && !showPhotographers) return null;
 
   return (
     <div className="absolute left-0 right-0 top-full z-50 mt-1.5 overflow-hidden rounded-2xl border bg-popover shadow-xl">
-      {showCurrentLocation && (
-        <button
-          type="button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            onUseCurrentLocation();
-          }}
-          className="flex w-full items-center gap-3 px-4 py-3 text-sm font-medium text-foreground hover:bg-muted transition-colors text-left"
-        >
-          <Navigation className="h-4 w-4 shrink-0 text-primary" />
-          {t.useCurrentLocation}
-        </button>
-      )}
-
-      {showPlaces && (
+      {showEvents && (
         <>
-          <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-            {t.locationsLabel}
+          <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 text-left">
+            {t.eventsLabel}
           </p>
-          {placePredictions.map((p) => (
+          {events.map((event) => (
             <button
-              key={p.placeId}
+              key={event.id}
               type="button"
               onMouseDown={(e) => {
                 e.preventDefault();
-                onSelectPlace(p);
+                onSelectEvent(event);
               }}
               className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
             >
-              <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               <span>
-                <span className="font-medium">{p.mainText}</span>
-                {p.secondaryText && (
-                  <span className="text-muted-foreground">, {p.secondaryText}</span>
-                )}
+                <span className="font-medium">{event.name}</span>
+                {event.city && <span className="text-muted-foreground"> · {event.city}</span>}
               </span>
             </button>
           ))}
         </>
       )}
 
-      {showPlaces && showEvents && <div className="mx-4 my-1 h-px bg-border" />}
+      {showEvents && showPhotographers && <div className="mx-4 my-1 h-px bg-border" />}
 
-      {showEvents && (
-        <>
-          <p className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-            {t.eventsLabel}
-          </p>
-          {eventNames.map((name) => (
-            <button
-              key={name}
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onSelectEventName(name);
-              }}
-              className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors text-left"
-            >
-              <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              {name}
-            </button>
-          ))}
-        </>
-      )}
-
-      {(showPlaces || showEvents) && showPhotographers && (
-        <div className="mx-4 my-1 h-px bg-border" />
-      )}
       {showPhotographers && (
         <>
-          <p className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+          <p className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 text-left">
             {t.photographersLabel}
           </p>
           {photographers.map((p) => (
