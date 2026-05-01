@@ -332,7 +332,16 @@
     "payoutNotSet": "No configurado",
     "payoutNotConfigured": "No configurado",
     "payoutBankAccountConfigured": "Cuenta bancaria configurada",
-    "payoutConfigured": "Configurado"
+    "payoutConfigured": "Configurado",
+    "stripeConnectLabel": "Estado de conexión",
+    "stripeNotConnected": "No conectado",
+    "stripePending": "En revisión",
+    "stripeActive": "Conectado",
+    "stripeRestricted": "Acción requerida",
+    "salesCommission": "Comisión",
+    "salesNetEarnings": "Ganancias netas",
+    "salesStatus": "Estado",
+    "salesStatusCompleted": "Completado"
   },
   "eventSearchBar": {
     "mobileText": "Busca tu evento",
@@ -470,6 +479,18 @@
     "allTimeGrossRevenue": "Ingresos brutos históricos",
     "platformFees": "Comisiones de plataforma",
     "tenPercentFee": "10% de comisión de plataforma",
+    "platformFeeDesc": "comisión de plataforma",
+    "connectBannerNotConnected": "Conecta tu cuenta bancaria para comenzar a recibir pagos por tus fotos.",
+    "connectBannerPending": "Tu cuenta de Stripe está en revisión. Recibirás pagos cuando sea aprobada.",
+    "connectBannerRestricted": "Se requiere acción en tu cuenta de Stripe. Actualiza tu configuración de pagos.",
+    "connectBannerButton": "Ir a configuración de pagos",
+    "stripeAvailable": "Balance disponible en Stripe",
+    "stripeAvailableDesc": "Listo para pago automático",
+    "stripePending": "Balance pendiente en Stripe",
+    "stripePendingDesc": "En revisión de fraude de Stripe",
+    "payoutScheduleTitle": "Pagos automáticos",
+    "payoutScheduleDesc": "Los pagos se envían automáticamente cada lunes a tu cuenta bancaria conectada.",
+    "payoutMinimumThreshold": "Balance mínimo requerido: $25",
     "netEarnings": "Ganancias netas",
     "afterPlatformFees": "Después de comisiones",
     "availableBalance": "Saldo disponible",
@@ -756,5 +777,39 @@
     "nPeopleTagged": "{n} personas etiquetadas",
     "saveToPhotos": "Guardar en mis fotos",
     "removeFromMyPhotos": "Eliminar de mis fotos"
+  },
+  "stripeConnect": {
+    "statusCard": {
+      "title": "Cuenta bancaria",
+      "notConnected": "No conectada",
+      "pending": "En revisión",
+      "active": "Conectada",
+      "restricted": "Acción requerida"
+    },
+    "notConnectedDescription": "Conecta tu cuenta bancaria para recibir pagos automáticos semanales por tus ventas de fotos.",
+    "pendingDescription": "Tu cuenta de Stripe está en revisión. Esto suele tardar 1–2 días hábiles. Recibirás un email cuando sea aprobada.",
+    "activeDescription": "Tu cuenta bancaria está conectada. Recibirás pagos automáticos semanales cada lunes.",
+    "restrictedDescription": "Stripe requiere información adicional para habilitar los pagos. Por favor actualiza tu cuenta.",
+    "connectButton": "Conectar con Stripe",
+    "completeSetupButton": "Completar configuración en Stripe",
+    "updateAccountButton": "Actualizar en Stripe",
+    "poweredByStripe": "Pagos seguros gestionados por Stripe",
+    "onboarding": {
+      "successBanner": "Cuenta bancaria conectada — Stripe está verificando tu cuenta. Esto suele tardar 1–2 días hábiles.",
+      "refreshBanner": "Por favor completa la configuración de tu cuenta de Stripe para empezar a recibir pagos."
+    },
+    "banner": {
+      "connectAccount": "Conecta tu cuenta bancaria para empezar a vender fotos y recibir pagos.",
+      "pendingReview": "Tu cuenta de Stripe está en revisión. Los pagos se habilitarán cuando sea aprobada.",
+      "actionRequired": "Se requiere acción en tu cuenta de Stripe. Actualiza tu configuración de pagos para continuar vendiendo.",
+      "goToPayoutProfile": "Ir a configuración de pagos"
+    },
+    "checkout": {
+      "photographerNotConnected": "Uno o más fotógrafos en tu carrito aún no han configurado sus pagos. Por favor intenta más tarde."
+    },
+    "sales": {
+      "commission": "Comisión",
+      "netEarnings": "Ingresos netos"
+    }
   }
 }

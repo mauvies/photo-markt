@@ -40,8 +40,8 @@ export function NavMains({
   };
 
   const isItemActive = (url: string, allUrls: string[]) => {
-    if (url === '/dashboard/photographer' || url === '/dashboard/talent') {
-      // Exact match for dashboard home pages
+    if (url.endsWith('/dashboard/photographer') || url.endsWith('/dashboard/talent')) {
+      // Exact match for dashboard home pages (works with any locale prefix)
       return pathname === url;
     }
 

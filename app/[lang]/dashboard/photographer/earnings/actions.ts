@@ -6,13 +6,11 @@ import {
   getPhotographerEarnings,
   type PhotographerEarning,
 } from '@/database/queries/earnings';
-import { createPayout, getPayouts, type Payout } from '@/database/queries/payouts';
-import { getProfile } from '@/database/queries/profiles';
+import { getPayouts, type Payout } from '@/database/queries/payouts';
+import { getProfileStripeConnect } from '@/database/queries/profiles';
 import { createClient } from '@/database/server';
+import { retrieveConnectBalance } from '@/lib/stripe/connect';
 
-/**
- * Get earnings summary for current photographer
- */
 export async function getEarningsSummaryAction(): Promise<EarningsSummary> {
   const supabase = await createClient();
   const {
@@ -26,9 +24,6 @@ export async function getEarningsSummaryAction(): Promise<EarningsSummary> {
   return getEarningsSummary(supabase, user.id);
 }
 
-/**
- * Get photographer earnings list
- */
 export async function getPhotographerEarningsAction(
   limit = 50,
   startDate?: string,
@@ -46,9 +41,6 @@ export async function getPhotographerEarningsAction(
   return getPhotographerEarnings(supabase, user.id, limit, startDate, endDate);
 }
 
-/**
- * Get payouts for current photographer
- */
 export async function getPayoutsAction(
   status?: 'pending' | 'approved' | 'paid' | 'cancelled',
 ): Promise<Payout[]> {
@@ -64,42 +56,41 @@ export async function getPayoutsAction(
   return getPayouts(supabase, user.id, status);
 }
 
-/**
- * Create a payout request
- */
-export async function createPayoutRequestAction(
-  amountCents: number,
-  paymentAccountId: string,
-): Promise<Payout> {
+export async function getStripeConnectBalanceAction(): Promise<{
+  available: number;
+  pending: number;
+} | null> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    throw new Error('Unauthorized');
+  if (!user) return null;
+
+  const connect = await getProfileStripeConnect(supabase, user.id);
+  if (!connect?.stripe_connect_account_id || connect.stripe_connect_status !== 'active') {
+    return null;
   }
 
-  const profile = await getProfile(supabase, user.id);
-  if (!profile?.is_payout_profile_complete) {
-    throw new Error('Please complete your payout profile before requesting withdrawals.');
+  try {
+    return await retrieveConnectBalance(connect.stripe_connect_account_id);
+  } catch {
+    return null;
   }
-  if (amountCents <= 0) {
-    throw new Error('Payout amount must be greater than 0.');
-  }
-  if (!paymentAccountId) {
-    throw new Error('Payment account is required.');
-  }
+}
 
-  // Check available balance
-  const summary = await getEarningsSummary(supabase, user.id);
-  const availableBalance = summary.withdrawableBalanceCents;
+export async function getConnectStatusForEarningsAction(): Promise<{
+  stripe_connect_status: 'not_connected' | 'pending' | 'active' | 'restricted';
+}> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (amountCents > availableBalance) {
-    throw new Error(
-      `Insufficient balance. Available: $${(availableBalance / 100).toFixed(2)}, Requested: $${(amountCents / 100).toFixed(2)}`,
-    );
-  }
+  if (!user) return { stripe_connect_status: 'not_connected' };
 
-  return createPayout(supabase, user.id, amountCents, paymentAccountId);
+  const connect = await getProfileStripeConnect(supabase, user.id);
+  return {
+    stripe_connect_status: connect?.stripe_connect_status ?? 'not_connected',
+  };
 }

@@ -50,6 +50,33 @@ export async function getSubscription(
 }
 
 /**
+ * Get plan IDs for multiple photographers — returns a Map from userId to planId.
+ * Photographers without an active subscription default to 'free'.
+ */
+export async function getPhotographerPlanIds(
+  supabase: SupabaseServerClient,
+  photographerIds: string[],
+): Promise<Map<string, string>> {
+  if (photographerIds.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('user_id, plan_id, status')
+    .in('user_id', photographerIds)
+    .in('status', ['active', 'trialing', 'past_due']);
+
+  if (error) {
+    throw new Error(`Failed to get photographer plan IDs: ${getErrorMessage(error)}`);
+  }
+
+  const map = new Map<string, string>();
+  for (const row of data ?? []) {
+    map.set(row.user_id, row.plan_id);
+  }
+  return map;
+}
+
+/**
  * Get subscription by Stripe subscription ID
  */
 export async function getSubscriptionByStripeId(

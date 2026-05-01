@@ -3,25 +3,24 @@
  * For calculating photographer earnings and balances
  */
 
+import { getPhotographerNetCents, getPlatformFeeRate } from '@/lib/plans';
 import { getTotalPaidOut, getTotalPendingPayouts } from './payouts';
+import { getPhotographerPlanIds } from './subscriptions';
 import type { SupabaseServerClient } from './types';
 import { getErrorMessage } from './types';
 
-// Platform fee percentage (10% = 0.10)
-const PLATFORM_FEE_RATE = 0.1;
-
 /**
- * Calculate platform fee from gross earnings
+ * Calculate platform fee from gross earnings using the photographer's plan rate.
  */
-export function calculatePlatformFee(grossEarningsCents: number): number {
-  return Math.round(grossEarningsCents * PLATFORM_FEE_RATE);
+export function calculatePlatformFee(grossEarningsCents: number, feeRate = 0.1): number {
+  return Math.round(grossEarningsCents * feeRate);
 }
 
 /**
- * Calculate net earnings after platform fee
+ * Calculate net earnings after platform fee using the photographer's plan rate.
  */
-export function calculateNetEarnings(grossEarningsCents: number): number {
-  return grossEarningsCents - calculatePlatformFee(grossEarningsCents);
+export function calculateNetEarnings(grossEarningsCents: number, feeRate = 0.1): number {
+  return grossEarningsCents - calculatePlatformFee(grossEarningsCents, feeRate);
 }
 
 /**
@@ -61,20 +60,24 @@ export interface EarningsSummary {
   totalPaidOutCents: number;
   pendingPayoutsCents: number;
   withdrawableBalanceCents: number;
+  platformFeeRate: number;
 }
 
 export async function getEarningsSummary(
   supabase: SupabaseServerClient,
   photographerId: string,
 ): Promise<EarningsSummary> {
-  const [totalGrossEarningsCents, totalPaidOutCents, pendingPayoutsCents] = await Promise.all([
-    getTotalGrossEarnings(supabase, photographerId),
-    getTotalPaidOut(supabase, photographerId),
-    getTotalPendingPayouts(supabase, photographerId),
-  ]);
+  const [totalGrossEarningsCents, totalPaidOutCents, pendingPayoutsCents, planIds] =
+    await Promise.all([
+      getTotalGrossEarnings(supabase, photographerId),
+      getTotalPaidOut(supabase, photographerId),
+      getTotalPendingPayouts(supabase, photographerId),
+      getPhotographerPlanIds(supabase, [photographerId]),
+    ]);
 
-  const platformFeeCents = calculatePlatformFee(totalGrossEarningsCents);
-  const totalNetEarningsCents = calculateNetEarnings(totalGrossEarningsCents);
+  const feeRate = getPlatformFeeRate(planIds.get(photographerId));
+  const platformFeeCents = calculatePlatformFee(totalGrossEarningsCents, feeRate);
+  const totalNetEarningsCents = calculateNetEarnings(totalGrossEarningsCents, feeRate);
   const withdrawableBalanceCents = totalNetEarningsCents - totalPaidOutCents - pendingPayoutsCents;
 
   return {
@@ -83,7 +86,8 @@ export async function getEarningsSummary(
     totalNetEarningsCents,
     totalPaidOutCents,
     pendingPayoutsCents,
-    withdrawableBalanceCents: Math.max(0, withdrawableBalanceCents), // Don't allow negative balance
+    withdrawableBalanceCents: Math.max(0, withdrawableBalanceCents),
+    platformFeeRate: feeRate,
   };
 }
 
@@ -148,11 +152,16 @@ export async function getPhotographerEarnings(
     query = query.lte('created_at', endDate);
   }
 
-  const { data, error } = await query;
+  const [{ data, error }, planIds] = await Promise.all([
+    query,
+    getPhotographerPlanIds(supabase, [photographerId]),
+  ]);
 
   if (error) {
     throw new Error(`Failed to get photographer earnings: ${getErrorMessage(error)}`);
   }
+
+  const feeRate = getPlatformFeeRate(planIds.get(photographerId));
 
   type OrderItemWithRelations = {
     id: string;
@@ -241,8 +250,8 @@ export async function getPhotographerEarnings(
     const event = Array.isArray(photo?.events) ? photo.events[0] : photo?.events;
 
     const grossAmountCents = item.total_price_cents;
-    const platformFeeCents = calculatePlatformFee(grossAmountCents);
-    const netAmountCents = calculateNetEarnings(grossAmountCents);
+    const platformFeeCents = calculatePlatformFee(grossAmountCents, feeRate);
+    const netAmountCents = getPhotographerNetCents(grossAmountCents, planIds.get(photographerId));
 
     return {
       id: item.id,

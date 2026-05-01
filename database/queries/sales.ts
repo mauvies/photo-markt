@@ -10,6 +10,8 @@ export interface Sale {
   photo_id: string;
   photographer_id: string;
   unit_price_cents: number;
+  commission_cents: number;
+  net_earnings_cents: number;
   created_at: string;
   photo_url: string | null;
   event_id: string | null;
@@ -613,6 +615,8 @@ export async function getRecentSales(
       photo_id: item.photo_id,
       photographer_id: item.photographer_id,
       unit_price_cents: item.total_price_cents,
+      commission_cents: 0,
+      net_earnings_cents: item.total_price_cents,
       created_at: order?.created_at ?? item.created_at,
       photo_url: photo?.original_url ?? null,
       event_id: photo?.event_id ?? null,

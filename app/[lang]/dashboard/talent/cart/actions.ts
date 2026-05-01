@@ -1,5 +1,6 @@
 'use server';
 
+import { headers } from 'next/headers';
 import { getActiveRole } from '@/app/[lang]/actions/roles';
 import {
   createPhotoUrls,
@@ -9,6 +10,7 @@ import {
   getCartItemCount,
   getCartItemsWithDetails,
   getOrCreateCart,
+  getPhotographerConnectStatuses,
   isPhotoInCart,
 } from '@/database/queries';
 import { createClient } from '@/database/server';
@@ -16,6 +18,8 @@ import { supabaseAdmin } from '@/database/supabase-admin';
 import { getBaseUrl } from '@/lib/get-base-url';
 import { getSiteUrl } from '@/lib/get-site-url';
 import type { GuestCartItem } from '@/lib/guest-cart';
+import type { Locale } from '@/lib/i18n/config';
+import { getDictionary } from '@/lib/i18n/get-dictionary';
 
 export interface CartItemDetail {
   photoId: string;
@@ -283,6 +287,18 @@ export async function createCheckoutSessionAction(): Promise<{ url: string }> {
 
   if (cartItems.length === 0) {
     throw new Error('Cart is empty');
+  }
+
+  // Block checkout if any photographer has not connected their Stripe account
+  const photographerIds = [...new Set(cartItems.map((i) => i.photographer_id))];
+  const connectStatuses = await getPhotographerConnectStatuses(supabaseAdmin, photographerIds);
+  const notConnected = connectStatuses.filter((p) => p.stripe_connect_status !== 'active');
+  if (notConnected.length > 0) {
+    const h = await headers();
+    const referer = h.get('referer') ?? '';
+    const lang = (referer.match(/\/(es|en)\//)?.[1] ?? 'en') as Locale;
+    const dict = await getDictionary(lang);
+    throw new Error(dict.stripeConnect.checkout.photographerNotConnected);
   }
 
   const { stripe } = await import('@/lib/stripe/config');

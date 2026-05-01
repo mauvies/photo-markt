@@ -1,8 +1,12 @@
 'use server';
 
+import { headers } from 'next/headers';
+import { getPhotographerConnectStatuses } from '@/database/queries/profiles';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { getBaseUrl } from '@/lib/get-base-url';
 import type { GuestCartItem } from '@/lib/guest-cart';
+import type { Locale } from '@/lib/i18n/config';
+import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { stripe } from '@/lib/stripe/config';
 
 /**
@@ -41,6 +45,18 @@ export async function createGuestCheckoutSessionAction(
       unitPriceCents,
     };
   });
+
+  // Block checkout if any photographer has not connected their Stripe account
+  const photographerIds = [...new Set(validatedItems.map((i) => i.photographerId))];
+  const connectStatuses = await getPhotographerConnectStatuses(supabaseAdmin, photographerIds);
+  const notConnected = connectStatuses.filter((p) => p.stripe_connect_status !== 'active');
+  if (notConnected.length > 0) {
+    const h = await headers();
+    const referer = h.get('referer') ?? '';
+    const lang = (referer.match(/\/(es|en)\//)?.[1] ?? 'en') as Locale;
+    const dict = await getDictionary(lang);
+    throw new Error(dict.stripeConnect.checkout.photographerNotConnected);
+  }
 
   // Encode cart items in Stripe metadata (one key per item, no DB needed)
   const cartMetadata: Record<string, string> = {

@@ -191,6 +191,15 @@ function RecentSales({ sales, lang }: RecentSalesProps) {
               <th className="px-4 py-2 text-right text-sm font-medium text-muted-foreground">
                 {t('amount')}
               </th>
+              <th className="px-4 py-2 text-right text-sm font-medium text-muted-foreground">
+                {t('salesCommission')}
+              </th>
+              <th className="px-4 py-2 text-right text-sm font-medium text-muted-foreground">
+                {t('salesNetEarnings')}
+              </th>
+              <th className="px-4 py-2 text-left text-sm font-medium text-muted-foreground">
+                {t('salesStatus')}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -207,6 +216,17 @@ function RecentSales({ sales, lang }: RecentSalesProps) {
                 </td>
                 <td className="px-4 py-3 text-right text-sm font-medium">
                   {formatPrice(sale.unit_price_cents)}
+                </td>
+                <td className="px-4 py-3 text-right text-sm text-muted-foreground">
+                  {formatPrice(sale.commission_cents)}
+                </td>
+                <td className="px-4 py-3 text-right text-sm font-semibold text-green-600 dark:text-green-400">
+                  {formatPrice(sale.net_earnings_cents)}
+                </td>
+                <td className="px-4 py-3 text-sm">
+                  <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
+                    {t('salesStatusCompleted')}
+                  </span>
                 </td>
               </tr>
             ))}
@@ -299,10 +319,8 @@ export function SalesContent({ lang }: { lang: string }) {
           {/* Charts and Recent Sales */}
           {salesData.summary.totalSales > 0 ? (
             <>
-              <div className="grid gap-4 lg:grid-cols-2">
-                <SalesChart data={salesData.salesOverTime} lang={lang} />
-                <RecentSales sales={salesData.recentSales} lang={lang} />
-              </div>
+              <SalesChart data={salesData.salesOverTime} lang={lang} />
+              <RecentSales sales={salesData.recentSales} lang={lang} />
 
               {/* Top Selling Events */}
               <TopEvents events={salesData.topEvents} />

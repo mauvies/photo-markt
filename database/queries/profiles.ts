@@ -24,6 +24,8 @@ export interface Profile {
   payout_method?: 'bank_transfer' | 'paypal' | 'other' | null;
   payout_details_json?: Record<string, unknown> | null;
   is_payout_profile_complete?: boolean;
+  stripe_connect_account_id?: string | null;
+  stripe_connect_status?: 'not_connected' | 'pending' | 'active' | 'restricted';
   created_at?: string;
   updated_at?: string;
 }
@@ -233,6 +235,105 @@ export async function updateProfile(
   if (error) {
     throw new Error(`Failed to update profile: ${getErrorMessage(error)}`);
   }
+}
+
+export type StripeConnectStatus = 'not_connected' | 'pending' | 'active' | 'restricted';
+
+/**
+ * Get Stripe Connect fields for a photographer
+ */
+export async function getProfileStripeConnect(
+  supabase: SupabaseServerClient,
+  userId: string,
+): Promise<{
+  stripe_connect_account_id: string | null;
+  stripe_connect_status: StripeConnectStatus;
+} | null> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('stripe_connect_account_id, stripe_connect_status')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to get connect status: ${getErrorMessage(error)}`);
+  }
+
+  if (!data) return null;
+  return {
+    stripe_connect_account_id: data.stripe_connect_account_id ?? null,
+    stripe_connect_status: (data.stripe_connect_status ?? 'not_connected') as StripeConnectStatus,
+  };
+}
+
+/**
+ * Update Stripe Connect fields on a profile
+ */
+export async function updateProfileStripeConnect(
+  supabase: SupabaseServerClient,
+  userId: string,
+  data: { stripe_connect_account_id?: string; stripe_connect_status?: StripeConnectStatus },
+): Promise<void> {
+  const { error } = await supabase.from('profiles').update(data).eq('id', userId);
+
+  if (error) {
+    throw new Error(`Failed to update connect status: ${getErrorMessage(error)}`);
+  }
+}
+
+/**
+ * Find a profile by Stripe Connect account ID (used in webhook account.updated handler)
+ */
+export async function getProfileByStripeConnectAccountId(
+  supabase: SupabaseServerClient,
+  accountId: string,
+): Promise<{ id: string; stripe_connect_status: StripeConnectStatus } | null> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, stripe_connect_status')
+    .eq('stripe_connect_account_id', accountId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to find profile by connect account: ${getErrorMessage(error)}`);
+  }
+
+  if (!data) return null;
+  return {
+    id: data.id,
+    stripe_connect_status: (data.stripe_connect_status ?? 'not_connected') as StripeConnectStatus,
+  };
+}
+
+/**
+ * Get Stripe Connect statuses for multiple photographers (used at checkout to block unconnected)
+ */
+export async function getPhotographerConnectStatuses(
+  supabase: SupabaseServerClient,
+  photographerIds: string[],
+): Promise<
+  Array<{
+    id: string;
+    stripe_connect_account_id: string | null;
+    stripe_connect_status: StripeConnectStatus;
+  }>
+> {
+  if (photographerIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, stripe_connect_account_id, stripe_connect_status')
+    .in('id', photographerIds);
+
+  if (error) {
+    throw new Error(`Failed to get connect statuses: ${getErrorMessage(error)}`);
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    stripe_connect_account_id: row.stripe_connect_account_id ?? null,
+    stripe_connect_status: (row.stripe_connect_status ?? 'not_connected') as StripeConnectStatus,
+  }));
 }
 
 /**
