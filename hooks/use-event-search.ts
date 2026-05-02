@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/activity-options';
 import { searchEventsAction } from '@/app/[lang]/dashboard/talent/events/actions';
 import { useDebounce } from '@/hooks/use-debounce';
+import { type EventStatus, getEventStatus } from '@/lib/event-status';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,6 +25,7 @@ export type EventWithStats = {
   pricePerPhoto: number | null;
   photographerUsername: string | null;
   photographerDisplayName: string | null;
+  status: EventStatus;
 };
 
 export type SortBy = 'date_asc' | 'date_desc' | 'name_asc' | 'name_desc';
@@ -52,6 +54,7 @@ function normalizeResult(result: Awaited<ReturnType<typeof searchEventsAction>>)
     events: result.events.map((e) => ({
       ...e,
       pricePerPhoto: e.price_per_photo,
+      status: getEventStatus(e.date),
     })) as EventWithStats[],
     total: result.total,
   };

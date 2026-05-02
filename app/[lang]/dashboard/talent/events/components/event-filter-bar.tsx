@@ -76,6 +76,8 @@ type EventFilterBarProps = {
   setHasSearched: (v: boolean) => void;
   // Extra buttons (e.g. Find Me) rendered before the Filters button
   extraButtons?: React.ReactNode;
+  // Content rendered on the left side (only in hideTopFilters mode)
+  leftSlot?: React.ReactNode;
 };
 
 function parseDateStr(s: string): Date | undefined {
@@ -125,6 +127,7 @@ export function EventFilterBar({
   clearFilters,
   setHasSearched,
   extraButtons,
+  leftSlot,
   photographerQuery,
   setPhotographerQuery,
   radiusKm,
@@ -380,6 +383,7 @@ export function EventFilterBar({
     return (
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex min-w-0 items-center gap-1.5">
+          {leftSlot}
           {locationLabel ? (
             <>
               <MapPin className="h-4 w-4 shrink-0 text-primary" />

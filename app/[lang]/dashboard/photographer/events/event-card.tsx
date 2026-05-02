@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import type { EventStatus } from '@/lib/event-status';
 
 type EventCardProps = {
   id: string;
@@ -27,6 +28,7 @@ type EventCardProps = {
   salesCount: number;
   isPublic: boolean;
   coverUrl?: string | null;
+  status?: EventStatus;
   onDelete: () => Promise<void>;
   editHref: string;
 };
@@ -43,6 +45,7 @@ export function EventCard({
   salesCount,
   isPublic,
   coverUrl,
+  status,
   onDelete,
   editHref,
 }: EventCardProps) {
@@ -79,6 +82,18 @@ export function EventCard({
                 className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
               />
               <div className="absolute inset-0 bg-linear-to-t from-black/40 via-transparent to-transparent" />
+              {/* Status badge — top-left */}
+              {status && (
+                <span
+                  className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${
+                    status === 'upcoming'
+                      ? 'bg-primary/80 text-primary-foreground'
+                      : 'bg-black/50 text-white'
+                  }`}
+                >
+                  {status === 'upcoming' ? 'Upcoming' : 'Completed'}
+                </span>
+              )}
               {/* Bottom overlay: photo count left, badge right */}
               <div className="absolute inset-x-0 bottom-0 flex items-end justify-between p-3">
                 <span className="text-xs font-medium text-white drop-shadow-sm">
@@ -97,7 +112,19 @@ export function EventCard({
             <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground">
               <Camera className="h-8 w-8 opacity-30" />
               <span className="text-xs">No photos yet</span>
-              {/* Badge for no-cover state */}
+              {/* Status badge for no-cover state */}
+              {status && (
+                <span
+                  className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${
+                    status === 'upcoming'
+                      ? 'bg-primary/80 text-primary-foreground'
+                      : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {status === 'upcoming' ? 'Upcoming' : 'Completed'}
+                </span>
+              )}
+              {/* Public/Private badge for no-cover state */}
               <span
                 className={`absolute bottom-2 right-2 text-[9px] font-medium uppercase tracking-wider opacity-60 ${
                   isPublic ? 'text-emerald-600' : 'text-zinc-500'

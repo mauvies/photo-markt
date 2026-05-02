@@ -11,7 +11,10 @@ type EventGridT = Pick<
   Dictionary['eventFilterBar'],
   'searchPrompt' | 'noEventsFound' | 'noEventsFoundDesc' | 'clearFilters' | 'loadMore'
 > &
-  Pick<Dictionary['eventCard'], 'photo' | 'photos' | 'from' | 'free' | 'noPhotosYet'>;
+  Pick<
+    Dictionary['eventCard'],
+    'photo' | 'photos' | 'from' | 'free' | 'noPhotosYet' | 'comingSoon'
+  >;
 
 type EventGridProps = {
   events: EventWithStats[];
@@ -125,6 +128,7 @@ export function EventGrid({
             pricePerPhoto={event.pricePerPhoto}
             photographerUsername={event.photographerUsername}
             photographerDisplayName={event.photographerDisplayName}
+            status={event.status}
             linkPrefix={eventLinkPrefix}
             t={{
               photo: t('photo'),
@@ -132,6 +136,7 @@ export function EventGrid({
               from: t('from'),
               free: t('free'),
               noPhotosYet: t('noPhotosYet'),
+              comingSoon: t('comingSoon'),
             }}
           />
         ))}

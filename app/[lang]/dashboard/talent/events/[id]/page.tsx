@@ -1,3 +1,4 @@
+import { CalendarClock } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import { getActiveRole } from '@/app/[lang]/actions/roles';
 import { AIMatchingButton } from '@/app/[lang]/dashboard/talent/photos/ai-matching/ai-matching-button';
@@ -5,6 +6,7 @@ import { DashboardHeader } from '@/components/dashboard-header';
 import { createPhotoUrls, getEventPhotosPublic, isPhotoInCart } from '@/database/queries';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { getEventStatus } from '@/lib/event-status';
 import { getBaseUrl } from '@/lib/get-base-url';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
@@ -43,12 +45,14 @@ export default async function ExploreEventDetailPage({
     data: { user },
   } = await supabase.auth.getUser();
 
+  const eventStatus = getEventStatus(event.date);
+
   // Check if user is talent (watermark only shows for talent users)
   let useWatermark = false;
   const photosInCart: string[] = [];
   const photosInMyPhotos: string[] = [];
   try {
-    if (user) {
+    if (user && eventStatus !== 'upcoming') {
       const { activeRole } = await getActiveRole();
       // Only show watermark for talent users if watermark is enabled
       useWatermark = activeRole === 'talent';
@@ -79,11 +83,11 @@ export default async function ExploreEventDetailPage({
     useWatermark = false;
   }
 
-  // Generate URLs (watermarked or regular signed URLs)
+  // Generate URLs (watermarked or regular signed URLs) — skip for upcoming events
   const paths = photos.map((p) => p.original_url).filter((url): url is string => url !== null);
   const signed: Record<string, string> = {};
 
-  if (paths.length > 0) {
+  if (paths.length > 0 && eventStatus !== 'upcoming') {
     const baseUrl = await getBaseUrl();
     const photoUrls = await createPhotoUrls(supabaseAdmin, 'photos', paths, {
       expiresIn: 60 * 60, // 1 hour
@@ -133,7 +137,13 @@ export default async function ExploreEventDetailPage({
         </div>
       </div>
 
-      {photoItems.length === 0 ? (
+      {eventStatus === 'upcoming' ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
+          <CalendarClock className="h-12 w-12 text-muted-foreground opacity-40" />
+          <p className="text-lg font-semibold">{dict.events.comingSoon}</p>
+          <p className="text-sm text-muted-foreground">{dict.events.photosAfterEvent}</p>
+        </div>
+      ) : photoItems.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-muted-foreground">{dict.talentDashboard.noPhotosAvailable}</p>
         </div>

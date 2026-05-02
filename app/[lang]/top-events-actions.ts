@@ -1,6 +1,7 @@
 import { cacheLife, cacheTag } from 'next/cache';
 import { createSignedUrl, getPhotosForEvents, getTopEvents } from '@/database/queries';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { type EventStatus, getEventStatus } from '@/lib/event-status';
 
 const DISPLAY_LIMIT = 4;
 const CANDIDATE_LIMIT = 50;
@@ -18,9 +19,10 @@ export type TopEventItem = {
   coverUrl: string | null;
   photographerUsername: string | null;
   photographerDisplayName: string | null;
+  status: EventStatus;
 };
 
-export async function getCachedTopEvents(): Promise<TopEventItem[]> {
+export async function getCachedTopEvents(status?: EventStatus): Promise<TopEventItem[]> {
   'use cache';
   cacheTag('top-events');
   // 55 min TTL — safely under the 60-min signed URL expiry
@@ -49,21 +51,38 @@ export async function getCachedTopEvents(): Promise<TopEventItem[]> {
       // Events ≤7 days old score 1.0 for recency; older events decay as 7/ageDays
       const recencyScore = ageDays <= 7 ? 1.0 : 7 / ageDays;
       const score = photoCount * 0.4 + recencyScore * 0.6;
-      return { ...e, photoCount, coverPath: stats.get(e.id)?.coverPath ?? null, score };
+      return {
+        ...e,
+        photoCount,
+        coverPath: stats.get(e.id)?.coverPath ?? null,
+        score,
+        status: getEventStatus(e.date),
+      };
     })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, DISPLAY_LIMIT);
+    .sort((a, b) => b.score - a.score);
+
+  let top4: typeof scored;
+  if (status) {
+    top4 = scored.filter((e) => e.status === status).slice(0, DISPLAY_LIMIT);
+  } else {
+    // Default: up to 2 upcoming first, then fill with completed
+    const upcoming = scored.filter((e) => e.status === 'upcoming').slice(0, 2);
+    const completed = scored
+      .filter((e) => e.status === 'completed')
+      .slice(0, DISPLAY_LIMIT - upcoming.length);
+    top4 = [...upcoming, ...completed];
+  }
 
   const coverUrls = new Map<string, string>();
   await Promise.all(
-    scored.map(async (e) => {
+    top4.map(async (e) => {
       if (!e.coverPath) return;
       const url = await createSignedUrl(supabaseAdmin, 'photos', e.coverPath, 60 * 60);
       if (url) coverUrls.set(e.id, url);
     }),
   );
 
-  const userIds = [...new Set(scored.map((e) => e.user_id))];
+  const userIds = [...new Set(top4.map((e) => e.user_id))];
   const { data: profiles } = await supabaseAdmin
     .from('profiles')
     .select('id, username, display_name')
@@ -74,7 +93,7 @@ export async function getCachedTopEvents(): Promise<TopEventItem[]> {
     ),
   );
 
-  return scored.map((e) => ({
+  return top4.map((e) => ({
     id: e.id,
     name: e.name,
     date: e.date,
@@ -87,5 +106,6 @@ export async function getCachedTopEvents(): Promise<TopEventItem[]> {
     coverUrl: coverUrls.get(e.id) ?? null,
     photographerUsername: profileMap.get(e.user_id)?.username ?? null,
     photographerDisplayName: profileMap.get(e.user_id)?.display_name ?? null,
+    status: e.status,
   }));
 }
