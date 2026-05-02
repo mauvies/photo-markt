@@ -1,4 +1,4 @@
-import { ArrowRight, Camera, Download, Search } from 'lucide-react';
+import { ArrowRight, Camera, Download, Sparkles } from 'lucide-react';
 import { cacheLife, cacheTag } from 'next/cache';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -196,7 +196,7 @@ export default async function Home({
               {/* Pillar 2 */}
               <div className="group flex flex-col gap-5 rounded-2xl border bg-card p-8 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl border bg-muted/50 transition-colors group-hover:bg-primary/10">
-                  <Search className="h-5 w-5 text-foreground/70 group-hover:text-primary" />
+                  <Sparkles className="h-5 w-5 text-foreground/70 group-hover:text-primary" />
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold tracking-tight">{dict.home.pillar2Title}</h3>
