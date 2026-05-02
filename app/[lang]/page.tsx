@@ -8,10 +8,12 @@ import { Footer } from '@/components/footer';
 import { HomeAuthRedirect } from '@/components/home-auth-redirect';
 import { PricingSection } from '@/components/pricing-section';
 import { Button } from '@/components/ui/button';
+import type { EventStatus } from '@/lib/event-status';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedPath } from '@/lib/i18n/localized-path';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
+import { EventStatusToggle } from './event-status-toggle';
 import { getCachedTopEvents } from './top-events-actions';
 
 async function getCachedDictionary(lang: string) {
@@ -38,7 +40,13 @@ export default async function Home({
     redirect(`/auth/callback?${qs}`);
   }
 
-  const [dict, topEvents] = await Promise.all([getCachedDictionary(lang), getCachedTopEvents()]);
+  const validStatus: EventStatus | undefined =
+    sp.status === 'upcoming' || sp.status === 'completed' ? sp.status : undefined;
+
+  const [dict, topEvents] = await Promise.all([
+    getCachedDictionary(lang),
+    getCachedTopEvents(validStatus),
+  ]);
   const isAuthenticated = false;
 
   return (
@@ -84,16 +92,27 @@ export default async function Home({
       {topEvents.length > 0 && (
         <section className="bg-background py-16 sm:py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="mb-8 flex items-center justify-between">
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
                 {dict.home.featuredEventsTitle}
               </h2>
-              <Link href={localizedPath(lang, '/events')}>
-                <Button variant="ghost" size="sm" className="hidden gap-1 xl:flex">
-                  {dict.home.exploreAllEvents}
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
+              <div className="flex items-center gap-6">
+                <EventStatusToggle
+                  current={validStatus}
+                  basePath={localizedPath(lang, '/')}
+                  t={{
+                    all: dict.home.statusAll,
+                    upcoming: dict.home.statusUpcoming,
+                    completed: dict.home.statusCompleted,
+                  }}
+                />
+                <Link href={localizedPath(lang, '/events')}>
+                  <Button variant="ghost" size="sm" className="hidden gap-1 xl:flex">
+                    {dict.home.exploreAllEvents}
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
             </div>
 
             <div className="flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:grid xl:grid-cols-4 xl:overflow-visible xl:pb-0">
@@ -115,6 +134,7 @@ export default async function Home({
                     pricePerPhoto={event.pricePerPhoto}
                     photographerUsername={event.photographerUsername}
                     photographerDisplayName={event.photographerDisplayName}
+                    status={event.status}
                     linkPrefix={localizedPath(lang, '/events')}
                     t={{
                       photo: dict.eventCard.photo,
@@ -122,6 +142,7 @@ export default async function Home({
                       from: dict.eventCard.from,
                       free: dict.eventCard.free,
                       noPhotosYet: dict.eventCard.noPhotosYet,
+                      comingSoon: dict.events.comingSoon,
                     }}
                   />
                 </div>

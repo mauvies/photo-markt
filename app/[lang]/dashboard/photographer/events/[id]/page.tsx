@@ -5,6 +5,7 @@ import { createClient } from '@/database/server';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedRedirect } from '@/lib/i18n/redirect';
+import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { getPhotoTags } from './actions';
 import { EventPhotoAlbum } from './event-photo-album';
 
@@ -64,37 +65,39 @@ export default async function EventDetailPage({
         </div>
       )}
       <div className="mt-4">
-        <EventPhotoAlbum
-          eventId={id}
-          iconTooltips={dict.photoIconButtons}
-          items={photos
-            .map((p) => {
-              const url = p.original_url ? signed[p.original_url] : null;
-              if (!url) return null;
-              return {
-                id: p.id,
-                url,
-                ...(p.original_url && { alt: p.original_url }),
-                tags: photoTags[p.id] || [],
-              };
-            })
-            .filter(
-              (
-                item,
-              ): item is {
-                id: string;
-                url: string;
-                alt?: string;
-                tags: Array<{
-                  tag_id: string;
-                  talent_user_id: string;
-                  talent_username: string;
-                  talent_display_name: string | null;
-                  tagged_at: string;
-                }>;
-              } => item !== null,
-            )}
-        />
+        <TranslationsProvider translations={dict.events}>
+          <EventPhotoAlbum
+            eventId={id}
+            iconTooltips={dict.photoIconButtons}
+            items={photos
+              .map((p) => {
+                const url = p.original_url ? signed[p.original_url] : null;
+                if (!url) return null;
+                return {
+                  id: p.id,
+                  url,
+                  ...(p.original_url && { alt: p.original_url }),
+                  tags: photoTags[p.id] || [],
+                };
+              })
+              .filter(
+                (
+                  item,
+                ): item is {
+                  id: string;
+                  url: string;
+                  alt?: string;
+                  tags: Array<{
+                    tag_id: string;
+                    talent_user_id: string;
+                    talent_username: string;
+                    talent_display_name: string | null;
+                    tagged_at: string;
+                  }>;
+                } => item !== null,
+              )}
+          />
+        </TranslationsProvider>
       </div>
     </div>
   );

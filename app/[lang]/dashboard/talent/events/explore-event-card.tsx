@@ -5,6 +5,7 @@ import { Camera } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/activity-options';
+import type { EventStatus } from '@/lib/event-status';
 
 type ExploreEventCardProps = {
   id: string;
@@ -19,8 +20,16 @@ type ExploreEventCardProps = {
   pricePerPhoto: number | null;
   photographerUsername?: string | null;
   photographerDisplayName?: string | null;
+  status?: EventStatus;
   linkPrefix?: string;
-  t?: { photos: string; photo: string; from: string; free: string; noPhotosYet: string };
+  t?: {
+    photos: string;
+    photo: string;
+    from: string;
+    free: string;
+    noPhotosYet: string;
+    comingSoon?: string;
+  };
 };
 
 export function ExploreEventCard({
@@ -36,6 +45,7 @@ export function ExploreEventCard({
   pricePerPhoto,
   photographerUsername,
   photographerDisplayName,
+  status,
   linkPrefix = '/dashboard/talent/events',
   t = {
     photos: 'photos',
@@ -70,6 +80,12 @@ export function ExploreEventCard({
             />
             {/* Subtle gradient for photo count legibility */}
             <div className="absolute inset-0 bg-linear-to-t from-black/40 via-transparent to-transparent" />
+            {/* Coming Soon badge */}
+            {status === 'upcoming' && (
+              <span className="absolute left-2 top-2 rounded-full bg-primary/90 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground">
+                {t.comingSoon ?? 'Coming Soon'}
+              </span>
+            )}
             {/* Photo count — bottom-left */}
             <div className="absolute bottom-0 left-0 p-3">
               <span className="text-xs font-medium text-white drop-shadow-sm">
@@ -81,6 +97,11 @@ export function ExploreEventCard({
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground">
             <Camera className="h-8 w-8 opacity-30" />
             <span className="text-xs">{t.noPhotosYet}</span>
+            {status === 'upcoming' && (
+              <span className="absolute left-2 top-2 rounded-full bg-primary/90 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground">
+                {t.comingSoon ?? 'Coming Soon'}
+              </span>
+            )}
           </div>
         )}
       </div>

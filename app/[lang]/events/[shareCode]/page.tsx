@@ -1,3 +1,4 @@
+import { CalendarClock } from 'lucide-react';
 import type { Metadata } from 'next';
 import { cacheLife, cacheTag } from 'next/cache';
 import { notFound } from 'next/navigation';
@@ -16,6 +17,7 @@ import {
 } from '@/database/queries';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { getEventStatus } from '@/lib/event-status';
 import { getBaseUrl } from '@/lib/get-base-url';
 import { getSiteUrl } from '@/lib/get-site-url';
 import type { Locale } from '@/lib/i18n/config';
@@ -205,11 +207,12 @@ export default async function EventPage({
     data: { user },
   } = await supabase.auth.getUser();
 
+  const eventStatus = getEventStatus(event.date);
   const useWatermark = event.watermark_enabled === true;
   const photosInCart: string[] = [];
 
   try {
-    if (user) {
+    if (user && eventStatus !== 'upcoming') {
       const { activeRole } = await getActiveRole();
       if (activeRole === 'talent') {
         for (const photo of photos) {
@@ -229,7 +232,7 @@ export default async function EventPage({
   const paths = photos.map((p) => p.original_url).filter((url): url is string => url !== null);
   const signed: Record<string, string> = {};
 
-  if (paths.length > 0) {
+  if (paths.length > 0 && eventStatus !== 'upcoming') {
     const baseUrl = await getBaseUrl();
     const photoUrls = await createPhotoUrls(
       supabaseAdmin as unknown as SupabaseServerClient,
@@ -351,33 +354,43 @@ export default async function EventPage({
           <CartLinkButton guest={!user} />
         </div>
 
-        {photoItems.length > 0 && (
-          <div className="mb-3 flex justify-end">
-            <AIMatchingButton className="h-9 rounded-full" />
+        {eventStatus === 'upcoming' ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
+            <CalendarClock className="h-12 w-12 text-muted-foreground opacity-40" />
+            <p className="text-lg font-semibold">{dict.events.comingSoon}</p>
+            <p className="text-sm text-muted-foreground">{dict.events.photosAfterEvent}</p>
           </div>
+        ) : (
+          <>
+            {photoItems.length > 0 && (
+              <div className="mb-3 flex justify-end">
+                <AIMatchingButton className="h-9 rounded-full" />
+              </div>
+            )}
+            <Suspense
+              fallback={
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                  {Array.from({ length: 12 }).map((_, i) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton items
+                    <div key={i} className="aspect-square animate-pulse rounded-lg bg-muted" />
+                  ))}
+                </div>
+              }
+            >
+              <PublicEventPhotoViewer
+                photos={photoItems}
+                eventId={event.id}
+                eventName={event.name}
+                eventDate={event.date}
+                pricePerPhoto={event.price_per_photo}
+                photographerId={event.user_id}
+                isAuthenticated={!!user}
+                initialPhotosInCart={photosInCart}
+                iconTooltips={dict.photoIconButtons}
+              />
+            </Suspense>
+          </>
         )}
-        <Suspense
-          fallback={
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {Array.from({ length: 12 }).map((_, i) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton items
-                <div key={i} className="aspect-square animate-pulse rounded-lg bg-muted" />
-              ))}
-            </div>
-          }
-        >
-          <PublicEventPhotoViewer
-            photos={photoItems}
-            eventId={event.id}
-            eventName={event.name}
-            eventDate={event.date}
-            pricePerPhoto={event.price_per_photo}
-            photographerId={event.user_id}
-            isAuthenticated={!!user}
-            initialPhotosInCart={photosInCart}
-            iconTooltips={dict.photoIconButtons}
-          />
-        </Suspense>
       </div>
     </div>
   );

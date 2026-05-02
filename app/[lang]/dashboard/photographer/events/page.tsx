@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { createSignedUrl, getPhotosForEvents, getUserEvents } from '@/database/queries';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { getEventStatus } from '@/lib/event-status';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { deleteEventAction as deleteEvent } from './actions';
@@ -189,6 +190,7 @@ export default async function EventsPage({ params }: { params: Promise<{ lang: s
                   salesCount={salesCounts.get(event.id) ?? 0}
                   isPublic={event.is_public}
                   coverUrl={coverUrl}
+                  status={event.date ? getEventStatus(event.date) : undefined}
                   editHref={`/dashboard/photographer/events/${event.id}/edit`}
                   onDelete={deleteEvent.bind(null, event.id)}
                 />

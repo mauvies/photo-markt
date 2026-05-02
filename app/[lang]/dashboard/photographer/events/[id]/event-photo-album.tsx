@@ -5,13 +5,19 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
+import { deleteEventAction } from '@/app/[lang]/dashboard/photographer/events/actions';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import PhotoAlbumViewer, { type PhotoAlbumItem } from '@/components/photo-album-viewer';
 import type { PhotoIconTooltips } from '@/components/photo-icon-buttons';
 import { TagTalentDialog } from '@/components/tag-talent-dialog';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { useLocalizedPath } from '@/hooks/use-localized-path';
+import type { Dictionary } from '@/lib/i18n/get-dictionary';
+import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
 import { deletePhotoAction } from './edit/actions';
+
+type EventsT = Dictionary['events'];
 
 type EventPhotoAlbumProps = {
   items: PhotoAlbumItem[];
@@ -21,11 +27,15 @@ type EventPhotoAlbumProps = {
 
 export function EventPhotoAlbum({ items, eventId, iconTooltips }: EventPhotoAlbumProps) {
   const router = useRouter();
+  const lp = useLocalizedPath();
+  const { t } = useTranslations<EventsT>();
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteEventDialogOpen, setDeleteEventDialogOpen] = useState(false);
   const [isDeleting, startDeleting] = useTransition();
+  const [isDeletingEvent, startDeletingEvent] = useTransition();
 
   const handleToggleSelect = useCallback((photoId: string) => {
     setSelectedIds((current) => {
@@ -70,22 +80,38 @@ export function EventPhotoAlbum({ items, eventId, iconTooltips }: EventPhotoAlbu
     startDeleting(async () => {
       try {
         await Promise.all(selectedIds.map((photoId) => deletePhotoAction(photoId, eventId)));
-        toast.success(`Deleted ${selectedIds.length} photo${selectedIds.length === 1 ? '' : 's'}`);
+        const noun = selectedIds.length === 1 ? t('photo') : t('photos');
+        toast.success(
+          t('deletedPhotosToast')
+            .replace('{n}', String(selectedIds.length))
+            .replace('{noun}', noun),
+        );
         setSelectedIds([]);
         setIsSelecting(false);
         router.refresh();
       } catch (error) {
         console.error(error);
-        toast.error(error instanceof Error ? error.message : 'Failed to delete photos');
+        toast.error(error instanceof Error ? error.message : t('failedDeletePhotos'));
       }
     });
-  }, [selectedIds, eventId, router]);
+  }, [selectedIds, eventId, router, t]);
+
+  const confirmDeleteEvent = useCallback(() => {
+    startDeletingEvent(async () => {
+      try {
+        await deleteEventAction(eventId);
+        router.push(lp('/dashboard/photographer/events'));
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : t('failedDeleteEvent'));
+      }
+    });
+  }, [eventId, router, lp, t]);
 
   const selectedCountLabel = useMemo(() => {
-    if (selectedIds.length === 0) return 'No photos selected';
-    if (selectedIds.length === 1) return '1 photo selected';
-    return `${selectedIds.length} photos selected`;
-  }, [selectedIds.length]);
+    if (selectedIds.length === 0) return t('noPhotosSelected');
+    if (selectedIds.length === 1) return t('onePhotoSelected');
+    return t('nPhotosSelected').replace('{n}', String(selectedIds.length));
+  }, [selectedIds.length, t]);
 
   return (
     <div className="space-y-3">
@@ -93,15 +119,25 @@ export function EventPhotoAlbum({ items, eventId, iconTooltips }: EventPhotoAlbu
         {!isSelecting && (
           <div className="ml-auto flex items-center gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => setIsSelecting(true)}>
-              Select
+              {t('selectButton')}
             </Button>
             <Link
               href={`/dashboard/photographer/events/${eventId}/edit`}
               className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
             >
               <Pencil className="mr-2 h-4 w-4" />
-              Edit Event
+              {t('editEvent')}
             </Link>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteEventDialogOpen(true)}
+              disabled={isDeletingEvent}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              {isDeletingEvent ? t('deletingLabel') : t('deleteEvent')}
+            </Button>
           </div>
         )}
         {isSelecting && (
@@ -109,7 +145,7 @@ export function EventPhotoAlbum({ items, eventId, iconTooltips }: EventPhotoAlbu
             <div className="text-sm font-medium">{selectedCountLabel}</div>
             <div className="flex items-center gap-2">
               <Button type="button" variant="outline" size="sm" onClick={clearSelection}>
-                Clear
+                {t('clearButton')}
               </Button>
               <Button
                 type="button"
@@ -119,7 +155,7 @@ export function EventPhotoAlbum({ items, eventId, iconTooltips }: EventPhotoAlbu
                 disabled={selectedIds.length === 0 || isDeleting}
               >
                 <Trash2 className="mr-2 h-4 w-4" />
-                {isDeleting ? 'Deleting...' : 'Remove'}
+                {isDeleting ? t('deletingLabel') : t('removeButton')}
               </Button>
               <Button
                 type="button"
@@ -129,7 +165,7 @@ export function EventPhotoAlbum({ items, eventId, iconTooltips }: EventPhotoAlbu
                 disabled={selectedIds.length === 0}
               >
                 <UserPlus className="mr-2 h-4 w-4" />
-                Tag talent
+                {t('tagTalentButton')}
               </Button>
             </div>
           </div>
@@ -157,12 +193,24 @@ export function EventPhotoAlbum({ items, eventId, iconTooltips }: EventPhotoAlbu
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        title="Delete Photos"
-        description={`Are you sure you want to delete ${selectedIds.length} photo${selectedIds.length === 1 ? '' : 's'}? This action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t('deletePhotosTitle')}
+        description={t('deletePhotosDesc')
+          .replace('{n}', String(selectedIds.length))
+          .replace('{noun}', selectedIds.length === 1 ? t('photo') : t('photos'))}
+        confirmText={t('confirmButton')}
+        cancelText={t('cancelButton')}
         variant="destructive"
         onConfirm={confirmDelete}
+      />
+      <ConfirmDialog
+        open={deleteEventDialogOpen}
+        onOpenChange={setDeleteEventDialogOpen}
+        title={t('deleteConfirmTitle')}
+        description={t('deleteConfirmDesc')}
+        confirmText={t('confirmButton')}
+        cancelText={t('cancelButton')}
+        variant="destructive"
+        onConfirm={confirmDeleteEvent}
       />
     </div>
   );

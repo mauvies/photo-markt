@@ -23,6 +23,7 @@ export function ExplorePageContent({
   initialDateTo,
   hideTopFilters = false,
   showFindMe = false,
+  filterBarLeftSlot,
 }: {
   initialFilterOptions: FilterOptions;
   initialEvents?: EventWithStats[];
@@ -39,6 +40,7 @@ export function ExplorePageContent({
   initialDateTo?: string;
   hideTopFilters?: boolean;
   showFindMe?: boolean;
+  filterBarLeftSlot?: React.ReactNode;
 }) {
   const search = useEventSearch({
     initialFilterOptions,
@@ -85,6 +87,7 @@ export function ExplorePageContent({
         clearFilters={search.clearFilters}
         setHasSearched={search.setHasSearched}
         extraButtons={showFindMe ? <AIMatchingButton className="h-9 rounded-full" /> : undefined}
+        leftSlot={filterBarLeftSlot}
         photographerQuery={search.photographerQuery}
         setPhotographerQuery={search.setPhotographerQuery}
         radiusKm={search.radiusKm}

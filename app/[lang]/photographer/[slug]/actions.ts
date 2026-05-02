@@ -9,6 +9,7 @@ import {
 } from '@/database/queries';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import type { EventWithStats } from '@/hooks/use-event-search';
+import { getEventStatus } from '@/lib/event-status';
 
 export type { PhotographerWithStats } from '@/database/queries';
 
@@ -73,6 +74,7 @@ export async function getPhotographerEventsAction(
       pricePerPhoto: event.price_per_photo,
       photographerUsername: null,
       photographerDisplayName: null,
+      status: getEventStatus(event.date),
     })),
     total: count ?? 0,
   };
