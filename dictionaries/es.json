@@ -755,7 +755,10 @@
     "removePhotoDesc": "Esto elimina la foto de tu colección. La foto original no se borra.",
     "removePhotoConfirm": "Eliminar",
     "removePhotoSuccess": "Foto eliminada de la colección",
-    "removePhotoFailed": "No se pudo eliminar la foto"
+    "removePhotoFailed": "No se pudo eliminar la foto",
+    "downloadTooltip": "Descargar",
+    "shareTooltip": "Compartir",
+    "deleteTooltip": "Eliminar"
   },
   "pricingSection": {
     "headline": "Precios simples para fotógrafos.",

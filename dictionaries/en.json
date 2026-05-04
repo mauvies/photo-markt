@@ -755,7 +755,10 @@
     "removePhotoDesc": "This removes the photo from your library. The original photo is not deleted.",
     "removePhotoConfirm": "Remove",
     "removePhotoSuccess": "Photo removed from library",
-    "removePhotoFailed": "Failed to remove photo"
+    "removePhotoFailed": "Failed to remove photo",
+    "downloadTooltip": "Download",
+    "shareTooltip": "Share",
+    "deleteTooltip": "Delete"
   },
   "pricingSection": {
     "headline": "Simple pricing for photographers.",

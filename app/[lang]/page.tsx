@@ -121,7 +121,6 @@ export default async function Home({
                     activity={event.activity}
                     photoCount={event.photoCount}
                     coverUrl={event.coverUrl}
-                    pricePerPhoto={event.pricePerPhoto}
                     photographerUsername={event.photographerUsername}
                     photographerDisplayName={event.photographerDisplayName}
                     status={event.status}
@@ -129,8 +128,6 @@ export default async function Home({
                     t={{
                       photo: dict.eventCard.photo,
                       photos: dict.eventCard.photos,
-                      from: dict.eventCard.from,
-                      free: dict.eventCard.free,
                       noPhotosYet: dict.eventCard.noPhotosYet,
                       comingSoon: dict.events.comingSoon,
                     }}

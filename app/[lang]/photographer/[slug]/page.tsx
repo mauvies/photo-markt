@@ -116,7 +116,6 @@ export default async function PhotographerProfilePage({ params }: { params: Para
                   activity={event.activity}
                   photoCount={event.photoCount}
                   coverUrl={event.coverUrl}
-                  pricePerPhoto={event.pricePerPhoto}
                   linkPrefix={`/${lang}/events`}
                 />
               ))}

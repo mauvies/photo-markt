@@ -1,7 +1,7 @@
 'use client';
 
 import { format } from 'date-fns';
-import { Camera } from 'lucide-react';
+import { CalendarDays, Camera, MapPin } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/activity-options';
@@ -17,7 +17,6 @@ type ExploreEventCardProps = {
   activity: string;
   photoCount: number;
   coverUrl?: string | null;
-  pricePerPhoto: number | null;
   photographerUsername?: string | null;
   photographerDisplayName?: string | null;
   status?: EventStatus;
@@ -25,8 +24,6 @@ type ExploreEventCardProps = {
   t?: {
     photos: string;
     photo: string;
-    from: string;
-    free: string;
     noPhotosYet: string;
     comingSoon?: string;
   };
@@ -42,7 +39,6 @@ export function ExploreEventCard({
   activity,
   photoCount,
   coverUrl,
-  pricePerPhoto,
   photographerUsername,
   photographerDisplayName,
   status,
@@ -50,8 +46,6 @@ export function ExploreEventCard({
   t = {
     photos: 'photos',
     photo: 'photo',
-    from: 'From',
-    free: 'Free',
     noPhotosYet: 'No photos yet',
   },
 }: ExploreEventCardProps) {
@@ -60,10 +54,6 @@ export function ExploreEventCard({
   const location = [city, country].filter(Boolean).join(', ');
   const photographerHandle =
     photographerDisplayName || (photographerUsername ? `@${photographerUsername}` : null);
-  const priceText =
-    pricePerPhoto !== null
-      ? `${t.from} $${pricePerPhoto % 1 === 0 ? pricePerPhoto : pricePerPhoto.toFixed(2)}`
-      : t.free;
 
   return (
     <Link href={`${linkPrefix}/${hrefParam ?? id}`} className="group block">
@@ -75,7 +65,7 @@ export function ExploreEventCard({
               src={coverUrl}
               alt={`${name} cover`}
               fill
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+              sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
               className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
             />
             {/* Subtle gradient for photo count legibility */}
@@ -106,25 +96,30 @@ export function ExploreEventCard({
         )}
       </div>
 
-      {/* Info below image */}
-      <div className="flex items-start justify-between gap-3 px-1">
-        {/* Left column */}
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold leading-snug text-foreground">{name}</p>
-          <p className="mt-0.5 truncate text-sm text-muted-foreground">{location}</p>
-          <p className="text-sm text-muted-foreground">{formattedDate}</p>
+      {/* Info below image — single column */}
+      <div className="space-y-1 px-1">
+        <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">{name}</h3>
+
+        <div className="space-y-0.5 text-xs text-muted-foreground">
+          <p className="flex items-center gap-1.5">
+            <MapPin className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{location}</span>
+          </p>
+          <p className="flex items-center gap-1.5">
+            <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{formattedDate}</span>
+          </p>
           {photographerHandle && (
-            <p className="mt-0.5 truncate text-sm text-muted-foreground">{photographerHandle}</p>
+            <p className="flex items-center gap-1.5">
+              <Camera className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{photographerHandle}</span>
+            </p>
           )}
         </div>
 
-        {/* Right column */}
-        <div className="shrink-0 text-right">
-          <span className="inline-block rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-            {activityLabel}
-          </span>
-          <p className="mt-1.5 text-xs text-foreground">{priceText}</p>
-        </div>
+        <span className="mt-1 inline-block rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+          {activityLabel}
+        </span>
       </div>
     </Link>
   );
