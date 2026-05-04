@@ -22,11 +22,9 @@ type EventGridProps = {
   isInitialLoad: boolean;
   hasSearched: boolean;
   hasMore: boolean;
-  hasFilters: boolean;
   skeletonKeys: string[];
   eventLinkPrefix?: string;
   onLoadMore: () => void;
-  onClearFilters: () => void;
 };
 
 function EventSkeleton({ skeletonKeys }: { skeletonKeys: string[] }) {
@@ -68,11 +66,9 @@ export function EventGrid({
   isInitialLoad,
   hasSearched,
   hasMore,
-  hasFilters,
   skeletonKeys,
   eventLinkPrefix,
   onLoadMore,
-  onClearFilters,
 }: EventGridProps) {
   const { t } = useTranslations<EventGridT>();
 
@@ -95,17 +91,6 @@ export function EventGrid({
         <Filter className="mx-auto mb-4 h-10 w-10 text-muted-foreground" />
         <h3 className="mb-2 text-lg font-semibold">{t('noEventsFound')}</h3>
         <p className="text-sm text-muted-foreground">{t('noEventsFoundDesc')}</p>
-        {hasFilters && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onClearFilters}
-            className="mt-4"
-          >
-            {t('clearFilters')}
-          </Button>
-        )}
       </div>
     );
   }

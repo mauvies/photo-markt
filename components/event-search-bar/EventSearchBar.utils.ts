@@ -35,6 +35,15 @@ export function parseDateStr(s: string): Date | undefined {
   }
 }
 
+// Detect access-code-like inputs: short, no spaces, uppercase alphanumeric (with -/_).
+// Lowercase or natural-language inputs fall through to regular search.
+export function isLikelyAccessCode(input: string): boolean {
+  const trimmed = input.trim();
+  if (trimmed.length < 4 || trimmed.length > 16) return false;
+  if (/\s/.test(trimmed)) return false;
+  return /^[A-Z0-9_-]+$/.test(trimmed);
+}
+
 export function whenLabel(from: Date | undefined, to: Date | undefined): string | null {
   if (from && to) {
     const sameDay = format(from, 'yyyy-MM-dd') === format(to, 'yyyy-MM-dd');

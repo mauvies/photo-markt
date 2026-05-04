@@ -267,7 +267,7 @@ export function AIMatchingModal({ open, onOpenChange }: AIMatchingModalProps) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5" />
-            Find Me
+            Find My Photos
           </DialogTitle>
           <DialogDescription>
             Upload a selfie and let AI find photos of you from events

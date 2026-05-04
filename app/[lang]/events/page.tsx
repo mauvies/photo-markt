@@ -3,8 +3,6 @@ import {
   searchEventsAction,
 } from '@/app/[lang]/dashboard/talent/events/actions';
 import { ExplorePageContent } from '@/app/[lang]/dashboard/talent/events/explore-page-content';
-import { EventStatusToggle } from '@/app/[lang]/event-status-toggle';
-import { EventSearchBar } from '@/components/event-search-bar';
 import { Footer } from '@/components/footer';
 import type { EventWithStats } from '@/hooks/use-event-search';
 import {
@@ -15,7 +13,6 @@ import {
 } from '@/lib/event-status';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
-import { localizedPath } from '@/lib/i18n/localized-path';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 
 export default async function PublicEventsPage({
@@ -30,11 +27,12 @@ export default async function PublicEventsPage({
     dateTo?: string;
     preset?: string;
     status?: string;
+    photographer?: string;
   }>;
 }) {
   const { lang } = await params;
   const dict = await getDictionary(lang as Locale);
-  const { where, activity, dateFrom, dateTo, preset, status } = await searchParams;
+  const { where, activity, dateFrom, dateTo, preset, status, photographer } = await searchParams;
   const filterOptions = await getFilterOptionsAction();
 
   const validStatus: EventStatus | undefined =
@@ -83,32 +81,15 @@ export default async function PublicEventsPage({
     }
   }
 
-  const searchKey = `${where ?? ''}-${activity ?? ''}-${dateFrom ?? ''}-${dateTo ?? ''}-${preset ?? ''}-${validStatus ?? ''}`;
+  const searchKey = `${where ?? ''}-${activity ?? ''}-${dateFrom ?? ''}-${dateTo ?? ''}-${preset ?? ''}-${validStatus ?? ''}-${photographer ?? ''}`;
 
   return (
     <div className="flex min-h-screen flex-col">
-      {/* Top bar */}
-      <div className="mx-auto max-w-7xl w-full px-4 pt-6 pb-2">
-        <div className="flex justify-center">
-          <TranslationsProvider translations={dict.eventSearchBar}>
-            <EventSearchBar
-              key={searchKey}
-              variant="hero"
-              initialWhere={where ?? ''}
-              initialActivity={activity ?? ''}
-              initialDateFrom={dateFrom ?? ''}
-              initialDateTo={dateTo ?? ''}
-              initialPreset={preset}
-            />
-          </TranslationsProvider>
-        </div>
-      </div>
-
-      {/* Content */}
       <div className="mx-auto max-w-7xl w-full flex-1 px-4 pt-6 pb-10">
         <TranslationsProvider translations={{ ...dict.eventFilterBar, ...dict.eventCard }}>
           <ExplorePageContent
             key={searchKey}
+            searchKey={searchKey}
             initialFilterOptions={filterOptions}
             initialEvents={initialEvents}
             initialTotal={initialTotal}
@@ -118,19 +99,11 @@ export default async function PublicEventsPage({
             initialActivity={activity}
             initialDateFrom={effectiveDateFrom}
             initialDateTo={effectiveDateTo}
+            initialPhotographerQuery={photographer}
+            initialPreset={preset}
             hideTopFilters={true}
             showFindMe={false}
-            filterBarLeftSlot={
-              <EventStatusToggle
-                current={validStatus}
-                basePath={localizedPath(lang, '/events')}
-                t={{
-                  all: dict.home.statusAll,
-                  upcoming: dict.home.statusUpcoming,
-                  completed: dict.home.statusCompleted,
-                }}
-              />
-            }
+            eventSearchBarDict={dict.eventSearchBar}
           />
         </TranslationsProvider>
       </div>

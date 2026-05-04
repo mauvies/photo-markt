@@ -73,18 +73,8 @@ export default async function Home({
           </p>
 
           <TranslationsProvider translations={dict.eventSearchBar}>
-            <EventSearchBar variant="hero" className="mx-auto" />
+            <EventSearchBar variant="hero" className="mx-auto" showMobileFilters={false} />
           </TranslationsProvider>
-
-          <p className="text-xs text-muted-foreground/60">
-            {dict.home.haveAccessCode}{' '}
-            <Link
-              href={localizedPath(lang, '/events/private')}
-              className="underline underline-offset-2 hover:text-muted-foreground transition-colors"
-            >
-              {dict.home.accessPrivateEvent}
-            </Link>
-          </p>
         </div>
       </section>
 

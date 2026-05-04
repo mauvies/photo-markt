@@ -49,7 +49,7 @@ export function Nav({ user }: { user: User | null }) {
                 href={lp('/login')}
                 className="text-sm hover:text-foreground/70 transition-colors"
               >
-                <Button size="md" className="md:hidden">
+                <Button size="md" className="bg-gradient-starter h-10 md:hidden">
                   {t('login')}
                 </Button>
                 <span className="hidden md:inline-flex">{t('login')}</span>
