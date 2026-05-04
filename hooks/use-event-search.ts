@@ -38,6 +38,7 @@ type UseEventSearchOptions = {
   initialActivity?: string;
   initialDateFrom?: string;
   initialDateTo?: string;
+  initialPhotographerQuery?: string;
   initialLat?: number;
   initialLng?: number;
   initialRadius?: number;
@@ -70,6 +71,7 @@ export function useEventSearch({
   initialActivity,
   initialDateFrom,
   initialDateTo,
+  initialPhotographerQuery,
   initialLat,
   initialLng,
   initialRadius,
@@ -108,7 +110,7 @@ export function useEventSearch({
   const [sortBy, setSortBy] = useState<SortBy>('date_desc');
   const [dateFrom, setDateFrom] = useState(initialDateFrom ?? '');
   const [dateTo, setDateTo] = useState(initialDateTo ?? '');
-  const [photographerQuery, setPhotographerQuery] = useState('');
+  const [photographerQuery, setPhotographerQuery] = useState(initialPhotographerQuery ?? '');
   const [searchLat, setSearchLat] = useState<number | undefined>(initialLat);
   const [searchLng, setSearchLng] = useState<number | undefined>(initialLng);
   const [radiusKm, setRadiusKm] = useState<number>(initialRadius ?? (initialLat ? 25 : 0));

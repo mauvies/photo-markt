@@ -20,7 +20,7 @@ export function AIMatchingButton({ className }: { className?: string }) {
             <span className="inline-block">
               <Button disabled className={cn('gap-2', className)} variant="default" size="sm">
                 <Sparkles className="h-4 w-4" />
-                Find Me
+                Find My Photos
               </Button>
             </span>
           </TooltipTrigger>
@@ -36,7 +36,7 @@ export function AIMatchingButton({ className }: { className?: string }) {
     <>
       <Button onClick={() => setIsOpen(true)} className={cn('gap-2', className)} variant="default">
         <Sparkles className="h-4 w-4" />
-        Find Me
+        Find My Photos
       </Button>
       <AIMatchingModal open={isOpen} onOpenChange={setIsOpen} />
     </>

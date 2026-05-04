@@ -1,7 +1,10 @@
 'use client';
 
+import { EventSearchBar } from '@/components/event-search-bar';
 import type { EventWithStats, FilterOptions } from '@/hooks/use-event-search';
 import { useEventSearch } from '@/hooks/use-event-search';
+import type { Dictionary } from '@/lib/i18n/get-dictionary';
+import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { AIMatchingButton } from '../photos/ai-matching/ai-matching-button';
 import { EventFilterBar } from './components/event-filter-bar';
 import { EventGrid } from './components/event-grid';
@@ -21,9 +24,12 @@ export function ExplorePageContent({
   initialActivity,
   initialDateFrom,
   initialDateTo,
+  initialPhotographerQuery,
+  initialPreset,
   hideTopFilters = false,
   showFindMe = false,
-  filterBarLeftSlot,
+  eventSearchBarDict,
+  searchKey,
 }: {
   initialFilterOptions: FilterOptions;
   initialEvents?: EventWithStats[];
@@ -38,9 +44,13 @@ export function ExplorePageContent({
   initialActivity?: string;
   initialDateFrom?: string;
   initialDateTo?: string;
+  initialPhotographerQuery?: string;
+  initialPreset?: string;
   hideTopFilters?: boolean;
   showFindMe?: boolean;
   filterBarLeftSlot?: React.ReactNode;
+  eventSearchBarDict?: Dictionary['eventSearchBar'];
+  searchKey?: string;
 }) {
   const search = useEventSearch({
     initialFilterOptions,
@@ -53,11 +63,31 @@ export function ExplorePageContent({
     initialActivity,
     initialDateFrom,
     initialDateTo,
+    initialPhotographerQuery,
     loadOnMount,
   });
 
   return (
     <div className="space-y-6">
+      {eventSearchBarDict && (
+        <div className="flex justify-center">
+          <TranslationsProvider translations={eventSearchBarDict}>
+            <EventSearchBar
+              key={searchKey}
+              variant="hero"
+              initialWhere={initialWhere ?? ''}
+              initialActivity={initialActivity ?? ''}
+              initialDateFrom={initialDateFrom ?? ''}
+              initialDateTo={initialDateTo ?? ''}
+              initialPreset={initialPreset}
+              initialPhotographer={initialPhotographerQuery ?? ''}
+              sortBy={search.sortBy}
+              onSortChange={search.setSortBy}
+            />
+          </TranslationsProvider>
+        </div>
+      )}
+
       <EventFilterBar
         hideTopFilters={hideTopFilters}
         searchText={search.searchText}
@@ -87,7 +117,6 @@ export function ExplorePageContent({
         clearFilters={search.clearFilters}
         setHasSearched={search.setHasSearched}
         extraButtons={showFindMe ? <AIMatchingButton className="h-9 rounded-full" /> : undefined}
-        leftSlot={filterBarLeftSlot}
         photographerQuery={search.photographerQuery}
         setPhotographerQuery={search.setPhotographerQuery}
         radiusKm={search.radiusKm}
@@ -100,11 +129,9 @@ export function ExplorePageContent({
         isInitialLoad={search.isInitialLoad}
         hasSearched={search.hasSearched}
         hasMore={search.hasMore}
-        hasFilters={search.hasFilters}
         skeletonKeys={search.skeletonKeys}
         eventLinkPrefix={eventLinkPrefix}
         onLoadMore={search.loadMore}
-        onClearFilters={search.clearFilters}
       />
 
       {showInfoCards && <EventInfoCards />}

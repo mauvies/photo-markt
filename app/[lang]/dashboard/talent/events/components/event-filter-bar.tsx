@@ -77,7 +77,6 @@ type EventFilterBarProps = {
   // Extra buttons (e.g. Find Me) rendered before the Filters button
   extraButtons?: React.ReactNode;
   // Content rendered on the left side (only in hideTopFilters mode)
-  leftSlot?: React.ReactNode;
 };
 
 function parseDateStr(s: string): Date | undefined {
@@ -120,20 +119,19 @@ export function EventFilterBar({
   locationLabel,
   hasFilters,
   activeFilterCount,
-  dateFilterCount,
   isFilterModalOpen,
   setIsFilterModalOpen,
   handleFilterChange,
   clearFilters,
   setHasSearched,
   extraButtons,
-  leftSlot,
   photographerQuery,
   setPhotographerQuery,
   radiusKm,
   setRadiusKm,
 }: EventFilterBarProps) {
   const { t } = useTranslations<EventFilterBarT>();
+
   // --- Local (pending) state for the modal ---
   const [localActivity, setLocalActivity] = useState(selectedActivity);
   const [localCity, setLocalCity] = useState(selectedCity);
@@ -273,11 +271,11 @@ export function EventFilterBar({
     { label: 'National', value: 0 },
   ] as const;
 
-  const simplifiedModalContent = (
-    <div className="space-y-4 py-4">
-      {photographerField(localPhotographerQuery, setLocalPhotographerQuery)}
-    </div>
-  );
+  // const simplifiedModalContent = (
+  //   <div className="space-y-4 py-4">
+  //     {photographerField(localPhotographerQuery, setLocalPhotographerQuery)}
+  //   </div>
+  // );
 
   const fullModalContent = (
     <div className="space-y-4 py-4">
@@ -383,7 +381,6 @@ export function EventFilterBar({
     return (
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex min-w-0 items-center gap-1.5">
-          {leftSlot}
           {locationLabel ? (
             <>
               <MapPin className="h-4 w-4 shrink-0 text-primary" />
@@ -431,50 +428,7 @@ export function EventFilterBar({
           ) : null}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          {extraButtons}
-          <Dialog open={isFilterModalOpen} onOpenChange={setIsFilterModalOpen}>
-            <DialogTrigger asChild>
-              <button
-                type="button"
-                className="flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium transition-colors hover:bg-muted"
-              >
-                <Filter className="h-4 w-4" />
-                {t('filters')}
-                {dateFilterCount > 0 && (
-                  <span className="rounded-full bg-primary px-1.5 py-0.5 text-xs font-medium text-primary-foreground">
-                    {dateFilterCount}
-                  </span>
-                )}
-              </button>
-            </DialogTrigger>
-            <DialogContent className="max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>{t('filterTitle')}</DialogTitle>
-              </DialogHeader>
-              {simplifiedModalContent}
-              {modalFooter}
-            </DialogContent>
-          </Dialog>
-
-          <Select
-            value={sortBy}
-            onValueChange={(value) => {
-              setSortBy(value as SortBy);
-              setHasSearched(true);
-            }}
-          >
-            <SelectTrigger className="h-9 w-auto rounded-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="date_desc">{t('newestFirst')}</SelectItem>
-              <SelectItem value="date_asc">{t('oldestFirst')}</SelectItem>
-              <SelectItem value="name_asc">{t('nameAZ')}</SelectItem>
-              <SelectItem value="name_desc">{t('nameZA')}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        <div className="flex shrink-0 items-center gap-2">{extraButtons}</div>
       </div>
     );
   }

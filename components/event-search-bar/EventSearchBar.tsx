@@ -1,9 +1,10 @@
 'use client';
 
 import { format } from 'date-fns';
-import { AnimatePresence, motion } from 'framer-motion';
-import { Clock, Search, X } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { enUS, es } from 'date-fns/locale';
+import { motion } from 'framer-motion';
+import { Clock, Search, SlidersHorizontal, X } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/activity-options';
@@ -14,10 +15,17 @@ import {
 } from '@/app/[lang]/dashboard/talent/events/actions';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useDebounce } from '@/hooks/use-debounce';
+import type { SortBy } from '@/hooks/use-event-search';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
@@ -27,6 +35,7 @@ import { useActivityCombobox } from './EventSearchBar.hooks';
 import type { EventSearchBarProps } from './EventSearchBar.types';
 import {
   BLUR_DISMISS_DELAY_MS,
+  isLikelyAccessCode,
   last3DaysRange,
   lastWeekRange,
   parseDateStr,
@@ -34,7 +43,6 @@ import {
   whenLabel,
 } from './EventSearchBar.utils';
 import { MOBILE_CALENDAR_COMPONENTS } from './MobileCalendarComponents';
-import { WhenPopoverContent } from './WhenPopoverContent';
 import { WhereSuggestionsDropdown } from './WhereSuggestionsDropdown';
 
 export function EventSearchBar({
@@ -44,21 +52,31 @@ export function EventSearchBar({
   initialDateFrom = '',
   initialDateTo = '',
   initialPreset,
+  initialPhotographer = '',
   initialLat: _initialLat,
   initialLng: _initialLng,
   initialRadius: _initialRadius,
+  sortBy,
+  onSortChange,
   onSearch,
   searchHref = '/events',
+  showMobileFilters = true,
   className,
 }: EventSearchBarProps) {
   const router = useRouter();
   const { t } = useTranslations<Dictionary['eventSearchBar']>();
   const lp = useLocalizedPath();
 
+  const params = useParams<{ lang: string }>();
+  const calendarLocale = params?.lang === 'es' ? es : enUS;
+
   const [where, setWhere] = useState(initialWhere);
+  const [photographer, setPhotographer] = useState(initialPhotographer);
   const whereRef = useRef<HTMLInputElement>(null);
   const activityInputRef = useRef<HTMLInputElement>(null);
   const whereContainerRef = useRef<HTMLDivElement>(null);
+
+  const [filterModalOpen, setFilterModalOpen] = useState(false);
 
   // If a known preset is passed, recompute its range so "Today" is always fresh
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
@@ -73,8 +91,11 @@ export function EventSearchBar({
 
   const [presetLabel, setPresetLabel] = useState<string | null>(initialPreset ?? null);
   const [mobileDialogOpen, setMobileDialogOpen] = useState(false);
+  const [mobileMoreFiltersOpen, setMobileMoreFiltersOpen] = useState(
+    () => !!initialActivity || !!initialDateFrom || !!initialDateTo || !!initialPhotographer,
+  );
   const [mobileWhenOpen, setMobileWhenOpen] = useState(false);
-  const [whenOpen, setWhenOpen] = useState(false);
+  const [modalWhenOpen, setModalWhenOpen] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [eventSuggestions, setEventSuggestions] = useState<EventSuggestion[]>([]);
   const [photographerSuggestions, setPhotographerSuggestions] = useState<
@@ -105,6 +126,11 @@ export function EventSearchBar({
       });
   }, [debouncedWhere]);
 
+  // Close activity dropdown when filter modal opens so it doesn't auto-open
+  useEffect(() => {
+    if (filterModalOpen) activity.setOpen(false);
+  }, [filterModalOpen, activity.setOpen]);
+
   const handleClearAll = useCallback(() => {
     setWhere('');
     setEventSuggestions([]);
@@ -115,6 +141,13 @@ export function EventSearchBar({
     setPresetLabel(null);
   }, [activity]);
 
+  const handleClearFilters = useCallback(() => {
+    activity.clear();
+    setDateRange(undefined);
+    setPresetLabel(null);
+    setPhotographer('');
+  }, [activity]);
+
   const handleClearDateRange = useCallback(() => {
     setDateRange(undefined);
     setPresetLabel(null);
@@ -123,23 +156,22 @@ export function EventSearchBar({
   const handleSelectPreset = useCallback((label: string, range: DateRange) => {
     setPresetLabel(label);
     setDateRange(range);
-    setWhenOpen(false);
     setMobileWhenOpen(false);
-  }, []);
-
-  const handleSelectCustom = useCallback((range: DateRange | undefined) => {
-    setDateRange(range);
-    setPresetLabel(null);
-    if (range?.from && range?.to) {
-      setWhenOpen(false);
-      setMobileWhenOpen(false);
-    }
+    setModalWhenOpen(false);
   }, []);
 
   const handleSearch = useCallback(() => {
     setShowSuggestions(false);
     const validatedActivity = activity.validate();
     if (validatedActivity === null) return;
+
+    // If the where input looks like an access code, route directly to that event
+    const trimmedWhere = where.trim();
+    if (trimmedWhere && isLikelyAccessCode(trimmedWhere)) {
+      setMobileDialogOpen(false);
+      router.push(lp(`/events/${trimmedWhere.toUpperCase()}`));
+      return;
+    }
 
     const df = dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : '';
     const dt = dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : '';
@@ -150,28 +182,21 @@ export function EventSearchBar({
       return;
     }
     const params = new URLSearchParams();
-    if (where.trim()) params.set('where', where.trim());
+    if (trimmedWhere) params.set('where', trimmedWhere);
     if (validatedActivity) params.set('activity', validatedActivity);
     if (df) params.set('dateFrom', df);
     if (dt) params.set('dateTo', dt);
     if (presetLabel) params.set('preset', presetLabel);
+    if (photographer.trim()) params.set('photographer', photographer.trim());
     setMobileDialogOpen(false);
     router.push(`${searchHref}?${params.toString()}`);
-  }, [activity, where, dateRange, onSearch, searchHref, router, presetLabel]);
+  }, [activity, where, dateRange, onSearch, searchHref, router, presetLabel, photographer, lp]);
 
   const displayLabel = presetLabel ?? whenLabel(dateRange?.from, dateRange?.to);
 
   const suggestionTranslations = {
     eventsLabel: t('eventsLabel'),
     photographersLabel: t('photographersLabel'),
-  };
-
-  const whenTranslations = {
-    quickOptions: t('quickOptions'),
-    customDate: t('customDate'),
-    presetToday: t('presetToday'),
-    presetLast3Days: t('presetLast3Days'),
-    presetLastWeek: t('presetLastWeek'),
   };
 
   const handleSelectEvent = useCallback(
@@ -196,20 +221,47 @@ export function EventSearchBar({
     whereRef.current?.focus();
   }, []);
 
+  const activeFilterCount =
+    (activity.selectedValue ? 1 : 0) + (dateRange?.from ? 1 : 0) + (photographer.trim() ? 1 : 0);
+
   if (variant === 'hero') {
     return (
       <div className={cn('w-full max-w-3xl', className)}>
-        <div className="md:hidden w-full flex justify-center">
+        <div className="md:hidden w-full flex justify-center items-center gap-2">
           <button
             type="button"
             onClick={() => setMobileDialogOpen(true)}
-            className="flex h-14 items-center rounded-full border bg-background px-10 gap-3 shadow-lg"
+            className="flex h-14 items-center rounded-full border bg-background px-8 gap-3 shadow-lg"
           >
             <Search className="h-5 w-5 text-foreground/80" />
             <span className="font-medium tracking-wider text-foreground/80">{t('mobileText')}</span>
           </button>
+          {showMobileFilters && (
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMoreFiltersOpen(true);
+                  setMobileDialogOpen(true);
+                }}
+                aria-label={t('filters')}
+                className={cn(
+                  'flex h-14 w-14 items-center justify-center rounded-full border bg-background shadow-lg transition-colors hover:bg-muted',
+                  activeFilterCount > 0 && 'border-foreground/40 border-2',
+                )}
+              >
+                <SlidersHorizontal className="h-5 w-5" />
+              </button>
+              {activeFilterCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold text-primary-foreground shadow-sm">
+                  {activeFilterCount}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
+        {/* Mobile full-screen dialog — all fields always visible */}
         <Dialog
           open={mobileDialogOpen}
           onOpenChange={(open) => {
@@ -222,85 +274,106 @@ export function EventSearchBar({
             className="inset-0 h-dvh max-w-none translate-x-0 translate-y-0 rounded-none border-0 p-0"
           >
             <DialogTitle className="sr-only">Search events</DialogTitle>
-            <AnimatePresence mode="wait">
-              {mobileDialogOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  transition={{ duration: 0.2, ease: 'easeOut' }}
-                  className="flex h-full flex-col bg-background"
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="flex h-full flex-col bg-background"
+            >
+              <div className="flex items-center justify-end px-4 py-6">
+                <DialogClose asChild>
+                  <button
+                    type="button"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    aria-label="Close search"
+                  >
+                    <X className="h-7 w-7" />
+                  </button>
+                </DialogClose>
+              </div>
+
+              <div className="flex-1 space-y-3 overflow-x-hidden overflow-y-auto px-4 pb-28 [scrollbar-gutter:stable]">
+                {/* biome-ignore lint/a11y/noStaticElementInteractions: onMouseDown dismisses the date picker when tapping another field — no semantic role applies */}
+                <section
+                  ref={whereContainerRef}
+                  className="relative rounded-2xl border bg-background px-4 py-3 shadow-sm"
+                  onMouseDown={() => {
+                    setMobileWhenOpen(false);
+                    activity.setOpen(false);
+                  }}
                 >
-                  <div className="flex items-center justify-end px-4 py-6">
-                    <DialogClose asChild>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {t('whereLabel')}
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      ref={whereRef}
+                      id="event-search-where-mobile"
+                      name="where-mobile"
+                      type="text"
+                      autoComplete="off"
+                      placeholder={t('wherePlaceholder')}
+                      value={where}
+                      onChange={(e) => {
+                        setWhere(e.target.value);
+                        setShowSuggestions(true);
+                      }}
+                      onFocus={() => setShowSuggestions(true)}
+                      onBlur={() =>
+                        setTimeout(() => setShowSuggestions(false), BLUR_DISMISS_DELAY_MS)
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          setShowSuggestions(false);
+                          handleSearch();
+                        }
+                        if (e.key === 'Escape') setShowSuggestions(false);
+                      }}
+                      className="min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground/50"
+                    />
+                    {where && (
                       <button
                         type="button"
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                        aria-label="Close search"
+                        onClick={handleWhereClear}
+                        className="shrink-0 text-muted-foreground hover:text-foreground"
                       >
-                        <X className="h-7 w-7" />
+                        <X className="h-4 w-4" />
                       </button>
-                    </DialogClose>
+                    )}
                   </div>
+                  {showSuggestions && (
+                    <WhereSuggestionsDropdown
+                      events={eventSuggestions}
+                      photographers={photographerSuggestions}
+                      hasInput={!!where.trim()}
+                      onSelectEvent={handleSelectEvent}
+                      onSelectPhotographer={handleSelectPhotographer}
+                      t={suggestionTranslations}
+                    />
+                  )}
+                </section>
 
-                  <div className="flex-1 space-y-3 overflow-x-hidden overflow-y-auto px-4 pb-28 [scrollbar-gutter:stable]">
-                    {/* biome-ignore lint/a11y/noStaticElementInteractions: onMouseDown dismisses the date picker when tapping another field — no semantic role applies */}
-                    <section
-                      ref={whereContainerRef}
-                      className="relative rounded-2xl border bg-background px-4 py-3 shadow-sm"
-                      onMouseDown={() => setMobileWhenOpen(false)}
-                    >
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        {t('whereLabel')}
-                      </p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <input
-                          ref={whereRef}
-                          id="event-search-where-mobile"
-                          name="where-mobile"
-                          type="text"
-                          autoComplete="off"
-                          placeholder={t('wherePlaceholder')}
-                          value={where}
-                          onChange={(e) => {
-                            setWhere(e.target.value);
-                            setShowSuggestions(true);
-                          }}
-                          onFocus={() => setShowSuggestions(true)}
-                          onBlur={() =>
-                            setTimeout(() => setShowSuggestions(false), BLUR_DISMISS_DELAY_MS)
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              setShowSuggestions(false);
-                              handleSearch();
-                            }
-                            if (e.key === 'Escape') setShowSuggestions(false);
-                          }}
-                          className="min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground/50"
-                        />
-                        {where && (
-                          <button
-                            type="button"
-                            onClick={handleWhereClear}
-                            className="shrink-0 text-muted-foreground hover:text-foreground"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                      {showSuggestions && (
-                        <WhereSuggestionsDropdown
-                          events={eventSuggestions}
-                          photographers={photographerSuggestions}
-                          hasInput={!!where.trim()}
-                          onSelectEvent={handleSelectEvent}
-                          onSelectPhotographer={handleSelectPhotographer}
-                          t={suggestionTranslations}
-                        />
-                      )}
-                    </section>
+                {!mobileMoreFiltersOpen && (
+                  <button
+                    type="button"
+                    onClick={() => setMobileMoreFiltersOpen(true)}
+                    className="flex w-full items-center justify-between rounded-2xl border bg-background px-4 py-3 text-sm font-medium shadow-sm transition-colors hover:bg-muted"
+                  >
+                    <span className="flex items-center gap-2">
+                      <SlidersHorizontal className="h-4 w-4" />
+                      {t('moreFilters')}
+                    </span>
+                    {activeFilterCount > 0 && (
+                      <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                        {activeFilterCount}
+                      </span>
+                    )}
+                  </button>
+                )}
 
+                {mobileMoreFiltersOpen && (
+                  <>
                     {/* biome-ignore lint/a11y/noStaticElementInteractions: onMouseDown dismisses the date picker when tapping another field — no semantic role applies */}
                     <section
                       ref={activity.containerRef}
@@ -366,40 +439,42 @@ export function EventSearchBar({
                     </section>
 
                     <div className="rounded-2xl border bg-background shadow-sm overflow-hidden">
-                      <button
-                        type="button"
-                        className="w-full px-4 py-3 text-left"
-                        onMouseDown={() => {
-                          setMobileWhenOpen((o) => !o);
-                        }}
-                      >
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                          {t('whenLabel')}
-                        </p>
-                        <div className="mt-2 flex w-full items-center gap-2">
-                          <span
-                            className={cn(
-                              'flex-1 text-base font-medium',
-                              displayLabel ? 'text-foreground' : 'text-muted-foreground/50',
-                            )}
-                          >
-                            {displayLabel ?? t('addDates')}
-                          </span>
-                          {displayLabel && (
-                            <button
-                              type="button"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleClearDateRange();
-                              }}
-                              className="shrink-0 text-muted-foreground hover:text-foreground"
+                      <div className="flex items-center">
+                        <button
+                          type="button"
+                          className="flex-1 px-4 py-3 text-left"
+                          onMouseDown={() => {
+                            activity.setOpen(false);
+                            setMobileWhenOpen((o) => !o);
+                          }}
+                        >
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            {t('whenLabel')}
+                          </p>
+                          <div className="mt-2 flex items-center gap-2">
+                            <span
+                              className={cn(
+                                'flex-1 text-base font-medium',
+                                displayLabel ? 'text-foreground' : 'text-muted-foreground/50',
+                              )}
                             >
-                              <X className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
-                      </button>
+                              {displayLabel ?? t('addDates')}
+                            </span>
+                          </div>
+                        </button>
+                        {displayLabel && (
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleClearDateRange();
+                            }}
+                            className="px-4 text-muted-foreground hover:text-foreground"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                       {mobileWhenOpen && (
                         <div className="border-t">
                           <div className="flex flex-wrap gap-2 px-3 py-3">
@@ -442,51 +517,315 @@ export function EventSearchBar({
                         </div>
                       )}
                     </div>
-                  </div>
 
-                  <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background px-4 py-3 md:hidden">
-                    <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3">
-                      <button
-                        type="button"
-                        onClick={handleClearAll}
-                        className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-                      >
-                        {t('clearAll')}
-                      </button>
-                      <Button
-                        onClick={handleSearch}
-                        variant="default"
-                        className="h-11 rounded-full px-5 text-sm font-semibold"
-                      >
-                        <Search className="mr-2 h-4 w-4" />
-                        {t('searchButton')}
-                      </Button>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                    <section className="rounded-2xl border bg-background px-4 py-3 shadow-sm">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {t('photographerLabel')}
+                      </p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <input
+                          id="event-search-photographer-mobile"
+                          name="photographer-mobile"
+                          type="text"
+                          placeholder={t('photographerPlaceholder')}
+                          value={photographer}
+                          onChange={(e) => setPhotographer(e.target.value)}
+                          className="min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground/50"
+                        />
+                        {photographer && (
+                          <button
+                            type="button"
+                            onClick={() => setPhotographer('')}
+                            className="shrink-0 text-muted-foreground hover:text-foreground"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </section>
+
+                    {sortBy !== undefined && onSortChange && (
+                      <section className="rounded-2xl border bg-background px-4 py-3 shadow-sm">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          {t('sortBy')}
+                        </p>
+                        <select
+                          id="event-search-sort-mobile"
+                          name="sort-mobile"
+                          value={sortBy}
+                          onChange={(e) => onSortChange(e.target.value as SortBy)}
+                          className="mt-2 w-full bg-transparent text-base font-medium text-foreground outline-none"
+                        >
+                          <option value="date_desc">{t('newestFirst')}</option>
+                          <option value="date_asc">{t('oldestFirst')}</option>
+                          <option value="name_asc">{t('nameAZ')}</option>
+                          <option value="name_desc">{t('nameZA')}</option>
+                        </select>
+                      </section>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background px-4 py-3 md:hidden">
+                <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={handleClearAll}
+                    className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    {t('clearAll')}
+                  </button>
+                  <Button
+                    onClick={handleSearch}
+                    variant="default"
+                    className="h-11 rounded-full px-5 text-sm font-semibold"
+                  >
+                    <Search className="mr-2 h-4 w-4" />
+                    {t('searchButton')}
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
           </DialogContent>
         </Dialog>
 
-        <div className="hidden md:block rounded-2xl pl-3 sm:rounded-full border-2 bg-background shadow-md">
-          <div className="flex flex-col sm:flex-row sm:items-stretch">
-            {/* Where */}
-            <div
-              ref={whereContainerRef}
-              className="relative flex-1 min-w-0 px-5 pt-4 pb-2 sm:py-0 sm:min-h-[60px] sm:flex sm:flex-col sm:justify-center sm:items-start"
-            >
-              <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
-                {t('nameOrLocation')}
-              </p>
-              <div className="flex w-full items-center gap-1">
+        {/* Filter modal — desktop */}
+        <Dialog
+          open={filterModalOpen}
+          onOpenChange={(open) => {
+            setFilterModalOpen(open);
+            if (!open) setModalWhenOpen(false);
+          }}
+        >
+          <DialogContent
+            className="sm:max-w-md flex flex-col p-0 gap-0 max-h-[85vh] overflow-hidden"
+            aria-describedby={undefined}
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
+            <DialogHeader className="px-6 py-4 border-b shrink-0">
+              <DialogTitle>{t('filters')}</DialogTitle>
+            </DialogHeader>
+
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-3">
+              {/* Activity — inline expandable card */}
+              <div
+                ref={activity.containerRef}
+                className="rounded-xl border bg-background overflow-hidden"
+              >
+                <div className="px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {t('activityLabel')}
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      id="event-search-activity-modal"
+                      name="activity-modal"
+                      type="text"
+                      placeholder={t('activityPlaceholder')}
+                      value={activity.inputValue}
+                      onChange={(e) => {
+                        activity.setInputValue(e.target.value);
+                        activity.setOpen(true);
+                      }}
+                      onFocus={() => activity.setOpen(true)}
+                      onBlur={() =>
+                        setTimeout(() => activity.setOpen(false), BLUR_DISMISS_DELAY_MS)
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') activity.setOpen(false);
+                      }}
+                      className={cn(
+                        'min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/50',
+                        activity.error &&
+                          'animate-[shake_0.35s_ease-in-out] text-destructive placeholder:text-destructive/40',
+                      )}
+                    />
+                    {activity.inputValue && (
+                      <button
+                        type="button"
+                        onClick={() => activity.clear()}
+                        className="shrink-0 text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {activity.open && activity.filtered.length > 0 && (
+                  <div className="border-t max-h-48 overflow-y-auto py-1">
+                    {activity.filtered.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          activity.select(opt);
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm transition-colors hover:bg-muted"
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* When — inline expandable card with calendar */}
+              <div className="rounded-xl border bg-background overflow-hidden">
+                <div className="flex items-center">
+                  <button
+                    type="button"
+                    className="flex-1 px-4 py-3 text-left"
+                    onClick={() => setModalWhenOpen((o) => !o)}
+                  >
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {t('whenLabel')}
+                    </p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span
+                        className={cn(
+                          'flex-1 text-sm font-medium',
+                          displayLabel ? 'text-foreground' : 'text-muted-foreground/50',
+                        )}
+                      >
+                        {displayLabel ?? t('addDates')}
+                      </span>
+                    </div>
+                  </button>
+                  {displayLabel && (
+                    <button
+                      type="button"
+                      onClick={handleClearDateRange}
+                      className="px-4 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                {modalWhenOpen && (
+                  <div className="border-t">
+                    <div className="flex flex-wrap gap-2 px-3 py-2">
+                      {[
+                        { label: t('presetToday'), getRange: todayRange },
+                        { label: t('presetLast3Days'), getRange: last3DaysRange },
+                        { label: t('presetLastWeek'), getRange: lastWeekRange },
+                      ].map(({ label, getRange }) => (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() => handleSelectPreset(label, getRange())}
+                          className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors hover:bg-muted"
+                        >
+                          <Clock className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex justify-center">
+                      <Calendar
+                        mode="range"
+                        selected={dateRange}
+                        onSelect={(range) => {
+                          setDateRange(range);
+                          setPresetLabel(null);
+                          if (range?.from && range?.to) setModalWhenOpen(false);
+                        }}
+                        locale={calendarLocale}
+                        numberOfMonths={1}
+                        className="p-2 [--cell-size:--spacing(7)] [&_button]:text-[12px]"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Photographer */}
+              <div className="rounded-xl border bg-background px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {t('photographerLabel')}
+                </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    id="event-search-photographer-modal"
+                    name="photographer-modal"
+                    type="text"
+                    placeholder={t('photographerPlaceholder')}
+                    value={photographer}
+                    onChange={(e) => setPhotographer(e.target.value)}
+                    className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/50"
+                  />
+                  {photographer && (
+                    <button
+                      type="button"
+                      onClick={() => setPhotographer('')}
+                      className="shrink-0 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {sortBy !== undefined && onSortChange && (
+                <div className="rounded-xl border bg-background px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {t('sortBy')}
+                  </p>
+                  <select
+                    id="event-search-sort-modal"
+                    name="sort-modal"
+                    value={sortBy}
+                    onChange={(e) => onSortChange(e.target.value as SortBy)}
+                    className="mt-2 w-full bg-transparent text-sm font-medium text-foreground outline-none"
+                  >
+                    <option value="date_desc">{t('newestFirst')}</option>
+                    <option value="date_asc">{t('oldestFirst')}</option>
+                    <option value="name_asc">{t('nameAZ')}</option>
+                    <option value="name_desc">{t('nameZA')}</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="px-6 py-4 border-t shrink-0 flex-row items-center justify-between sm:justify-between">
+              <button
+                type="button"
+                onClick={handleClearFilters}
+                className="text-sm font-medium text-muted-foreground underline-offset-2 hover:underline hover:text-foreground transition-colors"
+              >
+                {t('clearFilters')}
+              </button>
+              <Button
+                onClick={() => {
+                  setFilterModalOpen(false);
+                  handleSearch();
+                }}
+                className="rounded-full px-6"
+              >
+                {t('apply')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Desktop bar — always visible */}
+        <div className="hidden md:flex justify-center">
+          <div className="w-full max-w-xl rounded-full border-2 bg-background shadow-md">
+            <div className="flex items-stretch">
+              {/* Where */}
+              <div
+                ref={whereContainerRef}
+                className="relative flex flex-1 min-w-0 items-center gap-2 pl-5 pr-3 min-h-14"
+              >
+                <Search className="h-4 w-4 shrink-0 text-muted-foreground/70" />
                 <input
                   ref={whereRef}
                   id="event-search-where"
                   name="where"
                   type="text"
                   autoComplete="off"
-                  placeholder={t('nameOrLocationPlaceholder')}
+                  placeholder={t('searchByNameLocationPhotographer')}
                   value={where}
                   onChange={(e) => {
                     setWhere(e.target.value);
@@ -501,151 +840,61 @@ export function EventSearchBar({
                     }
                     if (e.key === 'Escape') setShowSuggestions(false);
                   }}
-                  className="min-w-0 flex-1 w-0 h-auto outline-none p-0 mt-0.5 text-sm text-muted-foreground font-medium focus-visible:ring-0 shadow-none bg-transparent placeholder:text-muted-foreground/40 [&:-webkit-autofill]:[box-shadow:0_0_0_1000px_white_inset]!"
+                  className="min-w-0 flex-1 w-0 h-auto outline-none p-0 text-sm text-foreground font-medium focus-visible:ring-0 shadow-none bg-transparent placeholder:text-muted-foreground/60 [&:-webkit-autofill]:[box-shadow:0_0_0_1000px_white_inset]!"
                 />
-                <button
-                  type="button"
-                  onClick={handleWhereClear}
-                  className={cn(
-                    'mt-0.5 shrink-0 text-muted-foreground hover:text-foreground transition-opacity',
-                    where ? 'opacity-100' : 'opacity-0 pointer-events-none',
-                  )}
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-
-              {showSuggestions && (
-                <WhereSuggestionsDropdown
-                  events={eventSuggestions}
-                  photographers={photographerSuggestions}
-                  hasInput={!!where.trim()}
-                  onSelectEvent={handleSelectEvent}
-                  onSelectPhotographer={handleSelectPhotographer}
-                  t={suggestionTranslations}
-                />
-              )}
-            </div>
-
-            <div className="hidden sm:block w-px bg-border self-stretch my-4" />
-            <div className="sm:hidden h-px bg-border mx-5 mt-2" />
-
-            {/* Activity */}
-            <div
-              ref={activity.containerRef}
-              className="relative w-[25%] min-w-0 px-5 pt-3 pb-2 sm:py-0 sm:min-h-[60px] sm:flex sm:flex-col sm:justify-center sm:items-start"
-            >
-              <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
-                {t('activityLabel')}
-              </p>
-              <div className="flex w-full items-center gap-1">
-                <input
-                  ref={activityInputRef}
-                  id="event-search-activity"
-                  name="activity"
-                  type="text"
-                  placeholder={t('activityPlaceholder')}
-                  value={activity.inputValue}
-                  onChange={(e) => {
-                    activity.setInputValue(e.target.value);
-                    activity.setOpen(true);
-                  }}
-                  onFocus={() => activity.setOpen(true)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSearch();
-                    if (e.key === 'Escape') activity.setOpen(false);
-                  }}
-                  className={cn(
-                    'mt-0.5 text-sm text-muted-foreground bg-transparent outline-none min-w-0 flex-1 w-0 placeholder:text-muted-foreground/40 transition-all',
-                    activity.error &&
-                      'animate-[shake_0.35s_ease-in-out] text-destructive placeholder:text-destructive/40',
-                  )}
-                />
-                {activity.inputValue && (
+                {where && (
                   <button
                     type="button"
-                    onClick={() => {
-                      activity.clear();
-                      activityInputRef.current?.focus();
-                    }}
-                    className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
+                    onClick={handleWhereClear}
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
                   >
                     <X className="h-4 w-4" />
                   </button>
                 )}
-              </div>
-              {activity.open &&
-                activity.filtered.length > 0 &&
-                typeof document !== 'undefined' &&
-                !mobileDialogOpen && (
-                  <ActivityDropdown
-                    filtered={activity.filtered}
-                    anchorRef={activity.containerRef}
-                    onSelect={activity.select}
+
+                {showSuggestions && (
+                  <WhereSuggestionsDropdown
+                    events={eventSuggestions}
+                    photographers={photographerSuggestions}
+                    hasInput={!!where.trim()}
+                    onSelectEvent={handleSelectEvent}
+                    onSelectPhotographer={handleSelectPhotographer}
+                    t={suggestionTranslations}
                   />
                 )}
-            </div>
+              </div>
 
-            <div className="hidden sm:block w-px bg-border self-stretch my-4" />
-            <div className="sm:hidden h-px bg-border mx-5 mt-2" />
-
-            {/* When */}
-            <div className="relative w-[25%] min-w-0 px-5 pt-3 pb-2 sm:py-0 sm:min-h-[60px] sm:flex sm:flex-col sm:justify-center sm:items-start">
-              <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
-                {t('whenLabel')}
-              </p>
-              <Popover open={whenOpen} onOpenChange={(o) => setWhenOpen(o)}>
-                <div className="mt-0.5 flex w-full items-center gap-1">
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className="flex-1 truncate text-left outline-none min-w-0"
-                    >
-                      <span
-                        className={cn(
-                          'block truncate text-sm font-medium',
-                          displayLabel ? 'text-muted-foreground' : 'text-muted-foreground/40',
-                        )}
-                      >
-                        {displayLabel ?? t('addDates')}
-                      </span>
-                    </button>
-                  </PopoverTrigger>
-                  {displayLabel && (
-                    <button
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        handleClearDateRange();
-                      }}
-                      className="shrink-0 text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
+              {/* Filters button — icon + label pill, with corner badge when filters active */}
+              <div className="relative flex shrink-0 items-center">
+                <button
+                  type="button"
+                  onClick={() => setFilterModalOpen(true)}
+                  className={cn(
+                    'flex h-10 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors hover:bg-muted',
+                    activeFilterCount > 0 && 'border-foreground/70 border-2',
                   )}
-                </div>
-                <PopoverContent className="w-auto p-0" align="start" sideOffset={12}>
-                  <WhenPopoverContent
-                    dateRange={dateRange}
-                    onSelectPreset={handleSelectPreset}
-                    onSelectCustom={handleSelectCustom}
-                    t={whenTranslations}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                  <span>{t('filters')}</span>
+                </button>
+                {activeFilterCount > 0 && (
+                  <span className="absolute -right-0.5 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground shadow-sm">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </div>
 
-            {/* Search button */}
-            <div className="p-3 sm:p-2.5 sm:flex sm:items-center sm:justify-center">
-              <button
-                type="button"
-                onClick={handleSearch}
-                aria-label="Search events"
-                className="flex w-full sm:w-10 h-10 shrink-0 items-center justify-center gap-2 rounded-xl sm:rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 active:opacity-80"
-              >
-                <Search className="h-5 w-5" />
-                <span className="sm:hidden text-sm font-semibold">{t('searchButton')}</span>
-              </button>
+              {/* Search button */}
+              <div className="flex shrink-0 items-center p-2">
+                <button
+                  type="button"
+                  onClick={handleSearch}
+                  aria-label="Search events"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 active:opacity-80"
+                >
+                  <Search className="h-5 w-5" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
