@@ -17,6 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
 import { getPhotoDownloadUrl } from './actions';
@@ -61,6 +62,9 @@ export function ProfilePhotoViewer({
     removePhotoConfirm: string;
     removePhotoSuccess: string;
     removePhotoFailed: string;
+    downloadTooltip: string;
+    shareTooltip: string;
+    deleteTooltip: string;
   }>();
   const [dimensions, setDimensions] = useState<Record<string, { width: number; height: number }>>(
     {},
@@ -246,81 +250,92 @@ export function ProfilePhotoViewer({
       const photoId = extractPhotoId(photo);
       const metadata = photoMetadata[photoId];
 
+      const iconClass =
+        'pointer-events-auto flex size-6 items-center justify-center rounded-full bg-gray-900/45 backdrop-blur-sm text-white shadow-sm transition-colors hover:bg-gray-900/80 opacity-100 md:opacity-0 md:group-hover:opacity-100';
+
       return (
         <div className={cn('absolute inset-0 flex flex-col items-end justify-start p-2')}>
-          {/* Gradient overlay for better icon contrast */}
-          <div
-            className={cn(
-              'pointer-events-none absolute inset-x-0 top-0 h-14 bg-linear-to-b from-black/30 via-black/10 to-transparent z-0 opacity-0 transition-opacity group-hover:opacity-100',
-            )}
-          />
-
           {/* Action buttons (top right) */}
           <div className="relative z-10 flex w-full items-start justify-end gap-1.5">
             {/* Download button */}
             {metadata?.download_url && (
-              // biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons
-              <div
-                role="button"
-                className={cn(
-                  'pointer-events-auto flex size-6 items-center justify-center rounded-full bg-background/70 text-foreground/90 opacity-0 shadow-sm transition-all group-hover:opacity-100 hover:bg-background',
-                )}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleDownload(photoId);
-                }}
-                onKeyDown={(event) => {
-                  event.stopPropagation();
-                }}
-                aria-label="Download photo"
-                tabIndex={0}
-              >
-                <Download className="size-3" />
-              </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons */}
+                  <div
+                    role="button"
+                    className={iconClass}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleDownload(photoId);
+                    }}
+                    onKeyDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    aria-label={t('downloadTooltip')}
+                    tabIndex={0}
+                  >
+                    <Download className="size-3" />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{t('downloadTooltip')}</p>
+                </TooltipContent>
+              </Tooltip>
             )}
             {/* Share button */}
-            {/* biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons */}
-            <div
-              role="button"
-              className={cn(
-                'pointer-events-auto flex size-6 items-center justify-center rounded-full bg-background/70 text-foreground/90 opacity-0 shadow-sm transition-all group-hover:opacity-100 hover:bg-background',
-              )}
-              onClick={(e) => {
-                e.stopPropagation();
-                void handleShare(photoId);
-              }}
-              onKeyDown={(event) => {
-                event.stopPropagation();
-              }}
-              aria-label="Share photo"
-              tabIndex={0}
-            >
-              <Share2 className="size-3" />
-            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {/* biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons */}
+                <div
+                  role="button"
+                  className={iconClass}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleShare(photoId);
+                  }}
+                  onKeyDown={(event) => {
+                    event.stopPropagation();
+                  }}
+                  aria-label={t('shareTooltip')}
+                  tabIndex={0}
+                >
+                  <Share2 className="size-3" />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{t('shareTooltip')}</p>
+              </TooltipContent>
+            </Tooltip>
             {/* Delete button */}
-            {/* biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons */}
-            <div
-              role="button"
-              className={cn(
-                'pointer-events-auto flex size-6 items-center justify-center rounded-full bg-background/70 text-destructive opacity-0 shadow-sm transition-all group-hover:opacity-100 hover:bg-destructive hover:text-destructive-foreground',
-              )}
-              onClick={(e) => {
-                e.stopPropagation();
-                setDeleteConfirm(photoId);
-              }}
-              onKeyDown={(event) => {
-                event.stopPropagation();
-              }}
-              aria-label="Remove from library"
-              tabIndex={0}
-            >
-              <Trash2 className="size-3" />
-            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {/* biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons */}
+                <div
+                  role="button"
+                  className={iconClass}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteConfirm(photoId);
+                  }}
+                  onKeyDown={(event) => {
+                    event.stopPropagation();
+                  }}
+                  aria-label={t('deleteTooltip')}
+                  tabIndex={0}
+                >
+                  <Trash2 className="size-3" />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{t('deleteTooltip')}</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
       );
     },
-    [extractPhotoId, photoMetadata, handleShare, handleDownload],
+    [extractPhotoId, photoMetadata, handleShare, handleDownload, t],
   );
 
   return (
