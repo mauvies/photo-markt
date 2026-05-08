@@ -17,6 +17,8 @@ export * from './carts';
 export * from './download-tokens';
 // Re-export earnings queries
 export * from './earnings';
+// Re-export event-photographers (organizer event memberships) queries
+export * from './event-photographers';
 // Re-export event queries
 export * from './events';
 // Re-export feedback and roadmap vote queries

@@ -1,6 +1,5 @@
 'use server';
 
-import { Buffer } from 'node:buffer';
 import { revalidatePath, revalidateTag, updateTag } from 'next/cache';
 import { z } from 'zod';
 import { activityValues } from '@/app/[lang]/dashboard/photographer/events/new/activity-options';
@@ -15,6 +14,7 @@ import {
   uploadFile,
 } from '@/database/queries';
 import { createClient } from '@/database/server';
+import { validatePhotoUpload } from '@/lib/photo-upload';
 
 // --- Constants ---
 
@@ -80,11 +80,8 @@ function generateShareCode(): string {
   ).join('');
 }
 
-function buildPhotoPath(userId: string, eventId: string, file: File): string {
-  const fileId = crypto.randomUUID();
-  const extension = file.name.split('.').pop();
-  const safeName = extension ? `${fileId}.${extension.toLowerCase()}` : fileId;
-  return `${userId}/${eventId}/${safeName}`;
+function buildPhotoPath(userId: string, eventId: string, extension: string): string {
+  return `${userId}/${eventId}/${crypto.randomUUID()}.${extension}`;
 }
 
 async function uploadPhotos(
@@ -98,10 +95,10 @@ async function uploadPhotos(
   const uploadedPaths: string[] = [];
   try {
     for (const file of files) {
-      const path = buildPhotoPath(userId, eventId, file);
-      const buffer = Buffer.from(await file.arrayBuffer());
-      await uploadFile(supabase, 'photos', path, buffer, {
-        contentType: file.type || undefined,
+      const validated = await validatePhotoUpload(file);
+      const path = buildPhotoPath(userId, eventId, validated.extension);
+      await uploadFile(supabase, 'photos', path, validated.buffer, {
+        contentType: validated.contentType,
         upsert: false,
       });
       await createPhoto(supabase, userId, {

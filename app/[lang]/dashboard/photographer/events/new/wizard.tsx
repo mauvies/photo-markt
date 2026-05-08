@@ -1,57 +1,39 @@
 'use client';
 
-import { useForm } from '@tanstack/react-form';
 import { format } from 'date-fns';
-import { ChevronDownIcon } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { useEffect, useId, useMemo, useState, useTransition } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { LocationAutocomplete } from '@/components/ui/location-autocomplete';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
-import { cn } from '@/lib/utils';
 import { createEvent } from './actions';
-import { activityOptions, activityValues } from './activity-options';
-import { ConfirmEventDialog } from './components/confirm-event-dialog';
-import { PhotoUploadSection } from './components/photo-upload-section';
+import { activityOptions } from './activity-options';
 import { ShareCodeDialog } from './components/share-code-dialog';
+import { type StepNumber, WizardSteps } from './components/wizard-steps';
+import { Step1Config } from './steps/step-1-config';
+import { Step2Details } from './steps/step-2-details';
+import { Step3Photos } from './steps/step-3-photos';
+import { type ReviewSection, Step4Review } from './steps/step-4-review';
 import { eventSchema, type FormValues } from './wizard.schema';
+import { type FilePreview, useEventForm } from './wizard-types';
 
 type NewEventT = Dictionary['newEvent'];
 
 const STORAGE_KEY = 'photo-markt_new_event_form';
 const LEGACY_STORAGE_KEY = 'picdemi_new_event_form';
+// Side-channel flag: set when the user picks at least one photo. We don't
+// store the photos themselves (File objects can't be serialized), but knowing
+// that they *had* selected something lets us distinguish a fresh arrival on
+// step 3 (no banner) from a refresh that wiped the in-memory File[] (banner).
+const HAD_FILES_KEY = 'photo-markt_new_event_had_files';
 
-// Defaults must be deterministic across server and client so first render
-// matches and hydration succeeds. Stored values from localStorage are loaded
-// in a useEffect after mount instead.
-const EMPTY_DEFAULTS: FormValues = {
-  name: '',
-  activity: 'OTHER',
-  date: '',
-  country: '',
-  state: '',
-  city: '',
-  is_public: true,
-  watermark_enabled: true,
-  is_collaborative: false,
-  allow_guest_upload: true,
-  require_upload_approval: false,
-  price_per_photo: null,
+const STEP_FIELDS: Record<StepNumber, Array<keyof FormValues>> = {
+  1: [],
+  2: ['name', 'activity', 'date', 'city', 'price_per_photo'],
+  3: [],
+  4: [],
 };
 
 function readStoredValues(): FormValues | null {
@@ -64,6 +46,12 @@ function readStoredValues(): FormValues | null {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
       localStorage.removeItem(LEGACY_STORAGE_KEY);
     }
+    const eventType: 'solo' | 'collaborative' | 'organizer' =
+      parsed.event_type === 'organizer' || parsed.event_type === 'collaborative'
+        ? parsed.event_type
+        : parsed.is_collaborative
+          ? 'collaborative'
+          : 'solo';
     return {
       name: parsed.name || '',
       activity: parsed.activity || 'OTHER',
@@ -71,75 +59,70 @@ function readStoredValues(): FormValues | null {
       country: '',
       state: '',
       city: parsed.city || '',
+      event_type: eventType,
       is_public: parsed.is_public ?? true,
       watermark_enabled: parsed.watermark_enabled ?? true,
-      is_collaborative: parsed.is_collaborative ?? false,
+      is_collaborative: eventType === 'collaborative',
       allow_guest_upload: parsed.allow_guest_upload ?? true,
       require_upload_approval: parsed.require_upload_approval ?? false,
       price_per_photo: parsed.price_per_photo ?? null,
+      organizer_fee_per_photo: parsed.organizer_fee_per_photo ?? null,
     };
   } catch {
     return null;
   }
 }
 
+function parseStepParam(value: string | null): StepNumber {
+  const parsed = Number.parseInt(value ?? '1', 10);
+  if (parsed === 1 || parsed === 2 || parsed === 3 || parsed === 4) return parsed;
+  return 1;
+}
+
 export default function NewEventForm() {
   const { t } = useTranslations<NewEventT>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const lp = useLocalizedPath();
+
+  const currentStep = parseStepParam(searchParams.get('step'));
+
   const [files, setFiles] = useState<File[]>([]);
+  const [filePreviews, setFilePreviews] = useState<FilePreview[]>([]);
   const [isPending, startTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [pendingValues, setPendingValues] = useState<FormValues | null>(null);
   const [photosError, setPhotosError] = useState<string | null>(null);
-  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [submitAttemptedStep2, setSubmitAttemptedStep2] = useState(false);
   const [createdShareCode, setCreatedShareCode] = useState<string | null>(null);
   const [createdEventName, setCreatedEventName] = useState<string | null>(null);
   const [createdEventId, setCreatedEventId] = useState<string | null>(null);
-  const dateInputId = useId();
-  const [datePopoverOpen, setDatePopoverOpen] = useState(false);
-  const [filePreviews, setFilePreviews] = useState<Array<{ id: string; url: string; file: File }>>(
-    [],
-  );
-
+  const [reachedStep, setReachedStep] = useState<StepNumber>(currentStep);
   const [hydratedFromStorage, setHydratedFromStorage] = useState(false);
 
-  const form = useForm({
-    defaultValues: EMPTY_DEFAULTS,
-    onSubmit: async ({ value }) => {
-      try {
-        const parsed = eventSchema.parse(value);
-        // Collaborative events let owners create the shell and have others
-        // contribute, so the photographer's own initial upload is optional.
-        if (!parsed.is_collaborative && files.length === 0) {
-          setPhotosError(t('photosRequired'));
-          return;
-        }
-        setPhotosError(null);
-        setSubmitError(null);
-        setPendingValues(parsed);
-        setIsModalOpen(true);
-        setSubmitAttempted(false);
-      } catch (error) {
-        console.error(error);
-      }
-    },
-  });
+  // True after a refresh-with-photos: the user had files in memory, the page
+  // reloaded, files are gone — flag so step 3 / step 4 can show a banner.
+  const [photosLost, setPhotosLost] = useState(false);
 
-  // Hydrate the form from localStorage AFTER mount so server-rendered HTML
-  // matches the client first paint. Only runs once.
+  const form = useEventForm();
+
+  // Hydrate localStorage values after mount to avoid SSR mismatch.
   useEffect(() => {
     const stored = readStoredValues();
-    if (stored) {
-      form.reset(stored);
+    if (stored) form.reset(stored);
+    // If the user had picked photos in a previous session (flag set on first
+    // selection) and we're back without an in-memory File[], surface the
+    // "photos lost" banner so they re-pick. Don't fire on a fresh visit.
+    try {
+      if (localStorage.getItem(HAD_FILES_KEY) === 'true') {
+        setPhotosLost(true);
+      }
+    } catch {
+      // Ignore.
     }
     setHydratedFromStorage(true);
   }, [form]);
 
-  // Persist form values to localStorage on change. Skipped until hydration
-  // completes so we don't overwrite stored values with the empty defaults
-  // during the brief window before reset() runs.
+  // Persist form values on change (after hydration).
   useEffect(() => {
     if (!hydratedFromStorage) return;
     const values = form.state.values;
@@ -148,12 +131,13 @@ export default function NewEventForm() {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(values));
       } catch {
-        // Ignore storage errors
+        // Ignore quota / privacy-mode errors.
       }
     }
   }, [form.state.values, hydratedFromStorage]);
 
-  // Generate preview URLs for files
+  // Generate object URLs for the file previews; revoke them on cleanup so we
+  // don't leak memory when the user removes/reselects.
   useEffect(() => {
     const previews = files.map((file) => ({
       id: `preview-${file.name}-${file.lastModified}`,
@@ -161,14 +145,40 @@ export default function NewEventForm() {
       file,
     }));
     setFilePreviews(previews);
-
     return () => {
-      // Cleanup object URLs
-      previews.forEach((preview) => {
-        URL.revokeObjectURL(preview.url);
-      });
+      for (const p of previews) URL.revokeObjectURL(p.url);
     };
   }, [files]);
+
+  const goToStep = useCallback(
+    (step: StepNumber) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('step', String(step));
+      router.push(`?${params.toString()}`);
+      setReachedStep((prev) => (step > prev ? step : prev));
+    },
+    [router, searchParams],
+  );
+
+  // Keep the "had files" flag in sync. Set it when the user first picks
+  // photos so a future refresh can distinguish "fresh visit" from "lost".
+  // Clear it when files goes back to empty *via removeFile* (the user is in
+  // control). We don't write here on the initial 0-state to avoid clobbering
+  // a flag set in a previous session.
+  useEffect(() => {
+    if (!hydratedFromStorage) return;
+    try {
+      if (files.length > 0) {
+        localStorage.setItem(HAD_FILES_KEY, 'true');
+        if (photosLost) setPhotosLost(false);
+      } else if (localStorage.getItem(HAD_FILES_KEY) === 'true' && !photosLost) {
+        // Files were just cleared in this session — drop the flag too.
+        localStorage.removeItem(HAD_FILES_KEY);
+      }
+    } catch {
+      // Ignore.
+    }
+  }, [files.length, hydratedFromStorage, photosLost]);
 
   const handleFiles = (incoming: File[]) => {
     setFiles((prev) => {
@@ -186,74 +196,112 @@ export default function NewEventForm() {
     });
     if (incoming.length > 0) {
       setPhotosError(null);
+      setPhotosLost(false);
     }
   };
 
-  const removeFile = (targetFile: File) => {
-    setFiles((prev) => {
-      const next = prev.filter((file) => file !== targetFile);
-      if (submitAttempted && next.length === 0) {
-        setPhotosError(t('photosRequired'));
-      } else if (next.length > 0) {
-        setPhotosError(null);
-      }
-      return next;
-    });
+  const removeFile = (target: File) => {
+    setFiles((prev) => prev.filter((f) => f !== target));
   };
 
-  const confirmCreation = () => {
-    const value = pendingValues;
-    if (!value || isPending) return;
-    if (!value.is_collaborative && files.length === 0) {
-      setPhotosError(t('photosRequired'));
-      setIsModalOpen(false);
+  const validateAndAdvance = useCallback(async () => {
+    if (currentStep === 2) {
+      setSubmitAttemptedStep2(true);
+      const fields = STEP_FIELDS[2];
+      await Promise.all(fields.map((name) => form.validateField(name, 'change')));
+      const fieldMeta = form.state.fieldMeta;
+      const hasErrors = fields.some((name) => {
+        const meta = fieldMeta[name];
+        return meta && (meta.errors?.length ?? 0) > 0;
+      });
+      if (hasErrors) return;
+    }
+
+    if (currentStep === 3) {
+      const eventType = form.state.values.event_type;
+      // Solo events require ≥1 photo; collaborative and organizer events
+      // both let other users contribute later, so the wizard accepts zero.
+      const photosRequired = eventType === 'solo';
+      if (photosRequired && files.length === 0) {
+        setPhotosError(t('photosRequired'));
+        return;
+      }
+      setPhotosError(null);
+    }
+
+    const next = Math.min(currentStep + 1, 4) as StepNumber;
+    goToStep(next);
+  }, [currentStep, files.length, form, goToStep, t]);
+
+  const submit = useCallback(() => {
+    if (isPending) return;
+    let parsed: FormValues;
+    try {
+      parsed = eventSchema.parse(form.state.values);
+    } catch (error) {
+      console.error(error);
+      setSubmitError(t('submitError'));
       return;
     }
-    const formData = new FormData();
-    formData.append('name', value.name.trim());
-    formData.append('activity', value.activity);
-    formData.append('date', value.date);
-    if (value.city?.trim()) {
-      formData.append('city', value.city.trim());
+
+    if (parsed.event_type === 'solo' && files.length === 0) {
+      // Bump the user back to step 3 with the banner if they somehow reached
+      // step 4 with no photos (e.g., refresh).
+      setPhotosError(t('photosRequired'));
+      goToStep(3);
+      return;
     }
-    formData.append('is_public', value.is_public ? 'true' : 'false');
-    formData.append('watermark_enabled', value.watermark_enabled ? 'true' : 'false');
-    formData.append('is_collaborative', value.is_collaborative ? 'true' : 'false');
-    formData.append('allow_guest_upload', value.allow_guest_upload ? 'true' : 'false');
-    formData.append('require_upload_approval', value.require_upload_approval ? 'true' : 'false');
-    if (value.price_per_photo !== undefined && value.price_per_photo !== null) {
+
+    const formData = new FormData();
+    formData.append('name', parsed.name.trim());
+    formData.append('activity', parsed.activity);
+    formData.append('date', parsed.date);
+    if (parsed.city?.trim()) formData.append('city', parsed.city.trim());
+    formData.append('event_type', parsed.event_type);
+    formData.append('is_public', parsed.is_public ? 'true' : 'false');
+    formData.append('watermark_enabled', parsed.watermark_enabled ? 'true' : 'false');
+    formData.append('is_collaborative', parsed.event_type === 'collaborative' ? 'true' : 'false');
+    formData.append('allow_guest_upload', parsed.allow_guest_upload ? 'true' : 'false');
+    formData.append('require_upload_approval', parsed.require_upload_approval ? 'true' : 'false');
+    if (parsed.price_per_photo !== null && parsed.price_per_photo !== undefined) {
       const price =
-        typeof value.price_per_photo === 'string'
-          ? Number.parseFloat(value.price_per_photo)
-          : value.price_per_photo;
+        typeof parsed.price_per_photo === 'string'
+          ? Number.parseFloat(parsed.price_per_photo)
+          : parsed.price_per_photo;
       if (!Number.isNaN(price) && price >= 0) {
         formData.append('price_per_photo', price.toString());
       }
     }
-    for (const file of files) {
-      formData.append('photos', file);
+    if (
+      parsed.event_type === 'organizer' &&
+      parsed.organizer_fee_per_photo !== null &&
+      parsed.organizer_fee_per_photo !== undefined
+    ) {
+      const fee =
+        typeof parsed.organizer_fee_per_photo === 'string'
+          ? Number.parseFloat(parsed.organizer_fee_per_photo)
+          : parsed.organizer_fee_per_photo;
+      if (!Number.isNaN(fee) && fee >= 0) {
+        formData.append('organizer_fee_per_photo', fee.toString());
+      }
     }
+    for (const file of files) formData.append('photos', file);
 
     startTransition(async () => {
       try {
         const result = await createEvent(formData);
-        if (!result?.eventId) {
-          throw new Error('Event could not be created');
-        }
+        if (!result?.eventId) throw new Error('Event could not be created');
         setSubmitError(null);
-        setIsModalOpen(false);
-        // Clear localStorage on success
         try {
           localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(HAD_FILES_KEY);
         } catch {
-          // Ignore storage errors
+          // Ignore.
         }
-        // If event is private, show share code before redirecting
-        if (!value.is_public && result.shareCode) {
+        if (!parsed.is_public && result.shareCode) {
           setCreatedShareCode(result.shareCode);
-          setCreatedEventName(value.name);
+          setCreatedEventName(parsed.name);
           setCreatedEventId(result.eventId);
-          // Redirect after a short delay to show the share code
           setTimeout(() => {
             router.push(lp(`/dashboard/photographer/events/${result.eventId}`));
           }, 5000);
@@ -265,520 +313,172 @@ export default function NewEventForm() {
         setSubmitError(error instanceof Error ? error.message : t('submitError'));
       }
     });
-  };
+  }, [files, form.state.values, goToStep, isPending, lp, router, t]);
 
-  const eventSummary = useMemo(() => {
-    const source = pendingValues ?? form.state.values;
-    const price =
-      source.price_per_photo !== null && source.price_per_photo !== undefined
-        ? `$${typeof source.price_per_photo === 'string' ? Number.parseFloat(source.price_per_photo).toFixed(2) : source.price_per_photo.toFixed(2)}`
+  const reviewSections: ReviewSection[] = useMemo(() => {
+    const v = form.state.values;
+    const formatDollar = (val: string | number | null | undefined) =>
+      val !== null && val !== undefined
+        ? `$${(typeof val === 'string' ? Number.parseFloat(val) : val).toFixed(2)}`
         : t('summaryFree');
 
-    return [
-      { label: t('summaryName'), value: source.name },
+    const eventTypeLabel =
+      v.event_type === 'collaborative'
+        ? t('eventTypeCollaborative')
+        : v.event_type === 'organizer'
+          ? t('eventTypeOrganizer')
+          : t('eventTypeSolo');
+
+    const configRows: Array<{ label: string; value: string }> = [
+      { label: t('eventTypeLabel'), value: eventTypeLabel },
+    ];
+    if (v.event_type !== 'organizer') {
+      configRows.push({
+        label: t('summaryVisibility'),
+        value: v.is_public ? t('summaryPublic') : t('summaryPrivate'),
+      });
+    }
+    configRows.push({
+      label: t('summaryWatermark'),
+      value:
+        (v.event_type === 'organizer' || v.is_public) && v.watermark_enabled
+          ? t('summaryEnabled')
+          : t('summaryDisabled'),
+    });
+    if (v.event_type === 'collaborative') {
+      configRows.push({
+        label: t('allowGuestUploadLabel'),
+        value: v.allow_guest_upload ? t('summaryEnabled') : t('summaryDisabled'),
+      });
+      configRows.push({
+        label: t('requireApprovalLabel'),
+        value: v.require_upload_approval ? t('summaryEnabled') : t('summaryDisabled'),
+      });
+    }
+    if (v.event_type === 'organizer') {
+      configRows.push({
+        label: t('requireApprovalLabel'),
+        value: v.require_upload_approval ? t('summaryEnabled') : t('summaryDisabled'),
+      });
+    }
+
+    const detailsRows: Array<{ label: string; value: string }> = [
+      { label: t('summaryName'), value: v.name },
       {
         label: t('summaryActivity'),
-        value:
-          activityOptions.find((option) => option.value === source.activity)?.label ??
-          source.activity,
+        value: activityOptions.find((option) => option.value === v.activity)?.label ?? v.activity,
       },
-      {
-        label: t('summaryDate'),
-        value: source.date ? format(new Date(source.date), 'PPP') : '',
-      },
-      ...(source.city ? [{ label: t('summaryLocation'), value: source.city }] : []),
-      {
-        label: t('summaryVisibility'),
-        value: source.is_public ? t('summaryPublic') : t('summaryPrivate'),
-      },
-      {
-        label: t('summaryWatermark'),
-        value:
-          source.is_public && source.watermark_enabled ? t('summaryEnabled') : t('summaryDisabled'),
-      },
-      { label: t('summaryPrice'), value: price },
-      { label: 'Photos', value: t('summaryPhotosCount').replace('{n}', String(files.length)) },
+      { label: t('summaryDate'), value: v.date ? format(new Date(v.date), 'PPP') : '' },
+      ...(v.city ? [{ label: t('summaryLocation'), value: v.city }] : []),
     ];
-  }, [pendingValues, form.state.values, files.length, t]);
+    if (v.event_type === 'organizer') {
+      detailsRows.push({
+        label: t('organizerFeeLabel'),
+        value: formatDollar(v.organizer_fee_per_photo),
+      });
+    } else {
+      detailsRows.push({ label: t('summaryPrice'), value: formatDollar(v.price_per_photo) });
+    }
+
+    return [
+      { title: t('reviewConfigSection'), editStep: 1, rows: configRows },
+      { title: t('reviewDetailsSection'), editStep: 2, rows: detailsRows },
+    ];
+  }, [form.state.values, t]);
+
+  const eventType = form.state.values.event_type;
+  const submitDisabledOnReview = eventType === 'solo' && (photosLost || files.length === 0);
 
   return (
     <div>
-      {/* pb-28 gives the form room to scroll past the fixed action bar at
-          the bottom (~80px tall, lifted on mobile by the bottom nav). */}
-      <div className="mx-auto w-full max-w-full space-y-6 pb-28 md:pb-24">
-        <header>
+      <div className="mx-auto w-full max-w-3xl space-y-6 pb-28 md:pb-24">
+        <header className="space-y-3">
           <DashboardHeader title={t('title')} />
-          <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
+          <p className="text-sm text-muted-foreground">
+            {currentStep === 4
+              ? t('step4Title')
+              : t('wizardStepLabel')
+                  .replace('{current}', String(currentStep))
+                  .replace('{total}', '3')}
+          </p>
+          <WizardSteps current={currentStep} reached={reachedStep} onSelect={goToStep} />
         </header>
 
-        {/* Unified layout: Desktop split, Mobile stacked. items-start so the
-            dropzone column can be its own height without stretching the form
-            column (the dropzone is sticky with a viewport-bound height). */}
-        <div className="grid min-w-0 gap-6 lg:grid-cols-2 lg:items-start">
-          {/* Form section - left side on desktop. NOT sticky: the form may
-              grow past the viewport (e.g. with collaborative options) and a
-              sticky element traps its overflow under the fixed action bar. */}
-          <div className="order-2 min-w-0 w-full">
-            <form
-              className="flex flex-col gap-4"
-              onSubmit={(event) => {
-                event.preventDefault();
-                setSubmitAttempted(true);
-                form.handleSubmit();
-              }}
-              noValidate
-              suppressHydrationWarning
-            >
-              <div className="grid gap-2" suppressHydrationWarning>
-                {/* Row 1: Name + Activity (paired on desktop) */}
-                <div className="grid gap-2 md:gap-4 md:grid-cols-2">
-                  <form.Field
-                    name="name"
-                    validators={{
-                      onChange: ({ value }) =>
-                        value.trim().length === 0 ? t('nameRequired') : undefined,
-                    }}
-                  >
-                    {(field) => {
-                      const showFeedback = submitAttempted || field.state.meta.isTouched;
-                      const error = showFeedback ? field.state.meta.errors?.[0] : null;
-                      const isInvalid = showFeedback && !field.state.meta.isValid;
-                      return (
-                        <div>
-                          <Label htmlFor="name">{t('nameLabel')}</Label>
-                          <Input
-                            id="name"
-                            className="mt-2 mb-1"
-                            value={field.state.value}
-                            onChange={(event) => field.handleChange(event.target.value)}
-                            onBlur={field.handleBlur}
-                            placeholder={t('namePlaceholder')}
-                            aria-invalid={isInvalid}
-                            autoComplete="off"
-                            suppressHydrationWarning
-                          />
-                          <p className="min-h-4 text-xs text-destructive">
-                            {isInvalid ? error : ''}
-                          </p>
-                        </div>
-                      );
-                    }}
-                  </form.Field>
-
-                  <form.Field
-                    name="activity"
-                    validators={{
-                      onChange: ({ value }) =>
-                        value && activityValues.includes(value as (typeof activityValues)[number])
-                          ? undefined
-                          : t('activityRequired'),
-                    }}
-                  >
-                    {(field) => {
-                      const showFeedback = submitAttempted || field.state.meta.isTouched;
-                      const error = showFeedback ? field.state.meta.errors?.[0] : null;
-                      const isInvalid = showFeedback && !field.state.meta.isValid;
-                      return (
-                        <div className="grid gap-2">
-                          <Label htmlFor="activity">{t('activityLabel')}</Label>
-                          <Select
-                            value={field.state.value}
-                            onValueChange={(value) => {
-                              field.handleChange(value as FormValues['activity']);
-                              field.handleBlur();
-                            }}
-                          >
-                            <SelectTrigger
-                              id="activity"
-                              className="w-full rounded-md"
-                              aria-invalid={isInvalid}
-                            >
-                              <SelectValue placeholder={t('activityPlaceholder')} />
-                            </SelectTrigger>
-                            <SelectContent className="w-[--radix-select-trigger-width]">
-                              {activityOptions.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                  {option.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <p className="min-h-4 text-xs text-destructive">
-                            {isInvalid ? error : ''}
-                          </p>
-                        </div>
-                      );
-                    }}
-                  </form.Field>
-                </div>
-
-                {/* Row 2: Location */}
-                <form.Field name="city">
-                  {(field) => (
-                    <div className="grid gap-2">
-                      <Label htmlFor="city">{t('locationLabel')}</Label>
-                      <LocationAutocomplete
-                        id="city"
-                        value={field.state.value || ''}
-                        onChange={(val) => field.handleChange(val)}
-                        onBlur={field.handleBlur}
-                        placeholder={t('locationSearchPlaceholder')}
-                        noResultsText={t('locationNoResults')}
-                      />
-                    </div>
-                  )}
-                </form.Field>
-
-                {/* Row 3: Date + Price per Photo (paired on desktop) */}
-                <div className="mt-1.5 grid gap-4 md:grid-cols-2">
-                  <form.Field
-                    name="date"
-                    validators={{
-                      onChange: ({ value }) =>
-                        value && value.length > 0 ? undefined : t('dateRequired'),
-                    }}
-                  >
-                    {(field) => {
-                      const showFeedback = submitAttempted || field.state.meta.isTouched;
-                      const error = showFeedback ? field.state.meta.errors?.[0] : null;
-                      const isInvalid = showFeedback && !field.state.meta.isValid;
-                      const parsedDate = field.state.value
-                        ? new Date(field.state.value)
-                        : undefined;
-                      return (
-                        <div className="grid gap-2">
-                          <Label htmlFor={dateInputId}>{t('dateLabel')}</Label>
-                          <div>
-                            <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  className={cn(
-                                    'w-full justify-between rounded-md border border-input text-left font-normal',
-                                    !parsedDate && 'text-muted-foreground',
-                                  )}
-                                  aria-invalid={isInvalid}
-                                >
-                                  {parsedDate
-                                    ? format(parsedDate, 'PPP')
-                                    : t('dateSelectPlaceholder')}
-                                  <ChevronDownIcon className="size-4 opacity-60" />
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto overflow-hidden p-0" align="start">
-                                <Calendar
-                                  mode="single"
-                                  selected={parsedDate}
-                                  captionLayout="dropdown"
-                                  onSelect={(date) => {
-                                    field.handleChange(date ? format(date, 'yyyy-MM-dd') : '');
-                                    field.handleBlur();
-                                    setDatePopoverOpen(false);
-                                  }}
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
-                            <input
-                              id={dateInputId}
-                              type="hidden"
-                              value={field.state.value}
-                              readOnly
-                              suppressHydrationWarning
-                            />
-                            <p className="mt-1 min-h-4 text-xs text-destructive">
-                              {isInvalid ? error : ''}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    }}
-                  </form.Field>
-
-                  <form.Field
-                    name="price_per_photo"
-                    validators={{
-                      onChange: ({ value }) => {
-                        if (value === undefined || value === null) {
-                          return undefined; // Optional field
-                        }
-                        const num = typeof value === 'string' ? Number.parseFloat(value) : value;
-                        if (Number.isNaN(num)) {
-                          return t('priceInvalidNumber');
-                        }
-                        if (num < 0) {
-                          return t('priceNegative');
-                        }
-                        return undefined;
-                      },
-                    }}
-                  >
-                    {(field) => {
-                      const showFeedback = submitAttempted || field.state.meta.isTouched;
-                      const error = showFeedback ? field.state.meta.errors?.[0] : null;
-                      const isInvalid = showFeedback && !field.state.meta.isValid;
-                      return (
-                        <div className="grid gap-2">
-                          <Label htmlFor="price_per_photo">{t('priceLabel')}</Label>
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                              $
-                            </span>
-                            <Input
-                              id="price_per_photo"
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={
-                                field.state.value === null || field.state.value === undefined
-                                  ? ''
-                                  : typeof field.state.value === 'string'
-                                    ? field.state.value
-                                    : field.state.value.toString()
-                              }
-                              onChange={(event) => {
-                                const val = event.target.value;
-                                if (val === '') {
-                                  field.handleChange(null);
-                                } else {
-                                  const num = Number.parseFloat(val);
-                                  if (!Number.isNaN(num)) {
-                                    field.handleChange(num);
-                                  } else {
-                                    field.handleChange(val as unknown as number);
-                                  }
-                                }
-                              }}
-                              onBlur={field.handleBlur}
-                              placeholder="0.00"
-                              aria-invalid={isInvalid}
-                              className="pl-7"
-                              suppressHydrationWarning
-                            />
-                          </div>
-                          <p className="min-h-4 text-xs text-destructive">
-                            {isInvalid ? error : ''}
-                          </p>
-                        </div>
-                      );
-                    }}
-                  </form.Field>
-                </div>
-
-                <form.Field name="is_public">
-                  {(field) => {
-                    return (
-                      <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
-                        <div className="grid gap-1">
-                          <Label htmlFor="is_public">{t('visibilityLabel')}</Label>
-                          <p className="text-xs text-muted-foreground">
-                            {field.state.value
-                              ? t('visibilityPublicDesc')
-                              : t('visibilityPrivateDesc')}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">
-                            {field.state.value ? t('visibilityPublic') : t('visibilityPrivate')}
-                          </span>
-                          <Switch
-                            id="is_public"
-                            checked={field.state.value}
-                            onCheckedChange={(checked) => {
-                              field.handleChange(checked);
-                              field.handleBlur();
-                              // Auto-toggle watermark based on visibility
-                              if (checked) {
-                                // Enable watermark when making event public
-                                form.setFieldValue('watermark_enabled', true);
-                              } else {
-                                // Disable watermark when making event private
-                                form.setFieldValue('watermark_enabled', false);
-                              }
-                            }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  }}
-                </form.Field>
-
-                <form.Field name="watermark_enabled">
-                  {(field) => {
-                    return (
-                      <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
-                        <div className="grid gap-1">
-                          <Label htmlFor="watermark_enabled">{t('watermarkLabel')}</Label>
-                          <p className="text-xs text-muted-foreground">{t('watermarkDesc')}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">
-                            {field.state.value ? t('watermarkEnabled') : t('watermarkDisabled')}
-                          </span>
-                          <Switch
-                            id="watermark_enabled"
-                            checked={field.state.value}
-                            onCheckedChange={(checked) => {
-                              field.handleChange(checked);
-                              field.handleBlur();
-                            }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  }}
-                </form.Field>
-
-                <form.Field name="is_collaborative">
-                  {(field) => {
-                    return (
-                      <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
-                        <div className="grid gap-1">
-                          <Label htmlFor="is_collaborative">{t('collaborativeLabel')}</Label>
-                          <p className="text-xs text-muted-foreground">{t('collaborativeDesc')}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">
-                            {field.state.value
-                              ? t('collaborativeEnabled')
-                              : t('collaborativeDisabled')}
-                          </span>
-                          <Switch
-                            id="is_collaborative"
-                            checked={field.state.value}
-                            onCheckedChange={(checked) => {
-                              const wasOff = !field.state.value;
-                              field.handleChange(checked);
-                              field.handleBlur();
-                              // On the off->on transition, pre-fill sensible defaults for
-                              // the typical sharing use case (private, free, no watermark).
-                              // Owner can still override any of them below.
-                              if (checked && wasOff) {
-                                form.setFieldValue('is_public', false);
-                                form.setFieldValue('watermark_enabled', false);
-                                form.setFieldValue('price_per_photo', null);
-                              }
-                            }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  }}
-                </form.Field>
-
-                <form.Subscribe selector={(state) => state.values.is_collaborative}>
-                  {(isCollaborative) =>
-                    isCollaborative ? (
-                      <div className="grid gap-2 rounded-lg border border-dashed border-input p-3">
-                        <p className="text-xs text-muted-foreground">
-                          {t('collaborativeDefaultsNote')}
-                        </p>
-                        <form.Field name="allow_guest_upload">
-                          {(field) => (
-                            <div className="flex items-center justify-between gap-4">
-                              <div className="grid gap-1">
-                                <Label htmlFor="allow_guest_upload">
-                                  {t('allowGuestUploadLabel')}
-                                </Label>
-                                <p className="text-xs text-muted-foreground">
-                                  {t('allowGuestUploadDesc')}
-                                </p>
-                              </div>
-                              <Switch
-                                id="allow_guest_upload"
-                                checked={field.state.value}
-                                onCheckedChange={(checked) => {
-                                  field.handleChange(checked);
-                                  field.handleBlur();
-                                }}
-                              />
-                            </div>
-                          )}
-                        </form.Field>
-                        <form.Field name="require_upload_approval">
-                          {(field) => (
-                            <div className="flex items-center justify-between gap-4">
-                              <div className="grid gap-1">
-                                <Label htmlFor="require_upload_approval">
-                                  {t('requireApprovalLabel')}
-                                </Label>
-                                <p className="text-xs text-muted-foreground">
-                                  {t('requireApprovalDesc')}
-                                </p>
-                              </div>
-                              <Switch
-                                id="require_upload_approval"
-                                checked={field.state.value}
-                                onCheckedChange={(checked) => {
-                                  field.handleChange(checked);
-                                  field.handleBlur();
-                                }}
-                              />
-                            </div>
-                          )}
-                        </form.Field>
-                      </div>
-                    ) : null
-                  }
-                </form.Subscribe>
-              </div>
-            </form>
-          </div>
-
-          <PhotoUploadSection
-            previews={filePreviews}
-            error={photosError}
-            onFiles={handleFiles}
-            onRemove={removeFile}
-          />
+        <div className="min-w-0">
+          {currentStep === 1 && <Step1Config form={form} />}
+          {currentStep === 2 && <Step2Details form={form} submitAttempted={submitAttemptedStep2} />}
+          {currentStep === 3 && (
+            <Step3Photos
+              previews={filePreviews}
+              error={photosError}
+              photosLost={photosLost}
+              eventType={eventType}
+              onFiles={handleFiles}
+              onRemove={removeFile}
+            />
+          )}
+          {currentStep === 4 && (
+            <Step4Review
+              sections={reviewSections}
+              previews={filePreviews}
+              photosLost={photosLost && eventType === 'solo'}
+              eventType={eventType}
+              goToStep={goToStep}
+            />
+          )}
         </div>
 
-        {/* Fixed Action Buttons - Bottom */}
+        {/* Sticky bottom action bar — same offsets as the original form so it
+            sits above the mobile bottom nav and aligns with the desktop sidebar. */}
         <div className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom))] left-0 right-0 z-50 border-t border-border bg-background/95 shadow-lg backdrop-blur supports-backdrop-filter:bg-background/80 md:bottom-0 md:left-(--sidebar-width)">
           <div className="mx-auto flex w-full max-w-full flex-col items-end gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-end sm:px-6">
             {submitError ? (
               <p className="text-sm text-destructive text-right sm:text-left">{submitError}</p>
             ) : null}
             <div className="flex gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => router.back()}
-                disabled={isPending}
-              >
-                {t('cancelButton')}
-              </Button>
-              <Button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setSubmitAttempted(true);
-                  form.handleSubmit();
-                }}
-                disabled={isPending}
-              >
-                {isPending ? (
-                  <>
-                    <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    {t('creatingButton')}
-                  </>
-                ) : (
-                  t('createButton')
-                )}
-              </Button>
+              {currentStep === 1 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.back()}
+                  disabled={isPending}
+                >
+                  {t('cancelButton')}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => goToStep((currentStep - 1) as StepNumber)}
+                  disabled={isPending}
+                >
+                  {t('wizardBack')}
+                </Button>
+              )}
+              {currentStep < 4 ? (
+                <Button type="button" onClick={validateAndAdvance} disabled={isPending}>
+                  {t('wizardNext')}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={submit}
+                  disabled={isPending || submitDisabledOnReview}
+                >
+                  {isPending ? (
+                    <>
+                      <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      {t('creatingButton')}
+                    </>
+                  ) : (
+                    t('createButton')
+                  )}
+                </Button>
+              )}
             </div>
           </div>
         </div>
       </div>
-
-      <ConfirmEventDialog
-        open={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        summary={eventSummary}
-        isPending={isPending}
-        onConfirm={confirmCreation}
-      />
 
       {createdShareCode && createdEventName && (
         <ShareCodeDialog

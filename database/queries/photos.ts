@@ -192,6 +192,9 @@ export async function createPhoto(
     country: string;
     state: string | null;
     size_bytes: number;
+    // Optional. Defaults to 'approved' on insert (the column default). Pass
+    // 'pending' for organizer-event uploads when the event requires approval.
+    upload_status?: UploadStatus;
   },
 ): Promise<void> {
   const { error } = await supabase.from('photos').insert({

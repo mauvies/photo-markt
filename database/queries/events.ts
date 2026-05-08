@@ -22,6 +22,8 @@ export interface Event {
   is_collaborative: boolean;
   allow_guest_upload: boolean;
   require_upload_approval: boolean;
+  type: 'solo' | 'collaborative' | 'organizer';
+  organizer_fee_per_photo_cents: number | null;
   created_at?: string;
   updated_at?: string;
   deleted_at?: string | null;
@@ -138,19 +140,36 @@ export async function createEvent(
     is_collaborative?: boolean;
     allow_guest_upload?: boolean;
     require_upload_approval?: boolean;
+    type?: 'solo' | 'collaborative' | 'organizer';
+    organizer_fee_per_photo_cents?: number | null;
   },
 ): Promise<{ id: string }> {
-  const { data, error } = await supabase
-    .from('events')
-    .insert({
-      user_id: userId,
-      ...eventData,
-    })
-    .select('id')
-    .single();
+  // Only include the newer columns when they actually carry a value. Lets
+  // the insert succeed against environments where the
+  // `add_organizer_event_type` migration hasn't been applied yet, as long as
+  // the event being created doesn't depend on those columns.
+  const { type, organizer_fee_per_photo_cents, ...rest } = eventData;
+  const insertPayload: Record<string, unknown> = { user_id: userId, ...rest };
+  if (type && type !== 'solo') insertPayload.type = type;
+  if (organizer_fee_per_photo_cents !== null && organizer_fee_per_photo_cents !== undefined) {
+    insertPayload.organizer_fee_per_photo_cents = organizer_fee_per_photo_cents;
+  }
+
+  const { data, error } = await supabase.from('events').insert(insertPayload).select('id').single();
 
   if (error || !data) {
-    throw new Error(`Failed to create event: ${error ? getErrorMessage(error) : 'Unknown error'}`);
+    const msg = error ? getErrorMessage(error) : 'Unknown error';
+    // Pinpoint the most common deployment-blocker so the message is
+    // actionable instead of a raw PostgREST error.
+    if (
+      /organizer_fee_per_photo_cents|column.*"type"|schema cache/i.test(msg) &&
+      type === 'organizer'
+    ) {
+      throw new Error(
+        'Organizer events require the latest database migration. Run `supabase db push` (or apply 20260511000000_add_organizer_event_type.sql) and reload the PostgREST schema cache.',
+      );
+    }
+    throw new Error(`Failed to create event: ${msg}`);
   }
 
   return { id: data.id };

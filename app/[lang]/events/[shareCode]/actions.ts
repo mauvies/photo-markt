@@ -1,6 +1,5 @@
 'use server';
 
-import { Buffer } from 'node:buffer';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import {
   deletePhoto,
@@ -14,17 +13,15 @@ import {
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { isCollaborativeUploadOpen } from '@/lib/event-status';
+import { validatePhotoUpload } from '@/lib/photo-upload';
 
 const MAX_GUEST_NAME_LENGTH = 60;
 const MAX_GUEST_EMAIL_LENGTH = 120;
-const ACCEPTED_MIME_PREFIXES = ['image/'];
+const MAX_FILES_PER_REQUEST = 50;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function buildCollaborativePhotoPath(eventId: string, file: File): string {
-  const fileId = crypto.randomUUID();
-  const extension = file.name.split('.').pop();
-  const safeName = extension ? `${fileId}.${extension.toLowerCase()}` : fileId;
-  return `collaborative/${eventId}/${safeName}`;
+function buildCollaborativePhotoPath(eventId: string, extension: string): string {
+  return `collaborative/${eventId}/${crypto.randomUUID()}.${extension}`;
 }
 
 export type UploadGuestPhotosResult = {
@@ -67,10 +64,8 @@ export async function uploadGuestPhotosAction(
   if (files.length === 0) {
     throw new Error('Add at least one photo to continue.');
   }
-  for (const file of files) {
-    if (!ACCEPTED_MIME_PREFIXES.some((p) => file.type.startsWith(p))) {
-      throw new Error('Only image files are accepted.');
-    }
+  if (files.length > MAX_FILES_PER_REQUEST) {
+    throw new Error(`Too many photos. Upload at most ${MAX_FILES_PER_REQUEST} at a time.`);
   }
 
   // Identify the uploader. Authenticated users get tracked by uploaded_by;
@@ -104,10 +99,10 @@ export async function uploadGuestPhotosAction(
   const uploads: Array<{ photoId: string; deleteToken: string | null }> = [];
   try {
     for (const file of files) {
-      const path = buildCollaborativePhotoPath(event.id, file);
-      const buffer = Buffer.from(await file.arrayBuffer());
-      await uploadFile(adminClient, 'photos', path, buffer, {
-        contentType: file.type || undefined,
+      const validated = await validatePhotoUpload(file);
+      const path = buildCollaborativePhotoPath(event.id, validated.extension);
+      await uploadFile(adminClient, 'photos', path, validated.buffer, {
+        contentType: validated.contentType,
         upsert: false,
       });
       uploadedPaths.push(path);

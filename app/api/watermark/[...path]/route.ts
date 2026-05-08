@@ -20,6 +20,16 @@ export async function GET(
       return new NextResponse('Invalid path', { status: 400 });
     }
 
+    // Defense-in-depth — Supabase Storage already rejects out-of-bucket paths,
+    // but reject obvious traversal/absolute paths early so we don't hand a
+    // surprising input to the storage SDK.
+    if (
+      pathSegments.some((s) => s === '..' || s === '.' || s === '' || s.includes('/')) ||
+      fullPath.startsWith('/')
+    ) {
+      return new NextResponse('Invalid path', { status: 400 });
+    }
+
     // Use service role client for admin access to storage
     // Service role key is REQUIRED for storage access
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

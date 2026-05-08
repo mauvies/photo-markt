@@ -4,7 +4,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   createSignedUrls,
   getEvent,
+  getEventPhotographers,
   getEventPhotos,
+  isApprovedEventPhotographer,
   type SupabaseServerClient,
 } from '@/database/queries';
 import { createClient } from '@/database/server';
@@ -17,7 +19,9 @@ import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { getPhotoTags } from './actions';
 import { EventActionsMenu } from './event-actions-menu';
 import { EventPhotoAlbum } from './event-photo-album';
+import { OrganizerUploadSection } from './organizer-upload-section';
 import { PendingPhotosTab } from './pending-photos-tab';
+import { PhotographersSection } from './photographers-section';
 
 export default async function EventDetailPage({
   params,
@@ -34,25 +38,69 @@ export default async function EventDetailPage({
 
   if (!user) return redirectToLogin();
 
-  const event = await getEvent(supabase, id, user.id);
-  if (!event) return localizedRedirect(lang, '/dashboard/photographer/events');
-
-  // Ownership is verified above. Switch to the service-role client for
-  // photo SELECT and storage URL signing so guest-contributed photos under
-  // `collaborative/{event_id}/...` aren't filtered out by storage RLS
-  // (which only allows reading `{auth.uid()}/...`).
   const adminClient = supabaseAdmin as unknown as SupabaseServerClient;
+
+  // Two roles can view this page: the event owner, and an accepted contributor
+  // photographer for organizer events. We resolve the role here once.
+  const ownEvent = await getEvent(supabase, id, user.id);
+  let event = ownEvent;
+  let role: 'owner' | 'contributor' = 'owner';
+  if (!event) {
+    const isContributor = await isApprovedEventPhotographer(supabase, {
+      eventId: id,
+      photographerId: user.id,
+    });
+    if (!isContributor) {
+      return localizedRedirect(lang, '/dashboard/photographer/events');
+    }
+    const { data } = await adminClient
+      .from('events')
+      .select('*')
+      .eq('id', id)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (!data) return localizedRedirect(lang, '/dashboard/photographer/events');
+    event = data as typeof event;
+    role = 'contributor';
+  }
+
+  // Contributor view is intentionally minimal: header + upload entry. The
+  // contributor can browse their own uploads from /dashboard/photographer/events.
+  if (role === 'contributor' && event) {
+    return (
+      <div>
+        <DashboardHeader title={event.name} />
+        <div className="text-sm text-muted-foreground">
+          {new Date(event.date).toDateString().split(' ').slice(1).join(' ')} •{' '}
+          {event.city[0]?.toUpperCase() + event.city.slice(1)}
+        </div>
+        <div className="mt-4">
+          <TranslationsProvider translations={dict.organizerEvent}>
+            <OrganizerUploadSection eventId={id} />
+          </TranslationsProvider>
+        </div>
+      </div>
+    );
+  }
+
+  if (!event) return localizedRedirect(lang, '/dashboard/photographer/events');
 
   const photos = await getEventPhotos(adminClient, id, user.id, { skipUserIdFilter: true });
 
-  // Pending photos only matter when collaborative + approval is required.
-  const showPendingTab = event.is_collaborative && event.require_upload_approval;
+  // Pending photos surface for both collaborative-with-approval AND
+  // organizer-with-approval events.
+  const showPendingTab =
+    (event.is_collaborative || event.type === 'organizer') && event.require_upload_approval;
   const pendingPhotos = showPendingTab
     ? await getEventPhotos(adminClient, id, user.id, {
         status: 'pending',
         skipUserIdFilter: true,
       })
     : [];
+
+  // Organizer-event photographers list (membership). Empty array for other types.
+  const eventPhotographers =
+    event.type === 'organizer' ? await getEventPhotographers(supabase, id) : [];
 
   // Generate signed URLs for private storage objects (approved + pending).
   const allPaths = [...photos, ...pendingPhotos]
@@ -168,6 +216,13 @@ export default async function EventDetailPage({
             eventName={event.name}
             label={event.is_collaborative ? dict.collaborativeEvent.shareLinkLabel : undefined}
           />
+        </div>
+      )}
+      {event.type === 'organizer' && (
+        <div className="mt-4">
+          <TranslationsProvider translations={dict.organizerEvent}>
+            <PhotographersSection eventId={id} initialPhotographers={eventPhotographers} />
+          </TranslationsProvider>
         </div>
       )}
       <div className="mt-4">

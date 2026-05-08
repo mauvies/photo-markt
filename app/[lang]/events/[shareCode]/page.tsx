@@ -25,6 +25,7 @@ import { locales } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
+import { stringifyJsonLd } from '@/lib/json-ld';
 import { ContributeModal } from './contribute-modal';
 import { ContributeTriggerCard } from './contribute-trigger-card';
 import { PublicEventPhotoViewer } from './public-event-photo-viewer';
@@ -401,11 +402,11 @@ export default async function EventPage({
 
   return (
     <div className="flex min-h-screen flex-col">
-      {/* Structured data — server-generated, not user input */}
+      {/* Structured data — escaped for safe inline-script embedding */}
       <script
         type="application/ld+json"
-        // biome-ignore lint/security/noDangerouslySetInnerHtml: server-generated structured data
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: payload escaped via stringifyJsonLd
+        dangerouslySetInnerHTML={{ __html: stringifyJsonLd(jsonLd) }}
       />
       <UploadProgressProvider
         labels={{

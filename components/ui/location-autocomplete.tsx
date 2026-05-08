@@ -44,18 +44,35 @@ export function LocationAutocomplete({
   >([]);
   const [open, setOpen] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
-  const [fetchedFor, setFetchedFor] = useState('');
+  const [fetchedFor, setFetchedFor] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Only auto-fetch + open the popover when the user has actively typed in
+  // this component. Prop syncs (rehydration, parent reset, post-select sync)
+  // and the initial mount must NOT open the popover.
+  const userTypingRef = useRef(false);
+  // Set when the value change came from this component (typing or select),
+  // so the value-sync effect skips clobbering our local state.
+  const internalChangeRef = useRef(false);
 
   const debouncedInput = useDebounce(inputValue, 300);
 
-  // Sync external value changes (e.g. form reset)
+  // Sync external value changes (form reset, external setValue). We skip
+  // the sync when WE caused the change (otherwise typing would clobber
+  // userTypingRef and close the popover mid-stroke).
   useEffect(() => {
+    if (internalChangeRef.current) {
+      internalChangeRef.current = false;
+      return;
+    }
     setInputValue(value);
+    setFetchedFor(value);
+    userTypingRef.current = false;
   }, [value]);
 
-  // Fetch predictions
+  // Fetch predictions only after the user types something. Prop-driven
+  // value changes never trigger a fetch.
   useEffect(() => {
+    if (!userTypingRef.current) return;
     if (!isReady || debouncedInput.length < 3) {
       setPredictions([]);
       setOpen(false);
@@ -81,6 +98,10 @@ export function LocationAutocomplete({
     mainText: string;
     secondaryText: string;
   }) => {
+    // Critical: clear the typing flag BEFORE any state update so the
+    // post-select debounce/render cycle can't reopen the popover.
+    userTypingRef.current = false;
+    internalChangeRef.current = true;
     setOpen(false);
     setPredictions([]);
     setHighlightIndex(-1);
@@ -128,7 +149,13 @@ export function LocationAutocomplete({
           value={inputValue}
           onChange={(e) => {
             const v = e.target.value;
+            // Allow the user to commit a custom (non-Place) value: propagate
+            // every keystroke up to the parent form so validators run and the
+            // user can advance even without selecting a Google prediction.
+            userTypingRef.current = true;
+            internalChangeRef.current = true;
             setInputValue(v);
+            onChange(v);
             if (v.length < 3) {
               setPredictions([]);
               setOpen(false);
@@ -158,13 +185,13 @@ export function LocationAutocomplete({
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => void handleSelect(p)}
               className={cn(
-                'flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted',
+                'flex w-full items-center px-3 py-2 text-sm text-left transition-colors hover:bg-muted',
                 i === highlightIndex && 'bg-muted',
               )}
             >
               <span className="font-medium">{p.mainText}</span>
               {p.secondaryText && (
-                <span className="text-muted-foreground">, {p.secondaryText}</span>
+                <span className="text-muted-foreground">,&nbsp;{p.secondaryText}</span>
               )}
             </button>
           ))}

@@ -2,14 +2,21 @@ import { cacheLife, cacheTag } from 'next/cache';
 import Link from 'next/link';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { Button } from '@/components/ui/button';
-import { createSignedUrl, getPhotosForEvents, getUserEvents } from '@/database/queries';
+import {
+  createSignedUrl,
+  getPendingInvitationsForPhotographer,
+  getPhotosForEvents,
+  getUserEvents,
+} from '@/database/queries';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { getEventStatus } from '@/lib/event-status';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
+import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { deleteEventAction as deleteEvent } from './actions';
 import { EventCard } from './event-card';
+import { PendingInvitationsPanel } from './pending-invitations-panel';
 
 type PhotoStat = {
   count: number;
@@ -128,11 +135,17 @@ export default async function EventsPage({ params }: { params: Promise<{ lang: s
     );
   }
 
-  const { events, stats, salesCounts, coverUrls } = await getCachedEventsData(user.id);
+  const [{ events, stats, salesCounts, coverUrls }, pendingInvitations] = await Promise.all([
+    getCachedEventsData(user.id),
+    getPendingInvitationsForPhotographer(supabase, user.id),
+  ]);
 
   return (
     <div>
       <DashboardHeader title={dict.dashboard.events} />
+      <TranslationsProvider translations={dict.organizerEvent}>
+        <PendingInvitationsPanel initialInvitations={pendingInvitations} />
+      </TranslationsProvider>
       {events.length === 0 ? (
         <div className="mt-8 flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
           <div className="mb-4 rounded-full bg-muted p-4">

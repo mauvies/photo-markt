@@ -1,6 +1,5 @@
 'use server';
 
-import { Buffer } from 'node:buffer';
 import { revalidatePath, revalidateTag, updateTag } from 'next/cache';
 import { z } from 'zod';
 import {
@@ -12,6 +11,7 @@ import {
   uploadFile,
 } from '@/database/queries';
 import { createClient } from '@/database/server';
+import { validatePhotoUpload } from '@/lib/photo-upload';
 import { generateEventSlug } from '@/lib/slugify';
 import { activityValues } from './activity-options';
 
@@ -21,6 +21,13 @@ const SHARE_CODE_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const SHARE_CODE_LENGTH = 8;
 
 // --- Schema ---
+
+const dollarsToCents = (val: string | undefined): number | null => {
+  if (!val || val.trim() === '') return null;
+  const num = Number.parseFloat(val);
+  if (Number.isNaN(num) || num < 0) return null;
+  return Math.round(num * 100);
+};
 
 const eventSchema = z.object({
   name: z.string().trim().min(1, 'Name is required.'),
@@ -36,6 +43,7 @@ const eventSchema = z.object({
   country: z.string().trim().optional().default(''),
   state: z.string().trim().optional().default(''),
   city: z.string().trim().optional(),
+  event_type: z.enum(['solo', 'collaborative', 'organizer']).default('solo'),
   is_public: z
     .string()
     .default('true')
@@ -64,6 +72,7 @@ const eventSchema = z.object({
       const num = Number.parseFloat(val);
       return Number.isNaN(num) || num < 0 ? null : num;
     }),
+  organizer_fee_per_photo: z.string().optional(),
 });
 
 // --- Types ---
@@ -84,10 +93,9 @@ function generateShareCode(): string {
   ).join('');
 }
 
-function buildPhotoPath(userId: string, eventId: string, file: File): string {
+function buildPhotoPath(userId: string, eventId: string, extension: string): string {
   const fileId = crypto.randomUUID();
-  const extension = file.name.split('.').pop();
-  const safeName = extension ? `${fileId}.${extension.toLowerCase()}` : fileId;
+  const safeName = `${fileId}.${extension}`;
   return `${userId}/${eventId}/${safeName}`;
 }
 
@@ -118,10 +126,10 @@ async function uploadEventPhotos(
   const uploadedPaths: string[] = [];
   try {
     for (const file of files) {
-      const path = buildPhotoPath(userId, event.id, file);
-      const buffer = Buffer.from(await file.arrayBuffer());
-      await uploadFile(supabase, 'photos', path, buffer, {
-        contentType: file.type || undefined,
+      const validated = await validatePhotoUpload(file);
+      const path = buildPhotoPath(userId, event.id, validated.extension);
+      await uploadFile(supabase, 'photos', path, validated.buffer, {
+        contentType: validated.contentType,
         upsert: false,
       });
       await createPhoto(supabase, userId, {
@@ -188,30 +196,46 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     country: formData.get('country')?.toString() ?? '',
     state: formData.get('state')?.toString(),
     city: formData.get('city')?.toString(),
+    event_type: formData.get('event_type')?.toString() ?? 'solo',
     is_public: formData.get('is_public')?.toString() ?? 'true',
     watermark_enabled: formData.get('watermark_enabled')?.toString() ?? 'true',
     is_collaborative: formData.get('is_collaborative')?.toString() ?? 'false',
     allow_guest_upload: formData.get('allow_guest_upload')?.toString() ?? 'true',
     require_upload_approval: formData.get('require_upload_approval')?.toString() ?? 'false',
     price_per_photo: formData.get('price_per_photo')?.toString(),
+    organizer_fee_per_photo: formData.get('organizer_fee_per_photo')?.toString(),
   });
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? 'Invalid event data provided.');
   }
 
   const payload = parsed.data;
+  const eventType = payload.event_type;
+  // Force the legacy boolean to mirror the new event_type. Organizer events
+  // never set is_collaborative=true; they have their own membership model.
+  const isCollaborative = eventType === 'collaborative';
+  // Organizer events are always private (membership-gated) and have no public
+  // share code — access is via the event_photographers join table.
+  const isPublic = eventType === 'organizer' ? false : payload.is_public;
+
   const uploadedFiles = formData
     .getAll('photos')
     .filter((value): value is File => value instanceof File && value.size > 0);
-  // Collaborative events can be created without any initial photos because
-  // the whole point is for others to contribute through the share link.
-  if (!payload.is_collaborative && uploadedFiles.length === 0) {
+  // Solo events require at least one initial photo. Collaborative + organizer
+  // both expect contributions to arrive after creation.
+  if (eventType === 'solo' && uploadedFiles.length === 0) {
     throw new Error('Add at least one photo to continue.');
   }
 
-  // Collaborative events are inherently shared by code, so always issue one.
-  const shareCode = payload.is_public && !payload.is_collaborative ? null : generateShareCode();
-  const watermarkEnabled = payload.is_public && payload.watermark_enabled;
+  // Public solo events use a SEO slug; everything else needs a share code
+  // (collaborative) or has no public access at all (organizer).
+  const shareCode =
+    eventType === 'organizer' ? null : isPublic && !isCollaborative ? null : generateShareCode();
+  const watermarkEnabled =
+    eventType === 'organizer' ? payload.watermark_enabled : isPublic && payload.watermark_enabled;
+
+  const organizerFeeCents =
+    eventType === 'organizer' ? dollarsToCents(payload.organizer_fee_per_photo) : null;
 
   const event = await dbCreateEvent(supabase, user.id, {
     name: payload.name,
@@ -220,17 +244,19 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     country: payload.country,
     state: payload.state,
     city: payload.city || '',
-    is_public: payload.is_public,
+    is_public: isPublic,
     share_code: shareCode,
-    price_per_photo: payload.price_per_photo ?? null,
+    price_per_photo: eventType === 'organizer' ? null : (payload.price_per_photo ?? null),
     watermark_enabled: watermarkEnabled,
-    is_collaborative: payload.is_collaborative,
-    allow_guest_upload: payload.allow_guest_upload,
+    is_collaborative: isCollaborative,
+    allow_guest_upload: eventType === 'collaborative' ? payload.allow_guest_upload : false,
     require_upload_approval: payload.require_upload_approval,
+    type: eventType,
+    organizer_fee_per_photo_cents: organizerFeeCents,
     slug: null,
   });
 
-  if (payload.is_public) {
+  if (isPublic) {
     const slug = await resolvePublicEventSlug(
       supabase,
       payload.name,
