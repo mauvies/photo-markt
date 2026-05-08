@@ -72,7 +72,14 @@ export function PhotoLightbox({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [addedPhotos, setAddedPhotos] = useState<Set<string>>(new Set());
   const [addedToCart, setAddedToCart] = useState<Set<string>>(new Set());
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
   const currentPhoto = useMemo(() => items[currentIndex], [items, currentIndex]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setIsTouchDevice(window.matchMedia('(hover: none) and (pointer: coarse)').matches);
+  }, []);
 
   const isInMyPhotos = useMemo(
     () =>
@@ -94,6 +101,7 @@ export function PhotoLightbox({
   useEffect(() => {
     if (open) {
       setCurrentIndex(initialIndex);
+      setControlsVisible(true);
       // Prevent body scroll
       document.body.style.overflow = 'hidden';
     } else {
@@ -148,18 +156,28 @@ export function PhotoLightbox({
     setTouchEnd(e.targetTouches[0].clientX);
   };
 
-  const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
-    const distance = touchStart - touchEnd;
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchStart === null) return;
+
+    const distance = touchEnd !== null ? touchStart - touchEnd : 0;
     const isLeftSwipe = distance > minSwipeDistance;
     const isRightSwipe = distance < -minSwipeDistance;
 
     if (isLeftSwipe && items.length > 1) {
       handleNext();
+      return;
     }
     if (isRightSwipe && items.length > 1) {
       handlePrevious();
+      return;
     }
+
+    // Tap (no significant movement) — toggle controls on touch devices,
+    // unless the tap landed on an interactive control.
+    if (!isTouchDevice) return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('button, a, [role="button"]')) return;
+    setControlsVisible((v) => !v);
   };
 
   // Fullscreen handling
@@ -313,6 +331,7 @@ export function PhotoLightbox({
       tabIndex={-1}
     >
       <LightboxToolbar
+        visible={controlsVisible}
         currentPhoto={currentPhoto}
         itemCount={items.length}
         currentIndex={currentIndex}
@@ -358,7 +377,9 @@ export function PhotoLightbox({
               e.stopPropagation();
               handlePrevious();
             }}
-            className="absolute left-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition-all hover:bg-white/15 md:left-8 cursor-pointer"
+            className={`absolute left-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition-opacity duration-200 hover:bg-white/15 md:left-8 cursor-pointer ${
+              controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}
             aria-label="Previous photo"
           >
             <ArrowLeft className="h-7 w-7" strokeWidth={1.5} />
@@ -389,7 +410,9 @@ export function PhotoLightbox({
               e.stopPropagation();
               handleNext();
             }}
-            className="absolute right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition-all hover:bg-white/15 md:right-8 cursor-pointer"
+            className={`absolute right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition-opacity duration-200 hover:bg-white/15 md:right-8 cursor-pointer ${
+              controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}
             aria-label="Next photo"
           >
             <ArrowLeft className="h-7 w-7 rotate-180" strokeWidth={1.5} />

@@ -9,6 +9,7 @@ import {
 } from '@/database/queries';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { redirectToLogin } from '@/lib/auth/redirect-to-login';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedRedirect } from '@/lib/i18n/redirect';
@@ -31,7 +32,7 @@ export default async function EventDetailPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return localizedRedirect(lang, '/login');
+  if (!user) return redirectToLogin();
 
   const event = await getEvent(supabase, id, user.id);
   if (!event) return localizedRedirect(lang, '/dashboard/photographer/events');

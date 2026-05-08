@@ -26,6 +26,7 @@ export async function proxy(request: NextRequest) {
   // ── Headers ──────────────────────────────────────────────────────────────
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-pathname', pathname);
+  requestHeaders.set('x-search', search);
   requestHeaders.set('x-lang', lang);
 
   const response = NextResponse.next({

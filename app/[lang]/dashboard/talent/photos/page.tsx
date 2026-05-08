@@ -1,6 +1,7 @@
 import { getActiveRole } from '@/app/[lang]/actions/roles';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { createClient } from '@/database/server';
+import { redirectToLogin } from '@/lib/auth/redirect-to-login';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedRedirect } from '@/lib/i18n/redirect';
@@ -19,7 +20,7 @@ export default async function TalentPhotosPage({ params }: { params: Promise<{ l
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return localizedRedirect(lang, '/login');
+    return redirectToLogin();
   }
 
   // Ensure user is in talent role

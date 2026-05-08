@@ -3,8 +3,11 @@
 import { Sparkles, UserCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { useLoginHref, useSignupHref } from '@/hooks/use-login-href';
 
 export function EventInfoCards() {
+  const buildLoginHref = useLoginHref();
+  const buildSignupHref = useSignupHref();
   return (
     <div className="my-6 grid gap-3 sm:grid-cols-2">
       <div className="flex items-start gap-3 rounded-xl border bg-card p-4">
@@ -17,12 +20,12 @@ export function EventInfoCards() {
             Create a free account to keep purchased photos in your library permanently.
           </p>
           <div className="mt-2 flex gap-2">
-            <Link href="/login">
+            <Link href={buildLoginHref()}>
               <Button variant="outline" size="sm" className="h-7 px-3 text-xs">
                 Log in
               </Button>
             </Link>
-            <Link href="/signup">
+            <Link href={buildSignupHref()}>
               <Button size="sm" className="h-7 px-3 text-xs">
                 Sign up free
               </Button>

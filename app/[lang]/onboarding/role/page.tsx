@@ -1,6 +1,7 @@
 import { completeOnboarding, getDashboardPath } from '@/app/[lang]/actions/roles';
 import OnboardingRoleForm from '@/components/onboarding-role-form';
 import { createClient } from '@/database/server';
+import { redirectToLogin } from '@/lib/auth/redirect-to-login';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { getLangFromHeaders } from '@/lib/i18n/get-lang-from-headers';
@@ -21,7 +22,7 @@ export default async function OnboardingRolePage({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return localizedRedirect(lang, '/login');
+    return redirectToLogin();
   }
 
   const { getProfileActiveRole, getUserRole } = await import('@/database/queries');

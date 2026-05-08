@@ -2,6 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { createClient } from '@/database/server';
+import { safeNext } from '@/lib/auth/safe-next';
 import { getSiteUrl } from '@/lib/get-site-url';
 
 export async function signInWithGoogle(plan?: string, next?: string) {
@@ -14,7 +15,8 @@ export async function signInWithGoogle(plan?: string, next?: string) {
   const cookieStore = await cookies();
   const oauthState: Record<string, string> = {};
   if (plan) oauthState.plan = plan;
-  if (next?.startsWith('/') && !next.startsWith('//')) oauthState.next = next;
+  const safeNextPath = safeNext(next);
+  if (safeNextPath) oauthState.next = safeNextPath;
   if (Object.keys(oauthState).length > 0) {
     cookieStore.set('oauth_redirect_state', JSON.stringify(oauthState), {
       maxAge: 60 * 10, // 10 minutes — enough to complete the OAuth flow

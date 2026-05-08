@@ -57,6 +57,7 @@ const TOOLBAR_TRANSLATIONS: Record<
 };
 
 type LightboxToolbarProps = {
+  visible: boolean;
   currentPhoto: PhotoLightboxItem;
   itemCount: number;
   currentIndex: number;
@@ -80,6 +81,7 @@ type LightboxToolbarProps = {
 };
 
 export function LightboxToolbar({
+  visible,
   currentPhoto,
   itemCount,
   currentIndex,
@@ -125,7 +127,9 @@ export function LightboxToolbar({
 
   return (
     <div
-      className="absolute top-0 left-0 right-0 z-30 flex h-16 items-center px-4"
+      className={`absolute top-0 left-0 right-0 z-30 flex h-16 items-center px-4 transition-opacity duration-200 ${
+        visible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+      }`}
       style={{ justifyContent: isFullscreen ? 'flex-end' : 'space-between' }}
     >
       {/* Gradient overlay */}

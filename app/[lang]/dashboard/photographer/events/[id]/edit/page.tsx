@@ -1,6 +1,7 @@
 import { DashboardHeader } from '@/components/dashboard-header';
 import { createSignedUrls, getEvent, getEventPhotos } from '@/database/queries';
 import { createClient } from '@/database/server';
+import { redirectToLogin } from '@/lib/auth/redirect-to-login';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedRedirect } from '@/lib/i18n/redirect';
@@ -19,7 +20,7 @@ export default async function EditEventPage({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    localizedRedirect(lang, '/login');
+    return redirectToLogin();
   }
 
   const event = await getEvent(supabase, id, user.id);

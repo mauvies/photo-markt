@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { Button } from '@/components/ui/button';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { useLoginHref, useSignupHref } from '@/hooks/use-login-href';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { UserAvatar } from './user-avatar';
@@ -14,6 +15,8 @@ import { UserAvatar } from './user-avatar';
 export function Nav({ user }: { user: User | null }) {
   const pathname = usePathname();
   const lp = useLocalizedPath();
+  const buildLoginHref = useLoginHref();
+  const buildSignupHref = useSignupHref();
   const { t } = useTranslations<Dictionary['nav']>();
 
   if (
@@ -46,7 +49,7 @@ export function Nav({ user }: { user: User | null }) {
           ) : (
             <>
               <Link
-                href={lp('/login')}
+                href={buildLoginHref()}
                 className="text-sm hover:text-foreground/70 transition-colors"
               >
                 <Button size="md" className="bg-gradient-starter h-10 md:hidden">
@@ -54,7 +57,7 @@ export function Nav({ user }: { user: User | null }) {
                 </Button>
                 <span className="hidden md:inline-flex">{t('login')}</span>
               </Link>
-              <Link href={lp('/signup')} tabIndex={-1} className="hidden md:inline-flex">
+              <Link href={buildSignupHref()} tabIndex={-1} className="hidden md:inline-flex">
                 <Button
                   size="md"
                   className="bg-gradient-starter p-5 text-white hover:opacity-90 transition-opacity"

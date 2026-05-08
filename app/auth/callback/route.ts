@@ -5,6 +5,7 @@ import { getProfileActiveRole, getUserRoles } from '@/database/queries';
 import { claimDownloadToken, getDownloadTokenByToken } from '@/database/queries/download-tokens';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { safeNext } from '@/lib/auth/safe-next';
 import { defaultLocale, type Locale } from '@/lib/i18n/config';
 import { localizedPath } from '@/lib/i18n/localized-path';
 
@@ -87,9 +88,9 @@ export async function GET(request: Request) {
     }
   }
 
-  // Safe redirect to `next` param (relative paths only, no protocol-relative)
-  if (nextParam?.startsWith('/') && !nextParam.startsWith('//')) {
-    return NextResponse.redirect(`${origin}${localizedPath(lang, nextParam)}`);
+  const safeNextPath = safeNext(nextParam);
+  if (safeNextPath) {
+    return NextResponse.redirect(`${origin}${localizedPath(lang, safeNextPath)}`);
   }
 
   const activeRole = await getProfileActiveRole(supabase, user.id);

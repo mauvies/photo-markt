@@ -8,6 +8,7 @@ import { SubmitButton } from '@/components/submit-button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createClient } from '@/database/server';
+import { nextQuerySuffix, safeNext } from '@/lib/auth/safe-next';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { getLangFromHeaders } from '@/lib/i18n/get-lang-from-headers';
@@ -33,6 +34,7 @@ export default async function Login({
   const dict = await getDictionary(lang as Locale);
   const params = await searchParams;
   const supabase = await createClient();
+  const nextParam = safeNext(params.next);
 
   const {
     data: { user },
@@ -84,7 +86,8 @@ export default async function Login({
     if (error) {
       console.error(error);
       const errorKey = error.code === 'invalid_credentials' ? 'invalid_credentials' : 'generic';
-      const nextQuery = params.next ? `&next=${encodeURIComponent(params.next)}` : '';
+      const safeNextParam = safeNext(params.next);
+      const nextQuery = safeNextParam ? `&next=${encodeURIComponent(safeNextParam)}` : '';
       return localizedRedirect(lang, `/login?error=${errorKey}${nextQuery}`);
     }
     // After successful login, check role to decide where to send the user.
@@ -115,9 +118,8 @@ export default async function Login({
       }
     }
 
-    // Safe redirect to `next` param (relative paths only, no protocol-relative)
-    const nextPath = params.next;
-    if (nextPath?.startsWith('/') && !nextPath.startsWith('//')) {
+    const nextPath = safeNext(params.next);
+    if (nextPath) {
       return localizedRedirect(lang, nextPath);
     }
 
@@ -146,7 +148,7 @@ export default async function Login({
           <div className="mt-4">
             <GoogleSignInButton
               plan={params.plan}
-              next={params.next}
+              next={nextParam ?? undefined}
               label={dict.auth.continueWithGoogle}
               className="w-full h-10 border-1 rounded-full"
             />
@@ -220,7 +222,10 @@ export default async function Login({
             </SubmitButton>
             <p className="text-center text-sm">
               {dict.auth.noAccount}{' '}
-              <Link className="text-sky-600 hover:underline" href="/signup">
+              <Link
+                className="text-sky-600 hover:underline"
+                href={`/signup${nextQuerySuffix(nextParam, '?')}`}
+              >
                 {dict.auth.signUpHere}
               </Link>
             </p>

@@ -30,12 +30,15 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { useLoginHref, useSignupHref } from '@/hooks/use-login-href';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 
 export function GuestCartContent() {
   const { items, removeItem, clearCart, subtotalCents } = useGuestCart();
   const router = useRouter();
   const lp = useLocalizedPath();
+  const buildLoginHref = useLoginHref();
+  const buildSignupHref = useSignupHref();
   const searchParams = useSearchParams();
   const canceled = searchParams.get('canceled') === 'true';
   const [isPending, startTransition] = useTransition();
@@ -109,12 +112,12 @@ export function GuestCartContent() {
           </div>
         </div>
         <div className="flex shrink-0 gap-2 sm:ml-auto">
-          <Link href={lp('/login?next=/cart')}>
+          <Link href={buildLoginHref()}>
             <Button variant="outline" size="sm">
               {t('logIn')}
             </Button>
           </Link>
-          <Link href="/signup">
+          <Link href={buildSignupHref()}>
             <Button size="sm">{t('signUpFree')}</Button>
           </Link>
         </div>

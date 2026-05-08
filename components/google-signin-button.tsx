@@ -27,12 +27,15 @@ export function GoogleSignInButton({
   const handleClick = () => {
     startTransition(async () => {
       const result = await signInWithGoogle(plan, next);
+      const nextSuffix = next ? `&next=${encodeURIComponent(next)}` : '';
       if (result.error) {
-        router.push(`/login?message=Could not sign in with Google. Reason: ${result.error}`);
+        router.push(
+          `/login?message=Could not sign in with Google. Reason: ${result.error}${nextSuffix}`,
+        );
       } else if (result.url) {
         window.location.href = result.url;
       } else {
-        router.push('/login?message=Failed to initiate Google sign-in');
+        router.push(`/login?message=Failed to initiate Google sign-in${nextSuffix}`);
       }
     });
   };

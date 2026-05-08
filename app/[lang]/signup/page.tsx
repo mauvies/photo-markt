@@ -6,6 +6,7 @@ import { SubmitButton } from '@/components/submit-button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createClient } from '@/database/server';
+import { nextQuerySuffix, safeNext } from '@/lib/auth/safe-next';
 import { getSiteUrl } from '@/lib/get-site-url';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
@@ -18,12 +19,13 @@ export default async function Signup({
   searchParams,
 }: {
   params: Promise<{ lang: string }>;
-  searchParams: Promise<{ message?: string; plan?: string; token?: string }>;
+  searchParams: Promise<{ message?: string; plan?: string; token?: string; next?: string }>;
 }) {
   const { lang } = await routeParams;
   const dict = await getDictionary(lang as Locale);
   const params = await searchParams;
   const supabase = await createClient();
+  const nextParam = safeNext(params.next);
 
   const {
     data: { user },
@@ -54,8 +56,11 @@ export default async function Signup({
     const supabase = await createClient();
 
     const baseRedirect = getSiteUrl();
-    const tokenRedirect = params.token
-      ? `${baseRedirect}/auth/callback?token=${params.token}`
+    const callbackQuery: string[] = [];
+    if (params.token) callbackQuery.push(`token=${encodeURIComponent(params.token)}`);
+    if (nextParam) callbackQuery.push(`next=${encodeURIComponent(nextParam)}`);
+    const tokenRedirect = callbackQuery.length
+      ? `${baseRedirect}/auth/callback?${callbackQuery.join('&')}`
       : baseRedirect;
 
     const { error } = await supabase.auth.signUp({
@@ -68,18 +73,20 @@ export default async function Signup({
 
     if (error) {
       console.error(error);
+      const nextSuffix = nextQuerySuffix(nextParam, '&');
       return localizedRedirect(
         lang,
-        `/signup?message=Could not signup user. Reason: ${error.code}`,
+        `/signup?message=Could not signup user. Reason: ${error.code}${nextSuffix}`,
       );
     }
 
-    // Preserve plan and token parameters if present
+    // Preserve plan, token, and next parameters if present
     const planParam = params.plan ? `&plan=${params.plan}` : '';
     const tokenParam = params.token ? `&token=${params.token}` : '';
+    const nextSuffix = nextQuerySuffix(nextParam, '&');
     return localizedRedirect(
       lang,
-      `/login?success=Check email to continue sign in process${planParam}${tokenParam}`,
+      `/login?success=Check email to continue sign in process${planParam}${tokenParam}${nextSuffix}`,
     );
   };
 
@@ -93,6 +100,7 @@ export default async function Signup({
         <div className="mt-4">
           <GoogleSignInButton
             plan={params.plan}
+            next={nextParam ?? undefined}
             label={dict.auth.continueWithGoogle}
             className="w-full h-10 border-1 rounded-full"
           />
@@ -151,7 +159,10 @@ export default async function Signup({
           </SubmitButton>
           <p className="text-center text-muted-foreground">
             {dict.signup.alreadyHaveAccount}{' '}
-            <Link className="text-sky-600 hover:underline" href={localizedPath(lang, '/login')}>
+            <Link
+              className="text-sky-600 hover:underline"
+              href={localizedPath(lang, `/login${nextQuerySuffix(nextParam, '?')}`)}
+            >
               {dict.signup.loginHere}{' '}
             </Link>
             {dict.signup.here}

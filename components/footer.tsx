@@ -1,11 +1,13 @@
 import { Facebook, Instagram, Mail, Twitter } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { getLoginHref, getSignupHref } from '@/lib/auth/login-href';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { localizedPath } from '@/lib/i18n/localized-path';
 
-export function Footer({ dict, lang }: { dict: Dictionary; lang: string }) {
+export async function Footer({ dict, lang }: { dict: Dictionary; lang: string }) {
   const t = dict.footer;
+  const [signupHref, loginHref] = await Promise.all([getSignupHref(), getLoginHref()]);
   return (
     <footer className="border-t bg-background">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
@@ -56,7 +58,7 @@ export function Footer({ dict, lang }: { dict: Dictionary; lang: string }) {
             <ul className="space-y-2 text-sm">
               <li>
                 <Link
-                  href={localizedPath(lang, '/signup')}
+                  href={signupHref}
                   className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {t.getStarted}
@@ -64,7 +66,7 @@ export function Footer({ dict, lang }: { dict: Dictionary; lang: string }) {
               </li>
               <li>
                 <Link
-                  href={localizedPath(lang, '/login')}
+                  href={loginHref}
                   className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {t.signIn}

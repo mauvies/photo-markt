@@ -8,6 +8,7 @@ import { Footer } from '@/components/footer';
 import { HomeAuthRedirect } from '@/components/home-auth-redirect';
 import { PricingSection } from '@/components/pricing-section';
 import { Button } from '@/components/ui/button';
+import { getLoginHref, getSignupHref } from '@/lib/auth/login-href';
 import type { EventStatus } from '@/lib/event-status';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
@@ -43,9 +44,11 @@ export default async function Home({
   const validStatus: EventStatus | undefined =
     sp.status === 'upcoming' || sp.status === 'completed' ? sp.status : undefined;
 
-  const [dict, topEvents] = await Promise.all([
+  const [dict, topEvents, signupHref, loginHref] = await Promise.all([
     getCachedDictionary(lang),
     getCachedTopEvents(validStatus),
+    getSignupHref(),
+    getLoginHref(),
   ]);
   const isAuthenticated = false;
 
@@ -222,13 +225,13 @@ export default async function Home({
               {dict.home.ctaSubtitle}
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
-              <Link href={localizedPath(lang, '/signup')}>
+              <Link href={signupHref}>
                 <Button size="lg" className="group px-8 text-base">
                   {dict.home.ctaCreateAccount}
                   <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </Button>
               </Link>
-              <Link href={localizedPath(lang, '/login')}>
+              <Link href={loginHref}>
                 <Button size="lg" variant="outline" className="px-8 text-base">
                   {dict.home.ctaHaveAccount}
                 </Button>
