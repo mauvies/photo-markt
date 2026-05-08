@@ -59,16 +59,18 @@ export default async function PhotographerDashboardPage({
 
       {/* Stripe Connect banner if account not active */}
       {connectStatus !== 'active' && (
-        <div className="flex items-center gap-3 rounded-xl border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-950">
-          <AlertTriangle className="h-5 w-5 shrink-0 text-yellow-600 dark:text-yellow-400" />
-          <div className="flex-1 text-sm text-yellow-800 dark:text-yellow-200">
-            {connectStatus === 'not_connected' && dict.stripeConnect.banner.connectAccount}
-            {connectStatus === 'pending' && dict.stripeConnect.banner.pendingReview}
-            {connectStatus === 'restricted' && dict.stripeConnect.banner.actionRequired}
+        <div className="flex flex-col gap-3 rounded-xl border border-yellow-200 bg-yellow-50 p-4 sm:flex-row sm:items-center dark:border-yellow-800 dark:bg-yellow-950">
+          <div className="flex flex-1 items-start gap-3 sm:items-center">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-600 sm:mt-0 dark:text-yellow-400" />
+            <div className="text-sm text-yellow-800 dark:text-yellow-200">
+              {connectStatus === 'not_connected' && dict.stripeConnect.banner.connectAccount}
+              {connectStatus === 'pending' && dict.stripeConnect.banner.pendingReview}
+              {connectStatus === 'restricted' && dict.stripeConnect.banner.actionRequired}
+            </div>
           </div>
           <Link
             href={`/${lang}/dashboard/photographer/profile/payout-profile`}
-            className="shrink-0 text-sm font-medium text-yellow-800 underline dark:text-yellow-200"
+            className="shrink-0 self-start pl-8 text-sm font-medium text-yellow-800 underline sm:self-center sm:pl-0 dark:text-yellow-200"
           >
             {dict.stripeConnect.banner.goToPayoutProfile}
           </Link>

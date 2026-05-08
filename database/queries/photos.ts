@@ -191,6 +191,7 @@ export async function createPhoto(
     city: string;
     country: string;
     state: string | null;
+    size_bytes: number;
   },
 ): Promise<void> {
   const { error } = await supabase.from('photos').insert({
@@ -222,6 +223,7 @@ export async function uploadGuestPhoto(
     upload_status: UploadStatus;
     delete_token: string | null;
     taken_at?: string | null;
+    size_bytes: number;
   },
 ): Promise<{ id: string; delete_token: string | null }> {
   const { data, error } = await supabase
@@ -236,6 +238,7 @@ export async function uploadGuestPhoto(
       upload_status: photoData.upload_status,
       delete_token: photoData.delete_token,
       taken_at: photoData.taken_at ?? null,
+      size_bytes: photoData.size_bytes,
     })
     .select('id, delete_token')
     .single();

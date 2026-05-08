@@ -3,8 +3,11 @@
  * For managing Stripe subscriptions
  */
 
+import { getPlanById, type Plan, type PlanId } from '@/lib/plans';
 import type { SupabaseServerClient } from './types';
 import { getErrorMessage } from './types';
+
+const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'past_due'] as const;
 
 export interface Subscription {
   id: string;
@@ -50,6 +53,27 @@ export async function getSubscription(
 }
 
 /**
+ * Resolve the user's current plan. Falls back to the Free plan when there's
+ * no userId or no subscription in an active-equivalent status. Single source
+ * of truth so callers don't repeat the fallback ladder.
+ */
+export async function getCurrentPlan(
+  supabase: SupabaseServerClient,
+  userId: string | null | undefined,
+): Promise<Plan> {
+  const free = getPlanById('free');
+  if (!free) throw new Error('Free plan missing from PLANS configuration');
+  if (!userId) return free;
+
+  const sub = await getSubscription(supabase, userId);
+  const isActive =
+    !!sub?.status && (ACTIVE_SUBSCRIPTION_STATUSES as readonly string[]).includes(sub.status);
+  if (!isActive) return free;
+
+  return getPlanById(sub.plan_id as PlanId) ?? free;
+}
+
+/**
  * Get plan IDs for multiple photographers — returns a Map from userId to planId.
  * Photographers without an active subscription default to 'free'.
  */
@@ -63,7 +87,7 @@ export async function getPhotographerPlanIds(
     .from('subscriptions')
     .select('user_id, plan_id, status')
     .in('user_id', photographerIds)
-    .in('status', ['active', 'trialing', 'past_due']);
+    .in('status', ACTIVE_SUBSCRIPTION_STATUSES as unknown as string[]);
 
   if (error) {
     throw new Error(`Failed to get photographer plan IDs: ${getErrorMessage(error)}`);

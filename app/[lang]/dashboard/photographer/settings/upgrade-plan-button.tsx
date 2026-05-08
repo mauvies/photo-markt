@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { createBillingCheckoutAction } from '../billing/actions';
 
 interface UpgradePlanButtonProps {
@@ -49,7 +50,7 @@ export function UpgradePlanButton({
       size={size}
       onClick={handleUpgrade}
       disabled={isPending}
-      className={className}
+      className={cn('h-11 px-4 sm:h-8 sm:px-3', className)}
     >
       {isPending ? (
         <>

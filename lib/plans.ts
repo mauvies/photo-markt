@@ -27,12 +27,11 @@ export const PLANS: Plan[] = [
     price: 0,
     priceInterval: null,
     description: 'Perfect for getting started and testing Photo Markt',
-    storageGB: 1,
+    storageGB: 20,
     maxEvents: 3,
     salesFeePercent: 15,
     allowCustomBundles: false,
     features: [
-      '1GB storage',
       'Up to 3 events',
       'Default pricing bundles only',
       'Basic search & analytics',
@@ -50,7 +49,6 @@ export const PLANS: Plan[] = [
     salesFeePercent: 8,
     allowCustomBundles: true,
     features: [
-      '50GB storage',
       'Up to 200 events',
       { text: 'AI-assisted talent tagging', badge: 'Coming soon' },
       'Advanced analytics',
@@ -66,12 +64,11 @@ export const PLANS: Plan[] = [
     price: 29.99,
     priceInterval: 'month',
     description: 'For professional photographers and studios',
-    storageGB: 200,
+    storageGB: 250,
     maxEvents: null, // Unlimited
     salesFeePercent: 5,
     allowCustomBundles: true,
     features: [
-      '200GB storage included',
       'Unlimited events',
       'Add +100GB for $5/mo',
       { text: 'Full AI auto-tagging', badge: 'Coming soon' },

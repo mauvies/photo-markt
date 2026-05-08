@@ -131,6 +131,7 @@ async function uploadEventPhotos(
         city: payload.city || '',
         country: payload.country,
         state: payload.state || null,
+        size_bytes: file.size,
       });
       uploadedPaths.push(path);
     }

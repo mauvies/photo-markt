@@ -1,6 +1,5 @@
 import { CreditCard, Database } from 'lucide-react';
 import { DashboardHeader } from '@/components/dashboard-header';
-import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
@@ -10,11 +9,11 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { getSubscription } from '@/database/queries';
+import { getCurrentPlan } from '@/database/queries';
 import { createClient } from '@/database/server';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
-import { formatPlanPrice, PLANS, type PlanId } from '@/lib/plans';
+import { formatPlanPrice, PLANS } from '@/lib/plans';
 import { getDashboardData } from '../actions';
 import { UpgradeHandler } from './upgrade-handler';
 import { UpgradePlanButton } from './upgrade-plan-button';
@@ -36,23 +35,17 @@ export default async function PhotographerSettingsPage({
   const dashboardData = await getDashboardData();
   const { storage } = dashboardData;
 
-  // Fetch actual subscription from database
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  let currentPlanId: PlanId = 'free';
-  if (user) {
-    const subscription = await getSubscription(supabase, user.id);
-    // Only show subscription as current plan if it's active, trialing, or past_due
-    // Don't show incomplete subscriptions as the current plan
-    if (subscription?.status && ['active', 'trialing', 'past_due'].includes(subscription.status)) {
-      currentPlanId = subscription.plan_id as PlanId;
-    }
-  }
-
-  const currentPlan = PLANS.find((p) => p.id === currentPlanId) || PLANS[0];
+  const currentPlan = await getCurrentPlan(supabase, user?.id);
+  const currentPlanId = currentPlan.id;
+  // Show the next tier as the primary upgrade CTA — Free→Starter, Starter→Pro.
+  // Avoids pushing the most expensive plan first.
+  const nextPlanId: 'starter' | 'pro' | null =
+    currentPlanId === 'free' ? 'starter' : currentPlanId === 'starter' ? 'pro' : null;
 
   return (
     <div className="flex flex-1 flex-col gap-4 sm:gap-6">
@@ -62,16 +55,16 @@ export default async function PhotographerSettingsPage({
       <div className="flex flex-1 flex-col gap-6">
         {/* Billing & Plan */}
         <Card>
-          <CardHeader>
+          <CardHeader className="p-4 sm:p-6">
             <div className="flex items-center gap-2">
               <CreditCard className="h-5 w-5" />
               <CardTitle>{dict.photographerDashboard.billingPlan}</CardTitle>
             </div>
             <CardDescription>{dict.photographerDashboard.billingPlanDesc}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 p-4 pt-0 sm:p-6 sm:pt-0">
             {/* Current Plan */}
-            <div className="flex items-center justify-between rounded-lg border p-4">
+            <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-medium">{dict.photographerDashboard.currentPlan}</p>
                 <p className="text-sm text-muted-foreground">
@@ -79,13 +72,18 @@ export default async function PhotographerSettingsPage({
                   {currentPlan.price !== null && ` • ${formatPlanPrice(currentPlan)}`}
                 </p>
               </div>
-              {currentPlanId !== 'pro' && <UpgradePlanButton planId="pro" />}
+              {nextPlanId && (
+                <UpgradePlanButton
+                  planId={nextPlanId}
+                  className="w-full bg-gradient-starter border-0 text-white hover:opacity-90 sm:w-auto"
+                />
+              )}
             </div>
 
             {/* Storage Usage */}
             {currentPlan.storageGB !== null && (
               <div className="space-y-2 rounded-lg border p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-2">
                     <Database className="h-4 w-4 text-muted-foreground" />
                     <p className="text-sm font-medium">{dict.photographerDashboard.storageUsage}</p>
@@ -112,13 +110,18 @@ export default async function PhotographerSettingsPage({
             {/* Current Plan Features */}
             <div className="space-y-2">
               <p className="text-sm font-medium">{dict.photographerDashboard.planFeatures}</p>
-              <ul className="space-y-1 text-sm text-muted-foreground">
-                {currentPlan.features.map((feature) => {
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                {[
+                  ...(currentPlan.storageGB !== null
+                    ? [`${currentPlan.storageGB}GB storage`]
+                    : ['Unlimited storage']),
+                  ...currentPlan.features,
+                ].map((feature) => {
                   const text = typeof feature === 'string' ? feature : feature.text;
                   return (
-                    <li key={text} className="flex items-center gap-2">
-                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                      {text}
+                    <li key={text} className="flex items-start gap-2">
+                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                      <span>{text}</span>
                     </li>
                   );
                 })}
@@ -128,41 +131,50 @@ export default async function PhotographerSettingsPage({
             {/* Available Plans */}
             <div className="space-y-4">
               <p className="text-sm font-medium">{dict.photographerDashboard.availablePlans}</p>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 pt-4 sm:grid-cols-2">
                 {PLANS.filter((plan) => plan.id !== currentPlanId).map((plan) => (
                   <div
                     key={plan.id}
-                    className="rounded-lg border p-4 transition-all hover:border-primary/50"
+                    className={[
+                      'relative rounded-lg border p-4 transition-all sm:p-5',
+                      plan.popular
+                        ? 'shadow-lg border-[#ee9da4] bg-gradient-starter-card hover:border-[#ed737d]'
+                        : 'hover:border-primary/50',
+                    ].join(' ')}
                   >
+                    {plan.popular && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                        <span className="bg-gradient-starter rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white shadow-sm">
+                          {dict.photographerDashboard.popular}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-semibold">{plan.name}</h4>
-                          {plan.popular && (
-                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                              {dict.photographerDashboard.popular}
-                            </span>
-                          )}
-                        </div>
+                        <h4 className="font-semibold">{plan.name}</h4>
                         <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>
                         <p className="mt-2 text-lg font-bold">{formatPlanPrice(plan)}</p>
                       </div>
                     </div>
                     <div className="mt-4">
-                      <UpgradePlanButton planId={plan.id as 'starter' | 'pro'} />
+                      <UpgradePlanButton
+                        planId={plan.id as 'starter' | 'pro'}
+                        className={
+                          plan.popular
+                            ? 'w-full bg-gradient-starter border-0 text-white hover:opacity-90'
+                            : 'w-full'
+                        }
+                      />
                     </div>
                   </div>
                 ))}
               </div>
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+          <CardFooter className="p-4 pt-0 sm:p-6 sm:pt-0">
             <p className="text-xs text-muted-foreground">
               {dict.photographerDashboard.billingHelpText}
             </p>
-            <Button variant="outline" size="sm">
-              {dict.photographerDashboard.viewBillingHistory}
-            </Button>
           </CardFooter>
         </Card>
       </div>

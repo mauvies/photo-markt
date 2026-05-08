@@ -3,9 +3,9 @@
 import { cacheLife, cacheTag } from 'next/cache';
 import { getUserEvents } from '@/database/queries/events';
 import { getSalesOverTime, getSalesSummary, getTopSellingEvents } from '@/database/queries/sales';
+import { getCurrentPlan } from '@/database/queries/subscriptions';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
-import { getPlanById } from '@/lib/plans';
 
 async function getCachedDashboardData(userId: string) {
   'use cache';
@@ -27,18 +27,23 @@ async function getCachedDashboardData(userId: string) {
     getUserEvents(supabaseAdmin, userId),
   ]);
 
-  const ESTIMATED_MB_PER_PHOTO = 5;
+  const [{ count: totalPhotosCount }, sizeRowsResult, currentPlan] = await Promise.all([
+    supabaseAdmin.from('photos').select('*', { count: 'exact', head: true }).eq('user_id', userId),
+    supabaseAdmin.from('photos').select('size_bytes').eq('user_id', userId),
+    getCurrentPlan(supabaseAdmin, userId),
+  ]);
 
-  const { count: totalPhotosCount } = await supabaseAdmin
-    .from('photos')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId);
-
-  const estimatedStorageGB = ((totalPhotosCount ?? 0) * ESTIMATED_MB_PER_PHOTO) / 1024;
-  const currentPlan = getPlanById('free');
-  const storageLimitGB = currentPlan?.storageGB ?? 1;
-  const storageUsedGB = estimatedStorageGB;
-  const storageUsedPercent = Math.min((storageUsedGB / storageLimitGB) * 100, 100);
+  if (sizeRowsResult.error) {
+    console.error('Failed to fetch photo sizes for storage usage:', sizeRowsResult.error);
+  }
+  const usedBytes = (sizeRowsResult.data ?? []).reduce<number>(
+    (acc, row) => acc + (typeof row.size_bytes === 'number' ? row.size_bytes : 0),
+    0,
+  );
+  const storageUsedGB = usedBytes / 1024 ** 3;
+  const storageLimitGB = currentPlan.storageGB ?? 0;
+  const storageUsedPercent =
+    storageLimitGB > 0 ? Math.min((storageUsedGB / storageLimitGB) * 100, 100) : 0;
 
   return {
     salesSummary,

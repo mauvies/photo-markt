@@ -124,6 +124,7 @@ export async function uploadGuestPhotosAction(
         upload_status: status,
         delete_token: deleteToken,
         taken_at: new Date().toISOString(),
+        size_bytes: file.size,
       });
       uploads.push({ photoId: inserted.id, deleteToken: inserted.delete_token });
     }

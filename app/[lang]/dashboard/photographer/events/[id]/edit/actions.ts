@@ -111,6 +111,7 @@ async function uploadPhotos(
         city: location.city,
         country: location.country,
         state: location.state,
+        size_bytes: file.size,
       });
       uploadedPaths.push(path);
     }
