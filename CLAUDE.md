@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with the Photo Markt codebase.
 
 ## Commands
 
@@ -15,57 +15,291 @@ pnpm test         # Run tests (tsx --test __tests__/**/*.ts)
 pnpm spell        # Spell check .ts/.tsx files
 ```
 
-## Architecture Overview
+## Project Overview
 
-**Photo Markt** is a marketplace connecting photographers with athletes/event-goers. Photographers create events and upload photos; talent (athletes/models) browse and purchase photos of themselves.
+**Photo Markt** is a sports event photography marketplace connecting photographers with athletes (referred to as "talent"). Photographers create events, upload photos, and earn from sales. Talent browses events, finds photos of themselves, and purchases them.
 
-### Tech Stack
+## Tech Stack
 
-- **Framework**: Next.js App Router with React 19, TypeScript
-- **Database**: Supabase (PostgreSQL) — raw SQL migrations, no ORM
-- **Auth**: Supabase Auth with Google
-- **Payments**: Stripe (subscriptions for photographers, photo purchases for talent)
+- **Framework**: Next.js App Router, React 19, TypeScript
+- **Database**: Supabase (PostgreSQL) — raw SQL migrations in `/supabase/migrations/`, no ORM
+- **Auth**: Supabase Auth — Google OAuth only
+- **Payments**: Stripe — subscriptions for photographers (Free/Starter/Pro), one-time purchases for talent, Stripe Connect for photographer payouts
 - **Styling**: Tailwind CSS v4 + shadcn/ui (New York style) + Radix UI
 - **Forms**: TanStack React Form + Zod validation
 - **Linting/Formatting**: Biome (not ESLint/Prettier)
+- **Email**: Resend
+- **i18n**: Custom dictionary system (`/dictionaries/en.json`, `/dictionaries/es.json`)
+
+## Architecture
+
+### Routing
+
+```
+app/
+  [lang]/               # i18n prefix — always /es/... or /en/...
+    page.tsx            # Home page (static)
+    events/             # Public events listing and detail
+    photographer/[slug] # Public photographer profiles
+    cart/               # Guest and authenticated cart
+    dashboard/
+      photographer/     # Photographer dashboard (private)
+      talent/           # Talent dashboard (private)
+    login/
+    signup/
+    onboarding/
+  auth/
+    callback/           # Google OAuth callback — handles code exchange
+  api/
+    stripe/             # Stripe webhook and checkout handlers
+    watermark/          # Watermarked image serving
+```
 
 ### Role-Based System
 
 Two user roles with separate dashboards:
-- **PHOTOGRAPHER** (`/dashboard/photographer`) — manages events, uploads photos, tracks earnings/sales
-- **TALENT** (`/dashboard/talent`) — browses events, searches for photos of themselves, purchases photos
+- **PHOTOGRAPHER** (`/dashboard/photographer`) — manages events, uploads/manages photos, tracks sales and earnings, manages payout account
+- **TALENT** (`/dashboard/talent`) — browses events, finds and purchases photos of themselves, manages saved photos
 
-Role is stored in the `profiles` table as `active_role`. Users can switch roles. Onboarding assigns initial role via `/app/actions/roles.ts`.
+Role is stored in `profiles.active_role`. Users can switch roles. Initial role assigned during onboarding via `/app/actions/roles.ts`.
 
 ### Key Architectural Patterns
 
-**Server Actions for mutations**: Nearly all data mutations use `"use server"` actions colocated in `actions.ts` files next to their page components. Avoid creating new API routes for mutations.
+**Server Actions for mutations**
+All data mutations use `"use server"` actions in `actions.ts` files colocated next to their page components. Do not create new API routes for mutations — use server actions instead.
 
-**Database query layer**: All Supabase queries live in `/database/queries/`. Each domain has its own file (events, photos, orders, etc.) with a central export in `index.ts`. Always add queries here rather than inline in components or actions.
+**Database query layer**
+All Supabase queries live in `/database/queries/`. Each domain has its own file. Always add new queries here — never inline in components or actions.
 
-**Session middleware**: `proxy.ts` (Next.js middleware) refreshes Supabase auth sessions on every request. The server Supabase client is in `database/server.ts` (cookie-based), the client-side in `database/client.ts`.
+```
+database/queries/
+  events.ts           # Event CRUD and search
+  photos.ts           # Photo management and embedding
+  profiles.ts         # User profiles
+  orders.ts           # Purchase orders
+  carts.ts            # Cart management
+  sales.ts            # Photographer sales data
+  earnings.ts         # Photographer earnings
+  photographers.ts    # Photographer-specific queries
+  talent-library.ts   # Talent saved photos
+  subscriptions.ts    # Stripe subscription data
+  payment-accounts.ts # Photographer payout accounts
+  payouts.ts          # Payout requests
+  storage.ts          # Supabase Storage helpers
+  ai-search-profiles.ts
+  ai-search-usage.ts
+  ai-similarity-search.ts
+  index.ts            # Central export
+```
 
-**Feature flags**: Controlled in `lib/feature-flags.ts`. AI matching (`AI_MATCHING`) is currently disabled.
+**Supabase clients**
+- Server-side (Server Components, Server Actions, API routes): `database/server.ts`
+- Client-side (Client Components): `database/client.ts`
+- Admin (service role, bypasses RLS): `database/supabase-admin.ts`
 
-**Environment validation**: `env.mjs` uses T3 Env (Zod) to validate all environment variables at build/runtime. Add new env vars here.
+**Middleware**
+`proxy.ts` (Next.js middleware) refreshes Supabase auth sessions on every request and handles locale detection.
 
-### Database
+**i18n**
+- Dictionaries: `/dictionaries/en.json` and `/dictionaries/es.json`
+- Server-side: `lib/i18n/get-dictionary.ts`
+- Client-side: `lib/i18n/translations-provider.tsx` + `useTranslations()` hook
+- Always add new strings to both dictionaries. Never hardcode visible strings.
 
-Migrations are in `/supabase/migrations/` (timestamp-prefixed SQL files). Key tables: `profiles`, `events`, `photos`, `orders`, `carts`, `cart_items`, `sales`, `earnings`, `payment_accounts`, `subscriptions`, `talent_library`, `ai_search_profiles`, `ai_search_usage`.
+**Feature flags**
+Controlled in `lib/feature-flags.ts`. `AI_MATCHING` is currently disabled.
 
-Events support soft delete (deleted_at column). Photos have embedding columns for future AI vector search.
+**Environment validation**
+`env.mjs` uses T3 Env (Zod). Always add new environment variables here.
 
-### Payments
+## Database Schema
 
-- Photographers subscribe to Amateur or Pro plans (Stripe subscriptions, price IDs in env)
-- Talent purchases individual photos (Stripe one-time payments)
-- Payout system tracks photographer earnings and payment accounts
-- Stripe webhook handling in `/app/api/stripe/`
+### Key Tables
 
-### AI Photo Search
+**events**
+`id, user_id, name, date, start_date, end_date, city, country, state, activity, is_public, share_code, price_per_photo, watermark_enabled, slug, lat, lng, time_offset, time_sync_enabled, deleted_at, created_at, updated_at`
+- Soft delete via `deleted_at`
+- `state` field tracks event status (`upcoming` / `completed`) based on date
+- `time_sync_enabled` + `time_offset` support the camera time sync feature
+- `share_code` allows access to private events
 
-Currently uses a mock embedding provider (`lib/ai/embedding-provider.ts`). The infrastructure (vector columns, similarity search RPC functions, rate limiting) is in place for real models. `AI_MATCHING` feature flag must be enabled to expose this to users.
+**photos** (via `/database/queries/photos.ts`)
+- Has embedding columns for future AI vector search
+- Stored in Supabase Storage bucket: `photos`
+- Watermarked previews served via `/app/api/watermark/`
+- Full resolution only accessible via short-lived signed URLs after purchase
 
-### Image Handling
+**carts / cart_items**
+`carts: id, user_id` — `cart_items: id, cart_id, photo_id, photographer_id, unit_price_cents`
+- Guest cart stored in `localStorage` under `picdemi_guest_cart`
+- Guest cart merged into authenticated cart on login via `components/guest-cart-merge.tsx`
 
-Photos are stored in Supabase Storage (bucket: `photos`). Watermarked previews are generated via `/app/api/watermark/`. Next.js Image optimization is configured for Supabase storage URLs and localhost.
+**orders / order_items**
+`orders: id, user_id, cart_id, stripe_payment_intent_id, stripe_checkout_session_id, status, total_amount_cents`
+- Status: `pending`, `completed`, `failed`, `refunded`
+
+**payment_accounts**
+`id, photographer_id, type, account_details, is_default, is_verified`
+- Stores Stripe Connect account info for photographer payouts
+
+**payouts**
+`id, photographer_id, amount_cents, status, paid_at`
+- Automatic weekly payouts via Stripe Connect ($25 minimum threshold)
+
+**ai_search_profiles**
+`id, user_id, selfie_embedding, activity_type, country, region, date_from, date_to`
+- Stores talent selfie embeddings for AI photo matching (currently disabled)
+
+## Payments
+
+### Photographer Subscriptions
+Three plans: **Free** (12% commission), **Starter** ($14.99/mo, 8% commission), **Pro** ($29.99/mo, 5% commission).
+Price IDs in env: `STRIPE_PRICE_AMATEUR`, `STRIPE_PRICE_PRO`.
+Billing management in `/dashboard/photographer/settings/`.
+
+### Photo Purchases (Talent)
+One-time Stripe payments. Webhook handler at `/app/api/stripe/webhook/route.ts`.
+After confirmed payment: order saved, cart cleared, photos available in talent profile and orders.
+
+### Photographer Payouts (Stripe Connect)
+- Photographers connect Stripe Express accounts in `/dashboard/photographer/profile/payout-profile/`
+- Photo Markt absorbs the Stripe Connect fee (0.5%) — photographer always receives exactly their promised net amount
+- Automatic weekly payouts, $25 minimum threshold
+- Sales tracked in `/dashboard/photographer/sales/`, earnings in `/dashboard/photographer/ganancias/`
+
+## Shared Components
+
+```
+components/
+  ui/
+    photo-action-icon.tsx     # Shared photo action icon (dark bg, white icon, tooltip)
+    location-autocomplete.tsx # Google Places autocomplete for event forms only
+  event-search-bar/           # Search bar with filter modal (Airbnb-style)
+    EventSearchBar.tsx
+    ActivityDropdown.tsx
+    WhenPopoverContent.tsx
+    WhereSuggestionsDropdown.tsx
+  photo-lightbox.tsx          # Full-screen photo viewer
+  guest-cart-merge.tsx        # Handles merging guest cart on login
+  pricing-section.tsx         # Pricing plans UI
+```
+
+## Photo Action Icons
+
+The `PhotoActionIcon` component (`components/ui/photo-action-icon.tsx`) is the standard for all photo action buttons:
+- **Style:** Dark semi-transparent background (`bg-gray-900/60 backdrop-blur-sm`), white icon
+- **States:** Outline icon = inactive, filled icon = active. No color changes — only outline vs filled.
+- **Visibility:** Always visible on mobile, visible on hover on desktop (handled by parent with `group` + `md:opacity-0 md:group-hover:opacity-100`)
+- **Tooltip:** Always included via Shadcn `Tooltip`
+- **Used in:** `/events/[slug]`, `/dashboard/photographer/events/[id]`, `/dashboard/talent/events/[id]`, `/dashboard/talent/photos`, `/dashboard/talent/profile`
+
+## Event Search
+
+Search bar (`components/event-search-bar/`) queries Supabase directly — no external APIs:
+```sql
+events.name ILIKE '%query%'
+OR events.city ILIKE '%query%'
+OR profiles.display_name ILIKE '%query%'
+```
+- Results grouped by type: events and photographers
+- Filters (Activity, When) in a separate modal opened by a Filters button outside the input
+- Google Places API used **only** in location field of event create/edit forms — never in search
+
+## Image Handling
+
+- Original photos: Supabase Storage (private)
+- Previews: watermarked + degraded quality via `/app/api/watermark/`
+- Purchased photos: short-lived signed URLs — never expose original storage path publicly
+- Watermark: tiled repeating pattern, server-side via Sharp
+
+## AI Photo Search
+
+Infrastructure in place (vector columns, similarity search RPC, rate limiting) but disabled behind `AI_MATCHING` feature flag. Mock provider in `lib/ai/embedding-provider.ts`. Planned: CLIP or InsightFace for outfit pattern recognition.
+
+## Environment Variables
+
+```bash
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_JWT_SECRET=
+
+# Stripe
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+STRIPE_PRICE_AMATEUR=        # Starter plan price ID
+STRIPE_PRICE_PRO=            # Pro plan price ID
+PLATFORM_FEE_BPS=            # Platform fee in basis points
+
+# Google
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=   # Places API — event location forms only
+
+# AI (optional, feature-flagged)
+EMBEDDING_PROVIDER=
+HUGGINGFACE_API_KEY=
+REPLICATE_API_TOKEN=
+AI_PROVIDER=
+
+# Email
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=
+
+# App
+SITE_URL=
+```
+
+## Active Feature Branches
+
+Check these branches before touching related code:
+
+| Branch | Description |
+|--------|-------------|
+| `feature/stripe-connect` | Photographer payouts via Stripe Connect |
+| `feature/event-status` | upcoming/completed event states |
+| `feature/guest-cart-merge` | Guest cart persistence and merge on login |
+| `feature/home-top-events` | Featured events section on home page |
+| `feature/photographer-profiles` | Public photographer profile pages |
+| `feature/location-autocomplete` | Google Places in event forms |
+| `feature/search-bar-refactor` | Airbnb-style search bar with filter modal |
+| `feature/i18n-localization` | i18n routing and locale detection |
+| `feature/i18n-client-translations` | Client-side translations provider |
+| `feature/seo-overhaul` | Metadata, JSON-LD, sitemap |
+| `feature/refactor-backend` | Backend code cleanup |
+| `feature/refactor-shared-components` | Shared component cleanup |
+| `feature/time-sync-filtering` | Camera time sync for events |
+| `feature/ai-matching-rewrite` | AI photo matching (disabled) |
+
+## Working with Claude
+
+### When to use Planning Mode
+Only use planning mode when:
+- The feature touches more than 5 files
+- The architecture is genuinely unclear
+- It involves payments, auth, or security-sensitive code
+
+Skip planning mode for: bug fixes, UI tweaks, adding fields, isolated features, translations, refactoring individual files.
+
+### Token Budget Guidelines
+- Bug fixes: 3–8k tokens
+- UI changes / isolated features: 5–15k tokens
+- Medium features (3–5 files): 15–25k tokens
+- Large features (payments, auth, multi-page): 25–40k tokens
+
+### Prompt Best Practices
+- Always specify the branch to work on
+- Reference specific file paths when known
+- Add "Do not ask for confirmation — proceed autonomously" for low-risk tasks
+- For bugs: describe exact symptoms and where they occur
+- Always end prompts with "No other changes"
+
+### Code Conventions
+- All visible strings must be in both `en.json` and `es.json`
+- All Supabase queries go in `/database/queries/`
+- All mutations use Server Actions — not API routes
+- Use existing Shadcn components — do not introduce new UI libraries
+- Use Biome for formatting — not Prettier
+- New env vars must be added to `env.mjs`
+- No `any` types in TypeScript
+- All async functions must have proper error handling — no silent catches

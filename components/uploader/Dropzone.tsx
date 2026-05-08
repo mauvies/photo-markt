@@ -50,7 +50,7 @@ function Dropzone({ onSelect, accept, multiple = true, className }: DropzoneProp
       }}
       onDrop={onDrop}
       className={cn(
-        'flex flex-col items-center justify-center bg-muted/10 rounded-2xl border-2 border-dashed border-muted-foreground/10 p-9 text-center transition-colors',
+        'flex flex-col items-center justify-center bg-muted/10 rounded-2xl border-2 border-dashed border-muted-foreground/10 p-8 text-center transition-colors',
         'hover:bg-muted/30 focus-visible:outline focus-visible:outline-offset-2',
         isDragged && 'bg-muted/40',
         className,

@@ -44,6 +44,18 @@ const eventSchema = z.object({
     .string()
     .default('true')
     .transform((val) => val === 'true'),
+  is_collaborative: z
+    .string()
+    .default('false')
+    .transform((val) => val === 'true'),
+  allow_guest_upload: z
+    .string()
+    .default('true')
+    .transform((val) => val === 'true'),
+  require_upload_approval: z
+    .string()
+    .default('false')
+    .transform((val) => val === 'true'),
   price_per_photo: z
     .string()
     .optional()
@@ -177,6 +189,9 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     city: formData.get('city')?.toString(),
     is_public: formData.get('is_public')?.toString() ?? 'true',
     watermark_enabled: formData.get('watermark_enabled')?.toString() ?? 'true',
+    is_collaborative: formData.get('is_collaborative')?.toString() ?? 'false',
+    allow_guest_upload: formData.get('allow_guest_upload')?.toString() ?? 'true',
+    require_upload_approval: formData.get('require_upload_approval')?.toString() ?? 'false',
     price_per_photo: formData.get('price_per_photo')?.toString(),
   });
   if (!parsed.success) {
@@ -187,9 +202,14 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
   const uploadedFiles = formData
     .getAll('photos')
     .filter((value): value is File => value instanceof File && value.size > 0);
-  if (uploadedFiles.length === 0) throw new Error('Add at least one photo to continue.');
+  // Collaborative events can be created without any initial photos because
+  // the whole point is for others to contribute through the share link.
+  if (!payload.is_collaborative && uploadedFiles.length === 0) {
+    throw new Error('Add at least one photo to continue.');
+  }
 
-  const shareCode = payload.is_public ? null : generateShareCode();
+  // Collaborative events are inherently shared by code, so always issue one.
+  const shareCode = payload.is_public && !payload.is_collaborative ? null : generateShareCode();
   const watermarkEnabled = payload.is_public && payload.watermark_enabled;
 
   const event = await dbCreateEvent(supabase, user.id, {
@@ -203,6 +223,9 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     share_code: shareCode,
     price_per_photo: payload.price_per_photo ?? null,
     watermark_enabled: watermarkEnabled,
+    is_collaborative: payload.is_collaborative,
+    allow_guest_upload: payload.allow_guest_upload,
+    require_upload_approval: payload.require_upload_approval,
     slug: null,
   });
 
@@ -217,15 +240,17 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     await supabase.from('events').update({ slug }).eq('id', event.id).eq('user_id', user.id);
   }
 
-  try {
-    await uploadEventPhotos(supabase, user.id, event, uploadedFiles, payload);
-  } catch (error) {
-    console.error('createEvent: upload failed', error);
-    await deleteEventPhotos(supabase, event.id, user.id);
-    await deleteEvent(supabase, event.id, user.id);
-    throw new Error(
-      error instanceof Error ? error.message : 'Unable to upload photos. Please try again.',
-    );
+  if (uploadedFiles.length > 0) {
+    try {
+      await uploadEventPhotos(supabase, user.id, event, uploadedFiles, payload);
+    } catch (error) {
+      console.error('createEvent: upload failed', error);
+      await deleteEventPhotos(supabase, event.id, user.id);
+      await deleteEvent(supabase, event.id, user.id);
+      throw new Error(
+        error instanceof Error ? error.message : 'Unable to upload photos. Please try again.',
+      );
+    }
   }
 
   await revalidateAfterEventCreate(supabase, user.id, event.id);

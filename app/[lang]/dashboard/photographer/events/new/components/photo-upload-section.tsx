@@ -28,9 +28,18 @@ export function PhotoUploadSection({
 
   return (
     <>
-      <div className="order-1 flex flex-col gap-2 lg:sticky lg:top-4">
+      {/* On desktop the dropzone column pins to the top and bounds its height
+          so it never extends past the fixed bottom action bar — even at
+          initial scroll where the column starts ~120px below the viewport
+          top (page header + subtitle + spacing). Subtract enough to clear
+          both that top offset and the action bar (~80px) with margin. */}
+      <div className="order-1 flex flex-col gap-2 lg:sticky lg:top-4 lg:h-[calc(100dvh-15rem)]">
         <Label>{t('addPhotosLabel')}</Label>
-        <Dropzone accept=".jpg,.jpeg,.png,.heic" onSelect={onFiles} className="flex-1 rounded-lg" />
+        <Dropzone
+          accept=".jpg,.jpeg,.png,.heic"
+          onSelect={onFiles}
+          className="min-h-40 flex-1 rounded-lg"
+        />
         {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
 

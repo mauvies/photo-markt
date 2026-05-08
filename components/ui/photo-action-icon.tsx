@@ -1,11 +1,11 @@
 'use client';
 
-import { Check, Heart, Loader2, ShoppingCart, UserPlus, Users } from 'lucide-react';
+import { Check, Heart, Loader2, ShoppingCart, Trash2, UserPlus, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 
 type PhotoActionIconProps = {
-  icon: 'cart' | 'check' | 'tag' | 'save';
+  icon: 'cart' | 'check' | 'tag' | 'save' | 'delete';
   active: boolean;
   onClick: () => void;
   tooltip: string;
@@ -38,6 +38,8 @@ export function PhotoActionIcon({
         return (
           <Heart className="size-3" strokeWidth={1.5} fill={active ? 'currentColor' : 'none'} />
         );
+      case 'delete':
+        return <Trash2 className="size-3" strokeWidth={1.75} />;
     }
   }
 

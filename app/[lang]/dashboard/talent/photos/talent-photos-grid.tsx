@@ -2,12 +2,15 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { enUS, es } from 'date-fns/locale';
 import { Loader2, ShoppingCart } from 'lucide-react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { useCallback, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { addPhotoToCartAction } from '@/app/[lang]/dashboard/talent/cart/actions';
 import PhotoAlbumViewer, { type PhotoAlbumItem } from '@/components/photo-album-viewer';
+import type { PhotoIconTooltips } from '@/components/photo-icon-buttons';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,14 +36,18 @@ interface TalentPhotosGridProps {
   initialGroups: TaggedPhotoGroup[];
   hasMore: boolean;
   photosInCart?: string[];
+  iconTooltips?: Partial<PhotoIconTooltips>;
 }
 
 export function TalentPhotosGrid({
   initialGroups,
   hasMore: initialHasMore,
   photosInCart = [],
+  iconTooltips,
 }: TalentPhotosGridProps) {
   const { t } = useTranslations<TalentPhotosT>();
+  const params = useParams<{ lang: string }>();
+  const dateLocale = params?.lang === 'es' ? es : enUS;
   const queryClient = useQueryClient();
   const [groups, setGroups] = useState(initialGroups);
   const [offset, setOffset] = useState(
@@ -275,7 +282,12 @@ export function TalentPhotosGrid({
               <h2 className="text-xl font-semibold text-foreground">
                 {dateKey === 'unknown'
                   ? t('unknownDate')
-                  : format(new Date(dateKey), 'EEEE, MMMM d, yyyy')}
+                  : (() => {
+                      const formatted = format(new Date(dateKey), 'EEEE, MMMM d, yyyy', {
+                        locale: dateLocale,
+                      });
+                      return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+                    })()}
               </h2>
             </div>
 
@@ -317,6 +329,7 @@ export function TalentPhotosGrid({
                     onToggleSelect={handleToggleSelect}
                     showAddToCart={true}
                     photosInCart={new Set(photosInCart)}
+                    iconTooltips={iconTooltips}
                   />
                 </div>
               </div>

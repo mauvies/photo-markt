@@ -16,9 +16,11 @@ import {
 interface EventShareCodeProps {
   shareCode: string;
   eventName: string;
+  /** Optional override for the section heading (e.g. "Share to invite contributors") */
+  label?: string;
 }
 
-export function EventShareCode({ shareCode, eventName }: EventShareCodeProps) {
+export function EventShareCode({ shareCode, eventName, label }: EventShareCodeProps) {
   const [copied, setCopied] = useState(false);
   const shareUrl =
     typeof window !== 'undefined' ? `${window.location.origin}/events/${shareCode}` : '';
@@ -36,7 +38,7 @@ export function EventShareCode({ shareCode, eventName }: EventShareCodeProps) {
   return (
     <div className="rounded-lg border border-input bg-card p-4">
       <div className="mb-4">
-        <h3 className="text-sm font-semibold">Share Code</h3>
+        <h3 className="text-sm font-semibold">{label ?? 'Share Code'}</h3>
         <p className="text-xs text-muted-foreground mt-1">
           Share this code with people who should have access to "{eventName}"
         </p>

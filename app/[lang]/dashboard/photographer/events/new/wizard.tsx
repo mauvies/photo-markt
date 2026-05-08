@@ -36,59 +36,52 @@ type NewEventT = Dictionary['newEvent'];
 const STORAGE_KEY = 'photo-markt_new_event_form';
 const LEGACY_STORAGE_KEY = 'picdemi_new_event_form';
 
-const getDefaultValues = (): FormValues => {
-  if (typeof window === 'undefined') {
-    return {
-      name: '',
-      activity: 'OTHER',
-      date: '',
-      country: '',
-      state: '',
-      city: '',
-      is_public: true,
-      watermark_enabled: true,
-      price_per_photo: null,
-    };
-  }
-
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (localStorage.getItem(STORAGE_KEY) === null) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-        localStorage.removeItem(LEGACY_STORAGE_KEY);
-      }
-      return {
-        name: parsed.name || '',
-        activity: parsed.activity || 'OTHER',
-        date: parsed.date || '',
-        country: '',
-        state: '',
-        city: parsed.city || '',
-        is_public: parsed.is_public ?? true,
-        watermark_enabled: parsed.watermark_enabled ?? true,
-        price_per_photo: parsed.price_per_photo ?? null,
-      };
-    }
-  } catch {
-    // Ignore parse errors
-  }
-
-  return {
-    name: '',
-    activity: 'OTHER',
-    date: '',
-    country: '',
-    state: '',
-    city: '',
-    is_public: true,
-    watermark_enabled: true,
-    price_per_photo: null,
-  };
+// Defaults must be deterministic across server and client so first render
+// matches and hydration succeeds. Stored values from localStorage are loaded
+// in a useEffect after mount instead.
+const EMPTY_DEFAULTS: FormValues = {
+  name: '',
+  activity: 'OTHER',
+  date: '',
+  country: '',
+  state: '',
+  city: '',
+  is_public: true,
+  watermark_enabled: true,
+  is_collaborative: false,
+  allow_guest_upload: true,
+  require_upload_approval: false,
+  price_per_photo: null,
 };
 
-const defaultValues = getDefaultValues();
+function readStoredValues(): FormValues | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!stored) return null;
+    const parsed = JSON.parse(stored);
+    if (localStorage.getItem(STORAGE_KEY) === null) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+    }
+    return {
+      name: parsed.name || '',
+      activity: parsed.activity || 'OTHER',
+      date: parsed.date || '',
+      country: '',
+      state: '',
+      city: parsed.city || '',
+      is_public: parsed.is_public ?? true,
+      watermark_enabled: parsed.watermark_enabled ?? true,
+      is_collaborative: parsed.is_collaborative ?? false,
+      allow_guest_upload: parsed.allow_guest_upload ?? true,
+      require_upload_approval: parsed.require_upload_approval ?? false,
+      price_per_photo: parsed.price_per_photo ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
 
 export default function NewEventForm() {
   const { t } = useTranslations<NewEventT>();
@@ -110,12 +103,16 @@ export default function NewEventForm() {
     [],
   );
 
+  const [hydratedFromStorage, setHydratedFromStorage] = useState(false);
+
   const form = useForm({
-    defaultValues,
+    defaultValues: EMPTY_DEFAULTS,
     onSubmit: async ({ value }) => {
       try {
         const parsed = eventSchema.parse(value);
-        if (files.length === 0) {
+        // Collaborative events let owners create the shell and have others
+        // contribute, so the photographer's own initial upload is optional.
+        if (!parsed.is_collaborative && files.length === 0) {
           setPhotosError(t('photosRequired'));
           return;
         }
@@ -130,8 +127,21 @@ export default function NewEventForm() {
     },
   });
 
-  // Save to localStorage whenever form values change
+  // Hydrate the form from localStorage AFTER mount so server-rendered HTML
+  // matches the client first paint. Only runs once.
   useEffect(() => {
+    const stored = readStoredValues();
+    if (stored) {
+      form.reset(stored);
+    }
+    setHydratedFromStorage(true);
+  }, [form]);
+
+  // Persist form values to localStorage on change. Skipped until hydration
+  // completes so we don't overwrite stored values with the empty defaults
+  // during the brief window before reset() runs.
+  useEffect(() => {
+    if (!hydratedFromStorage) return;
     const values = form.state.values;
     const hasData = values.name || values.activity || values.date || values.city;
     if (hasData) {
@@ -141,7 +151,7 @@ export default function NewEventForm() {
         // Ignore storage errors
       }
     }
-  }, [form.state.values]);
+  }, [form.state.values, hydratedFromStorage]);
 
   // Generate preview URLs for files
   useEffect(() => {
@@ -194,7 +204,7 @@ export default function NewEventForm() {
   const confirmCreation = () => {
     const value = pendingValues;
     if (!value || isPending) return;
-    if (files.length === 0) {
+    if (!value.is_collaborative && files.length === 0) {
       setPhotosError(t('photosRequired'));
       setIsModalOpen(false);
       return;
@@ -208,6 +218,9 @@ export default function NewEventForm() {
     }
     formData.append('is_public', value.is_public ? 'true' : 'false');
     formData.append('watermark_enabled', value.watermark_enabled ? 'true' : 'false');
+    formData.append('is_collaborative', value.is_collaborative ? 'true' : 'false');
+    formData.append('allow_guest_upload', value.allow_guest_upload ? 'true' : 'false');
+    formData.append('require_upload_approval', value.require_upload_approval ? 'true' : 'false');
     if (value.price_per_photo !== undefined && value.price_per_photo !== null) {
       const price =
         typeof value.price_per_photo === 'string'
@@ -290,18 +303,24 @@ export default function NewEventForm() {
 
   return (
     <div>
-      <div className="mx-auto w-full max-w-full space-y-6">
+      {/* pb-28 gives the form room to scroll past the fixed action bar at
+          the bottom (~80px tall, lifted on mobile by the bottom nav). */}
+      <div className="mx-auto w-full max-w-full space-y-6 pb-28 md:pb-24">
         <header>
           <DashboardHeader title={t('title')} />
           <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
         </header>
 
-        {/* Unified layout: Desktop split, Mobile stacked */}
-        <div className="grid min-w-0 gap-6 lg:grid-cols-2 lg:items-stretch">
-          {/* Form section - left side on desktop */}
-          <div className="order-2 min-w-0 w-full lg:sticky lg:top-4">
+        {/* Unified layout: Desktop split, Mobile stacked. items-start so the
+            dropzone column can be its own height without stretching the form
+            column (the dropzone is sticky with a viewport-bound height). */}
+        <div className="grid min-w-0 gap-6 lg:grid-cols-2 lg:items-start">
+          {/* Form section - left side on desktop. NOT sticky: the form may
+              grow past the viewport (e.g. with collaborative options) and a
+              sticky element traps its overflow under the fixed action bar. */}
+          <div className="order-2 min-w-0 w-full">
             <form
-              className="flex h-full flex-col gap-4"
+              className="flex flex-col gap-4"
               onSubmit={(event) => {
                 event.preventDefault();
                 setSubmitAttempted(true);
@@ -610,6 +629,99 @@ export default function NewEventForm() {
                     );
                   }}
                 </form.Field>
+
+                <form.Field name="is_collaborative">
+                  {(field) => {
+                    return (
+                      <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
+                        <div className="grid gap-1">
+                          <Label htmlFor="is_collaborative">{t('collaborativeLabel')}</Label>
+                          <p className="text-xs text-muted-foreground">{t('collaborativeDesc')}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {field.state.value
+                              ? t('collaborativeEnabled')
+                              : t('collaborativeDisabled')}
+                          </span>
+                          <Switch
+                            id="is_collaborative"
+                            checked={field.state.value}
+                            onCheckedChange={(checked) => {
+                              const wasOff = !field.state.value;
+                              field.handleChange(checked);
+                              field.handleBlur();
+                              // On the off->on transition, pre-fill sensible defaults for
+                              // the typical sharing use case (private, free, no watermark).
+                              // Owner can still override any of them below.
+                              if (checked && wasOff) {
+                                form.setFieldValue('is_public', false);
+                                form.setFieldValue('watermark_enabled', false);
+                                form.setFieldValue('price_per_photo', null);
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  }}
+                </form.Field>
+
+                <form.Subscribe selector={(state) => state.values.is_collaborative}>
+                  {(isCollaborative) =>
+                    isCollaborative ? (
+                      <div className="grid gap-2 rounded-lg border border-dashed border-input p-3">
+                        <p className="text-xs text-muted-foreground">
+                          {t('collaborativeDefaultsNote')}
+                        </p>
+                        <form.Field name="allow_guest_upload">
+                          {(field) => (
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="grid gap-1">
+                                <Label htmlFor="allow_guest_upload">
+                                  {t('allowGuestUploadLabel')}
+                                </Label>
+                                <p className="text-xs text-muted-foreground">
+                                  {t('allowGuestUploadDesc')}
+                                </p>
+                              </div>
+                              <Switch
+                                id="allow_guest_upload"
+                                checked={field.state.value}
+                                onCheckedChange={(checked) => {
+                                  field.handleChange(checked);
+                                  field.handleBlur();
+                                }}
+                              />
+                            </div>
+                          )}
+                        </form.Field>
+                        <form.Field name="require_upload_approval">
+                          {(field) => (
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="grid gap-1">
+                                <Label htmlFor="require_upload_approval">
+                                  {t('requireApprovalLabel')}
+                                </Label>
+                                <p className="text-xs text-muted-foreground">
+                                  {t('requireApprovalDesc')}
+                                </p>
+                              </div>
+                              <Switch
+                                id="require_upload_approval"
+                                checked={field.state.value}
+                                onCheckedChange={(checked) => {
+                                  field.handleChange(checked);
+                                  field.handleBlur();
+                                }}
+                              />
+                            </div>
+                          )}
+                        </form.Field>
+                      </div>
+                    ) : null
+                  }
+                </form.Subscribe>
               </div>
             </form>
           </div>

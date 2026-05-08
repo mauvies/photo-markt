@@ -324,6 +324,88 @@ export function EventFormFields({
           </div>
         )}
       </form.Field>
+
+      {/* Collaborative Toggle */}
+      <form.Field name="is_collaborative">
+        {(field) => (
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
+            <div className="grid gap-1">
+              <Label htmlFor="is_collaborative">Collaborative Event</Label>
+              <p className="text-xs text-muted-foreground">
+                Let anyone with the share link contribute photos
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {field.state.value ? 'Enabled' : 'Disabled'}
+              </span>
+              <Switch
+                id="is_collaborative"
+                checked={field.state.value}
+                onCheckedChange={(checked) => {
+                  const wasOff = !field.state.value;
+                  field.handleChange(checked);
+                  field.handleBlur();
+                  if (checked && wasOff) {
+                    form.setFieldValue('is_public', false);
+                    form.setFieldValue('watermark_enabled', false);
+                    form.setFieldValue('price_per_photo', null);
+                  }
+                }}
+              />
+            </div>
+          </div>
+        )}
+      </form.Field>
+
+      <form.Subscribe selector={(state) => state.values.is_collaborative}>
+        {(isCollaborative) =>
+          isCollaborative ? (
+            <div className="grid gap-3 rounded-lg border border-dashed border-input p-3">
+              <form.Field name="allow_guest_upload">
+                {(field) => (
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="grid gap-1">
+                      <Label htmlFor="allow_guest_upload">Allow guest uploads</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Visitors without an account can contribute photos
+                      </p>
+                    </div>
+                    <Switch
+                      id="allow_guest_upload"
+                      checked={field.state.value}
+                      onCheckedChange={(checked) => {
+                        field.handleChange(checked);
+                        field.handleBlur();
+                      }}
+                    />
+                  </div>
+                )}
+              </form.Field>
+              <form.Field name="require_upload_approval">
+                {(field) => (
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="grid gap-1">
+                      <Label htmlFor="require_upload_approval">Require approval</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Hold uploads as pending until you approve them
+                      </p>
+                    </div>
+                    <Switch
+                      id="require_upload_approval"
+                      checked={field.state.value}
+                      onCheckedChange={(checked) => {
+                        field.handleChange(checked);
+                        field.handleBlur();
+                      }}
+                    />
+                  </div>
+                )}
+              </form.Field>
+            </div>
+          ) : null
+        }
+      </form.Subscribe>
     </div>
   );
 }

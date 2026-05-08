@@ -1,11 +1,16 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import {
+  deletePhoto,
+  deleteStorageFiles,
+  eventExists,
+  getPhoto,
   getTagsForPhotos,
   isPhotoTaggedForTalent,
   tagPhotosForTalent,
   untagPhotoForTalent,
+  updatePhotoUploadStatus,
 } from '@/database/queries';
 import { createClient } from '@/database/server';
 
@@ -203,4 +208,69 @@ export async function checkPhotoTaggedForTalent(
 ): Promise<boolean> {
   const supabase = await createClient();
   return await isPhotoTaggedForTalent(supabase, photoId, talentUserId);
+}
+
+/**
+ * Approve a pending guest-uploaded photo on a collaborative event.
+ */
+export async function approvePendingPhotoAction(
+  photoId: string,
+  eventId: string,
+): Promise<{ success: true }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('You must be signed in to approve photos.');
+  }
+  if (!(await eventExists(supabase, eventId, user.id))) {
+    throw new Error('Event not found or access denied.');
+  }
+
+  await updatePhotoUploadStatus(supabase, {
+    photoId,
+    eventId,
+    status: 'approved',
+  });
+
+  revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
+  revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
+  revalidateTag(`event-${eventId}`, 'max');
+  return { success: true };
+}
+
+/**
+ * Reject a pending guest-uploaded photo: hard-delete the storage object and
+ * the photos row. No undo.
+ */
+export async function rejectPendingPhotoAction(
+  photoId: string,
+  eventId: string,
+): Promise<{ success: true }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('You must be signed in to reject photos.');
+  }
+  if (!(await eventExists(supabase, eventId, user.id))) {
+    throw new Error('Event not found or access denied.');
+  }
+
+  const photo = await getPhoto(supabase, photoId, eventId, user.id);
+  if (!photo) throw new Error('Photo not found.');
+
+  await deletePhoto(supabase, photoId, user.id);
+  if (photo.original_url) {
+    await deleteStorageFiles(supabase, 'photos', [photo.original_url]);
+  }
+
+  revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
+  revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
+  revalidateTag(`event-${eventId}`, 'max');
+  return { success: true };
 }

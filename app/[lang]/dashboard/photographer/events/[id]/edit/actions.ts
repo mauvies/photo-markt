@@ -45,6 +45,18 @@ const eventSchema = z.object({
     .string()
     .default('true')
     .transform((val) => val === 'true'),
+  is_collaborative: z
+    .string()
+    .default('false')
+    .transform((val) => val === 'true'),
+  allow_guest_upload: z
+    .string()
+    .default('true')
+    .transform((val) => val === 'true'),
+  require_upload_approval: z
+    .string()
+    .default('false')
+    .transform((val) => val === 'true'),
   price_per_photo: z
     .string()
     .optional()
@@ -156,6 +168,9 @@ export async function updateEventAction(
     city: formData.get('city')?.toString(),
     is_public: formData.get('is_public')?.toString() ?? 'true',
     watermark_enabled: formData.get('watermark_enabled')?.toString() ?? 'true',
+    is_collaborative: formData.get('is_collaborative')?.toString() ?? 'false',
+    allow_guest_upload: formData.get('allow_guest_upload')?.toString() ?? 'true',
+    require_upload_approval: formData.get('require_upload_approval')?.toString() ?? 'false',
     price_per_photo: formData.get('price_per_photo')?.toString(),
   });
   if (!parsed.success) {
@@ -167,10 +182,12 @@ export async function updateEventAction(
   const currentEvent = await getEvent(supabase, eventId, user.id);
   if (!currentEvent) throw new Error('Event not found.');
 
+  // Collaborative events always need a share code (that's the entry point for
+  // contributors). Public non-collaborative events don't.
   let shareCode: string | null = currentEvent.share_code;
-  if (!payload.is_public && !shareCode) {
-    shareCode = generateShareCode();
-  } else if (payload.is_public) {
+  if (payload.is_collaborative || !payload.is_public) {
+    if (!shareCode) shareCode = generateShareCode();
+  } else {
     shareCode = null;
   }
 
@@ -187,6 +204,9 @@ export async function updateEventAction(
     share_code: shareCode,
     price_per_photo: payload.price_per_photo ?? null,
     watermark_enabled: watermarkEnabled,
+    is_collaborative: payload.is_collaborative,
+    allow_guest_upload: payload.allow_guest_upload,
+    require_upload_approval: payload.require_upload_approval,
   });
 
   if (photoIdsToDelete && photoIdsToDelete.length > 0) {
