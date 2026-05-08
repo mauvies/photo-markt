@@ -1,4 +1,3 @@
-import { Toaster } from 'sonner';
 import { ConditionalHeader } from '@/components/conditional-header';
 import { GuestCartMerge } from '@/components/guest-cart-merge';
 import { GuestCartProvider } from '@/components/guest-cart-provider';
@@ -6,6 +5,7 @@ import Header from '@/components/header';
 import { Main } from '@/components/main';
 import { QueryProvider } from '@/components/query-provider';
 import { ScrollToTop } from '@/components/scroll-to-top';
+import { Toaster } from '@/components/ui/sonner';
 import { type Locale, locales } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';

@@ -19,6 +19,9 @@ export interface Event {
   slug: string | null;
   price_per_photo: number | null;
   watermark_enabled: boolean;
+  is_collaborative: boolean;
+  allow_guest_upload: boolean;
+  require_upload_approval: boolean;
   created_at?: string;
   updated_at?: string;
   deleted_at?: string | null;
@@ -38,6 +41,9 @@ export interface EventSummary {
   slug: string | null;
   price_per_photo: number | null;
   watermark_enabled: boolean;
+  is_collaborative: boolean;
+  allow_guest_upload: boolean;
+  require_upload_approval: boolean;
 }
 
 /**
@@ -50,7 +56,7 @@ export async function getUserEvents(
   const { data, error } = await supabase
     .from('events')
     .select(
-      'id, name, date, city, country, activity, is_public, share_code, slug, price_per_photo, watermark_enabled',
+      'id, name, date, city, country, activity, is_public, share_code, slug, price_per_photo, watermark_enabled, is_collaborative, allow_guest_upload, require_upload_approval',
     )
     .eq('user_id', userId)
     .is('deleted_at', null)
@@ -129,6 +135,9 @@ export async function createEvent(
     slug?: string | null;
     price_per_photo: number | null;
     watermark_enabled: boolean;
+    is_collaborative?: boolean;
+    allow_guest_upload?: boolean;
+    require_upload_approval?: boolean;
   },
 ): Promise<{ id: string }> {
   const { data, error } = await supabase
@@ -228,7 +237,7 @@ export async function searchPublicEvents(
   let query = supabase
     .from('events')
     .select(
-      'id, user_id, name, date, city, country, state, activity, is_public, share_code, slug, price_per_photo, watermark_enabled',
+      'id, user_id, name, date, city, country, state, activity, is_public, share_code, slug, price_per_photo, watermark_enabled, is_collaborative, allow_guest_upload, require_upload_approval',
       { count: 'exact' },
     )
     .eq('is_public', true)
@@ -406,6 +415,9 @@ export async function updateEvent(
     share_code?: string | null;
     price_per_photo?: number | null;
     watermark_enabled?: boolean;
+    is_collaborative?: boolean;
+    allow_guest_upload?: boolean;
+    require_upload_approval?: boolean;
   },
 ): Promise<void> {
   // Verify event belongs to user and is not deleted

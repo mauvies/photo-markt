@@ -39,6 +39,7 @@ export default async function TalentPhotosPage({ params }: { params: Promise<{ l
           initialGroups={result.groups}
           hasMore={result.hasMore}
           photosInCart={result.photosInCart}
+          iconTooltips={dict.photoIconButtons}
         />
       </TranslationsProvider>
     </div>

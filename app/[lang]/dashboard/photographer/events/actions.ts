@@ -6,7 +6,7 @@ import {
   deleteEvent,
   deleteEventPhotos,
   deleteStorageFiles,
-  eventExists,
+  getEvent,
   getPhoto,
   getPhotoStoragePaths,
 } from '@/database/queries';
@@ -29,7 +29,13 @@ export const deleteEventAction = async (eventId: string) => {
     throw new Error('You must be signed in to delete an event.');
   }
 
-  if (!(await eventExists(supabase, eventId, user.id))) {
+  // Fetch the event before deleting so we know which cache entries on the
+  // public route to invalidate. /events/[param] caches under tag
+  // `event-{param}` where param can be the UUID, the slug, or the share code
+  // — invalidating only `event-{eventId}` leaves stale entries served via the
+  // other identifiers.
+  const event = await getEvent(supabase, eventId, user.id);
+  if (!event) {
     throw new Error('Event not found.');
   }
 
@@ -55,6 +61,16 @@ export const deleteEventAction = async (eventId: string) => {
   revalidateTag('top-events', 'max');
   revalidateTag('filter-options', 'max');
   revalidateTag(`event-${eventId}`, 'max');
+  if (event.share_code) {
+    revalidateTag(`event-${event.share_code}`, 'max');
+    revalidatePath(`/es/events/${event.share_code}`);
+    revalidatePath(`/en/events/${event.share_code}`);
+  }
+  if (event.slug) {
+    revalidateTag(`event-${event.slug}`, 'max');
+    revalidatePath(`/es/events/${event.slug}`);
+    revalidatePath(`/en/events/${event.slug}`);
+  }
   revalidateTag(`photographer-events-${user.id}`, 'max');
   revalidateTag(`dashboard-photographer-${user.id}`, 'max');
   updateTag(`photographer-events-${user.id}`);

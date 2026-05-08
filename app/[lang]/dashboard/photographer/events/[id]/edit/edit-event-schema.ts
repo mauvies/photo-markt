@@ -15,6 +15,9 @@ export const eventSchema = z.object({
   city: z.string().trim().optional(),
   is_public: z.boolean().default(true),
   watermark_enabled: z.boolean().default(true),
+  is_collaborative: z.boolean().default(false),
+  allow_guest_upload: z.boolean().default(true),
+  require_upload_approval: z.boolean().default(false),
   price_per_photo: z
     .union([z.string(), z.number(), z.null(), z.undefined()])
     .optional()

@@ -1,5 +1,5 @@
 # ==========================================
-# .claudeignore - Picdemi Project
+# .claudeignore - Photo Markt
 # Objetivo: Ahorrar tokens y evitar fugas de secretos.
 # ==========================================
 
@@ -7,18 +7,12 @@
 node_modules/
 jspm_packages/
 web_modules/
-# Si usas Python
-venv/
-.venv/
-env/
-__pycache__/
 
 # --- Directorios de Build y Output ---
 .next/
 build/
 dist/
 out/
-.docusaurus/
 .cache/
 
 # --- Variables de Entorno y Secretos (¡CRÍTICO!) ---
@@ -37,7 +31,6 @@ secrets.json
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-lerna-debug.log*
 pnpm-debug.log*
 .npm/
 .eslintcache
@@ -46,26 +39,36 @@ pnpm-debug.log*
 *.tmp
 *.temp
 
-# --- Multimedia y Assets Grandes (Claude no lee binarios) ---
-# Esto ahorra muchísimos tokens de input.
+# --- Multimedia y Assets Grandes ---
+# Claude no lee binarios — ignorar ahorra tokens significativos
 public/assets/
 public/images/
 public/videos/
 public/fonts/
-# O genérico si tienes los assets en otros sitios
 *.png
 *.jpg
 *.jpeg
 *.gif
-*.svg
 *.ico
 *.mp4
 *.webp
 *.avif
 *.ttf
 *.otf
+# SVGs NO ignorados — pueden ser componentes relevantes en el código
 
-# --- Configuración de IDEs y Herramientas ---
+# --- Base de Datos ---
+*.db
+*.sqlite
+*.sqlite-journal
+# NO ignorar *.sql — las migraciones en /supabase/migrations/ son necesarias
+# para que Claude entienda el schema y escriba migraciones correctas
+
+# --- Supabase local ---
+supabase/.branches/
+supabase/.temp/
+
+# --- Configuración de IDEs ---
 .vscode/
 .idea/
 *.suo
@@ -80,16 +83,16 @@ public/fonts/
 .hg/
 .svn/
 
-# --- Base de Datos Local (si usas SQLite u otros dumps) ---
-# Mantén schema.prisma, pero ignora los datos reales.
-*.db
-*.sqlite
-*.sqlite-journal
-# Si tienes dumps de SQL grandes
-*.sql
-
-# --- Otros ---
+# --- Coverage y Tests ---
 coverage/
 .nyc_output/
+__snapshots__/
+
+# --- Deploy y CI ---
 .vercel/
 .turbo/
+
+# --- Lock files (muy largos, no aportan contexto útil) ---
+pnpm-lock.yaml
+package-lock.json
+yarn.lock

@@ -2,6 +2,10 @@
 
 import { useCallback } from 'react';
 import { PhotoTagsIndicator } from '@/components/photo-tags-indicator';
+import {
+  PhotoUploaderIndicator,
+  type PhotoUploaderInfo,
+} from '@/components/photo-uploader-indicator';
 import { PhotoActionIcon } from '@/components/ui/photo-action-icon';
 import { cn } from '@/lib/utils';
 
@@ -41,6 +45,14 @@ interface PhotoIconButtonsProps {
     talent_display_name: string | null;
     tagged_at: string;
   }>;
+  uploader?: PhotoUploaderInfo;
+  uploaderLabels?: {
+    tooltip: string;
+    popoverHeading: string;
+  };
+  canDelete?: boolean;
+  onDelete?: (photoId: string) => void;
+  deleteTooltip?: string;
   isPopoverOpen?: boolean;
   onPopoverOpenChange?: (open: boolean) => void;
   canSelect?: boolean;
@@ -65,6 +77,11 @@ export function PhotoIconButtons({
   isSelected = false,
   hasTags = false,
   tags = [],
+  uploader,
+  uploaderLabels,
+  canDelete = false,
+  onDelete,
+  deleteTooltip,
   isPopoverOpen = false,
   onPopoverOpenChange,
   canSelect = false,
@@ -112,6 +129,10 @@ export function PhotoIconButtons({
     }
   }, [photoId, inCart, onAddToCart, onRemoveFromCart]);
 
+  const handleDeleteClick = useCallback(() => {
+    onDelete?.(photoId);
+  }, [photoId, onDelete]);
+
   const tagTooltip = hasTags ? tt.nPeopleTagged.replace('{n}', String(tags.length)) : tt.tagPeople;
 
   return (
@@ -151,8 +172,25 @@ export function PhotoIconButtons({
           </div>
         )}
 
-        {/* Cart button — visible on hover; always visible when in cart */}
+        {/* Right side: uploader badge (always visible when present, like the
+            tags badge) and cart button (visible on hover). */}
         <div className="ml-auto flex items-start gap-1.5">
+          {uploader && !selectionActive && (
+            <div
+              className={cn(
+                'pointer-events-auto transition-opacity duration-150',
+                hasAnyOpen ? 'opacity-100' : 'opacity-100 md:opacity-0 md:group-hover:opacity-100',
+              )}
+            >
+              <PhotoUploaderIndicator
+                uploader={uploader}
+                tooltip={uploaderLabels?.tooltip}
+                popoverHeading={uploaderLabels?.popoverHeading}
+                isPopoverOpen={isPopoverOpen}
+                onPopoverOpenChange={onPopoverOpenChange}
+              />
+            </div>
+          )}
           {showAddToCart && !selectionActive && (
             <div className={cn(ICON_WRAP, (inCart || hasAnyOpen) && 'md:opacity-100')}>
               <PhotoActionIcon
@@ -204,17 +242,29 @@ export function PhotoIconButtons({
             )}
           </div>
 
-          {/* Heart / Save button — visible on hover; always visible when saved */}
-          {showAddToPhotos && (
-            <div className={cn(ICON_WRAP, (inMyPhotos || hasAnyOpen) && 'md:opacity-100')}>
-              <PhotoActionIcon
-                icon="save"
-                active={inMyPhotos}
-                onClick={handleHeartClick}
-                tooltip={inMyPhotos ? tt.removeFromMyPhotos : tt.saveToPhotos}
-              />
-            </div>
-          )}
+          {/* Right cluster: Heart / Save and contributor Delete */}
+          <div className="flex items-end gap-1.5">
+            {showAddToPhotos && (
+              <div className={cn(ICON_WRAP, (inMyPhotos || hasAnyOpen) && 'md:opacity-100')}>
+                <PhotoActionIcon
+                  icon="save"
+                  active={inMyPhotos}
+                  onClick={handleHeartClick}
+                  tooltip={inMyPhotos ? tt.removeFromMyPhotos : tt.saveToPhotos}
+                />
+              </div>
+            )}
+            {canDelete && onDelete && (
+              <div className={cn(ICON_WRAP, hasAnyOpen && 'md:opacity-100')}>
+                <PhotoActionIcon
+                  icon="delete"
+                  active={false}
+                  onClick={handleDeleteClick}
+                  tooltip={deleteTooltip ?? 'Delete'}
+                />
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

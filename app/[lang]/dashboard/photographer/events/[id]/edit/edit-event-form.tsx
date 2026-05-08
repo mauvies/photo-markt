@@ -52,6 +52,9 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
     city: event.city,
     is_public: event.is_public,
     watermark_enabled: event.watermark_enabled,
+    is_collaborative: event.is_collaborative,
+    allow_guest_upload: event.allow_guest_upload,
+    require_upload_approval: event.require_upload_approval,
     price_per_photo: event.price_per_photo,
   };
 
@@ -117,6 +120,12 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
         }
         formData.append('is_public', parsed.is_public ? 'true' : 'false');
         formData.append('watermark_enabled', parsed.watermark_enabled ? 'true' : 'false');
+        formData.append('is_collaborative', parsed.is_collaborative ? 'true' : 'false');
+        formData.append('allow_guest_upload', parsed.allow_guest_upload ? 'true' : 'false');
+        formData.append(
+          'require_upload_approval',
+          parsed.require_upload_approval ? 'true' : 'false',
+        );
         if (parsed.price_per_photo !== undefined && parsed.price_per_photo !== null) {
           const price =
             typeof parsed.price_per_photo === 'string'
