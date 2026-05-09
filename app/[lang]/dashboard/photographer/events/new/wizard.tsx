@@ -9,7 +9,7 @@ import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { createEvent } from './actions';
-import { activityOptions } from './activity-options';
+import { activityOptions, activityValues } from './activity-options';
 import { ShareCodeDialog } from './components/share-code-dialog';
 import { type StepNumber, WizardSteps } from './components/wizard-steps';
 import { Step1Config } from './steps/step-1-config';
@@ -36,38 +36,87 @@ const STEP_FIELDS: Record<StepNumber, Array<keyof FormValues>> = {
   4: [],
 };
 
-function readStoredValues(): FormValues | null {
+type StoredWizardState = {
+  values: FormValues;
+  reachedStep: StepNumber;
+};
+
+function readStoredState(): StoredWizardState | null {
   if (typeof window === 'undefined') return null;
   try {
-    const stored = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
-    if (!stored) return null;
-    const parsed = JSON.parse(stored);
-    if (localStorage.getItem(STORAGE_KEY) === null) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-      localStorage.removeItem(LEGACY_STORAGE_KEY);
-    }
+    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+
+    // The localStorage payload used to be the bare FormValues. Migrate to the
+    // new `{ values, reachedStep }` shape on the fly so existing drafts don't
+    // get dropped on first load after this change.
+    const candidateValues =
+      parsed && typeof parsed === 'object' && 'values' in parsed && parsed.values
+        ? (parsed.values as Record<string, unknown>)
+        : (parsed as Record<string, unknown>);
+
+    const reachedStepRaw =
+      parsed && typeof parsed === 'object' && 'reachedStep' in parsed
+        ? (parsed as { reachedStep: unknown }).reachedStep
+        : 1;
+
+    // Validate event_type against the legacy is_collaborative flag — older
+    // drafts predate the explicit type column.
     const eventType: 'solo' | 'collaborative' | 'organizer' =
-      parsed.event_type === 'organizer' || parsed.event_type === 'collaborative'
-        ? parsed.event_type
-        : parsed.is_collaborative
+      candidateValues.event_type === 'organizer' ||
+      candidateValues.event_type === 'collaborative' ||
+      candidateValues.event_type === 'solo'
+        ? (candidateValues.event_type as 'solo' | 'collaborative' | 'organizer')
+        : candidateValues.is_collaborative
           ? 'collaborative'
           : 'solo';
-    return {
-      name: parsed.name || '',
-      activity: parsed.activity || 'OTHER',
-      date: parsed.date || '',
-      country: '',
-      state: '',
-      city: parsed.city || '',
+
+    const storedActivity = candidateValues.activity;
+    const validActivity =
+      typeof storedActivity === 'string' &&
+      activityValues.includes(storedActivity as (typeof activityValues)[number])
+        ? (storedActivity as (typeof activityValues)[number])
+        : 'OTHER';
+
+    const values: FormValues = {
+      name: typeof candidateValues.name === 'string' ? candidateValues.name : '',
+      activity: validActivity,
+      date: typeof candidateValues.date === 'string' ? candidateValues.date : '',
+      country: typeof candidateValues.country === 'string' ? candidateValues.country : '',
+      state: typeof candidateValues.state === 'string' ? candidateValues.state : '',
+      city: typeof candidateValues.city === 'string' ? candidateValues.city : '',
       event_type: eventType,
-      is_public: parsed.is_public ?? true,
-      watermark_enabled: parsed.watermark_enabled ?? true,
+      is_public: typeof candidateValues.is_public === 'boolean' ? candidateValues.is_public : true,
+      watermark_enabled:
+        typeof candidateValues.watermark_enabled === 'boolean'
+          ? candidateValues.watermark_enabled
+          : true,
       is_collaborative: eventType === 'collaborative',
-      allow_guest_upload: parsed.allow_guest_upload ?? true,
-      require_upload_approval: parsed.require_upload_approval ?? false,
-      price_per_photo: parsed.price_per_photo ?? null,
-      organizer_fee_per_photo: parsed.organizer_fee_per_photo ?? null,
+      allow_guest_upload:
+        typeof candidateValues.allow_guest_upload === 'boolean'
+          ? candidateValues.allow_guest_upload
+          : true,
+      require_upload_approval:
+        typeof candidateValues.require_upload_approval === 'boolean'
+          ? candidateValues.require_upload_approval
+          : false,
+      price_per_photo:
+        typeof candidateValues.price_per_photo === 'number'
+          ? candidateValues.price_per_photo
+          : null,
+      organizer_fee_per_photo:
+        typeof candidateValues.organizer_fee_per_photo === 'number'
+          ? candidateValues.organizer_fee_per_photo
+          : null,
     };
+
+    const reachedStep: StepNumber =
+      reachedStepRaw === 1 || reachedStepRaw === 2 || reachedStepRaw === 3 || reachedStepRaw === 4
+        ? reachedStepRaw
+        : 1;
+
+    return { values, reachedStep };
   } catch {
     return null;
   }
@@ -107,8 +156,13 @@ export default function NewEventForm() {
 
   // Hydrate localStorage values after mount to avoid SSR mismatch.
   useEffect(() => {
-    const stored = readStoredValues();
-    if (stored) form.reset(stored);
+    const stored = readStoredState();
+    if (stored) {
+      form.reset(stored.values);
+      // Restore the highest step reached so the indicator keeps showing
+      // earlier steps as completed/clickable after a refresh.
+      setReachedStep((prev) => (stored.reachedStep > prev ? stored.reachedStep : prev));
+    }
     // If the user had picked photos in a previous session (flag set on first
     // selection) and we're back without an in-memory File[], surface the
     // "photos lost" banner so they re-pick. Don't fire on a fresh visit.
@@ -122,19 +176,42 @@ export default function NewEventForm() {
     setHydratedFromStorage(true);
   }, [form]);
 
-  // Persist form values on change (after hydration).
+  // Persist the entire wizard state on every change (post-hydration).
+  //
+  // We subscribe directly to the form's store rather than relying on a React
+  // state snapshot. TanStack Form Field components subscribe in isolation, so
+  // the parent NewEventForm doesn't re-render on every keystroke — which
+  // means a useEffect dependency on form.state.values would never re-evaluate
+  // and the persist would only fire once on hydration. Subscribing to the
+  // store directly bypasses React's render cycle for this side effect.
   useEffect(() => {
     if (!hydratedFromStorage) return;
-    const values = form.state.values;
-    const hasData = values.name || values.activity || values.date || values.city;
-    if (hasData) {
+    const writePayload = (): void => {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(values));
+        const payload: StoredWizardState = {
+          values: form.state.values,
+          reachedStep,
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
       } catch {
         // Ignore quota / privacy-mode errors.
       }
-    }
-  }, [form.state.values, hydratedFromStorage]);
+    };
+    // Persist current state immediately (e.g. after `reachedStep` changes
+    // even if the form values haven't moved).
+    writePayload();
+    const subscription = form.store.subscribe(() => {
+      writePayload();
+    });
+    // TanStack Store subscribers may return either a teardown fn or a
+    // Subscription object — normalise so React's effect cleanup signature
+    // is happy.
+    return () => {
+      const sub = subscription as { unsubscribe?: () => void } | (() => void);
+      if (typeof sub === 'function') sub();
+      else sub.unsubscribe?.();
+    };
+  }, [form, hydratedFromStorage, reachedStep]);
 
   // Generate object URLs for the file previews; revoke them on cleanup so we
   // don't leak memory when the user removes/reselects.

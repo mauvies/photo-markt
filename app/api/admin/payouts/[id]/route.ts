@@ -21,15 +21,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Service-role lookup so an attacker can't game RLS by being the row's own
-  // owner — is_admin is only writable via direct DB access.
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('is_admin')
-    .eq('id', user.id)
+  // admin_users has no RLS policies — only service_role can read it, so we
+  // can't accidentally expose the admin list via PostgREST.
+  const { data: admin } = await supabaseAdmin
+    .from('admin_users')
+    .select('user_id')
+    .eq('user_id', user.id)
     .maybeSingle();
 
-  if (!profile?.is_admin) {
+  if (!admin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
