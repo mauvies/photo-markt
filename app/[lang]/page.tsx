@@ -2,7 +2,7 @@ import { ArrowRight, Camera, Download, Sparkles } from 'lucide-react';
 import { cacheLife, cacheTag } from 'next/cache';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { ExploreEventCard } from '@/app/[lang]/dashboard/talent/events/explore-event-card';
+import { EventCard } from '@/components/event-card';
 import { EventSearchBar } from '@/components/event-search-bar';
 import { Footer } from '@/components/footer';
 import { HomeAuthRedirect } from '@/components/home-auth-redirect';
@@ -114,7 +114,7 @@ export default async function Home({
                   key={event.id}
                   className="w-[80vw] shrink-0 snap-start sm:w-[45vw] xl:w-auto xl:shrink"
                 >
-                  <ExploreEventCard
+                  <EventCard
                     id={event.id}
                     hrefParam={event.slug ?? event.id}
                     name={event.name}
@@ -124,8 +124,10 @@ export default async function Home({
                     activity={event.activity}
                     photoCount={event.photoCount}
                     coverUrl={event.coverUrl}
-                    photographerUsername={event.photographerUsername}
-                    photographerDisplayName={event.photographerDisplayName}
+                    photographer={{
+                      username: event.photographerUsername,
+                      displayName: event.photographerDisplayName,
+                    }}
                     status={event.status}
                     linkPrefix={localizedPath(lang, '/events')}
                     t={{

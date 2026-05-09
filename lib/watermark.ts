@@ -6,10 +6,35 @@
  *   2. Watermark — tiled diagonal "PHOTO MARKT" grid at 17% opacity
  *   3. Noise   — subtle grayscale grain at ~3% opacity
  *   4. Encode  — JPEG at quality 82
+ *
+ * The watermark text is rendered via opentype.js + a bundled Inter Bold WOFF
+ * file converted to SVG `<path>` elements at runtime. We can't use SVG
+ * `<text>` here because Vercel's serverless environment has no fontconfig,
+ * so librsvg (Sharp's SVG renderer) can't resolve `font-family` lookups —
+ * the text would render blank. Pre-converting glyphs to vector paths
+ * sidesteps the font system entirely.
  */
 
 import { randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import opentype from 'opentype.js';
 import sharp from 'sharp';
+
+// Load and parse the bundled font once at module init. Reading once is fine
+// because the lambda warms once per cold start; subsequent invocations reuse
+// the parsed font from memory.
+let cachedFont: opentype.Font | null = null;
+function getFont(): opentype.Font {
+  if (cachedFont) return cachedFont;
+  const fontPath = path.join(process.cwd(), 'lib', 'fonts', 'Inter-Bold.woff');
+  const buffer = readFileSync(fontPath);
+  // opentype.parse expects an ArrayBuffer; slice exposes the underlying one.
+  cachedFont = opentype.parse(
+    buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
+  );
+  return cachedFont;
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -82,12 +107,21 @@ function buildWatermarkSvg(width: number, height: number): string {
   const ANGLE = -30; // degrees
   const OPACITY = 0.17;
 
+  const font = getFont();
+
   // Scale font to image size so the mark looks the same proportionally
   const fontSize = Math.max(14, Math.min(22, Math.floor(Math.min(width, height) / 26)));
 
-  // Approximate rendered text dimensions
-  const approxCharWidth = fontSize * 0.62;
-  const textWidth = TEXT.length * approxCharWidth;
+  // Render the text once as an SVG path string. We position the glyphs at
+  // origin (0, 0) inside a `<symbol>`, then `<use>` it at every tile location
+  // so the path data isn't repeated dozens of times in the SVG output.
+  const textPath = font.getPath(TEXT, 0, 0, fontSize);
+  const pathData = textPath.toPathData(2); // 2 decimal places — keep it compact
+
+  // Measure the rendered text bounding box for tile spacing.
+  const bbox = textPath.getBoundingBox();
+  const textWidth = bbox.x2 - bbox.x1;
+  const textHeight = bbox.y2 - bbox.y1;
 
   // Tile spacing — slightly larger than the text so there's breathing room
   const spacingX = Math.ceil(textWidth * 1.6);
@@ -105,16 +139,17 @@ function buildWatermarkSvg(width: number, height: number): string {
 
     for (let x = -extra; x < width + extra; x += spacingX) {
       const tx = Math.floor(x + stagger);
-      const ty = Math.floor(y);
+      // Center vertically on the tile's y by offsetting half the text height
+      const ty = Math.floor(y + textHeight / 2);
       elements.push(
-        `<text x="${tx}" y="${ty}" transform="rotate(${ANGLE},${tx},${ty})" font-family="Arial,Helvetica,sans-serif" font-size="${fontSize}" font-weight="bold" fill="#ffffff" fill-opacity="${OPACITY}" dominant-baseline="middle">${TEXT}</text>`,
+        `<use href="#wm" x="${tx}" y="${ty}" transform="rotate(${ANGLE},${tx},${ty})"/>`,
       );
     }
   }
 
   // overflow="hidden" clips anything outside the viewport (default SVG behaviour,
   // stated explicitly for librsvg compatibility)
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" overflow="hidden">${elements.join('')}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" overflow="hidden"><defs><path id="wm" d="${pathData}" fill="#ffffff" fill-opacity="${OPACITY}"/></defs>${elements.join('')}</svg>`;
 }
 
 /**

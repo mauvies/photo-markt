@@ -151,7 +151,8 @@
     "confirmButton": "Delete",
     "cancelButton": "Cancel",
     "comingSoon": "Coming Soon",
-    "photosAfterEvent": "Photos will be available after the event."
+    "photosAfterEvent": "Photos will be available after the event.",
+    "statusUpcoming": "Upcoming"
   },
   "cart": {
     "title": "Cart",

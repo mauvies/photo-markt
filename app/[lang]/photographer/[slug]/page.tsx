@@ -2,7 +2,7 @@ import { Camera } from 'lucide-react';
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
-import { ExploreEventCard } from '@/app/[lang]/dashboard/talent/events/explore-event-card';
+import { EventCard } from '@/components/event-card';
 import { Footer } from '@/components/footer';
 import { getSiteUrl } from '@/lib/get-site-url';
 import type { Locale } from '@/lib/i18n/config';
@@ -105,7 +105,7 @@ export default async function PhotographerProfilePage({ params }: { params: Para
           ) : (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {photographerEvents.map((event) => (
-                <ExploreEventCard
+                <EventCard
                   key={event.id}
                   id={event.id}
                   hrefParam={(event as { slug?: string | null }).slug ?? event.id}

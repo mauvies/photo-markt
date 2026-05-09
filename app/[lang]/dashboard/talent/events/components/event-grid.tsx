@@ -1,11 +1,11 @@
 'use client';
 
 import { Filter, Loader2, Search } from 'lucide-react';
+import { EventCard } from '@/components/event-card';
 import { Button } from '@/components/ui/button';
 import type { EventWithStats } from '@/hooks/use-event-search';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
-import { ExploreEventCard } from '../explore-event-card';
 
 type EventGridT = Pick<
   Dictionary['eventFilterBar'],
@@ -92,7 +92,7 @@ export function EventGrid({
     <>
       <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {events.map((event) => (
-          <ExploreEventCard
+          <EventCard
             key={event.id}
             id={event.id}
             hrefParam={event.slug ?? event.id}
@@ -103,8 +103,10 @@ export function EventGrid({
             activity={event.activity}
             photoCount={event.photoCount}
             coverUrl={event.coverUrl}
-            photographerUsername={event.photographerUsername}
-            photographerDisplayName={event.photographerDisplayName}
+            photographer={{
+              username: event.photographerUsername,
+              displayName: event.photographerDisplayName,
+            }}
             status={event.status}
             linkPrefix={eventLinkPrefix}
             t={{

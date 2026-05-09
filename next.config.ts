@@ -3,6 +3,13 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
+  // Force-include font assets in the bundle for routes that read them at
+  // runtime via fs. The watermark API needs Inter-Bold.woff to render text
+  // (Vercel/Lambda has no fontconfig, so we ship the font ourselves and
+  // convert glyphs to SVG paths via opentype.js).
+  outputFileTracingIncludes: {
+    '/api/watermark/**/*': ['./lib/fonts/**/*'],
+  },
   experimental: {
     serverActions: {
       // Per-file size is enforced in lib/photo-upload.ts (50 MB); this is the

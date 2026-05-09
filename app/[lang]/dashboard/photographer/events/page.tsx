@@ -1,6 +1,7 @@
 import { cacheLife, cacheTag } from 'next/cache';
 import Link from 'next/link';
 import { DashboardHeader } from '@/components/dashboard-header';
+import { EventCard } from '@/components/event-card';
 import { Button } from '@/components/ui/button';
 import {
   createSignedUrl,
@@ -15,7 +16,7 @@ import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { deleteEventAction as deleteEvent } from './actions';
-import { EventCard } from './event-card';
+import { EventCardActions } from './event-card-actions';
 import { PendingInvitationsPanel } from './pending-invitations-panel';
 
 type PhotoStat = {
@@ -31,7 +32,6 @@ const SIGNED_URL_TTL = 60 * 55;
 async function getCachedEventsData(userId: string): Promise<{
   events: Awaited<ReturnType<typeof getUserEvents>>;
   stats: Map<string, PhotoStat>;
-  salesCounts: Map<string, number>;
   coverUrls: Map<string, string>;
 }> {
   'use cache';
@@ -44,20 +44,11 @@ async function getCachedEventsData(userId: string): Promise<{
   const empty = {
     events,
     stats: new Map<string, PhotoStat>(),
-    salesCounts: new Map<string, number>(),
     coverUrls: new Map<string, string>(),
   };
   if (eventIds.length === 0) return empty;
 
-  const [photoRows, salesData] = await Promise.all([
-    getPhotosForEvents(supabaseAdmin, eventIds),
-    supabaseAdmin
-      .from('order_items')
-      .select('photo_id, orders!inner(id, status), photos!inner(event_id)')
-      .eq('photographer_id', userId)
-      .eq('orders.status', 'completed')
-      .in('photos.event_id', eventIds),
-  ]);
+  const photoRows = await getPhotosForEvents(supabaseAdmin, eventIds);
 
   const stats = new Map<string, PhotoStat>();
 
@@ -86,25 +77,6 @@ async function getCachedEventsData(userId: string): Promise<{
     }
   });
 
-  const uniqueOrdersPerEvent = new Map<string, Set<string>>();
-  const items = (salesData.data ?? []) as Array<{
-    photos: Array<{ event_id: string | null }> | { event_id: string | null };
-    orders: Array<{ id: string }> | { id: string };
-  }>;
-  items.forEach((item) => {
-    const photo = Array.isArray(item.photos) ? item.photos[0] : item.photos;
-    const order = Array.isArray(item.orders) ? item.orders[0] : item.orders;
-    if (!photo?.event_id || !order?.id) return;
-    const orderSet = uniqueOrdersPerEvent.get(photo.event_id) ?? new Set<string>();
-    orderSet.add(order.id);
-    uniqueOrdersPerEvent.set(photo.event_id, orderSet);
-  });
-
-  const salesCounts = new Map<string, number>();
-  uniqueOrdersPerEvent.forEach((orderSet, eventId) => {
-    salesCounts.set(eventId, orderSet.size);
-  });
-
   // Sign cover URLs inside the cache so repeated navigations skip this entirely
   const coverUrls = new Map<string, string>();
   await Promise.all(
@@ -115,7 +87,7 @@ async function getCachedEventsData(userId: string): Promise<{
     }),
   );
 
-  return { events, stats, salesCounts, coverUrls };
+  return { events, stats, coverUrls };
 }
 
 export default async function EventsPage({ params }: { params: Promise<{ lang: string }> }) {
@@ -135,7 +107,7 @@ export default async function EventsPage({ params }: { params: Promise<{ lang: s
     );
   }
 
-  const [{ events, stats, salesCounts, coverUrls }, pendingInvitations] = await Promise.all([
+  const [{ events, stats, coverUrls }, pendingInvitations] = await Promise.all([
     getCachedEventsData(user.id),
     getPendingInvitationsForPhotographer(supabase, user.id),
   ]);
@@ -193,19 +165,40 @@ export default async function EventsPage({ params }: { params: Promise<{ lang: s
                 <EventCard
                   key={event.id}
                   id={event.id}
+                  linkPrefix={`/${lang}/dashboard/photographer/events`}
                   name={event.name}
                   date={event.date}
                   city={event.city}
                   country={event.country}
                   activity={event.activity}
-                  pricePerPhoto={event.price_per_photo}
                   photoCount={count}
-                  salesCount={salesCounts.get(event.id) ?? 0}
-                  isPublic={event.is_public}
                   coverUrl={coverUrl}
                   status={event.date ? getEventStatus(event.date) : undefined}
-                  editHref={`/dashboard/photographer/events/${event.id}/edit`}
-                  onDelete={deleteEvent.bind(null, event.id)}
+                  ownerStats={{
+                    isPublic: event.is_public,
+                    privateLabel: dict.events.private,
+                  }}
+                  t={{
+                    photo: dict.events.photo,
+                    photos: dict.events.photos,
+                    noPhotosYet: dict.events.noPhotosYet,
+                    upcomingLabel: dict.events.statusUpcoming,
+                  }}
+                  actions={
+                    <EventCardActions
+                      editHref={`/dashboard/photographer/events/${event.id}/edit`}
+                      onDelete={deleteEvent.bind(null, event.id)}
+                      labels={{
+                        edit: dict.events.editEvent,
+                        delete: dict.events.deleteEvent,
+                        deleteTitle: dict.events.deleteConfirmTitle,
+                        deleteDescription: dict.events.deleteConfirmDesc,
+                        deleteConfirm: dict.events.confirmButton,
+                        deleteCancel: dict.events.cancelButton,
+                        ariaOpen: dict.events.eventActionsMenuLabel,
+                      }}
+                    />
+                  }
                 />
               );
             })}
