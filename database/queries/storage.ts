@@ -121,14 +121,23 @@ export async function createPhotoUrls(
 ): Promise<Array<{ path: string; signedUrl: string | null }>> {
   const { useWatermark = false, baseUrl, expiresIn = 3600 } = options ?? {};
 
-  if (useWatermark && baseUrl) {
-    // Return watermark API URLs
+  if (useWatermark) {
+    // Fail-CLOSED: if the caller asked for watermarked URLs but we can't
+    // build them (missing baseUrl), do NOT silently fall back to direct
+    // signed URLs — that would expose the original, payment-gated image.
+    // Returning null lets the consumer hide the photo or render a placeholder.
+    if (!baseUrl) {
+      console.error(
+        '[watermark-error] createPhotoUrls called with useWatermark=true but no baseUrl — returning null URLs to avoid leaking originals',
+      );
+      return paths.map((p) => ({ path: p, signedUrl: null }));
+    }
     return paths.map((path) => ({
       path,
       signedUrl: `${baseUrl}/api/watermark/${path}`,
     }));
   }
 
-  // Return regular signed URLs
+  // No watermark requested — caller is OK with direct signed URLs.
   return createSignedUrls(supabase, bucket, paths, expiresIn);
 }

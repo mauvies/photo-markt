@@ -18,19 +18,21 @@
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import opentype from 'opentype.js';
+// opentype.js v2 ships only named exports — no default. Importing the
+// namespace lets us reach `parse` and the `Font` type cleanly.
+import { type Font, parse as parseFont } from 'opentype.js';
 import sharp from 'sharp';
 
 // Load and parse the bundled font once at module init. Reading once is fine
 // because the lambda warms once per cold start; subsequent invocations reuse
 // the parsed font from memory.
-let cachedFont: opentype.Font | null = null;
-function getFont(): opentype.Font {
+let cachedFont: Font | null = null;
+function getFont(): Font {
   if (cachedFont) return cachedFont;
   const fontPath = path.join(process.cwd(), 'lib', 'fonts', 'Inter-Bold.woff');
   const buffer = readFileSync(fontPath);
-  // opentype.parse expects an ArrayBuffer; slice exposes the underlying one.
-  cachedFont = opentype.parse(
+  // parseFont expects an ArrayBuffer; slice exposes the underlying one.
+  cachedFont = parseFont(
     buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
   );
   return cachedFont;
@@ -150,6 +152,38 @@ function buildWatermarkSvg(width: number, height: number): string {
   // overflow="hidden" clips anything outside the viewport (default SVG behaviour,
   // stated explicitly for librsvg compatibility)
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" overflow="hidden"><defs><path id="wm" d="${pathData}" fill="#ffffff" fill-opacity="${OPACITY}"/></defs>${elements.join('')}</svg>`;
+}
+
+/**
+ * Returns a generic JPEG placeholder used when the watermark pipeline fails.
+ * The route handler serves this in place of the original image — never serve
+ * the un-watermarked original on error, that's the same as no protection.
+ *
+ * Implementation note: the SVG uses only `<rect>` and `<g>` paths — no
+ * `<text>` — so it renders identically regardless of whether fontconfig is
+ * available in the deployment runtime. (The whole reason we needed
+ * opentype.js in the first place.)
+ */
+let cachedErrorPlaceholder: Buffer | null = null;
+export async function buildWatermarkErrorPlaceholder(): Promise<Buffer> {
+  if (cachedErrorPlaceholder) return cachedErrorPlaceholder;
+  const size = 800;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
+    <defs>
+      <pattern id="stripe" patternUnits="userSpaceOnUse" width="80" height="80" patternTransform="rotate(-30)">
+        <rect width="80" height="80" fill="#3f3f46"/>
+        <rect width="40" height="80" fill="#52525b"/>
+      </pattern>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#stripe)"/>
+    <g transform="translate(${size / 2 - 70},${size / 2 - 70})" fill="none" stroke="#a1a1aa" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="0" y="0" width="140" height="140" rx="14" ry="14"/>
+      <path d="M10 100 L50 65 L80 95 L110 70 L130 90"/>
+      <circle cx="45" cy="40" r="10" fill="#a1a1aa" stroke="none"/>
+    </g>
+  </svg>`;
+  cachedErrorPlaceholder = await sharp(Buffer.from(svg)).jpeg({ quality: 60 }).toBuffer();
+  return cachedErrorPlaceholder;
 }
 
 /**
