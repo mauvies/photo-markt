@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
+import { headers } from 'next/headers';
 import {
   deletePhoto,
   deleteStorageFiles,
@@ -14,6 +15,7 @@ import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { isCollaborativeUploadOpen } from '@/lib/event-status';
 import { validatePhotoUpload } from '@/lib/photo-upload';
+import { getClientIp, rateLimit } from '@/lib/rate-limit';
 
 const MAX_GUEST_NAME_LENGTH = 60;
 const MAX_GUEST_EMAIL_LENGTH = 120;
@@ -50,6 +52,19 @@ export async function uploadGuestPhotosAction(
   const event = await getEventByShareCode(adminClient, shareCode);
   if (!event || !event.is_collaborative || !event.allow_guest_upload) {
     throw new Error('This event is not accepting contributions.');
+  }
+
+  // Rate-limit by (event, IP) — this endpoint is unauthenticated and a real
+  // abuse vector for storage-cost DoS. Per-event scope keeps a noisy guest on
+  // event A from blocking a legitimate guest on event B.
+  const ip = getClientIp(await headers());
+  const rl = await rateLimit({
+    key: `guest-upload:${event.id}:${ip}`,
+    limit: 30,
+    windowSec: 3600,
+  });
+  if (!rl.ok) {
+    throw new Error('Too many uploads from this network. Please try again later.');
   }
   // Block uploads before the event day. Without this, contributed photos
   // pile up in storage while the public gallery still shows "coming soon"

@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server';
 import { getCartItemsWithDetails } from '@/database/queries/carts';
 import { createClient } from '@/database/server';
+import { rateLimit, retryAfterSeconds } from '@/lib/rate-limit';
 import { stripe } from '@/lib/stripe/config';
 
 export async function POST(request: Request) {
@@ -17,6 +18,22 @@ export async function POST(request: Request) {
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Per-user rate limit on checkout creation. Each call hits the Stripe API
+    // (real $$$ side effect on free-tier rate limits) and creates a session
+    // that lingers in Stripe's dashboard. 20/hour generously covers honest
+    // retries from network blips; abuse is bounded.
+    const rl = await rateLimit({
+      key: `stripe-checkout:${user.id}`,
+      limit: 20,
+      windowSec: 3600,
+    });
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'Too Many Requests' },
+        { status: 429, headers: { 'Retry-After': String(retryAfterSeconds(rl)) } },
+      );
     }
 
     // Get user's cart

@@ -150,6 +150,18 @@ Controlled in `lib/feature-flags.ts`. `AI_MATCHING` is currently disabled.
 `id, user_id, selfie_embedding, activity_type, country, region, date_from, date_to`
 - Stores talent selfie embeddings for AI photo matching (currently disabled)
 
+**admin_users**
+`user_id, granted_at, granted_by`
+- Service-role-only access (RLS enabled, no policies — `anon`/`authenticated` cannot read or write)
+- Used by `/api/admin/*` endpoints to gate access. Look up via `supabaseAdmin`, never via the user-scoped client
+- Seed admins via direct DB access (Supabase SQL editor): `insert into admin_users (user_id) values ('<uuid>')`
+
+**rate_limit_buckets**
+`bucket_key, window_start, count`
+- Service-role-only access (RLS enabled, no policies)
+- Backs `lib/rate-limit.ts`. Atomic increments via the `increment_rate_limit_bucket` `SECURITY DEFINER` function — EXECUTE explicitly revoked from `anon` and `authenticated`
+- One row per `(bucket_key, window_start)`. No automatic cleanup yet — fine at current scale
+
 ## Payments
 
 ### Photographer Subscriptions
@@ -211,6 +223,32 @@ OR profiles.display_name ILIKE '%query%'
 - Previews: watermarked + degraded quality via `/app/api/watermark/`
 - Purchased photos: short-lived signed URLs — never expose original storage path publicly
 - Watermark: tiled repeating pattern, server-side via Sharp
+- **Uploads:** all paths (photographer + guest collaborative) validate via `lib/photo-upload.ts` before writing to storage. Magic-byte check via Sharp, 50 MB per-file cap, content-type and extension are derived from the detected format — `file.type` and `file.name` are never trusted
+
+## Security Utilities
+
+The `lib/` modules below enforce conventions across the app. Use them — don't reinvent.
+
+**`lib/photo-upload.ts`** — `validatePhotoUpload(file)`
+Reads magic bytes via Sharp, rejects unknown formats, caps per-file size at 50 MB. Returns `{ buffer, contentType, extension }` derived from the detected format. Apply on every upload path before writing to storage.
+
+**`lib/json-ld.ts`** — `stringifyJsonLd(value)`
+Use this instead of `JSON.stringify` whenever embedding structured data in an inline `<script>` via `dangerouslySetInnerHTML`. Escapes `<`, `>`, `&`, U+2028, U+2029 so a user-supplied field containing `</script>` cannot break out of the script block.
+
+**`lib/rate-limit.ts`** — `rateLimit({ key, limit, windowSec })`
+Postgres-backed fixed-window limiter. Apply to:
+- Endpoints that hit external APIs (Stripe, Resend) on every call
+- Endpoints with sequential or guessable id parameters (admin endpoints)
+- Unauthenticated endpoints with side effects (guest uploads)
+
+Helpers: `getClientIp(headers)` for unauthenticated keying, `retryAfterSeconds(result)` for the `Retry-After` response header. Fails open on backend errors. Backend is pluggable via the `RateLimitBackend` type — currently Postgres, swappable to Upstash/Redis later without touching call sites.
+
+**`lib/auth/safe-next.ts`** — `safeNext(value)`
+Use for any redirect destination derived from user input (`?next=`, OAuth callback, etc). Rejects protocol-relative URLs (`//evil.com`), backslash variants, and control characters.
+
+## Tests
+
+`pnpm test` runs `tsx --test __tests__/**/*.ts`. Suite is small but targeted at security-critical helpers (escaping, magic-byte validation, rate limiter). When adding security-relevant utilities, add unit tests — keep the helpers pure where possible so tests don't need a DB.
 
 ## AI Photo Search
 
@@ -303,3 +341,12 @@ Skip planning mode for: bug fixes, UI tweaks, adding fields, isolated features, 
 - New env vars must be added to `env.mjs`
 - No `any` types in TypeScript
 - All async functions must have proper error handling — no silent catches
+
+### Security Conventions
+- File uploads must validate via `lib/photo-upload.ts` — never trust client-supplied MIME or extension
+- JSON-LD inside `dangerouslySetInnerHTML` must use `stringifyJsonLd` — never raw `JSON.stringify`
+- Admin endpoints check `admin_users` via `supabaseAdmin` — there is no `profiles.is_admin` column
+- New `SECURITY DEFINER` functions in the `public` schema must explicitly `revoke execute ... from anon, authenticated` — Supabase grants those by default and `revoke from public` doesn't override role-specific grants
+- Tables with no public access pattern: enable RLS with no policies, use `supabaseAdmin` only — see `admin_users` and `rate_limit_buckets` for the pattern
+- Redirect destinations from user input must go through `safeNext()` from `lib/auth/safe-next.ts`
+- Permissive RLS policies (`USING (true)`) are forbidden on tables with sensitive writes — service-role bypasses RLS, so the webhook/admin paths still work after locking down user-facing roles
