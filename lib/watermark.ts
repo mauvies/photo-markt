@@ -149,10 +149,8 @@ function buildWatermarkSvg(width: number, height: number): string {
   // Scale font to image size so the mark looks the same proportionally
   const fontSize = Math.max(14, Math.min(22, Math.floor(Math.min(width, height) / 26)));
 
-  // Render the text once as an SVG path string. We position the glyphs at
-  // origin (0, 0) inside a `<defs><path id>`, then `<use>` it at every tile
-  // location so the path data isn't repeated dozens of times in the SVG.
-  // `textToPath` walks chars individually to avoid opentype.js GSUB bugs.
+  // Render "PHOTO MARKT" once, anchored at (0, 0). `textToPath` walks chars
+  // individually so we avoid opentype.js GSUB bugs.
   const textPath = textToPath(font, TEXT, 0, 0, fontSize);
   const pathData = textPath.toPathData(2); // 2 decimal places — keep it compact
 
@@ -168,6 +166,11 @@ function buildWatermarkSvg(width: number, height: number): string {
   // Extra margin so tiles near the edges remain fully visible after rotation
   const extra = Math.ceil(Math.max(width, height) * 0.35);
 
+  // Inline a `<path>` per tile rather than `<defs>+<use>`. The librsvg
+  // version that ships with Sharp's libvips on Vercel doesn't reliably
+  // resolve SVG2 `href` references, so a `<use>` would silently render
+  // nothing — leaving a watermarked-looking response with no actual
+  // watermark visible. Inlining is more bytes but unconditionally correct.
   const elements: string[] = [];
   let rowIdx = 0;
 
@@ -179,15 +182,16 @@ function buildWatermarkSvg(width: number, height: number): string {
       const tx = Math.floor(x + stagger);
       // Center vertically on the tile's y by offsetting half the text height
       const ty = Math.floor(y + textHeight / 2);
+      // translate(tx, ty) places the path's origin at the tile, then rotate
+      // around that same origin (rotate's default centre is 0,0 in the local
+      // coord system after translation).
       elements.push(
-        `<use href="#wm" x="${tx}" y="${ty}" transform="rotate(${ANGLE},${tx},${ty})"/>`,
+        `<path d="${pathData}" fill="#ffffff" fill-opacity="${OPACITY}" transform="translate(${tx},${ty}) rotate(${ANGLE})"/>`,
       );
     }
   }
 
-  // overflow="hidden" clips anything outside the viewport (default SVG behaviour,
-  // stated explicitly for librsvg compatibility)
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" overflow="hidden"><defs><path id="wm" d="${pathData}" fill="#ffffff" fill-opacity="${OPACITY}"/></defs>${elements.join('')}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" overflow="hidden">${elements.join('')}</svg>`;
 }
 
 /**

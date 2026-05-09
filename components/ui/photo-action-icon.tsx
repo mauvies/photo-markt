@@ -1,6 +1,7 @@
 'use client';
 
 import { Check, Heart, Loader2, ShoppingCart, Trash2, UserPlus, Users } from 'lucide-react';
+import { useCoarsePointer } from '@/hooks/use-coarse-pointer';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 
@@ -21,6 +22,12 @@ export function PhotoActionIcon({
   loading = false,
   className,
 }: PhotoActionIconProps) {
+  // Radix Tooltip opens on touch (it treats touch as pointer-enter), so on
+  // mobile a tap briefly shows the tooltip before the click handler runs.
+  // For coarse-pointer devices we render the bare button — touch users get
+  // the action immediately, hover users still get the tooltip on desktop.
+  const isCoarsePointer = useCoarsePointer();
+
   function renderIcon() {
     if (loading) return <Loader2 className="size-3 animate-spin" />;
     switch (icon) {
@@ -43,28 +50,32 @@ export function PhotoActionIcon({
     }
   }
 
+  const button = (
+    <button
+      type="button"
+      className={cn(
+        'flex size-6 items-center justify-center rounded-full',
+        'bg-gray-900/45 backdrop-blur-sm text-white shadow-sm',
+        'transition-colors hover:bg-gray-900/80',
+        active && 'bg-gray-900/80',
+        className,
+      )}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      onPointerDown={(e) => e.stopPropagation()}
+      aria-label={tooltip}
+    >
+      {renderIcon()}
+    </button>
+  );
+
+  if (isCoarsePointer) return button;
+
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            'flex size-6 items-center justify-center rounded-full',
-            'bg-gray-900/45 backdrop-blur-sm text-white shadow-sm',
-            'transition-colors hover:bg-gray-900/80',
-            active && 'bg-gray-900/80',
-            className,
-          )}
-          onClick={(e) => {
-            e.stopPropagation();
-            onClick();
-          }}
-          onPointerDown={(e) => e.stopPropagation()}
-          aria-label={tooltip}
-        >
-          {renderIcon()}
-        </button>
-      </TooltipTrigger>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
       <TooltipContent>
         <p>{tooltip}</p>
       </TooltipContent>
