@@ -18,9 +18,13 @@
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-// opentype.js v2 ships only named exports — no default. Importing the
-// namespace lets us reach `parse` and the `Font` type cleanly.
-import { type Font, parse as parseFont } from 'opentype.js';
+// opentype.js v2 ships only named exports — no default. We use `Path` to
+// build the text path manually (per glyph) instead of `Font.getPath`, which
+// triggers GSUB feature processing that bombs on Inter's complex tables
+// ("substitutionType : 62 lookupType: 6 - substFormat: 2 is not yet supported").
+// For "PHOTO MARKT" we don't need ligatures or contextual subs — just glyph
+// outlines, which `Glyph.getPath` provides without touching GSUB.
+import { type Font, Path as OpentypePath, parse as parseFont } from 'opentype.js';
 import sharp from 'sharp';
 
 // Load and parse the bundled font once at module init. Reading once is fine
@@ -36,6 +40,37 @@ function getFont(): Font {
     buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
   );
   return cachedFont;
+}
+
+/**
+ * Builds a combined `Path` for the given text by walking characters via
+ * `Font.charToGlyph` (cmap-only lookup) and concatenating each glyph's path.
+ * This deliberately bypasses `Font.getPath` / `Font.stringToGlyphs`, which
+ * apply OpenType GSUB features and crash on certain lookup formats present
+ * in modern fonts like Inter ("substFormat: 2 is not yet supported").
+ */
+function textToPath(
+  font: Font,
+  text: string,
+  x: number,
+  y: number,
+  fontSize: number,
+): InstanceType<typeof OpentypePath> {
+  const combined = new OpentypePath();
+  // unitsPerEm is the font's design grid; advanceWidth comes in those units.
+  const scale = fontSize / font.unitsPerEm;
+  let cursorX = x;
+  for (const char of text) {
+    const glyph = font.charToGlyph(char);
+    if (!glyph) continue;
+    const glyphPath = glyph.getPath(cursorX, y, fontSize);
+    // Path.commands is an array of drawing instructions (M, L, C, Q, Z).
+    // Concatenating them is the same as drawing each glyph in sequence.
+    combined.commands.push(...glyphPath.commands);
+    const advance = typeof glyph.advanceWidth === 'number' ? glyph.advanceWidth : 0;
+    cursorX += advance * scale;
+  }
+  return combined;
 }
 
 // ---------------------------------------------------------------------------
@@ -115,9 +150,10 @@ function buildWatermarkSvg(width: number, height: number): string {
   const fontSize = Math.max(14, Math.min(22, Math.floor(Math.min(width, height) / 26)));
 
   // Render the text once as an SVG path string. We position the glyphs at
-  // origin (0, 0) inside a `<symbol>`, then `<use>` it at every tile location
-  // so the path data isn't repeated dozens of times in the SVG output.
-  const textPath = font.getPath(TEXT, 0, 0, fontSize);
+  // origin (0, 0) inside a `<defs><path id>`, then `<use>` it at every tile
+  // location so the path data isn't repeated dozens of times in the SVG.
+  // `textToPath` walks chars individually to avoid opentype.js GSUB bugs.
+  const textPath = textToPath(font, TEXT, 0, 0, fontSize);
   const pathData = textPath.toPathData(2); // 2 decimal places — keep it compact
 
   // Measure the rendered text bounding box for tile spacing.
