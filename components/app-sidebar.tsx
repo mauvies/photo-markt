@@ -8,7 +8,6 @@ import {
   Images,
   LifeBuoy,
   Package,
-  Receipt,
   Send,
   TrendingUp,
   User,
@@ -25,8 +24,7 @@ interface NavLabels {
   overview: string;
   createEvent: string;
   events: string;
-  ventas: string;
-  ganancias: string;
+  revenue: string;
   myPhotos: string;
   profile: string;
   explore: string;
@@ -49,8 +47,7 @@ export function AppSidebar({
     { title: navLabels.overview, url: '/dashboard/photographer', icon: Home },
     { title: navLabels.createEvent, url: '/dashboard/photographer/events/new', icon: CalendarPlus },
     { title: navLabels.events, url: '/dashboard/photographer/events', icon: CalendarDays },
-    { title: navLabels.ventas, url: '/dashboard/photographer/ventas', icon: Receipt },
-    { title: navLabels.ganancias, url: '/dashboard/photographer/ganancias', icon: TrendingUp },
+    { title: navLabels.revenue, url: '/dashboard/photographer/sales', icon: TrendingUp },
   ];
 
   const talentNav = [

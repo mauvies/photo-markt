@@ -25,7 +25,8 @@
     "events": "Events",
     "createEvent": "Create Event",
     "sales": "Sales",
-    "earnings": "Earnings"
+    "earnings": "Earnings",
+    "revenue": "Earnings"
   },
   "home": {
     "heroHeadline1": "Your Best Shots",
@@ -102,6 +103,7 @@
     "events": "Events",
     "sales": "Sales",
     "earnings": "Earnings",
+    "revenue": "Earnings",
     "support": "Support",
     "feedback": "Feedback",
     "profile": "Profile",
@@ -293,6 +295,10 @@
     "salesSubtitle": "Track your sales performance and revenue",
     "earningsTitle": "Earnings & Payouts",
     "earningsSubtitle": "Track your earnings and request payouts",
+    "revenueTitle": "Earnings",
+    "revenueSubtitle": "Track your sales activity and request payouts.",
+    "tabSales": "Sales",
+    "tabEarnings": "Earnings",
     "profileTitle": "Profile",
     "profileSubtitle": "Manage your profile information, account details, and payout settings.",
     "profileNotFound": "Profile not found.",

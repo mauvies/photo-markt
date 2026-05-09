@@ -25,7 +25,8 @@
     "events": "Eventos",
     "createEvent": "Crear evento",
     "sales": "Ventas",
-    "earnings": "Ganancias"
+    "earnings": "Ganancias",
+    "revenue": "Ganancias"
   },
   "home": {
     "heroHeadline1": "Tus Mejores Fotos",
@@ -102,6 +103,7 @@
     "events": "Eventos",
     "sales": "Ventas",
     "earnings": "Ganancias",
+    "revenue": "Ganancias",
     "support": "Soporte",
     "feedback": "Comentarios",
     "profile": "Perfil",
@@ -293,6 +295,10 @@
     "salesSubtitle": "Sigue tu rendimiento de ventas e ingresos",
     "earningsTitle": "Ganancias y pagos",
     "earningsSubtitle": "Sigue tus ganancias y solicita pagos",
+    "revenueTitle": "Ganancias",
+    "revenueSubtitle": "Sigue tu actividad de ventas y solicita pagos.",
+    "tabSales": "Ventas",
+    "tabEarnings": "Ganancias",
     "profileTitle": "Perfil",
     "profileSubtitle": "Administra tu información de perfil, detalles de cuenta y configuración de pagos.",
     "profileNotFound": "Perfil no encontrado.",

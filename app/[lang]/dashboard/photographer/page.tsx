@@ -1,12 +1,5 @@
 import { format } from 'date-fns';
-import {
-  AlertTriangle,
-  Calendar,
-  DollarSign,
-  HardDrive,
-  Image as ImageIcon,
-  TrendingUp,
-} from 'lucide-react';
+import { AlertTriangle, Calendar, DollarSign, HardDrive, Image as ImageIcon } from 'lucide-react';
 import Link from 'next/link';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { getProfile } from '@/database/queries/profiles';
@@ -15,7 +8,6 @@ import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { cn } from '@/lib/utils';
 import { getDashboardData } from './actions';
-import { PerformanceChart } from './performance-chart';
 import { QuickActions } from './quick-actions';
 import { ViewEventButton } from './view-event-button';
 
@@ -49,7 +41,7 @@ export default async function PhotographerDashboardPage({
     getDashboardData(),
     user ? getProfile(supabase, user.id) : null,
   ]);
-  const { salesSummary, salesOverTime, topEvent, totalEvents, storage } = data;
+  const { salesSummary, topEvent, totalEvents, storage } = data;
 
   const connectStatus = profile?.stripe_connect_status ?? 'not_connected';
 
@@ -178,91 +170,67 @@ export default async function PhotographerDashboardPage({
           </div>
         </div>
 
-        {/* Main Content Grid */}
-        <div className="grid gap-4  lg:grid-cols-3">
-          {/* Performance Chart */}
-          <div className="lg:col-span-2 rounded-xl border bg-card p-4 sm:p-6 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-2">
-              <div>
-                <h2 className="text-lg sm:text-xl font-semibold">
-                  {dict.photographerDashboard.performance}
-                </h2>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                  {dict.photographerDashboard.salesLast30Days}
-                </p>
-              </div>
-              <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
-                <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span>{dict.photographerDashboard['30days']}</span>
-              </div>
-            </div>
-            <PerformanceChart
-              data={salesOverTime}
-              emptyMessage={dict.photographerDashboard.noSalesDataAvailable}
-              lang={lang}
-            />
-          </div>
-
-          {/* Top Event & Quick Actions */}
-          <div className="space-y-4 sm:space-y-6">
-            {/* Top Event */}
-            {topEvent ? (
-              <div className="rounded-xl border bg-card p-4 sm:p-6 shadow-sm">
-                <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">
-                  {dict.photographerDashboard.topEvent}
-                </h2>
-                <div className="space-y-3">
-                  <div>
-                    <p className="font-medium text-base sm:text-lg">
-                      {topEvent.event_name || dict.photographerDashboard.unnamedEvent}
+        {/* Performance chart removed — re-add once there's enough sales
+            data to make it useful. Keep the Top Event + Quick Actions block
+            as the only main-content section for now. */}
+        <div className="space-y-4 sm:space-y-6">
+          {/* Top Event */}
+          {topEvent ? (
+            <div className="rounded-xl border bg-card p-4 sm:p-6 shadow-sm">
+              <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">
+                {dict.photographerDashboard.topEvent}
+              </h2>
+              <div className="space-y-3">
+                <div>
+                  <p className="font-medium text-base sm:text-lg">
+                    {topEvent.event_name || dict.photographerDashboard.unnamedEvent}
+                  </p>
+                  {topEvent.event_date && (
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                      {format(new Date(topEvent.event_date), 'MMM d, yyyy')}
                     </p>
-                    {topEvent.event_date && (
-                      <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                        {format(new Date(topEvent.event_date), 'MMM d, yyyy')}
-                      </p>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 sm:gap-4 pt-3 border-t">
-                    <div>
-                      <p className="text-xs sm:text-sm text-muted-foreground">
-                        {dict.photographerDashboard.revenue}
-                      </p>
-                      <p className="text-base sm:text-lg font-semibold mt-1">
-                        {formatCurrency(topEvent.revenue_cents)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs sm:text-sm text-muted-foreground">
-                        {dict.photographerDashboard.photosSold}
-                      </p>
-                      <p className="text-base sm:text-lg font-semibold mt-1">
-                        {topEvent.photos_sold}
-                      </p>
-                    </div>
-                  </div>
-                  {topEvent.event_name !== 'Deleted Event' && (
-                    <ViewEventButton eventId={topEvent.event_id} />
                   )}
                 </div>
+                <div className="grid grid-cols-2 gap-3 sm:gap-4 pt-3 border-t">
+                  <div>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                      {dict.photographerDashboard.revenue}
+                    </p>
+                    <p className="text-base sm:text-lg font-semibold mt-1">
+                      {formatCurrency(topEvent.revenue_cents)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                      {dict.photographerDashboard.photosSold}
+                    </p>
+                    <p className="text-base sm:text-lg font-semibold mt-1">
+                      {topEvent.photos_sold}
+                    </p>
+                  </div>
+                </div>
+                {topEvent.event_name !== 'Deleted Event' && (
+                  <ViewEventButton eventId={topEvent.event_id} />
+                )}
               </div>
-            ) : (
-              <div className="rounded-xl border bg-card p-4 sm:p-6 shadow-sm">
-                <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">
-                  {dict.photographerDashboard.topEvent}
-                </h2>
-                <p className="text-xs sm:text-sm text-muted-foreground">
-                  {dict.photographerDashboard.noSalesYet}
-                </p>
-              </div>
-            )}
+            </div>
+          ) : (
+            <div className="rounded-xl border bg-card p-4 sm:p-6 shadow-sm">
+              <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">
+                {dict.photographerDashboard.topEvent}
+              </h2>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                {dict.photographerDashboard.noSalesYet}
+              </p>
+            </div>
+          )}
 
-            {/* Quick Actions */}
-            <QuickActions
-              title={dict.photographerDashboard.quickActionsTitle}
-              createEventLabel={dict.photographerDashboard.quickActionsCreateEvent}
-              viewEventsLabel={dict.photographerDashboard.quickActionsViewEvents}
-            />
-          </div>
+          {/* Quick Actions */}
+          <QuickActions
+            title={dict.photographerDashboard.quickActionsTitle}
+            createEventLabel={dict.photographerDashboard.quickActionsCreateEvent}
+            viewEventsLabel={dict.photographerDashboard.quickActionsViewEvents}
+          />
         </div>
       </div>
     </div>

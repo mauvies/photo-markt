@@ -8,7 +8,6 @@ import {
   Home,
   LifeBuoy,
   LogOut,
-  Receipt,
   Send,
   Settings,
   TrendingUp,
@@ -28,6 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { createClient } from '@/database/client';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { RoleSlug } from '@/lib/roles';
 import { cn } from '@/lib/utils';
@@ -45,8 +45,7 @@ export function PhotographerBottomNav({
     overview: string;
     events: string;
     createEvent: string;
-    ventas: string;
-    ganancias: string;
+    revenue: string;
     account: string;
     roleLabel: string;
     profile: string;
@@ -95,21 +94,19 @@ export function PhotographerBottomNav({
       },
     },
     {
-      href: '/dashboard/photographer/ventas',
-      label: navLabels.ventas,
-      icon: Receipt,
-      isActive: (p: string) => {
-        const clean = p.replace(/^\/(es|en)/, '');
-        return clean.startsWith('/dashboard/photographer/ventas');
-      },
-    },
-    {
-      href: '/dashboard/photographer/ganancias',
-      label: navLabels.ganancias,
+      // Single combined Sales + Earnings entry. The destination page renders
+      // both as tabs; legacy `/ventas` and `/ganancias` redirect here.
+      href: '/dashboard/photographer/sales',
+      label: navLabels.revenue,
       icon: TrendingUp,
       isActive: (p: string) => {
         const clean = p.replace(/^\/(es|en)/, '');
-        return clean.startsWith('/dashboard/photographer/ganancias');
+        return (
+          clean.startsWith('/dashboard/photographer/sales') ||
+          clean.startsWith('/dashboard/photographer/ventas') ||
+          clean.startsWith('/dashboard/photographer/ganancias') ||
+          clean.startsWith('/dashboard/photographer/earnings')
+        );
       },
     },
   ];
@@ -120,7 +117,21 @@ export function PhotographerBottomNav({
   const [isPending, startTransition] = useTransition();
 
   const handleLogout = async () => {
-    await fetch('/auth/signout', { method: 'POST' });
+    // Use the browser Supabase client directly so cookies are cleared in the
+    // current document synchronously. The previous `fetch('/auth/signout')`
+    // approach relied on Set-Cookie headers propagating from the response —
+    // fragile on mobile Safari (ITP) and racy with the subsequent navigation,
+    // which let `proxy.ts` re-establish the session via getUser() before the
+    // browser had applied the deletion headers.
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    // Mirror the server signout too: belt-and-suspenders in case any cookies
+    // were set by the browser client without a paired browser-side delete.
+    try {
+      await fetch('/auth/signout', { method: 'POST' });
+    } catch {
+      // Non-fatal — browser-side signOut already cleared the session.
+    }
     router.push(lp('/'));
     router.refresh();
   };

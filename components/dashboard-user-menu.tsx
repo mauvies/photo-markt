@@ -16,6 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { createClient } from '@/database/client';
 import type { RoleSlug } from '@/lib/roles';
 
 export function DashboardUserMenu({
@@ -51,7 +52,17 @@ export function DashboardUserMenu({
   const [isPending, startTransition] = useTransition();
 
   const handleLogout = async () => {
-    await fetch('/auth/signout', { method: 'POST' });
+    // Browser-side signOut clears auth cookies synchronously in the current
+    // document. The fetch fallback is kept for defense-in-depth so the server
+    // also drops the session, but the order matters — clear locally first so
+    // proxy.ts on the next nav can't re-establish the session via getUser().
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    try {
+      await fetch('/auth/signout', { method: 'POST' });
+    } catch {
+      // Non-fatal — browser-side signOut already cleared the session.
+    }
     router.push('/');
     router.refresh();
   };

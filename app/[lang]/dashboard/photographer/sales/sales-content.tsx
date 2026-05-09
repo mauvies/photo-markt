@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { Sale, SalesByDate, TopSellingEvent } from '@/database/queries/sales';
+import type { Sale, TopSellingEvent } from '@/database/queries/sales';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
@@ -21,16 +21,6 @@ type PhotographerDashboardT = Dictionary['photographerDashboard'];
 
 function formatPrice(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
-}
-
-function formatDate(dateString: string, locale: string): string {
-  const [year, month, day] = dateString.split('-').map(Number);
-  const date = new Date(year, (month ?? 1) - 1, day ?? 1);
-  return date.toLocaleDateString(locale, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
 }
 
 function formatDateTime(dateString: string, locale: string): string {
@@ -63,51 +53,6 @@ function SummaryCard({ title, value, icon, trend, className }: SummaryCardProps)
         </div>
         <div className="rounded-full bg-primary/10 p-3">{icon}</div>
       </div>
-    </div>
-  );
-}
-
-interface SalesChartProps {
-  data: SalesByDate[];
-  lang: string;
-}
-
-function SalesChart({ data, lang }: SalesChartProps) {
-  const { t } = useTranslations<PhotographerDashboardT>();
-
-  if (data.length === 0) {
-    return (
-      <div className="flex h-64 items-center justify-center rounded-lg border border-border bg-card p-6">
-        <p className="text-sm text-muted-foreground">{t('noSalesDataAvailable')}</p>
-      </div>
-    );
-  }
-
-  const maxRevenue = Math.max(...data.map((d) => d.revenue_cents), 1);
-  // Limit to last 30 data points for better visualization
-  const displayData = data.slice(-30);
-
-  return (
-    <div className="rounded-lg border border-border bg-card p-6">
-      <h3 className="mb-4 text-lg font-semibold">{t('salesOverTime')}</h3>
-      <div className="flex h-64 items-end justify-between gap-1 overflow-x-auto pb-2">
-        {displayData.map((item) => {
-          const height = (item.revenue_cents / maxRevenue) * 100;
-          return (
-            <div key={item.date} className="flex min-w-0 flex-1 flex-col items-center gap-1">
-              <div
-                className="w-full rounded-t bg-primary transition-all hover:bg-primary/80"
-                style={{ height: `${Math.max(height, 2)}%` }}
-                title={`${formatDate(item.date, lang)}: ${formatPrice(item.revenue_cents)} (${item.sales_count} ${item.sales_count !== 1 ? t('sales') : t('sale')})`}
-              />
-              <span className="text-xs text-muted-foreground">{formatDate(item.date, lang)}</span>
-            </div>
-          );
-        })}
-      </div>
-      {data.length > 30 && (
-        <p className="mt-2 text-xs text-muted-foreground">{t('showingLast30DaysNote')}</p>
-      )}
     </div>
   );
 }
@@ -316,13 +261,12 @@ export function SalesContent({ lang }: { lang: string }) {
             />
           </div>
 
-          {/* Charts and Recent Sales */}
+          {/* Recent Sales + Top Events. The performance chart is removed
+              for now — it's noisy with low data volume; bring it back when
+              there's enough data to make it useful. */}
           {salesData.summary.totalSales > 0 ? (
             <>
-              <SalesChart data={salesData.salesOverTime} lang={lang} />
               <RecentSales sales={salesData.recentSales} lang={lang} />
-
-              {/* Top Selling Events */}
               <TopEvents events={salesData.topEvents} />
             </>
           ) : (
