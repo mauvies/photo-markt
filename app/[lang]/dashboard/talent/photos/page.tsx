@@ -41,6 +41,7 @@ export default async function TalentPhotosPage({ params }: { params: Promise<{ l
           hasMore={result.hasMore}
           photosInCart={result.photosInCart}
           iconTooltips={dict.photoIconButtons}
+          imageUnavailableLabel={dict.eventCard.imageUnavailable}
         />
       </TranslationsProvider>
     </div>

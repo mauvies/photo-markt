@@ -187,6 +187,7 @@ export default async function EventsPage({ params }: { params: Promise<{ lang: s
                     photos: dict.events.photos,
                     noPhotosYet: dict.events.noPhotosYet,
                     upcomingLabel: dict.events.statusUpcoming,
+                    imageUnavailable: dict.eventCard.imageUnavailable,
                   }}
                   actions={
                     <EventCardActions

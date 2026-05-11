@@ -11,7 +11,10 @@ type EventGridT = Pick<
   Dictionary['eventFilterBar'],
   'searchPrompt' | 'noEventsFound' | 'noEventsFoundDesc' | 'clearFilters' | 'loadMore'
 > &
-  Pick<Dictionary['eventCard'], 'photo' | 'photos' | 'noPhotosYet' | 'comingSoon'> & {
+  Pick<
+    Dictionary['eventCard'],
+    'photo' | 'photos' | 'noPhotosYet' | 'comingSoon' | 'imageUnavailable'
+  > & {
     activities: Dictionary['activities'];
   };
 
@@ -118,6 +121,7 @@ export function EventGrid({
               photos: t('photos'),
               noPhotosYet: t('noPhotosYet'),
               comingSoon: t('comingSoon'),
+              imageUnavailable: t('imageUnavailable'),
             }}
           />
         ))}

@@ -121,6 +121,12 @@ export default async function PhotographerProfilePage({ params }: { params: Para
                   photoCount={event.photoCount}
                   coverUrl={event.coverUrl}
                   linkPrefix={`/${lang}/events`}
+                  t={{
+                    photo: dict.eventCard.photo,
+                    photos: dict.eventCard.photos,
+                    noPhotosYet: dict.eventCard.noPhotosYet,
+                    imageUnavailable: dict.eventCard.imageUnavailable,
+                  }}
                 />
               ))}
             </div>

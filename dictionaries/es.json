@@ -464,7 +464,8 @@
     "comingSoon": "Próximamente",
     "publicEvent": "Evento público",
     "privateEvent": "Evento privado",
-    "moreOptions": "Más opciones"
+    "moreOptions": "Más opciones",
+    "imageUnavailable": "Imagen no disponible"
   },
   "activities": {
     "SURF": "Surf",
@@ -500,7 +501,11 @@
     "removeConfirmMultiple": "Estas {n} fotos se eliminarán de tu colección. Los archivos originales no se eliminan.",
     "loadMore": "Cargar más",
     "loading": "Cargando...",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "addedToCart": "Añadida al carrito",
+    "removedFromCart": "Eliminada del carrito",
+    "failedAddCart": "Error al añadir la foto al carrito",
+    "failedRemoveCart": "Error al eliminar la foto del carrito"
   },
   "lightboxToolbar": {
     "share": "Compartir",

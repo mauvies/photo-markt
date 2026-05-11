@@ -240,6 +240,7 @@ export default async function EventDetailPage({
                   eventId={id}
                   iconTooltips={dict.photoIconButtons}
                   items={albumItems}
+                  imageUnavailableLabel={dict.eventCard.imageUnavailable}
                 />
               </TabsContent>
               <TabsContent value="pending" className="mt-4">
@@ -256,7 +257,12 @@ export default async function EventDetailPage({
               </TabsContent>
             </Tabs>
           ) : (
-            <EventPhotoAlbum eventId={id} iconTooltips={dict.photoIconButtons} items={albumItems} />
+            <EventPhotoAlbum
+              eventId={id}
+              iconTooltips={dict.photoIconButtons}
+              items={albumItems}
+              imageUnavailableLabel={dict.eventCard.imageUnavailable}
+            />
           )}
         </TranslationsProvider>
       </div>

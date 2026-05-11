@@ -19,6 +19,7 @@ type EventPhotoViewerProps = {
   photosInCart?: Set<string>;
   photosInMyPhotos?: Set<string>;
   iconTooltips?: Partial<PhotoIconTooltips>;
+  imageUnavailableLabel: string;
 };
 
 export function EventPhotoViewer({
@@ -27,6 +28,7 @@ export function EventPhotoViewer({
   photosInCart = new Set(),
   photosInMyPhotos: initialPhotosInMyPhotos = new Set(),
   iconTooltips,
+  imageUnavailableLabel,
 }: EventPhotoViewerProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -117,6 +119,7 @@ export function EventPhotoViewer({
       onAddToPhotos={handleAddToPhotos}
       onRemoveFromPhotos={handleRemoveFromPhotos}
       iconTooltips={iconTooltips}
+      imageUnavailableLabel={imageUnavailableLabel}
     />
   );
 }

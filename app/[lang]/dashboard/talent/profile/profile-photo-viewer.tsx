@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, Share2, Trash2 } from 'lucide-react';
+import { Download, ImageOff, Share2, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { type Photo, type RenderPhotoContext, RowsPhotoAlbum } from 'react-photo-album';
@@ -17,6 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
@@ -74,11 +75,15 @@ export function ProfilePhotoViewer({
     downloadTooltip: string;
     shareTooltip: string;
     deleteTooltip: string;
+    imageUnavailable: string;
   }>();
   const [dimensions, setDimensions] = useState<Record<string, { width: number; height: number }>>(
     {},
   );
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  // Per-tile image load state — drives the skeleton/fallback swap inside
+  // `renderExtras` and the image fade-in via `componentsProps.image`.
+  const [loadStates, setLoadStates] = useState<Record<string, 'loading' | 'loaded' | 'error'>>({});
 
   useEffect(() => {
     items.forEach((item) => {
@@ -257,6 +262,22 @@ export function ProfilePhotoViewer({
   const renderExtras = useCallback(
     (_props: object, { photo }: RenderPhotoContext<Photo & { id?: string }>) => {
       const photoId = extractPhotoId(photo);
+      const state = loadStates[photoId] ?? 'loading';
+
+      // Hide the action icons until the underlying image is ready so they
+      // don't float over an empty skeleton.
+      if (state === 'loading') {
+        return <Skeleton className="absolute inset-0 rounded-lg" />;
+      }
+      if (state === 'error') {
+        return (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-muted text-muted-foreground">
+            <ImageOff className="h-8 w-8 opacity-40" aria-hidden />
+            <span className="text-xs">{t('imageUnavailable')}</span>
+          </div>
+        );
+      }
+
       const metadata = photoMetadata[photoId];
 
       const iconClass =
@@ -344,7 +365,7 @@ export function ProfilePhotoViewer({
         </div>
       );
     },
-    [extractPhotoId, photoMetadata, handleShare, handleDownload, t],
+    [extractPhotoId, loadStates, photoMetadata, handleShare, handleDownload, t],
   );
 
   return (
@@ -374,8 +395,23 @@ export function ProfilePhotoViewer({
             },
           }}
           componentsProps={{
-            image: {
-              className: 'h-full w-full object-cover',
+            image: ({ photo }) => {
+              const photoId = extractPhotoId(photo as Photo & { id?: string });
+              const state = loadStates[photoId] ?? 'loading';
+              return {
+                className: cn(
+                  'h-full w-full object-cover transition-opacity duration-200',
+                  state === 'loaded' ? 'opacity-100' : 'opacity-0',
+                ),
+                onLoad: () =>
+                  setLoadStates((prev) =>
+                    prev[photoId] === 'loaded' ? prev : { ...prev, [photoId]: 'loaded' },
+                  ),
+                onError: () =>
+                  setLoadStates((prev) =>
+                    prev[photoId] === 'error' ? prev : { ...prev, [photoId]: 'error' },
+                  ),
+              };
             },
           }}
           onClick={({ index }) => {

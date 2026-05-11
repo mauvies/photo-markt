@@ -159,6 +159,7 @@ export default async function ExploreEventDetailPage({
               photosInCart={new Set(photosInCart)}
               photosInMyPhotos={new Set(photosInMyPhotos)}
               iconTooltips={dict.photoIconButtons}
+              imageUnavailableLabel={dict.eventCard.imageUnavailable}
             />
           </TranslationsProvider>
         </div>

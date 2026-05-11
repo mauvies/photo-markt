@@ -20,7 +20,10 @@ export default async function TalentProfilePage({ params, searchParams }: Talent
       <ProfileContent
         initialData={data}
         showSuccessMessage={showSuccessMessage}
-        translations={dict.profilePhotoViewer}
+        translations={{
+          ...dict.profilePhotoViewer,
+          imageUnavailable: dict.eventCard.imageUnavailable,
+        }}
       />
     </div>
   );

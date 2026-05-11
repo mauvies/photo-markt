@@ -64,6 +64,7 @@ interface PublicEventPhotoViewerProps {
     successToast: string;
     failedToast: string;
   };
+  imageUnavailableLabel: string;
 }
 
 export function PublicEventPhotoViewer({
@@ -83,6 +84,7 @@ export function PublicEventPhotoViewer({
   uploadingLabel,
   uploaderLabels,
   deleteLabels,
+  imageUnavailableLabel,
 }: PublicEventPhotoViewerProps) {
   const router = useRouter();
   const guestCart = useGuestCart();
@@ -255,6 +257,7 @@ export function PublicEventPhotoViewer({
           onDeleteOwn={handleDeleteRequest}
           deleteTooltip={deleteLabels?.tooltip}
           uploaderLabels={uploaderLabels}
+          imageUnavailableLabel={imageUnavailableLabel}
         />
       )}
       {isUploading && photos.length > 0 ? (

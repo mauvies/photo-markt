@@ -19,9 +19,15 @@ type EventPhotoAlbumProps = {
   items: PhotoAlbumItem[];
   eventId: string;
   iconTooltips?: Partial<PhotoIconTooltips>;
+  imageUnavailableLabel: string;
 };
 
-export function EventPhotoAlbum({ items, eventId, iconTooltips }: EventPhotoAlbumProps) {
+export function EventPhotoAlbum({
+  items,
+  eventId,
+  iconTooltips,
+  imageUnavailableLabel,
+}: EventPhotoAlbumProps) {
   const router = useRouter();
   const { t } = useTranslations<EventsT>();
   const [isSelecting, setIsSelecting] = useState(false);
@@ -164,6 +170,7 @@ export function EventPhotoAlbum({ items, eventId, iconTooltips }: EventPhotoAlbu
         onRemove={handleDeleteSinglePhoto}
         onTagTalent={handleTagSinglePhoto}
         iconTooltips={iconTooltips}
+        imageUnavailableLabel={imageUnavailableLabel}
       />
       <TagTalentDialog
         open={tagDialogOpen}

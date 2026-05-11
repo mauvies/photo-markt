@@ -516,6 +516,7 @@ export default async function EventPage({
                     successToast: dict.events.deletePhotoToast,
                     failedToast: dict.events.deletePhotoFailed,
                   }}
+                  imageUnavailableLabel={dict.eventCard.imageUnavailable}
                 />
               </Suspense>
             </>

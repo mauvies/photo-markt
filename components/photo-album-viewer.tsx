@@ -1,10 +1,12 @@
 'use client';
 
+import { ImageOff } from 'lucide-react';
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { type Photo, type RenderPhotoContext, RowsPhotoAlbum } from 'react-photo-album';
 import { PhotoIconButtons, type PhotoIconTooltips } from '@/components/photo-icon-buttons';
 import { PhotoLightbox, type PhotoLightboxItem } from '@/components/photo-lightbox';
 import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
+import { Skeleton } from '@/components/ui/skeleton';
 import { usePhotoLightboxUrl } from '@/hooks/use-photo-lightbox-url';
 import { cn } from '@/lib/utils';
 import 'react-photo-album/rows.css';
@@ -61,6 +63,8 @@ type PhotoAlbumViewerProps = {
     guestLabel: string;
     authenticatedLabel: string;
   };
+  /** Fallback text shown in tiles whose image fails to load. */
+  imageUnavailableLabel?: string;
 };
 
 export default function PhotoAlbumViewer({
@@ -89,11 +93,15 @@ export default function PhotoAlbumViewer({
   onDeleteOwn,
   deleteTooltip,
   uploaderLabels,
+  imageUnavailableLabel = 'Image unavailable',
 }: PhotoAlbumViewerProps) {
   const { index, openAt, switchTo, close } = usePhotoLightboxUrl(items);
   const [dimensions, setDimensions] = useState<Record<string, { width: number; height: number }>>(
     {},
   );
+  // Track per-tile image load state so we can show a skeleton until the
+  // photo lands, and keep action icons / overlays hidden in the meantime.
+  const [loadStates, setLoadStates] = useState<Record<string, 'loading' | 'loaded' | 'error'>>({});
   const [openPopovers, setOpenPopovers] = useState<Set<string>>(new Set());
   const selectedSet = useMemo(() => new Set(selectedIds ?? []), [selectedIds]);
   const canSelect = Boolean(onToggleSelect);
@@ -177,6 +185,23 @@ export default function PhotoAlbumViewer({
   const renderExtras = useCallback(
     (_props: object, { photo }: RenderPhotoContext<Photo & { id?: string }>) => {
       const photoId = extractPhotoId(photo);
+      const state = loadStates[photoId] ?? 'loading';
+
+      // While the image is in flight, cover the tile with a skeleton and
+      // hide every action icon / badge so they don't float over an empty
+      // placeholder. On error, swap the skeleton for a muted fallback.
+      if (state === 'loading') {
+        return <Skeleton className="absolute inset-0 rounded-lg" />;
+      }
+      if (state === 'error') {
+        return (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-muted text-muted-foreground">
+            <ImageOff className="h-8 w-8 opacity-40" aria-hidden />
+            <span className="text-xs">{imageUnavailableLabel}</span>
+          </div>
+        );
+      }
+
       const isSelected = selectedSet.has(photoId);
       const photoItem = items.find((item) => item.id === photoId);
       const tags = photoItem?.tags || [];
@@ -231,6 +256,8 @@ export default function PhotoAlbumViewer({
     },
     [
       extractPhotoId,
+      loadStates,
+      imageUnavailableLabel,
       canSelect,
       handleToggleSelect,
       selectedSet,
@@ -336,11 +363,21 @@ export default function PhotoAlbumViewer({
             image: ({ photo }) => {
               const photoId = extractPhotoId(photo as Photo & { id?: string });
               const isSelected = selectedSet.has(photoId);
+              const state = loadStates[photoId] ?? 'loading';
               return {
                 className: cn(
-                  'h-full w-full object-cover',
-                  canSelect && isSelected ? 'opacity-75' : '',
+                  'h-full w-full object-cover transition-opacity duration-200',
+                  state === 'loaded' ? 'opacity-100' : 'opacity-0',
+                  state === 'loaded' && canSelect && isSelected && 'opacity-75',
                 ),
+                onLoad: () =>
+                  setLoadStates((prev) =>
+                    prev[photoId] === 'loaded' ? prev : { ...prev, [photoId]: 'loaded' },
+                  ),
+                onError: () =>
+                  setLoadStates((prev) =>
+                    prev[photoId] === 'error' ? prev : { ...prev, [photoId]: 'error' },
+                  ),
               };
             },
           }}

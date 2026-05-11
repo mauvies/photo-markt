@@ -139,6 +139,7 @@ export default async function Home({
                       photos: dict.eventCard.photos,
                       noPhotosYet: dict.eventCard.noPhotosYet,
                       comingSoon: dict.events.comingSoon,
+                      imageUnavailable: dict.eventCard.imageUnavailable,
                     }}
                   />
                 </div>

@@ -8,7 +8,10 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { addPhotoToCartAction } from '@/app/[lang]/dashboard/talent/cart/actions';
+import {
+  addPhotoToCartAction,
+  removePhotoFromCartAction,
+} from '@/app/[lang]/dashboard/talent/cart/actions';
 import PhotoAlbumViewer, { type PhotoAlbumItem } from '@/components/photo-album-viewer';
 import type { PhotoIconTooltips } from '@/components/photo-icon-buttons';
 import {
@@ -37,13 +40,15 @@ interface TalentPhotosGridProps {
   hasMore: boolean;
   photosInCart?: string[];
   iconTooltips?: Partial<PhotoIconTooltips>;
+  imageUnavailableLabel: string;
 }
 
 export function TalentPhotosGrid({
   initialGroups,
   hasMore: initialHasMore,
-  photosInCart = [],
+  photosInCart: initialPhotosInCart = [],
   iconTooltips,
+  imageUnavailableLabel,
 }: TalentPhotosGridProps) {
   const { t } = useTranslations<TalentPhotosT>();
   const params = useParams<{ lang: string }>();
@@ -58,6 +63,10 @@ export function TalentPhotosGrid({
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  // Local set of photos in cart — kept in state so the per-photo cart icon
+  // can flip optimistically on tap (the server prop only seeds the initial
+  // value; subsequent toggles update this directly).
+  const [photosInCart, setPhotosInCart] = useState<Set<string>>(() => new Set(initialPhotosInCart));
 
   const handleToggleSelect = useCallback((photoId: string) => {
     setSelectedIds((current) => {
@@ -80,6 +89,12 @@ export function TalentPhotosGrid({
         for (const photoId of selectedIds) {
           await addPhotoToCartAction(photoId);
         }
+        // Keep the per-photo icon state in sync with the bulk-add
+        setPhotosInCart((prev) => {
+          const next = new Set(prev);
+          for (const id of selectedIds) next.add(id);
+          return next;
+        });
         queryClient.invalidateQueries({ queryKey: ['cart-count'] });
         toast.success(
           `Added ${selectedIds.length} photo${selectedIds.length === 1 ? '' : 's'} to cart`,
@@ -92,6 +107,53 @@ export function TalentPhotosGrid({
       }
     });
   }, [selectedIds, queryClient]);
+
+  const handleAddToCart = useCallback(
+    async (photoId: string) => {
+      // Optimistic flip — the cart icon's filled state reads from this set
+      setPhotosInCart((prev) => {
+        const next = new Set(prev);
+        next.add(photoId);
+        return next;
+      });
+      try {
+        await addPhotoToCartAction(photoId);
+        queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+        toast.success(t('addedToCart'));
+      } catch (error) {
+        setPhotosInCart((prev) => {
+          const next = new Set(prev);
+          next.delete(photoId);
+          return next;
+        });
+        toast.error(error instanceof Error ? error.message : t('failedAddCart'));
+      }
+    },
+    [queryClient, t],
+  );
+
+  const handleRemoveFromCart = useCallback(
+    async (photoId: string) => {
+      setPhotosInCart((prev) => {
+        const next = new Set(prev);
+        next.delete(photoId);
+        return next;
+      });
+      try {
+        await removePhotoFromCartAction(photoId);
+        queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+        toast.success(t('removedFromCart'));
+      } catch (error) {
+        setPhotosInCart((prev) => {
+          const next = new Set(prev);
+          next.add(photoId);
+          return next;
+        });
+        toast.error(error instanceof Error ? error.message : t('failedRemoveCart'));
+      }
+    },
+    [queryClient, t],
+  );
 
   const handleConfirmRemove = useCallback(() => {
     const idsToRemove = [...selectedIds];
@@ -344,8 +406,11 @@ export function TalentPhotosGrid({
                     selectedIds={selectedIds}
                     onToggleSelect={handleToggleSelect}
                     showAddToCart={true}
-                    photosInCart={new Set(photosInCart)}
+                    photosInCart={photosInCart}
+                    onAddToCart={handleAddToCart}
+                    onRemoveFromCart={handleRemoveFromCart}
                     iconTooltips={iconTooltips}
+                    imageUnavailableLabel={imageUnavailableLabel}
                   />
                 </div>
               </div>

@@ -464,7 +464,8 @@
     "comingSoon": "Coming Soon",
     "publicEvent": "Public event",
     "privateEvent": "Private event",
-    "moreOptions": "More options"
+    "moreOptions": "More options",
+    "imageUnavailable": "Image unavailable"
   },
   "activities": {
     "SURF": "Surf",
@@ -500,7 +501,11 @@
     "removeConfirmMultiple": "These {n} photos will be removed from your collection. The original files are not deleted.",
     "loadMore": "Load more",
     "loading": "Loading...",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "addedToCart": "Added to cart",
+    "removedFromCart": "Removed from cart",
+    "failedAddCart": "Failed to add photo to cart",
+    "failedRemoveCart": "Failed to remove photo from cart"
   },
   "lightboxToolbar": {
     "share": "Share",

@@ -1,14 +1,16 @@
 'use client';
 
 import { format } from 'date-fns';
-import { CalendarDays, Camera, Lock, MapPin } from 'lucide-react';
+import { CalendarDays, Camera, ImageOff, Lock, MapPin } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { type ReactNode, useState } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCoarsePointer } from '@/hooks/use-coarse-pointer';
 import { getActivityIcon } from '@/lib/activity-icon';
 import { type EventStatus, isEventSoon } from '@/lib/event-status';
+import { cn } from '@/lib/utils';
 
 export type EventCardLabels = {
   photo: string;
@@ -20,6 +22,8 @@ export type EventCardLabels = {
   // *soon* (see `isEventSoon` in lib/event-status.ts). Long-future events and
   // past events render no badge on the owner side.
   upcomingLabel?: string;
+  // Shown in place of the cover when the image fails to load.
+  imageUnavailable?: string;
 };
 
 type EventCardProps = {
@@ -216,6 +220,10 @@ export function EventCard({
   const photographerHandle =
     photographer?.displayName || (photographer?.username ? `@${photographer.username}` : null);
   const isOwner = ownerStats !== undefined;
+  // Track cover image loading so we can show a skeleton until it lands and
+  // avoid rendering the badges/gradient over an empty placeholder.
+  const [imageStatus, setImageStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
+  const imageUnavailableLabel = t.imageUnavailable ?? 'Image unavailable';
 
   // Card is wrapped in a relative `<div>` (instead of just a `<Link>`) so the
   // optional `actions` slot can sit on top of the cover without nesting an
@@ -226,30 +234,50 @@ export function EventCard({
         <div className="relative mb-2 aspect-square w-full overflow-hidden rounded-xl bg-muted">
           {coverUrl ? (
             <>
+              {/* Image always renders so `onLoad`/`onError` fire. We fade it
+                  in once loaded so the swap from skeleton to photo doesn't
+                  pop. Badges and the gradient overlay only mount after the
+                  image is in to avoid "floating icons over empty space". */}
               <Image
                 src={coverUrl}
                 alt={`${name} cover`}
                 fill
                 sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
-                className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                className={cn(
+                  'object-cover transition-[opacity,transform] duration-300',
+                  imageStatus === 'loaded' ? 'opacity-100 group-hover:scale-[1.03]' : 'opacity-0',
+                )}
+                onLoad={() => setImageStatus('loaded')}
+                onError={() => setImageStatus('error')}
               />
-              <div className="absolute inset-0 bg-linear-to-t from-black/40 via-transparent to-transparent" />
-              <StatusBadge
-                status={status}
-                date={date}
-                labels={t}
-                isOwner={isOwner}
-                offsetLeft={!!actions}
-              />
-              <ActivityBadge activity={activity} label={activityLabel} />
-              <span className="absolute bottom-2 left-3 text-xs font-medium text-white drop-shadow-sm">
-                {photoCount} {photoCount === 1 ? t.photo : t.photos}
-              </span>
-              {ownerStats && (
-                <VisibilityBadge
-                  isPublic={ownerStats.isPublic}
-                  privateLabel={ownerStats.privateLabel}
-                />
+              {imageStatus === 'loading' && <Skeleton className="absolute inset-0 rounded-xl" />}
+              {imageStatus === 'error' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                  <ImageOff className="h-8 w-8 opacity-40" aria-hidden />
+                  <span className="text-xs">{imageUnavailableLabel}</span>
+                </div>
+              )}
+              {imageStatus === 'loaded' && (
+                <>
+                  <div className="absolute inset-0 bg-linear-to-t from-black/40 via-transparent to-transparent" />
+                  <StatusBadge
+                    status={status}
+                    date={date}
+                    labels={t}
+                    isOwner={isOwner}
+                    offsetLeft={!!actions}
+                  />
+                  <ActivityBadge activity={activity} label={activityLabel} />
+                  <span className="absolute bottom-2 left-3 text-xs font-medium text-white drop-shadow-sm">
+                    {photoCount} {photoCount === 1 ? t.photo : t.photos}
+                  </span>
+                  {ownerStats && (
+                    <VisibilityBadge
+                      isPublic={ownerStats.isPublic}
+                      privateLabel={ownerStats.privateLabel}
+                    />
+                  )}
+                </>
               )}
             </>
           ) : (
@@ -300,7 +328,9 @@ export function EventCard({
         </div>
       </Link>
 
-      {actions && <div className="absolute left-2 top-2">{actions}</div>}
+      {actions && (!coverUrl || imageStatus === 'loaded') && (
+        <div className="absolute left-2 top-2">{actions}</div>
+      )}
     </div>
   );
 }
