@@ -3,12 +3,10 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
-  // Force-include font assets in the bundle for routes that read them at
-  // runtime via fs. The watermark API needs Inter-Bold.woff to render text
-  // (Vercel/Lambda has no fontconfig, so we ship the font ourselves and
-  // convert glyphs to SVG paths via opentype.js).
+  // Force-include the watermark tile PNG in the function bundle for the
+  // `/api/watermark` route. Sharp reads it at runtime via fs.readFile.
   outputFileTracingIncludes: {
-    '/api/watermark/**/*': ['./lib/fonts/**/*'],
+    '/api/watermark/**/*': ['./public/watermark/**/*'],
   },
   experimental: {
     serverActions: {

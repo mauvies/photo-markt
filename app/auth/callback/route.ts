@@ -5,7 +5,7 @@ import { getProfileActiveRole, getUserRoles } from '@/database/queries';
 import { claimDownloadToken, getDownloadTokenByToken } from '@/database/queries/download-tokens';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
-import { safeNext } from '@/lib/auth/safe-next';
+import { rewritePostLoginNext, safeNext } from '@/lib/auth/safe-next';
 import { defaultLocale, type Locale } from '@/lib/i18n/config';
 import { localizedPath } from '@/lib/i18n/localized-path';
 
@@ -90,7 +90,10 @@ export async function GET(request: Request) {
 
   const safeNextPath = safeNext(nextParam);
   if (safeNextPath) {
-    return NextResponse.redirect(`${origin}${localizedPath(lang, safeNextPath)}`);
+    // Map public-surface paths (e.g. /events/<slug>) to their authenticated
+    // dashboard equivalents so users land where the in-app experience lives.
+    const targetPath = rewritePostLoginNext(safeNextPath);
+    return NextResponse.redirect(`${origin}${localizedPath(lang, targetPath)}`);
   }
 
   const activeRole = await getProfileActiveRole(supabase, user.id);

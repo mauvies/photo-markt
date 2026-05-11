@@ -105,9 +105,9 @@ function VisibilityBadge({ isPublic, privateLabel }: { isPublic: boolean; privat
       role="img"
       aria-label={privateLabel}
       title={privateLabel}
-      className="absolute bottom-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-white/90 backdrop-blur-sm"
+      className="absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white/90 backdrop-blur-sm"
     >
-      <Lock className="h-3 w-3" aria-hidden />
+      <Lock className="h-4 w-4" aria-hidden />
     </span>
   );
 }
@@ -180,9 +180,7 @@ export function EventCard({
         </div>
 
         <div className="space-y-1 px-1">
-          <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">
-            {name}
-          </h3>
+          <h3 className="line-clamp-2 font-semibold leading-snug text-foreground">{name}</h3>
 
           <div className="space-y-0.5 text-xs text-muted-foreground">
             {location && (

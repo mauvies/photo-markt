@@ -24,3 +24,30 @@ export function nextQuerySuffix(
   const safe = safeNext(value);
   return safe ? `${leading}next=${encodeURIComponent(safe)}` : '';
 }
+
+/**
+ * Rewrites a post-login `next` path so that public surfaces map to their
+ * authenticated equivalents. Today the only mapping is:
+ *
+ *   /events/<param>(/...) → /dashboard/talent/events/<param>(/...)
+ *
+ * (The talent dashboard event detail route accepts the same UUID/slug as
+ * the public route, so the param passes through unchanged.)
+ *
+ * Returns the input unchanged when no rule matches.
+ */
+export function rewritePostLoginNext(value: string): string {
+  // /events                      → /dashboard/talent/events
+  // /events/<param>              → /dashboard/talent/events/<param>
+  // /events/<param>/anything     → /dashboard/talent/events/<param>/anything
+  // /events?query                 → /dashboard/talent/events?query
+  if (value === '/events') return '/dashboard/talent/events';
+  const eventsPrefix = '/events/';
+  if (value.startsWith(eventsPrefix)) {
+    return `/dashboard/talent/events/${value.slice(eventsPrefix.length)}`;
+  }
+  if (value.startsWith('/events?') || value.startsWith('/events#')) {
+    return `/dashboard/talent/events${value.slice('/events'.length)}`;
+  }
+  return value;
+}

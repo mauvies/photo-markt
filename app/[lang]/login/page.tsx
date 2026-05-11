@@ -8,7 +8,7 @@ import { SubmitButton } from '@/components/submit-button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createClient } from '@/database/server';
-import { nextQuerySuffix, safeNext } from '@/lib/auth/safe-next';
+import { nextQuerySuffix, rewritePostLoginNext, safeNext } from '@/lib/auth/safe-next';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { getLangFromHeaders } from '@/lib/i18n/get-lang-from-headers';
@@ -120,7 +120,9 @@ export default async function Login({
 
     const nextPath = safeNext(params.next);
     if (nextPath) {
-      return localizedRedirect(lang, nextPath);
+      // Map public-surface paths (e.g. /events/<slug>) to their authenticated
+      // dashboard equivalents so users land where the in-app experience lives.
+      return localizedRedirect(lang, rewritePostLoginNext(nextPath));
     }
 
     const activeRole = await getProfileActiveRole(supabase, user.id);

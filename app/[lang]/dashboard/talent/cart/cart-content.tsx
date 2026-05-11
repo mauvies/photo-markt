@@ -240,7 +240,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
         )}
       </div>
 
-      <div className="flex flex-col md:flex-row gap-6 pb-20 md:pb-0">
+      <div className="flex flex-col md:flex-row gap-6 pb-44 md:pb-0">
         {/* Left side - Cart items */}
         <div className="flex-2 min-w-0">
           <div className="space-y-3">
@@ -363,8 +363,8 @@ export function CartContent({ initialCartData }: CartContentProps) {
         </div>
       </div>
 
-      {/* Mobile summary - sticky footer */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card shadow-lg">
+      {/* Mobile summary - sticky footer (stacked above BottomNav) */}
+      <div className="md:hidden fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom))] left-0 right-0 z-50 border-t border-border bg-card shadow-lg">
         <div className="p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-medium text-muted-foreground">{t('subtotal')}</span>
