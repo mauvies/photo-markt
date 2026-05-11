@@ -16,6 +16,15 @@ const nextConfig: NextConfig = {
     },
     proxyClientMaxBodySize: '500mb',
     useCache: true,
+    // Next 16's default Router Cache TTL for dynamic segments is 0 s, which
+    // means back-navigation to any auth-coupled route re-fetches the RSC
+    // payload and flashes loading.tsx. 30 s makes typical back-nav instant
+    // while keeping data fresh enough that cart/photo mutations (which call
+    // router.refresh / invalidateQueries) still reflect on revisit.
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
+    },
   },
   async headers() {
     return [
@@ -85,6 +94,12 @@ const nextConfig: NextConfig = {
     // Next.js blocks private IPs even when in remotePatterns, so we need to
     // use unoptimized prop on Image components for localhost URLs
     unoptimized: false,
+    // Photo URLs are content-addressed by storage path — if a photo changes,
+    // its path changes. So an optimized image can be reused as long as the
+    // underlying signed URL stays valid. The 'use cache' wrapper regenerates
+    // signed URLs every 55 min, so 24 h here just means fewer Sharp invocations
+    // per photo across the day.
+    minimumCacheTTL: 60 * 60 * 24,
   },
 };
 

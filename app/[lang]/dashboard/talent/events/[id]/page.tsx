@@ -1,9 +1,10 @@
 import { CalendarClock } from 'lucide-react';
+import { cacheLife, cacheTag } from 'next/cache';
 import { notFound } from 'next/navigation';
 import { getActiveRole } from '@/app/[lang]/actions/roles';
 import { AIMatchingButton } from '@/app/[lang]/dashboard/talent/photos/ai-matching/ai-matching-button';
 import { DashboardHeader } from '@/components/dashboard-header';
-import { createPhotoUrls, getEventPhotosPublic, isPhotoInCart } from '@/database/queries';
+import { createPhotoUrls, getEventPhotosPublic, getPhotoIdsInCart } from '@/database/queries';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { getEventStatus } from '@/lib/event-status';
@@ -13,18 +14,21 @@ import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { EventPhotoViewer } from './event-photo-viewer';
 
-export default async function ExploreEventDetailPage({
-  params,
-}: {
-  params: Promise<{ lang: string; id: string }>;
-}) {
-  const { lang, id: param } = await params;
-  const dict = await getDictionary(lang as Locale);
-  const supabase = await createClient();
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Caches the event-public slice of this page (event row + photos + signed URLs).
+// User-specific bits (cart membership, photo tags) are computed AFTER this
+// returns, so no per-user data crosses the cache boundary. `useWatermark`
+// participates in the cache key — two cache entries per event (watermarked
+// vs not), both deterministic for a given (param, baseUrl, useWatermark).
+//
+// Cache invalidated by photographer photo mutations via revalidateTag('event-<id>').
+async function getCachedTalentEventData(param: string, baseUrl: string, useWatermark: boolean) {
+  'use cache';
+  cacheTag(`event-${param}`, 'events-public');
+  // 55 min — safely under the 60-min signed URL expiry
+  cacheLife({ revalidate: 55 * 60, expire: 55 * 60 });
 
-  // Accept both UUID and slug in the route parameter
   const { data: event } = await supabaseAdmin
     .from('events')
     .select('*')
@@ -33,71 +37,77 @@ export default async function ExploreEventDetailPage({
     .is('deleted_at', null)
     .single();
 
-  if (!event) {
-    notFound();
+  if (!event) return null;
+
+  const photos = await getEventPhotosPublic(supabaseAdmin, event.id);
+  const signed: Record<string, string> = {};
+
+  const eventStatusInside = getEventStatus(event.date);
+  if (eventStatusInside !== 'upcoming') {
+    const paths = photos.map((p) => p.original_url).filter((url): url is string => url !== null);
+    if (paths.length > 0) {
+      const photoUrls = await createPhotoUrls(supabaseAdmin, 'photos', paths, {
+        expiresIn: 60 * 60,
+        useWatermark,
+        baseUrl,
+      });
+      for (const item of photoUrls) {
+        if (item.signedUrl) signed[item.path] = item.signedUrl;
+      }
+    }
   }
 
-  // Get photos for the event (use admin to bypass RLS)
-  const photos = await getEventPhotosPublic(supabaseAdmin, event.id);
+  return { event, photos, signed };
+}
 
-  // Get user info for watermark and cart check
+export default async function ExploreEventDetailPage({
+  params,
+}: {
+  params: Promise<{ lang: string; id: string }>;
+}) {
+  const { lang, id: param } = await params;
+  const dict = await getDictionary(lang as Locale);
+  const supabase = await createClient();
+  const baseUrl = await getBaseUrl();
+
+  // Auth + role lookup runs per-request (cookies can't be inside 'use cache')
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
+  let activeRole: string | null = null;
+  if (user) {
+    try {
+      activeRole = (await getActiveRole()).activeRole ?? null;
+    } catch {
+      activeRole = null;
+    }
+  }
+  const useWatermark = activeRole === 'talent';
+
+  const cached = await getCachedTalentEventData(param, baseUrl, useWatermark);
+  if (!cached) notFound();
+  const { event, photos, signed } = cached;
+
   const eventStatus = getEventStatus(event.date);
 
-  // Check if user is talent (watermark only shows for talent users)
-  let useWatermark = false;
+  // Per-user state — fetched fresh on every request (intentional). Batched
+  // into one query each instead of looping isPhotoInCart per photo.
   const photosInCart: string[] = [];
   const photosInMyPhotos: string[] = [];
-  try {
-    if (user && eventStatus !== 'upcoming') {
-      const { activeRole } = await getActiveRole();
-      // Only show watermark for talent users if watermark is enabled
-      useWatermark = activeRole === 'talent';
-
-      // Check which photos are in cart and in "my photos" (only for talent users)
-      if (activeRole === 'talent') {
-        const photoIds = photos.map((p) => p.id);
-        for (const photoId of photoIds) {
-          const inCart = await isPhotoInCart(supabase, user.id, photoId);
-          if (inCart) {
-            photosInCart.push(photoId);
-          }
-        }
-        if (photoIds.length > 0) {
-          const { data: tags } = await supabase
-            .from('talent_photo_tags')
-            .select('photo_id')
-            .eq('talent_user_id', user.id)
-            .in('photo_id', photoIds);
-          for (const tag of tags ?? []) {
-            photosInMyPhotos.push(tag.photo_id);
-          }
-        }
-      }
-    }
-  } catch {
-    // User not logged in or error - no watermark, no cart
-    useWatermark = false;
-  }
-
-  // Generate URLs (watermarked or regular signed URLs) — skip for upcoming events
-  const paths = photos.map((p) => p.original_url).filter((url): url is string => url !== null);
-  const signed: Record<string, string> = {};
-
-  if (paths.length > 0 && eventStatus !== 'upcoming') {
-    const baseUrl = await getBaseUrl();
-    const photoUrls = await createPhotoUrls(supabaseAdmin, 'photos', paths, {
-      expiresIn: 60 * 60, // 1 hour
-      useWatermark,
-      baseUrl,
-    });
-    for (const item of photoUrls) {
-      if (item.signedUrl) {
-        signed[item.path] = item.signedUrl;
-      }
+  if (user && eventStatus !== 'upcoming' && activeRole === 'talent') {
+    const photoIds = photos.map((p) => p.id);
+    if (photoIds.length > 0) {
+      const [cartIds, tagsResult] = await Promise.all([
+        getPhotoIdsInCart(supabase, user.id, photoIds),
+        supabase
+          .from('talent_photo_tags')
+          .select('photo_id')
+          .eq('talent_user_id', user.id)
+          .in('photo_id', photoIds),
+      ]);
+      for (const id of cartIds) photosInCart.push(id);
+      for (const tag of tagsResult.data ?? []) photosInMyPhotos.push(tag.photo_id);
     }
   }
 

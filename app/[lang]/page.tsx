@@ -158,6 +158,9 @@ export default async function Home({
         </section>
       )}
 
+      {/* Pricing */}
+      <PricingSection isAuthenticated={isAuthenticated} t={dict.pricingSection} />
+
       {/* How It Works */}
       <section className="bg-background py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -219,9 +222,6 @@ export default async function Home({
           </div>
         </div>
       </section>
-
-      {/* Pricing */}
-      <PricingSection isAuthenticated={isAuthenticated} t={dict.pricingSection} />
 
       {/* Final CTA */}
       <section className="bg-linear-to-br from-primary/10 via-primary/5 to-background py-20 sm:py-24">

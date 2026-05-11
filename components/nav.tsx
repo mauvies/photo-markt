@@ -4,15 +4,17 @@ import type { User } from '@supabase/supabase-js';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { CartLinkButton } from '@/components/cart-link-button';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { Button } from '@/components/ui/button';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { useLoginHref, useSignupHref } from '@/hooks/use-login-href';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
+import { ROLES, type UserRole } from '@/lib/roles';
 import { UserAvatar } from './user-avatar';
 
-export function Nav({ user }: { user: User | null }) {
+export function Nav({ user, activeRole }: { user: User | null; activeRole: UserRole | null }) {
   const pathname = usePathname();
   const lp = useLocalizedPath();
   const buildLoginHref = useLoginHref();
@@ -26,6 +28,11 @@ export function Nav({ user }: { user: User | null }) {
   ) {
     return null;
   }
+
+  // Show cart on every public page except when the user is currently acting as
+  // a photographer (their dashboard hides it; the public nav matches). Guests
+  // get the localStorage-backed guest cart variant.
+  const showCart = activeRole !== ROLES.PHOTOGRAPHER;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur supports-backdrop-filter:bg-background/80">
@@ -44,6 +51,11 @@ export function Nav({ user }: { user: User | null }) {
           <div className="sm:-mr-2">
             <LanguageSwitcher />
           </div>
+          {showCart && (
+            <div className="-ml-2">
+              <CartLinkButton guest={!user} />
+            </div>
+          )}
           {user ? (
             <UserAvatar user={user} />
           ) : (

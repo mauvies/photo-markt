@@ -154,7 +154,10 @@ export async function uploadGuestPhotosAction(
   revalidatePath(`/en/events/${shareCode}`);
   revalidatePath(`/es/dashboard/photographer/events/${event.id}`);
   revalidatePath(`/en/dashboard/photographer/events/${event.id}`);
+  // Invalidate every param variant the cache could be keyed on (UUID/slug/share_code).
   revalidateTag(`event-${event.id}`, 'max');
+  if (event.slug) revalidateTag(`event-${event.slug}`, 'max');
+  if (event.share_code) revalidateTag(`event-${event.share_code}`, 'max');
 
   return { uploadedCount: files.length, status, uploads };
 }
@@ -225,6 +228,8 @@ export async function deleteContributorPhotoAction(input: {
   revalidatePath(`/es/dashboard/photographer/events/${event.id}`);
   revalidatePath(`/en/dashboard/photographer/events/${event.id}`);
   revalidateTag(`event-${event.id}`, 'max');
+  if (event.slug) revalidateTag(`event-${event.slug}`, 'max');
+  if (event.share_code) revalidateTag(`event-${event.share_code}`, 'max');
 
   return { success: true };
 }

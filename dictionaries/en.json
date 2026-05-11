@@ -525,11 +525,12 @@
   "ordersList": {
     "orderHistory": "Order History",
     "viewAndManage": "View and manage your purchase history",
-    "noOrdersYet": "No orders yet",
+    "noOrdersYet": "You haven't bought any photos yet",
     "noStatusOrders": "No {status} orders",
-    "noOrdersDesc": "When you purchase photos from events, they will appear here. Start exploring events to find photos of yourself!",
+    "noOrdersDesc": "When you purchase photos from events, they'll appear here. Explore events to find photos of yourself.",
     "noStatusOrdersDesc": "You don't have any {status} orders at this time.",
     "browseEvents": "Browse Events",
+    "exploreEvents": "Explore events",
     "completed": "Completed",
     "pending": "Pending",
     "processing": "Processing",
@@ -538,7 +539,11 @@
     "refunded": "Refunded",
     "photo": "photo",
     "photos": "photos",
-    "receipt": "Receipt"
+    "receipt": "Receipt",
+    "viewDetails": "View details",
+    "hideDetails": "Hide details",
+    "morePhotos": "+{count} more",
+    "orderShort": "Order"
   },
   "profileForm": {
     "username": "Username",
@@ -925,7 +930,8 @@
     "removePhotoFailed": "Failed to remove photo",
     "downloadTooltip": "Download",
     "shareTooltip": "Share",
-    "deleteTooltip": "Delete"
+    "deleteTooltip": "Delete",
+    "moreOptions": "More options"
   },
   "pricingSection": {
     "headline": "Simple pricing for photographers.",

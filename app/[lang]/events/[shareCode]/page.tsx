@@ -6,13 +6,12 @@ import { Suspense } from 'react';
 import { getActiveRole } from '@/app/[lang]/actions/roles';
 import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/activity-options';
 import { AIMatchingButton } from '@/app/[lang]/dashboard/talent/photos/ai-matching/ai-matching-button';
-import { CartLinkButton } from '@/components/cart-link-button';
 import {
   createPhotoUrls,
   getEventByShareCode,
   getEventBySlug,
   getEventPhotosPublic,
-  isPhotoInCart,
+  getPhotoIdsInCart,
   type SupabaseServerClient,
 } from '@/database/queries';
 import { createClient } from '@/database/server';
@@ -294,14 +293,13 @@ export default async function EventPage({
     if (showCartUi && user && eventStatus !== 'upcoming') {
       const { activeRole } = await getActiveRole();
       if (activeRole === 'talent') {
-        for (const photo of photos) {
-          const inCart = await isPhotoInCart(
-            supabase as unknown as SupabaseServerClient,
-            user.id,
-            photo.id,
-          );
-          if (inCart) photosInCart.push(photo.id);
-        }
+        const photoIds = photos.map((p) => p.id);
+        const cartIds = await getPhotoIdsInCart(
+          supabase as unknown as SupabaseServerClient,
+          user.id,
+          photoIds,
+        );
+        for (const id of cartIds) photosInCart.push(id);
       }
     }
   } catch {
@@ -430,7 +428,6 @@ export default async function EventPage({
                 )}
               </div>
             </div>
-            {showCartUi ? <CartLinkButton guest={!user} /> : null}
           </div>
 
           {showContribute && event.share_code ? (

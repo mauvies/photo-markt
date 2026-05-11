@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, ImageOff, Share2, Trash2 } from 'lucide-react';
+import { Download, ImageOff, MoreVertical, Share2, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { type Photo, type RenderPhotoContext, RowsPhotoAlbum } from 'react-photo-album';
@@ -17,8 +17,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
 import { getPhotoDownloadUrl } from './actions';
@@ -75,6 +80,7 @@ export function ProfilePhotoViewer({
     downloadTooltip: string;
     shareTooltip: string;
     deleteTooltip: string;
+    moreOptions: string;
     imageUnavailable: string;
   }>();
   const [dimensions, setDimensions] = useState<Record<string, { width: number; height: number }>>(
@@ -279,88 +285,72 @@ export function ProfilePhotoViewer({
       }
 
       const metadata = photoMetadata[photoId];
+      const canDownload = Boolean(metadata?.download_url);
 
-      const iconClass =
-        'pointer-events-auto flex size-6 items-center justify-center rounded-full bg-gray-900/45 backdrop-blur-sm text-white shadow-sm transition-colors hover:bg-gray-900/80 opacity-100 md:opacity-0 md:group-hover:opacity-100';
+      // Matches the activity/visibility overlay badges used elsewhere on
+      // photo tiles — keeps the action affordance visually consistent.
+      const triggerClass =
+        'pointer-events-auto flex size-7 items-center justify-center rounded-full bg-gray-900/60 backdrop-blur-sm text-white shadow-sm transition-colors hover:bg-gray-900/80 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70';
 
       return (
         <div className={cn('absolute inset-0 flex flex-col items-end justify-start p-2')}>
-          {/* Action buttons (top right) */}
-          <div className="relative z-10 flex w-full items-start justify-end gap-1.5">
-            {/* Download button */}
-            {metadata?.download_url && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  {/* biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons */}
-                  <div
-                    role="button"
-                    className={iconClass}
-                    onClick={(e) => {
-                      e.stopPropagation();
+          {/* Single "more options" trigger (top right) */}
+          <div className="relative z-10">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={t('moreOptions')}
+                  className={triggerClass}
+                  onClick={(e) => {
+                    // Prevent the grid's click handler from opening the
+                    // lightbox when the user taps the menu trigger.
+                    e.stopPropagation();
+                  }}
+                >
+                  <MoreVertical className="size-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                // Touch targets in shadcn New York are min-h-8 (32px); the
+                // gap-2 + padding gives ~40-44px effective tap height, which
+                // is comfortable on mobile.
+                className="w-44"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {canDownload && (
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
                       void handleDownload(photoId);
                     }}
-                    onKeyDown={(event) => {
-                      event.stopPropagation();
-                    }}
-                    aria-label={t('downloadTooltip')}
-                    tabIndex={0}
                   >
-                    <Download className="size-3" />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{t('downloadTooltip')}</p>
-                </TooltipContent>
-              </Tooltip>
-            )}
-            {/* Share button */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                {/* biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons */}
-                <div
-                  role="button"
-                  className={iconClass}
-                  onClick={(e) => {
-                    e.stopPropagation();
+                    <Download className="size-4" aria-hidden />
+                    {t('downloadTooltip')}
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
                     void handleShare(photoId);
                   }}
-                  onKeyDown={(event) => {
-                    event.stopPropagation();
-                  }}
-                  aria-label={t('shareTooltip')}
-                  tabIndex={0}
                 >
-                  <Share2 className="size-3" />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{t('shareTooltip')}</p>
-              </TooltipContent>
-            </Tooltip>
-            {/* Delete button */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                {/* biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons */}
-                <div
-                  role="button"
-                  className={iconClass}
-                  onClick={(e) => {
-                    e.stopPropagation();
+                  <Share2 className="size-4" aria-hidden />
+                  {t('shareTooltip')}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={(e) => {
+                    e.preventDefault();
                     setDeleteConfirm(photoId);
                   }}
-                  onKeyDown={(event) => {
-                    event.stopPropagation();
-                  }}
-                  aria-label={t('deleteTooltip')}
-                  tabIndex={0}
                 >
-                  <Trash2 className="size-3" />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{t('deleteTooltip')}</p>
-              </TooltipContent>
-            </Tooltip>
+                  <Trash2 className="size-4" aria-hidden />
+                  {t('deleteTooltip')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       );
@@ -379,13 +369,31 @@ export function ProfilePhotoViewer({
           spacing={10}
           render={{
             extras: renderExtras,
+            // The default react-photo-album button slot renders a real
+            // <button>, but renderExtras embeds a DropdownMenuTrigger
+            // (Radix's button) inside the tile — nested buttons are invalid
+            // HTML and trigger a hydration error. Render the tile as a
+            // div[role="button"] instead, mirroring components/photo-album-viewer.tsx.
             button: (props) => {
               const { onClick, className: propsClassName, ...restProps } = props;
               return (
-                <button
-                  {...(restProps as React.ButtonHTMLAttributes<HTMLButtonElement>)}
-                  onClick={onClick}
-                  type="button"
+                // biome-ignore lint/a11y/useSemanticElements: intentional div to avoid nested buttons
+                <div
+                  {...(restProps as React.HTMLAttributes<HTMLDivElement>)}
+                  onClick={
+                    onClick
+                      ? (e: React.MouseEvent<HTMLDivElement>) =>
+                          onClick(e as unknown as React.MouseEvent<HTMLButtonElement>)
+                      : undefined
+                  }
+                  onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onClick?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                   className={cn(
                     'group relative flex h-full w-full overflow-hidden rounded-lg bg-muted p-0 text-left focus:outline-none focus:ring-2 focus:ring-ring/30 cursor-zoom-in',
                     propsClassName,

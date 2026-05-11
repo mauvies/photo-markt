@@ -22,6 +22,23 @@ import {
 import { createClient } from '@/database/server';
 import { validatePhotoUpload } from '@/lib/photo-upload';
 
+// Invalidates the `event-${param}` cache tag for every param a viewer might
+// have used to reach the event (UUID, slug, or share_code). Without this,
+// photo content changes (uploads/approvals/rejections) only invalidate the
+// UUID-keyed cache, so visitors arriving via slug or share_code keep seeing
+// the stale photo list until the 55-min TTL elapses.
+async function revalidateEventPhotoCacheTags(eventId: string): Promise<void> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('events')
+    .select('slug, share_code')
+    .eq('id', eventId)
+    .maybeSingle();
+  revalidateTag(`event-${eventId}`, 'max');
+  if (data?.slug) revalidateTag(`event-${data.slug}`, 'max');
+  if (data?.share_code) revalidateTag(`event-${data.share_code}`, 'max');
+}
+
 export type PhotographerSearchHit = {
   id: string;
   username: string | null;
@@ -234,7 +251,7 @@ export async function uploadOrganizerEventPhotoAction(
 
   revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
   revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
-  revalidateTag(`event-${eventId}`, 'max');
+  await revalidateEventPhotoCacheTags(eventId);
   return { uploaded: files.length };
 }
 
@@ -461,7 +478,7 @@ export async function approvePendingPhotoAction(
 
   revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
   revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
-  revalidateTag(`event-${eventId}`, 'max');
+  await revalidateEventPhotoCacheTags(eventId);
   return { success: true };
 }
 
@@ -495,6 +512,6 @@ export async function rejectPendingPhotoAction(
 
   revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
   revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
-  revalidateTag(`event-${eventId}`, 'max');
+  await revalidateEventPhotoCacheTags(eventId);
   return { success: true };
 }

@@ -121,19 +121,26 @@ async function uploadPhotos(
   }
 }
 
-function revalidateAfterEventMutation(userId: string, eventId: string): void {
+function revalidateAfterEventMutation(
+  userId: string,
+  event: { id: string; slug: string | null; share_code: string | null },
+): void {
   revalidatePath('/es/dashboard/photographer/events');
   revalidatePath('/en/dashboard/photographer/events');
-  revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
-  revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
-  revalidatePath(`/es/dashboard/photographer/events/${eventId}/edit`);
-  revalidatePath(`/en/dashboard/photographer/events/${eventId}/edit`);
+  revalidatePath(`/es/dashboard/photographer/events/${event.id}`);
+  revalidatePath(`/en/dashboard/photographer/events/${event.id}`);
+  revalidatePath(`/es/dashboard/photographer/events/${event.id}/edit`);
+  revalidatePath(`/en/dashboard/photographer/events/${event.id}/edit`);
   revalidateTag('events-public', 'max');
   revalidateTag('top-events', 'max');
-  revalidateTag(`event-${eventId}`, 'max');
+  // The talent and public event routes cache by whichever param the visitor
+  // used — UUID, slug, or share_code — so invalidate all three variants.
+  revalidateTag(`event-${event.id}`, 'max');
+  if (event.slug) revalidateTag(`event-${event.slug}`, 'max');
+  if (event.share_code) revalidateTag(`event-${event.share_code}`, 'max');
   revalidateTag(`photographer-events-${userId}`, 'max');
   revalidateTag(`dashboard-photographer-${userId}`, 'max');
-  updateTag(`event-${eventId}`);
+  updateTag(`event-${event.id}`);
   updateTag(`photographer-events-${userId}`);
 }
 
@@ -233,7 +240,11 @@ export async function updateEventAction(
     }
   }
 
-  revalidateAfterEventMutation(user.id, eventId);
+  revalidateAfterEventMutation(user.id, {
+    id: eventId,
+    slug: currentEvent.slug,
+    share_code: shareCode,
+  });
   revalidateTag('filter-options', 'max');
 
   return { success: true };
@@ -265,7 +276,12 @@ export async function deletePhotoAction(photoId: string, eventId: string): Promi
     await deleteStorageFiles(supabase, 'photos', [photo.original_url]);
   }
 
-  revalidateAfterEventMutation(user.id, eventId);
+  const event = await getEvent(supabase, eventId, user.id);
+  revalidateAfterEventMutation(user.id, {
+    id: eventId,
+    slug: event?.slug ?? null,
+    share_code: event?.share_code ?? null,
+  });
 }
 
 /**
@@ -295,5 +311,9 @@ export async function addPhotosAction(eventId: string, formData: FormData): Prom
     state: event.state || '',
   });
 
-  revalidateAfterEventMutation(user.id, eventId);
+  revalidateAfterEventMutation(user.id, {
+    id: eventId,
+    slug: event.slug,
+    share_code: event.share_code,
+  });
 }

@@ -305,3 +305,35 @@ export async function isPhotoInCart(
 
   return data !== null;
 }
+
+// Batched version of isPhotoInCart. Use this instead of looping isPhotoInCart
+// over a photo list — a 50-photo event was making 50 sequential round-trips.
+export async function getPhotoIdsInCart(
+  supabase: SupabaseServerClient,
+  userId: string,
+  photoIds: string[],
+): Promise<Set<string>> {
+  if (photoIds.length === 0) return new Set();
+
+  const { data: cart } = await supabase
+    .from('carts')
+    .select('id')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!cart) return new Set();
+
+  const { data, error } = await supabase
+    .from('cart_items')
+    .select('photo_id')
+    .eq('cart_id', cart.id)
+    .in('photo_id', photoIds);
+
+  if (error) {
+    throw new Error(`Failed to load cart photo ids: ${getErrorMessage(error)}`);
+  }
+
+  return new Set((data ?? []).map((row) => row.photo_id as string));
+}

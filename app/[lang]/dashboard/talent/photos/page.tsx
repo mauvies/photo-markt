@@ -9,8 +9,6 @@ import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { listMyTaggedPhotos } from './actions';
 import { TalentPhotosGrid } from './talent-photos-grid';
 
-export const dynamic = 'force-dynamic';
-
 export default async function TalentPhotosPage({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = await params;
   const dict = await getDictionary(lang as Locale);
