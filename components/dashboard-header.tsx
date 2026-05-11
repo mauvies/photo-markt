@@ -3,7 +3,7 @@
 export function DashboardHeader({ title }: { title: string }) {
   return (
     <div className="flex items-center">
-      <h1 className="text-3xl font-semibold">{title}</h1>
+      <h1 className="text-4xl font-bold">{title}</h1>
     </div>
   );
 }

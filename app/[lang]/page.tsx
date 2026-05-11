@@ -122,6 +122,10 @@ export default async function Home({
                     city={event.city}
                     country={event.country}
                     activity={event.activity}
+                    activityLabel={
+                      dict.activities[event.activity as keyof typeof dict.activities] ??
+                      event.activity
+                    }
                     photoCount={event.photoCount}
                     coverUrl={event.coverUrl}
                     photographer={{

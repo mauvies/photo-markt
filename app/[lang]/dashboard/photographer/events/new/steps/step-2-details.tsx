@@ -55,7 +55,7 @@ export function Step2Details({ form, submitAttempted }: Step2DetailsProps) {
                 <Label htmlFor="name">{t('nameLabel')}</Label>
                 <Input
                   id="name"
-                  className="mt-2 mb-1"
+                  className="mt-2 mb-1 text-sm"
                   value={field.state.value}
                   onChange={(event) => field.handleChange(event.target.value)}
                   onBlur={field.handleBlur}
@@ -64,7 +64,7 @@ export function Step2Details({ form, submitAttempted }: Step2DetailsProps) {
                   autoComplete="off"
                   suppressHydrationWarning
                 />
-                <p className="min-h-4 text-xs text-destructive">{isInvalid ? error : ''}</p>
+                {isInvalid && error && <p className="min-h-4 text-xs text-destructive">{error}</p>}
               </div>
             );
           }}
@@ -108,7 +108,7 @@ export function Step2Details({ form, submitAttempted }: Step2DetailsProps) {
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="min-h-4 text-xs text-destructive">{isInvalid ? error : ''}</p>
+                {isInvalid && error && <p className="min-h-4 text-xs text-destructive">{error}</p>}
               </div>
             );
           }}
@@ -139,7 +139,7 @@ export function Step2Details({ form, submitAttempted }: Step2DetailsProps) {
                 aria-invalid={isInvalid}
                 className="mt-2 mb-1"
               />
-              <p className="min-h-4 text-xs text-destructive">{isInvalid ? error : ''}</p>
+              {isInvalid && error && <p className="min-h-4 text-xs text-destructive">{error}</p>}
             </div>
           );
         }}
@@ -195,7 +195,7 @@ export function Step2Details({ form, submitAttempted }: Step2DetailsProps) {
                     />
                   </PopoverContent>
                 </Popover>
-                <p className="min-h-4 text-xs text-destructive">{isInvalid ? error : ''}</p>
+                {isInvalid && error && <p className="min-h-4 text-xs text-destructive">{error}</p>}
               </div>
             );
           }}
@@ -255,12 +255,14 @@ export function Step2Details({ form, submitAttempted }: Step2DetailsProps) {
                           onBlur={field.handleBlur}
                           placeholder="0.00"
                           aria-invalid={isInvalid}
-                          className="pl-7"
+                          className="pl-7 text-sm"
                           suppressHydrationWarning
                         />
                       </div>
                       <p className="text-xs text-muted-foreground">{t('organizerFeeDesc')}</p>
-                      <p className="min-h-4 text-xs text-destructive">{isInvalid ? error : ''}</p>
+                      {isInvalid && error && (
+                        <p className="min-h-4 text-xs text-destructive">{error}</p>
+                      )}
                     </div>
                   );
                 }}
@@ -317,11 +319,13 @@ export function Step2Details({ form, submitAttempted }: Step2DetailsProps) {
                           onBlur={field.handleBlur}
                           placeholder="0.00"
                           aria-invalid={isInvalid}
-                          className="pl-7"
+                          className="pl-7 text-sm"
                           suppressHydrationWarning
                         />
                       </div>
-                      <p className="min-h-4 text-xs text-destructive">{isInvalid ? error : ''}</p>
+                      {isInvalid && error && (
+                        <p className="min-h-4 text-xs text-destructive">{error}</p>
+                      )}
                     </div>
                   );
                 }}

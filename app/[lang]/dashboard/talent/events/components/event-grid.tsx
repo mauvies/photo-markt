@@ -11,7 +11,9 @@ type EventGridT = Pick<
   Dictionary['eventFilterBar'],
   'searchPrompt' | 'noEventsFound' | 'noEventsFoundDesc' | 'clearFilters' | 'loadMore'
 > &
-  Pick<Dictionary['eventCard'], 'photo' | 'photos' | 'noPhotosYet' | 'comingSoon'>;
+  Pick<Dictionary['eventCard'], 'photo' | 'photos' | 'noPhotosYet' | 'comingSoon'> & {
+    activities: Dictionary['activities'];
+  };
 
 type EventGridProps = {
   events: EventWithStats[];
@@ -30,7 +32,7 @@ function EventSkeleton({ skeletonKeys }: { skeletonKeys: string[] }) {
       {skeletonKeys.map((key) => (
         <div key={key} className="group block">
           {/* Match ExploreEventCard spacing/layout */}
-          <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-xl bg-muted">
+          <div className="relative mb-2 aspect-square w-full overflow-hidden rounded-xl bg-muted">
             <div className="absolute inset-0 animate-pulse bg-muted" />
             <div className="absolute inset-0 bg-linear-to-t from-black/10 via-transparent to-transparent" />
             <div className="absolute bottom-0 left-0 p-3">
@@ -64,6 +66,7 @@ export function EventGrid({
   onLoadMore,
 }: EventGridProps) {
   const { t } = useTranslations<EventGridT>();
+  const activities = t('activities');
 
   if (!hasSearched) {
     return (
@@ -101,6 +104,7 @@ export function EventGrid({
             city={event.city}
             country={event.country}
             activity={event.activity}
+            activityLabel={activities[event.activity as keyof typeof activities] ?? event.activity}
             photoCount={event.photoCount}
             coverUrl={event.coverUrl}
             photographer={{

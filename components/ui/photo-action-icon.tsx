@@ -50,13 +50,20 @@ export function PhotoActionIcon({
     }
   }
 
+  // The unselected select-icon nudges to a slightly lighter shade so it
+  // reads as a tappable affordance against the photo, while keeping the
+  // same dark-pill look. All other icons (cart, tag, save, delete) and the
+  // active/selected check keep the original styling untouched.
+  const isUnselectedSelect = icon === 'check' && !active;
+
   const button = (
     <button
       type="button"
       className={cn(
-        'flex size-6 items-center justify-center rounded-full',
-        'bg-gray-900/45 backdrop-blur-sm text-white shadow-sm',
-        'transition-colors hover:bg-gray-900/80',
+        'flex size-6 items-center justify-center rounded-full text-white backdrop-blur-sm shadow-sm transition-colors',
+        isUnselectedSelect
+          ? 'bg-gray-700/55 hover:bg-gray-700/80'
+          : 'bg-gray-900/45 hover:bg-gray-900/80',
         active && 'bg-gray-900/80',
         className,
       )}

@@ -43,7 +43,9 @@ export default async function TalentExplorePage({
         </TranslationsProvider>
       </div>
 
-      <TranslationsProvider translations={{ ...dict.eventFilterBar, ...dict.eventCard }}>
+      <TranslationsProvider
+        translations={{ ...dict.eventFilterBar, ...dict.eventCard, activities: dict.activities }}
+      >
         <ExplorePageContent
           key={key}
           initialFilterOptions={filterOptions}

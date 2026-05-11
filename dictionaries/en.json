@@ -461,7 +461,28 @@
     "from": "From",
     "free": "Free",
     "noPhotosYet": "No photos yet",
-    "comingSoon": "Coming Soon"
+    "comingSoon": "Coming Soon",
+    "publicEvent": "Public event",
+    "privateEvent": "Private event",
+    "moreOptions": "More options"
+  },
+  "activities": {
+    "SURF": "Surf",
+    "MTB": "Mountain Bike",
+    "SKATEBOARDING": "Skateboarding",
+    "RUNNING_ROAD": "Running (Road)",
+    "RUNNING_TRAIL": "Trail Running",
+    "CYCLING_ROAD": "Cycling (Road)",
+    "CYCLING_GRAVEL": "Cycling (Gravel)",
+    "BMX": "BMX",
+    "TRIATHLON": "Triathlon",
+    "OPEN_WATER_SWIMMING": "Open Water Swimming",
+    "SKI_ALPINE": "Alpine Skiing",
+    "SNOWBOARD": "Snowboard",
+    "SKI_CROSS_COUNTRY": "Cross-Country Skiing",
+    "CLIMBING_BOULDER": "Bouldering",
+    "HIKING": "Hiking",
+    "OTHER": "Other"
   },
   "talentPhotos": {
     "noPhotosTagged": "No photos tagged yet. Photographers will tag you in photos from events.",

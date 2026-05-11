@@ -166,7 +166,7 @@ export function LocationAutocomplete({
           placeholder={placeholder}
           autoComplete="off"
           suppressHydrationWarning
-          className={cn('text-left', className)}
+          className={cn('text-left text-sm', className)}
         />
       </PopoverAnchor>
       <PopoverContent

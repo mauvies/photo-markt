@@ -39,15 +39,24 @@ type ProfilePhotoViewerProps = {
       photographer_username: string | null;
     }
   >;
+  // -1 when the lightbox is closed; otherwise the index of the open photo.
+  // Derived from the URL by the parent (see `usePhotoLightboxUrl`).
   currentIndex: number;
-  onIndexChange: (index: number) => void;
+  // Fired on grid click — opens the lightbox and pushes `?photo=…`.
+  onOpenPhoto: (photoId: string) => void;
+  // Fired on next/prev inside the lightbox — replaces the URL param.
+  onSwitchPhoto: (photoId: string) => void;
+  // Fired on lightbox close — pops/clears the URL param.
+  onClose: () => void;
 };
 
 export function ProfilePhotoViewer({
   items,
   photoMetadata,
   currentIndex,
-  onIndexChange,
+  onOpenPhoto,
+  onSwitchPhoto,
+  onClose,
 }: ProfilePhotoViewerProps) {
   const router = useRouter();
   const { t } = useTranslations<{
@@ -370,7 +379,8 @@ export function ProfilePhotoViewer({
             },
           }}
           onClick={({ index }) => {
-            onIndexChange(index);
+            const photo = items[index];
+            if (photo) onOpenPhoto(photo.id);
           }}
         />
       </div>
@@ -380,7 +390,8 @@ export function ProfilePhotoViewer({
         items={lightboxItems}
         open={currentIndex >= 0}
         initialIndex={currentIndex >= 0 ? currentIndex : 0}
-        onClose={() => onIndexChange(-1)}
+        onClose={onClose}
+        onIndexChange={onSwitchPhoto}
         showDownload={true}
         onDownload={(photoId) => {
           void handleDownload(photoId);

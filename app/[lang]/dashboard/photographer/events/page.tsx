@@ -150,7 +150,7 @@ export default async function EventsPage({ params }: { params: Promise<{ lang: s
           <div className="text-sm text-muted-foreground">
             {`${events.length} event${events.length === 1 ? '' : 's'}`}
           </div>
-          <div className="mt-4 grid gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          <div className="mt-4 grid gap-5 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
             {events.map((event) => {
               const stat = stats.get(event.id) ?? {
                 count: 0,
@@ -171,12 +171,16 @@ export default async function EventsPage({ params }: { params: Promise<{ lang: s
                   city={event.city}
                   country={event.country}
                   activity={event.activity}
+                  activityLabel={
+                    dict.activities[event.activity as keyof typeof dict.activities] ??
+                    event.activity
+                  }
                   photoCount={count}
                   coverUrl={coverUrl}
                   status={event.date ? getEventStatus(event.date) : undefined}
                   ownerStats={{
                     isPublic: event.is_public,
-                    privateLabel: dict.events.private,
+                    privateLabel: dict.eventCard.privateEvent,
                   }}
                   t={{
                     photo: dict.events.photo,
@@ -196,6 +200,7 @@ export default async function EventsPage({ params }: { params: Promise<{ lang: s
                         deleteConfirm: dict.events.confirmButton,
                         deleteCancel: dict.events.cancelButton,
                         ariaOpen: dict.events.eventActionsMenuLabel,
+                        moreOptions: dict.eventCard.moreOptions,
                       }}
                     />
                   }

@@ -4,8 +4,10 @@ import { format } from 'date-fns';
 import { CalendarDays, Camera, Lock, MapPin } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
-import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/activity-options';
+import { type ReactNode, useState } from 'react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useCoarsePointer } from '@/hooks/use-coarse-pointer';
+import { getActivityIcon } from '@/lib/activity-icon';
 import { type EventStatus, isEventSoon } from '@/lib/event-status';
 
 export type EventCardLabels = {
@@ -32,6 +34,10 @@ type EventCardProps = {
   city: string;
   country: string;
   activity: string;
+  // Localized name of the activity (e.g. "Mountain Bike"/"Bicicleta de Montaña").
+  // Resolved by the caller from the locale's `activities` dictionary so the
+  // tooltip stays in the user's language.
+  activityLabel: string;
   photoCount: number;
   coverUrl?: string | null;
   status?: EventStatus;
@@ -46,10 +52,10 @@ type EventCardProps = {
   // passed across the server/client boundary safely.
   ownerStats?: {
     isPublic: boolean;
-    // Localized accessibility label for the private-event lock icon.
+    // Localized accessibility/tooltip label for the private-event lock icon.
     privateLabel: string;
   };
-  // Floating top-right slot (e.g. dropdown trigger with edit/delete options).
+  // Floating top-left slot (e.g. dropdown trigger with edit/delete options).
   // Only rendered for owner mode.
   actions?: ReactNode;
   t?: EventCardLabels;
@@ -66,18 +72,24 @@ function StatusBadge({
   date,
   labels,
   isOwner,
+  offsetLeft,
 }: {
   status?: EventStatus;
   date: string;
   labels: EventCardLabels;
   isOwner: boolean;
+  // Push the badge to the right when the owner dropdown sits in the top-left.
+  offsetLeft?: boolean;
 }) {
+  const positionClass = offsetLeft ? 'left-12' : 'left-3 sm:left-2';
   // Explore-side: hint at any upcoming event so browsers know it's not live
   // yet. Keep the original "Coming Soon" framing.
   if (!isOwner) {
     if (status !== 'upcoming') return null;
     return (
-      <span className="absolute left-2 top-2 rounded-full bg-primary/90 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground">
+      <span
+        className={`absolute ${positionClass} top-3 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground sm:top-2`}
+      >
         {labels.comingSoon ?? 'Coming Soon'}
       </span>
     );
@@ -88,7 +100,9 @@ function StatusBadge({
   // doesn't get noisy.
   if (status === 'upcoming' && isEventSoon(date)) {
     return (
-      <span className="absolute left-2 top-2 rounded-full bg-primary/90 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground">
+      <span
+        className={`absolute ${positionClass} top-3 rounded-full bg-black/55 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground sm:top-2`}
+      >
         {labels.upcomingLabel ?? 'Upcoming'}
       </span>
     );
@@ -96,19 +110,86 @@ function StatusBadge({
   return null;
 }
 
+// Renders an icon-only badge that overlays the cover. The label appears via
+// Shadcn Tooltip (Radix), which portals the content to `document.body` and
+// therefore escapes the cover's `overflow-hidden` clipping. On desktop the
+// tooltip opens on hover; on touch devices we control it manually so a tap
+// toggles it open/closed without Radix's pointer-enter auto-open getting in
+// the way. Tapping the badge never navigates to the event — it lives inside
+// a `<Link>` so the click handler swallows the event.
+function OverlayIconBadge({
+  label,
+  className,
+  children,
+}: {
+  label: string;
+  className: string;
+  children: ReactNode;
+}) {
+  const isCoarse = useCoarsePointer();
+  const [open, setOpen] = useState(false);
+
+  const swallow = (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  return (
+    <Tooltip
+      open={open}
+      onOpenChange={(next) => {
+        // Touch devices: ignore Radix's pointer-driven open/close attempts
+        // (pointer-enter fires on tap, which would flash the tooltip and
+        // then immediately close it on pointer-leave). Our onClick below is
+        // the single source of truth for tap-to-toggle.
+        if (isCoarse) return;
+        setOpen(next);
+      }}
+    >
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={label}
+          className={className}
+          onClick={(e) => {
+            swallow(e);
+            if (isCoarse) setOpen((o) => !o);
+          }}
+          onPointerDown={swallow}
+        >
+          {children}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>{label}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function ActivityBadge({ activity, label }: { activity: string; label: string }) {
+  const Icon = getActivityIcon(activity);
+  return (
+    <OverlayIconBadge
+      label={label}
+      className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white/90 backdrop-blur-sm sm:right-2 sm:top-2"
+    >
+      <Icon className="h-4 w-4" aria-hidden />
+    </OverlayIconBadge>
+  );
+}
+
 function VisibilityBadge({ isPublic, privateLabel }: { isPublic: boolean; privateLabel: string }) {
   // Public is the default state; only flag private events with a small lock
   // icon. Less visual noise when most events are public.
   if (isPublic) return null;
   return (
-    <span
-      role="img"
-      aria-label={privateLabel}
-      title={privateLabel}
-      className="absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white/90 backdrop-blur-sm"
+    <OverlayIconBadge
+      label={privateLabel}
+      className="absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white/90 backdrop-blur-sm sm:right-2 sm:bottom-2 sm:h-7 sm:w-7"
     >
-      <Lock className="h-4 w-4" aria-hidden />
-    </span>
+      <Lock className="h-4 w-4 sm:h-3 sm:w-3" aria-hidden />
+    </OverlayIconBadge>
   );
 }
 
@@ -121,6 +202,7 @@ export function EventCard({
   city,
   country,
   activity,
+  activityLabel,
   photoCount,
   coverUrl,
   status,
@@ -129,7 +211,6 @@ export function EventCard({
   actions,
   t = DEFAULT_LABELS,
 }: EventCardProps) {
-  const activityLabel = activityOptions.find((opt) => opt.value === activity)?.label ?? activity;
   const formattedDate = format(new Date(date), 'MMM d, yyyy');
   const location = [city, country].filter(Boolean).join(', ');
   const photographerHandle =
@@ -142,7 +223,7 @@ export function EventCard({
   return (
     <div className="group relative">
       <Link href={`${linkPrefix}/${hrefParam ?? id}`} className="block">
-        <div className="relative mb-3 aspect-square w-full overflow-hidden rounded-xl bg-muted">
+        <div className="relative mb-2 aspect-square w-full overflow-hidden rounded-xl bg-muted">
           {coverUrl ? (
             <>
               <Image
@@ -153,7 +234,14 @@ export function EventCard({
                 className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
               />
               <div className="absolute inset-0 bg-linear-to-t from-black/40 via-transparent to-transparent" />
-              <StatusBadge status={status} date={date} labels={t} isOwner={isOwner} />
+              <StatusBadge
+                status={status}
+                date={date}
+                labels={t}
+                isOwner={isOwner}
+                offsetLeft={!!actions}
+              />
+              <ActivityBadge activity={activity} label={activityLabel} />
               <span className="absolute bottom-2 left-3 text-xs font-medium text-white drop-shadow-sm">
                 {photoCount} {photoCount === 1 ? t.photo : t.photos}
               </span>
@@ -168,7 +256,14 @@ export function EventCard({
             <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground">
               <Camera className="h-8 w-8 opacity-30" />
               <span className="text-xs">{t.noPhotosYet}</span>
-              <StatusBadge status={status} date={date} labels={t} isOwner={isOwner} />
+              <StatusBadge
+                status={status}
+                date={date}
+                labels={t}
+                isOwner={isOwner}
+                offsetLeft={!!actions}
+              />
+              <ActivityBadge activity={activity} label={activityLabel} />
               {ownerStats && (
                 <VisibilityBadge
                   isPublic={ownerStats.isPublic}
@@ -180,7 +275,9 @@ export function EventCard({
         </div>
 
         <div className="space-y-1 px-1">
-          <h3 className="line-clamp-2 font-semibold leading-snug text-foreground">{name}</h3>
+          <h3 className="line-clamp-2 text-lg font-semibold leading-snug text-foreground">
+            {name}
+          </h3>
 
           <div className="space-y-0.5 text-xs text-muted-foreground">
             {location && (
@@ -200,16 +297,10 @@ export function EventCard({
               </p>
             )}
           </div>
-
-          <div className="pt-1">
-            <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-              {activityLabel}
-            </span>
-          </div>
         </div>
       </Link>
 
-      {actions && <div className="absolute right-2 top-2">{actions}</div>}
+      {actions && <div className="absolute left-2 top-2">{actions}</div>}
     </div>
   );
 }

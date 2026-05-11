@@ -86,7 +86,9 @@ export default async function PublicEventsPage({
   return (
     <div className="flex min-h-screen flex-col">
       <div className="mx-auto max-w-7xl w-full flex-1 px-4 pt-6 pb-10">
-        <TranslationsProvider translations={{ ...dict.eventFilterBar, ...dict.eventCard }}>
+        <TranslationsProvider
+          translations={{ ...dict.eventFilterBar, ...dict.eventCard, activities: dict.activities }}
+        >
           <ExplorePageContent
             key={searchKey}
             searchKey={searchKey}

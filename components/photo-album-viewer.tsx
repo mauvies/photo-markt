@@ -5,6 +5,7 @@ import { type Photo, type RenderPhotoContext, RowsPhotoAlbum } from 'react-photo
 import { PhotoIconButtons, type PhotoIconTooltips } from '@/components/photo-icon-buttons';
 import { PhotoLightbox, type PhotoLightboxItem } from '@/components/photo-lightbox';
 import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
+import { usePhotoLightboxUrl } from '@/hooks/use-photo-lightbox-url';
 import { cn } from '@/lib/utils';
 import 'react-photo-album/rows.css';
 
@@ -89,7 +90,7 @@ export default function PhotoAlbumViewer({
   deleteTooltip,
   uploaderLabels,
 }: PhotoAlbumViewerProps) {
-  const [index, setIndex] = useState<number>(-1);
+  const { index, openAt, switchTo, close } = usePhotoLightboxUrl(items);
   const [dimensions, setDimensions] = useState<Record<string, { width: number; height: number }>>(
     {},
   );
@@ -343,13 +344,13 @@ export default function PhotoAlbumViewer({
               };
             },
           }}
-          onClick={({ index, photo }) => {
+          onClick={({ photo }) => {
             const photoId = extractPhotoId(photo as Photo & { id?: string });
             if (canSelect && selectionActive) {
               handleToggleSelect(photoId);
               return;
             }
-            setIndex(index);
+            openAt(photoId);
           }}
         />
       </div>
@@ -357,7 +358,8 @@ export default function PhotoAlbumViewer({
         items={lightboxItems}
         open={index >= 0}
         initialIndex={index >= 0 ? index : 0}
-        onClose={() => setIndex(-1)}
+        onClose={close}
+        onIndexChange={switchTo}
         showDownload={showDownload}
         showAddToPhotos={showAddToPhotos}
         showAddToCart={showAddToCart}

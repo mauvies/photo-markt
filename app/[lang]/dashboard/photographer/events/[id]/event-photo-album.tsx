@@ -100,49 +100,56 @@ export function EventPhotoAlbum({ items, eventId, iconTooltips }: EventPhotoAlbu
   return (
     <div className="space-y-3">
       {(hasItems || isSelecting) && (
-        <div className="flex items-center justify-between">
-          {!isSelecting && (
-            <div className="ml-auto flex items-center gap-2">
+        // Sticky toolbar — stays accessible while scrolling through long
+        // galleries. Sits below the lightbox (z-[100]) but above the photo
+        // grid. Photographer dashboard has no in-flow header so we stick to
+        // top-0 of the SidebarInset scroll container. Negative horizontal
+        // margin extends the backdrop to the layout's padding edges.
+        <div className="sticky top-0 z-30 -mx-4 border-b border-border bg-background/95 px-4 py-3 backdrop-blur-sm">
+          <div className="flex items-center gap-3 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {isSelecting ? (
+              <>
+                <div className="shrink-0 whitespace-nowrap text-sm font-medium">
+                  {selectedCountLabel}
+                </div>
+                <div className="ml-auto flex shrink-0 items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={clearSelection}>
+                    {t('clearButton')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDeleteSelected}
+                    disabled={selectedIds.length === 0 || isDeleting}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    {isDeleting ? t('deletingLabel') : t('removeButton')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    onClick={() => setTagDialogOpen(true)}
+                    disabled={selectedIds.length === 0}
+                  >
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    {t('tagTalentButton')}
+                  </Button>
+                </div>
+              </>
+            ) : (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => setIsSelecting(true)}
+                className="ml-auto shrink-0"
               >
                 {t('selectButton')}
               </Button>
-            </div>
-          )}
-          {isSelecting && (
-            <div className="flex flex-wrap items-center justify-between gap-3 w-full">
-              <div className="text-sm font-medium">{selectedCountLabel}</div>
-              <div className="flex items-center gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={clearSelection}>
-                  {t('clearButton')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDeleteSelected}
-                  disabled={selectedIds.length === 0 || isDeleting}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  {isDeleting ? t('deletingLabel') : t('removeButton')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="default"
-                  size="sm"
-                  onClick={() => setTagDialogOpen(true)}
-                  disabled={selectedIds.length === 0}
-                >
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  {t('tagTalentButton')}
-                </Button>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
       <PhotoAlbumViewer

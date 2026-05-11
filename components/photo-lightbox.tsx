@@ -3,6 +3,7 @@
 import { ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { LightboxToolbar } from '@/components/lightbox-toolbar';
 
 export type PhotoLightboxItem = {
@@ -25,6 +26,10 @@ type PhotoLightboxProps = {
   open: boolean;
   initialIndex?: number;
   onClose: () => void;
+  // Fires with the new photo id whenever the user navigates between photos
+  // inside the lightbox (next/prev/swipe). Consumers use this to mirror the
+  // current photo into a URL query param.
+  onIndexChange?: (photoId: string) => void;
   // Button visibility
   showDownload?: boolean;
   showAddToPhotos?: boolean;
@@ -51,6 +56,7 @@ export function PhotoLightbox({
   open,
   initialIndex = 0,
   onClose,
+  onIndexChange,
   showDownload = false,
   showAddToPhotos = false,
   showAddToCart = false,
@@ -74,7 +80,21 @@ export function PhotoLightbox({
   const [addedToCart, setAddedToCart] = useState<Set<string>>(new Set());
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
+  // `createPortal` needs `document.body`, which isn't available during SSR.
+  // Defer mounting until the first client render to avoid hydration issues.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const currentPhoto = useMemo(() => items[currentIndex], [items, currentIndex]);
+
+  // Mirror the current photo back into the URL via the consumer's callback
+  // whenever the index changes. This keeps `?photo=…` in sync with next/prev
+  // navigation. The consumer is expected to no-op when the id already
+  // matches the URL so this doesn't fire a redundant replace on open.
+  useEffect(() => {
+    if (!open) return;
+    const id = items[currentIndex]?.id;
+    if (id) onIndexChange?.(id);
+  }, [open, currentIndex, items, onIndexChange]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -318,11 +338,14 @@ export function PhotoLightbox({
     [onClose],
   );
 
-  if (!open || !currentPhoto) return null;
+  if (!open || !currentPhoto || !mounted) return null;
 
-  return (
+  // Render through a portal at `document.body` so the lightbox escapes any
+  // stacking context (mobile bottom nav, sticky headers) created by the
+  // page's layout. The `z-[100]` keeps it above app chrome that uses `z-50`.
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-black"
+      className="fixed inset-0 z-[100] flex flex-col bg-black"
       style={{ height: '100vh', width: '100vw' }}
       onClick={handleBackdropClick}
       onKeyDown={handleBackdropKeyDown}
@@ -419,6 +442,7 @@ export function PhotoLightbox({
           </button>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

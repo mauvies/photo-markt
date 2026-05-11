@@ -461,7 +461,28 @@
     "from": "Desde",
     "free": "Gratis",
     "noPhotosYet": "Aún no hay fotos",
-    "comingSoon": "Próximamente"
+    "comingSoon": "Próximamente",
+    "publicEvent": "Evento público",
+    "privateEvent": "Evento privado",
+    "moreOptions": "Más opciones"
+  },
+  "activities": {
+    "SURF": "Surf",
+    "MTB": "Bicicleta de Montaña",
+    "SKATEBOARDING": "Skateboarding",
+    "RUNNING_ROAD": "Running (Ruta)",
+    "RUNNING_TRAIL": "Trail Running",
+    "CYCLING_ROAD": "Ciclismo (Ruta)",
+    "CYCLING_GRAVEL": "Ciclismo (Gravel)",
+    "BMX": "BMX",
+    "TRIATHLON": "Triatlón",
+    "OPEN_WATER_SWIMMING": "Aguas Abiertas",
+    "SKI_ALPINE": "Esquí Alpino",
+    "SNOWBOARD": "Snowboard",
+    "SKI_CROSS_COUNTRY": "Esquí de Fondo",
+    "CLIMBING_BOULDER": "Escalada / Boulder",
+    "HIKING": "Senderismo",
+    "OTHER": "Otro"
   },
   "talentPhotos": {
     "noPhotosTagged": "Aún no hay fotos etiquetadas. Los fotógrafos te etiquetarán en fotos de eventos.",

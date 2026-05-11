@@ -239,38 +239,54 @@ export function TalentPhotosGrid({
 
   return (
     <div className="mt-2">
-      <div className="mt-4 flex justify-end items-center gap-3">
-        {isSelecting ? (
-          <>
-            <div className="text-sm font-medium text-muted-foreground">{selectedCountLabel}</div>
-            <Button type="button" variant="outline" size="sm" onClick={clearSelection}>
-              {t('clear')}
-            </Button>
+      {/* Sticky toolbar — sits below the talent dashboard header
+          (h = --header-height) so it stays reachable while scrolling. The
+          negative horizontal margin matches the layout's px-4 md:px-6 so
+          the backdrop runs edge-to-edge. */}
+      <div className="sticky top-[var(--header-height)] z-30 -mx-4 mt-4 border-b border-border bg-background/95 px-4 py-3 backdrop-blur-sm md:-mx-6 md:px-6">
+        <div className="flex items-center gap-3 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {isSelecting ? (
+            <>
+              <div className="shrink-0 whitespace-nowrap text-sm font-medium text-muted-foreground">
+                {selectedCountLabel}
+              </div>
+              <div className="ml-auto flex shrink-0 items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={clearSelection}>
+                  {t('clear')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowRemoveConfirm(true)}
+                  disabled={selectedIds.length === 0 || isLoading}
+                >
+                  {t('remove')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="default"
+                  size="sm"
+                  onClick={handleAddSelectedToCart}
+                  disabled={selectedIds.length === 0 || isLoading}
+                >
+                  <ShoppingCart className="mr-2 h-4 w-4" />
+                  {t('addToCart')}
+                </Button>
+              </div>
+            </>
+          ) : (
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setShowRemoveConfirm(true)}
-              disabled={selectedIds.length === 0 || isLoading}
+              onClick={() => setIsSelecting(true)}
+              className="ml-auto shrink-0"
             >
-              {t('remove')}
+              {t('select')}
             </Button>
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              onClick={handleAddSelectedToCart}
-              disabled={selectedIds.length === 0 || isLoading}
-            >
-              <ShoppingCart className="mr-2 h-4 w-4" />
-              {t('addToCart')}
-            </Button>
-          </>
-        ) : (
-          <Button type="button" variant="outline" size="sm" onClick={() => setIsSelecting(true)}>
-            {t('select')}
-          </Button>
-        )}
+          )}
+        </div>
       </div>
 
       <div className="space-y-6">

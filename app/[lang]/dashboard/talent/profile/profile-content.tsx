@@ -3,10 +3,11 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { usePhotoLightboxUrl } from '@/hooks/use-photo-lightbox-url';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import type { ProfileData } from './actions';
 import { ProfilePhotoViewer } from './profile-photo-viewer';
@@ -23,7 +24,6 @@ export function ProfileContent({
   translations,
 }: ProfileContentProps) {
   const { profile, stats, photos } = initialData;
-  const [index, setIndex] = useState<number>(-1);
   const router = useRouter();
 
   useEffect(() => {
@@ -48,6 +48,8 @@ export function ProfileContent({
       }))
       .filter((item) => item.url);
   }, [photos]);
+
+  const { index, openAt, switchTo, close } = usePhotoLightboxUrl(photoItems);
 
   const photoMetadata = useMemo(() => {
     const metadata: Record<
@@ -145,7 +147,9 @@ export function ProfileContent({
               items={photoItems}
               photoMetadata={photoMetadata}
               currentIndex={index}
-              onIndexChange={setIndex}
+              onOpenPhoto={openAt}
+              onSwitchPhoto={switchTo}
+              onClose={close}
             />
           </TranslationsProvider>
         </div>
