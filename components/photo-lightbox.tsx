@@ -77,7 +77,8 @@ export function PhotoLightbox({
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [addedPhotos, setAddedPhotos] = useState<Set<string>>(new Set());
-  const [addedToCart, setAddedToCart] = useState<Set<string>>(new Set());
+  // Cart state is now owned by the parent via `useOptimisticPhotosInCart`,
+  // which flips `photosInCart` optimistically. We just read from it.
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
   // `createPortal` needs `document.body`, which isn't available during SSR.
@@ -106,8 +107,8 @@ export function PhotoLightbox({
   );
 
   const isInCart = useMemo(
-    () => currentPhoto && (photosInCart.has(currentPhoto.id) || addedToCart.has(currentPhoto.id)),
-    [currentPhoto, photosInCart, addedToCart],
+    () => Boolean(currentPhoto && photosInCart.has(currentPhoto.id)),
+    [currentPhoto, photosInCart],
   );
 
   const handleTagTalent = useCallback(() => {
@@ -263,35 +264,14 @@ export function PhotoLightbox({
     }
   }, [currentPhoto, onAddToPhotos, onRemoveFromPhotos, isInMyPhotos]);
 
-  const handleAddToCart = useCallback(async () => {
+  const handleAddToCart = useCallback(() => {
+    // The parent's `useOptimisticPhotosInCart` (or `useGuestCart` for guests)
+    // owns the optimistic flip + rollback + toast. We just dispatch.
     if (!currentPhoto) return;
-
     if (isInCart) {
-      setAddedToCart((prev) => {
-        const next = new Set(prev);
-        next.delete(currentPhoto.id);
-        return next;
-      });
-      if (onRemoveFromCart) {
-        try {
-          await onRemoveFromCart(currentPhoto.id);
-        } catch {
-          setAddedToCart((prev) => new Set(prev).add(currentPhoto.id));
-        }
-      }
+      onRemoveFromCart?.(currentPhoto.id);
     } else {
-      setAddedToCart((prev) => new Set(prev).add(currentPhoto.id));
-      if (onAddToCart) {
-        try {
-          await onAddToCart(currentPhoto.id);
-        } catch {
-          setAddedToCart((prev) => {
-            const next = new Set(prev);
-            next.delete(currentPhoto.id);
-            return next;
-          });
-        }
-      }
+      onAddToCart?.(currentPhoto.id);
     }
   }, [currentPhoto, onAddToCart, onRemoveFromCart, isInCart]);
 

@@ -1,8 +1,6 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
   addPhotoToCartAction,
@@ -10,6 +8,7 @@ import {
 } from '@/app/[lang]/dashboard/talent/cart/actions';
 import PhotoAlbumViewer, { type PhotoAlbumItem } from '@/components/photo-album-viewer';
 import type { PhotoIconTooltips } from '@/components/photo-icon-buttons';
+import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { addPhotoToMyPhotosAction, removePhotoFromMyPhotosAction } from './actions';
 
@@ -25,13 +24,11 @@ type EventPhotoViewerProps = {
 export function EventPhotoViewer({
   items,
   showAddToCart = false,
-  photosInCart = new Set(),
+  photosInCart: initialPhotosInCart = new Set(),
   photosInMyPhotos: initialPhotosInMyPhotos = new Set(),
   iconTooltips,
   imageUnavailableLabel,
 }: EventPhotoViewerProps) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const { t } = useTranslations<{
     addedToPhotos: string;
     removedFromPhotos: string;
@@ -50,6 +47,33 @@ export function EventPhotoViewer({
   useEffect(() => {
     setMyPhotos(initialPhotosInMyPhotos);
   }, [initialPhotosInMyPhotos]);
+
+  // Optimistic cart state — the hook handles instant icon flip + badge sync.
+  const { photosInCart, addToCart, removeFromCart } = useOptimisticPhotosInCart({
+    initialPhotosInCart,
+    addServerAction: addPhotoToCartAction,
+    removeServerAction: removePhotoFromCartAction,
+    toastLabels: { failedAdd: t('failedAddCart'), failedRemove: t('failedRemoveCart') },
+  });
+
+  // Success toasts fire alongside the optimistic flip (hook only emits on
+  // failure). On a server error, the user sees this success briefly before
+  // the error toast appears — acceptable given how rare cart errors are.
+  const handleAddToCart = useCallback(
+    (photoId: string) => {
+      addToCart(photoId);
+      toast.success(t('addedToCart'));
+    },
+    [addToCart, t],
+  );
+
+  const handleRemoveFromCart = useCallback(
+    (photoId: string) => {
+      removeFromCart(photoId);
+      toast.success(t('removedFromCart'));
+    },
+    [removeFromCart, t],
+  );
 
   const handleAddToPhotos = async (photoId: string) => {
     setMyPhotos((prev) => new Set([...prev, photoId]));
@@ -79,30 +103,6 @@ export function EventPhotoViewer({
     } catch (error) {
       setMyPhotos((prev) => new Set([...prev, photoId]));
       toast.error(error instanceof Error ? error.message : t('failedRemovePhotos'));
-      throw error;
-    }
-  };
-
-  const handleAddToCart = async (photoId: string) => {
-    try {
-      await addPhotoToCartAction(photoId);
-      toast.success(t('addedToCart'));
-      queryClient.invalidateQueries({ queryKey: ['cart-count'] });
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('failedAddCart'));
-      throw error;
-    }
-  };
-
-  const handleRemoveFromCart = async (photoId: string) => {
-    try {
-      await removePhotoFromCartAction(photoId);
-      toast.success(t('removedFromCart'));
-      queryClient.invalidateQueries({ queryKey: ['cart-count'] });
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('failedRemoveCart'));
       throw error;
     }
   };

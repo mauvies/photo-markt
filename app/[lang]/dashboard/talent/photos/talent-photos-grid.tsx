@@ -1,6 +1,5 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { enUS, es } from 'date-fns/locale';
 import { Loader2, ShoppingCart } from 'lucide-react';
@@ -25,6 +24,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
@@ -53,7 +53,6 @@ export function TalentPhotosGrid({
   const { t } = useTranslations<TalentPhotosT>();
   const params = useParams<{ lang: string }>();
   const dateLocale = params?.lang === 'es' ? es : enUS;
-  const queryClient = useQueryClient();
   const [groups, setGroups] = useState(initialGroups);
   const [offset, setOffset] = useState(
     initialGroups.reduce((sum, g) => sum + g.dates.reduce((s, d) => s + d.photos.length, 0), 0),
@@ -63,10 +62,14 @@ export function TalentPhotosGrid({
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
-  // Local set of photos in cart — kept in state so the per-photo cart icon
-  // can flip optimistically on tap (the server prop only seeds the initial
-  // value; subsequent toggles update this directly).
-  const [photosInCart, setPhotosInCart] = useState<Set<string>>(() => new Set(initialPhotosInCart));
+  // Seed only once — the hook owns subsequent transitions.
+  const seedPhotosInCart = useMemo(() => new Set(initialPhotosInCart), [initialPhotosInCart]);
+  const { photosInCart, addToCart, removeFromCart } = useOptimisticPhotosInCart({
+    initialPhotosInCart: seedPhotosInCart,
+    addServerAction: addPhotoToCartAction,
+    removeServerAction: removePhotoFromCartAction,
+    toastLabels: { failedAdd: t('failedAddCart'), failedRemove: t('failedRemoveCart') },
+  });
 
   const handleToggleSelect = useCallback((photoId: string) => {
     setSelectedIds((current) => {
@@ -84,75 +87,36 @@ export function TalentPhotosGrid({
 
   const handleAddSelectedToCart = useCallback(() => {
     if (selectedIds.length === 0) return;
-    startTransition(async () => {
-      try {
-        for (const photoId of selectedIds) {
-          await addPhotoToCartAction(photoId);
-        }
-        // Keep the per-photo icon state in sync with the bulk-add
-        setPhotosInCart((prev) => {
-          const next = new Set(prev);
-          for (const id of selectedIds) next.add(id);
-          return next;
-        });
-        queryClient.invalidateQueries({ queryKey: ['cart-count'] });
-        toast.success(
-          `Added ${selectedIds.length} photo${selectedIds.length === 1 ? '' : 's'} to cart`,
-        );
-        setSelectedIds([]);
-        setIsSelecting(false);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to add photos to cart';
-        toast.error(message);
-      }
-    });
-  }, [selectedIds, queryClient]);
+    // Dispatch one optimistic transition per photo — the hook handles the
+    // icon flip + badge bump + server action; the bulk button only owns
+    // the single aggregated success toast.
+    for (const photoId of selectedIds) {
+      addToCart(photoId);
+    }
+    toast.success(
+      `Added ${selectedIds.length} photo${selectedIds.length === 1 ? '' : 's'} to cart`,
+    );
+    setSelectedIds([]);
+    setIsSelecting(false);
+  }, [selectedIds, addToCart]);
 
+  // Per-photo handlers fire the success toast alongside the optimistic flip
+  // (the hook itself only emits on failure). Bulk above uses the raw
+  // `addToCart` so we don't spam one toast per photo.
   const handleAddToCart = useCallback(
-    async (photoId: string) => {
-      // Optimistic flip — the cart icon's filled state reads from this set
-      setPhotosInCart((prev) => {
-        const next = new Set(prev);
-        next.add(photoId);
-        return next;
-      });
-      try {
-        await addPhotoToCartAction(photoId);
-        queryClient.invalidateQueries({ queryKey: ['cart-count'] });
-        toast.success(t('addedToCart'));
-      } catch (error) {
-        setPhotosInCart((prev) => {
-          const next = new Set(prev);
-          next.delete(photoId);
-          return next;
-        });
-        toast.error(error instanceof Error ? error.message : t('failedAddCart'));
-      }
+    (photoId: string) => {
+      addToCart(photoId);
+      toast.success(t('addedToCart'));
     },
-    [queryClient, t],
+    [addToCart, t],
   );
 
   const handleRemoveFromCart = useCallback(
-    async (photoId: string) => {
-      setPhotosInCart((prev) => {
-        const next = new Set(prev);
-        next.delete(photoId);
-        return next;
-      });
-      try {
-        await removePhotoFromCartAction(photoId);
-        queryClient.invalidateQueries({ queryKey: ['cart-count'] });
-        toast.success(t('removedFromCart'));
-      } catch (error) {
-        setPhotosInCart((prev) => {
-          const next = new Set(prev);
-          next.add(photoId);
-          return next;
-        });
-        toast.error(error instanceof Error ? error.message : t('failedRemoveCart'));
-      }
+    (photoId: string) => {
+      removeFromCart(photoId);
+      toast.success(t('removedFromCart'));
     },
-    [queryClient, t],
+    [removeFromCart, t],
   );
 
   const handleConfirmRemove = useCallback(() => {

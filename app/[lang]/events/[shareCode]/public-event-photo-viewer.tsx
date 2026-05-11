@@ -4,12 +4,16 @@ import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { addPhotoToCartAction } from '@/app/[lang]/dashboard/talent/cart/actions';
+import {
+  addPhotoToCartAction,
+  removePhotoFromCartAction,
+} from '@/app/[lang]/dashboard/talent/cart/actions';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useGuestCart } from '@/components/guest-cart-provider';
 import PhotoAlbumViewer from '@/components/photo-album-viewer';
 import type { PhotoIconTooltips } from '@/components/photo-icon-buttons';
 import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
+import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import { deleteContributorPhotoAction } from './actions';
 import { readGuestUploads, removeGuestUpload } from './guest-uploads-storage';
@@ -64,6 +68,8 @@ interface PublicEventPhotoViewerProps {
     successToast: string;
     failedToast: string;
   };
+  /** Translated error toasts for the cart icon. */
+  cartToastLabels: { failedAdd: string; failedRemove: string };
   imageUnavailableLabel: string;
 }
 
@@ -84,6 +90,7 @@ export function PublicEventPhotoViewer({
   uploadingLabel,
   uploaderLabels,
   deleteLabels,
+  cartToastLabels,
   imageUnavailableLabel,
 }: PublicEventPhotoViewerProps) {
   const router = useRouter();
@@ -91,7 +98,22 @@ export function PublicEventPhotoViewer({
   const uploadProgress = useOptionalUploadProgress();
   const isUploading = uploadProgress?.isUploading ?? false;
   const uploadingCount = uploadProgress?.uploadingCount ?? 0;
-  const [authCartPhotos, setAuthCartPhotos] = useState<Set<string>>(new Set(initialPhotosInCart));
+  // Auth cart — managed via the shared optimistic hook so the icon flips
+  // instantly. Seeded from the server prop on mount.
+  const authInitialSet = useMemo(() => new Set(initialPhotosInCart), [initialPhotosInCart]);
+  const {
+    photosInCart: authCartPhotos,
+    addToCart: addAuthCart,
+    removeFromCart: removeAuthCart,
+  } = useOptimisticPhotosInCart({
+    initialPhotosInCart: authInitialSet,
+    addServerAction: addPhotoToCartAction,
+    removeServerAction: removePhotoFromCartAction,
+    toastLabels: {
+      failedAdd: cartToastLabels.failedAdd,
+      failedRemove: cartToastLabels.failedRemove,
+    },
+  });
   const [pendingDeletePhotoId, setPendingDeletePhotoId] = useState<string | null>(null);
   const [isDeleting, startDeleting] = useTransition();
   // Photo IDs the current browser owns (guest-upload tokens stored locally).
@@ -128,25 +150,23 @@ export function PublicEventPhotoViewer({
   }, [isAuthenticated, authCartPhotos, photos, guestCart]);
 
   const handleAddToCart = useCallback(
-    async (photoId: string) => {
+    (photoId: string) => {
       const photo = photos.find((p) => p.id === photoId);
       if (!photo) return;
 
       if (isAuthenticated) {
-        try {
-          await addPhotoToCartAction(photoId);
-          setAuthCartPhotos((prev) => new Set([...prev, photoId]));
-          toast.success('Added to cart', {
-            action: {
-              label: 'View cart',
-              onClick: () => {
-                window.location.href = '/dashboard/talent/cart';
-              },
+        // Hook flips the icon optimistically + bumps the cart-count cache.
+        // The success toast (with "View cart" action) is rendered alongside
+        // so the user still gets a clear confirmation + jump-to-cart entry.
+        addAuthCart(photoId);
+        toast.success('Added to cart', {
+          action: {
+            label: 'View cart',
+            onClick: () => {
+              window.location.href = '/dashboard/talent/cart';
             },
-          });
-        } catch (err) {
-          toast.error(err instanceof Error ? err.message : 'Failed to add to cart');
-        }
+          },
+        });
       } else {
         const item: GuestCartItem = {
           photoId,
@@ -177,22 +197,19 @@ export function PublicEventPhotoViewer({
       eventDate,
       pricePerPhoto,
       guestCart,
+      addAuthCart,
     ],
   );
 
   const handleRemoveFromCart = useCallback(
     (photoId: string) => {
       if (isAuthenticated) {
-        setAuthCartPhotos((prev) => {
-          const next = new Set(prev);
-          next.delete(photoId);
-          return next;
-        });
+        removeAuthCart(photoId);
       } else {
         guestCart.removeItem(photoId);
       }
     },
-    [isAuthenticated, guestCart],
+    [isAuthenticated, removeAuthCart, guestCart],
   );
 
   const handleDeleteRequest = useCallback((photoId: string) => {
