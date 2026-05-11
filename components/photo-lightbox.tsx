@@ -86,15 +86,13 @@ export function PhotoLightbox({
   useEffect(() => setMounted(true), []);
   const currentPhoto = useMemo(() => items[currentIndex], [items, currentIndex]);
 
-  // Mirror the current photo back into the URL via the consumer's callback
-  // whenever the index changes. This keeps `?photo=…` in sync with next/prev
-  // navigation. The consumer is expected to no-op when the id already
-  // matches the URL so this doesn't fire a redundant replace on open.
-  useEffect(() => {
-    if (!open) return;
-    const id = items[currentIndex]?.id;
-    if (id) onIndexChange?.(id);
-  }, [open, currentIndex, items, onIndexChange]);
+  // NOTE: We intentionally do NOT mirror `currentIndex` → URL via a
+  // useEffect. An effect with `items` in its deps would fire on every
+  // re-render where the parent rebuilds the array, emitting `onIndexChange`
+  // and causing the lightbox to auto-advance through photos. Instead, the
+  // emit happens in handlePrevious/handleNext below — i.e. only when the
+  // user actually navigates. Initial open already has the correct URL
+  // because the consumer called `openAt` before rendering the lightbox.
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -134,14 +132,24 @@ export function PhotoLightbox({
     };
   }, [open, initialIndex]);
 
-  // Navigation handlers - defined early to avoid reference errors
+  // Navigation handlers — explicitly emit `onIndexChange` for the NEW
+  // index so the consumer can update the URL. Emitting here (instead of
+  // via a useEffect on currentIndex) guarantees the URL only changes in
+  // response to user-initiated navigation, never as a side effect of a
+  // parent re-render.
   const handlePrevious = useCallback(() => {
-    setCurrentIndex((prev) => (prev > 0 ? prev - 1 : items.length - 1));
-  }, [items.length]);
+    const next = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+    setCurrentIndex(next);
+    const id = items[next]?.id;
+    if (id) onIndexChange?.(id);
+  }, [currentIndex, items, onIndexChange]);
 
   const handleNext = useCallback(() => {
-    setCurrentIndex((prev) => (prev < items.length - 1 ? prev + 1 : 0));
-  }, [items.length]);
+    const next = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+    setCurrentIndex(next);
+    const id = items[next]?.id;
+    if (id) onIndexChange?.(id);
+  }, [currentIndex, items, onIndexChange]);
 
   // Keyboard navigation
   useEffect(() => {

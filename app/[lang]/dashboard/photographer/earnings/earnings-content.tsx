@@ -236,7 +236,7 @@ export function EarningsContent() {
                 ? t('connectBannerPending')
                 : t('connectBannerRestricted')}
           </p>
-          <Link href="/dashboard/photographer/profile/payout-profile">
+          <Link href="/dashboard/photographer/settings/payout-profile">
             <Button size="sm" variant="outline">
               {t('connectBannerButton')}
             </Button>

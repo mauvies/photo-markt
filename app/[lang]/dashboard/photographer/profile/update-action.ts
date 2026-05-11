@@ -3,6 +3,8 @@
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { updateProfile } from '@/database/queries/profiles';
 import { createClient } from '@/database/server';
+import { getLangFromHeaders } from '@/lib/i18n/get-lang-from-headers';
+import { localizedRedirect } from '@/lib/i18n/redirect';
 
 /**
  * Update the photographer's public profile (username, display name, bio).
@@ -57,4 +59,12 @@ export async function updateProfileAction(values: {
   // Bust the public profile cache (old slug in case username changed)
   if (oldSlug) revalidateTag(`photographer-${oldSlug}`, 'max');
   if (newSlug !== oldSlug) revalidateTag(`photographer-${newSlug}`, 'max');
+
+  // After save, return the photographer to the dashboard-wrapped preview
+  // so they immediately see the result without leaving the dashboard
+  // chrome. `localizedRedirect` throws the Next.js NEXT_REDIRECT exception,
+  // which the form's submit handler will surface to React — no
+  // client-side router.push needed.
+  const lang = await getLangFromHeaders();
+  localizedRedirect(lang, '/dashboard/photographer/profile/preview');
 }

@@ -30,7 +30,8 @@ export async function getPhotographerEventsAction(
   cacheTag(`photographer-${slug}`);
   cacheLife('minutes');
 
-  // Fetch all non-deleted events for this photographer (public + private)
+  // Fetch only PUBLIC, non-deleted events — the public profile must not
+  // surface private events.
   const { data: events, count } = await supabaseAdmin
     .from('events')
     .select(
@@ -38,6 +39,7 @@ export async function getPhotographerEventsAction(
       { count: 'exact' },
     )
     .eq('user_id', userId)
+    .eq('is_public', true)
     .is('deleted_at', null)
     .order('date', { ascending: false })
     .limit(100);

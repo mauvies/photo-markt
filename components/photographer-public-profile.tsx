@@ -1,0 +1,177 @@
+import { Camera, Pencil } from 'lucide-react';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import {
+  getPhotographerEventsAction,
+  getPhotographerProfileAction,
+} from '@/app/[lang]/photographer/[slug]/actions';
+import { ProfileHero } from '@/app/[lang]/photographer/[slug]/profile-hero';
+import { ProfileMetrics } from '@/app/[lang]/photographer/[slug]/profile-metrics';
+import { CopyLinkButton } from '@/components/copy-link-button';
+import { EventCard } from '@/components/event-card';
+import { buttonVariants } from '@/components/ui/button-variants';
+import { getSiteUrl } from '@/lib/get-site-url';
+import type { Dictionary } from '@/lib/i18n/get-dictionary';
+import { stringifyJsonLd } from '@/lib/json-ld';
+
+type PhotographerPublicProfileProps = {
+  /** Photographer's public slug (used to load data and build the canonical URL). */
+  slug: string;
+  lang: string;
+  dict: Dictionary;
+  /**
+   * When true, the hero renders the Edit + Copy-link CTAs. The caller is
+   * responsible for deciding ownership — the public route checks auth, the
+   * dashboard /preview route knows the viewer is the photographer.
+   */
+  isOwner: boolean;
+};
+
+/**
+ * Shared profile body — rendered identically by:
+ *
+ *   1. `/photographer/[slug]` (public site chrome) for any visitor
+ *   2. `/dashboard/photographer/profile/preview` (dashboard chrome) for the
+ *      photographer to preview their own profile without leaving the
+ *      dashboard sidebar/bottom-nav.
+ *
+ * Wrapping layout (max-w container, Footer) is the caller's job — both
+ * routes use different surrounding chrome.
+ */
+export async function PhotographerPublicProfile({
+  slug,
+  lang,
+  dict,
+  isOwner,
+}: PhotographerPublicProfileProps) {
+  const profile = await getPhotographerProfileAction(slug);
+  if (!profile) notFound();
+
+  const { events: photographerEvents } = await getPhotographerEventsAction(profile.id, slug);
+
+  const displayName = profile.display_name ?? profile.username;
+  const p = dict.photographerProfile;
+  const siteUrl = getSiteUrl();
+  // Always the canonical PUBLIC URL — what gets shared externally, even
+  // when this component is rendered inside the dashboard preview.
+  const canonicalUrl = `${siteUrl}/${lang}/photographer/${slug}`;
+
+  // JSON-LD Person schema — helps search engines understand who this page
+  // represents. `address` is nested only when both city and country_code
+  // are available so we never emit a half-formed PostalAddress.
+  const personSchema: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'Person',
+    name: displayName,
+    alternateName: `@${profile.username}`,
+    url: canonicalUrl,
+    jobTitle: p.jobTitle,
+  };
+  if (profile.avatar_url) personSchema.image = profile.avatar_url;
+  if (profile.bio) personSchema.description = profile.bio;
+  if (profile.city && profile.country_code) {
+    personSchema.address = {
+      '@type': 'PostalAddress',
+      addressLocality: profile.city,
+      addressCountry: profile.country_code,
+    };
+  }
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: stringifyJsonLd escapes script-breaking characters.
+        dangerouslySetInnerHTML={{ __html: stringifyJsonLd(personSchema) }}
+      />
+
+      <ProfileHero
+        displayName={displayName}
+        username={profile.username}
+        avatarUrl={profile.avatar_url}
+        bio={profile.bio}
+        city={profile.city}
+        countryCode={profile.country_code}
+        createdAt={profile.created_at}
+        labels={{
+          locationFormat: p.locationFormat,
+          photographerSince: p.photographerSince,
+        }}
+      />
+
+      {isOwner && (
+        // Owner-only action row — lets the photographer edit their info
+        // or grab their shareable URL (always the public path) without
+        // leaving the page.
+        <div className="mt-6 flex flex-wrap items-center gap-2">
+          <Link
+            href={`/${lang}/dashboard/photographer/profile/edit`}
+            className={buttonVariants({ variant: 'default', size: 'sm' })}
+          >
+            <Pencil className="mr-2 h-4 w-4" />
+            {p.editProfile}
+          </Link>
+          <CopyLinkButton
+            value={canonicalUrl}
+            copyLabel={p.copyProfileLink}
+            copiedLabel={p.copied}
+          />
+        </div>
+      )}
+
+      <div className="mt-8 sm:mt-10">
+        <ProfileMetrics
+          eventCount={profile.eventCount}
+          photoCount={profile.photoCount}
+          photosSoldCount={profile.photosSoldCount}
+          labels={{
+            eventsCount: p.eventsCount,
+            eventsCountOne: p.eventsCountOne,
+            photosCount: p.photosCount,
+            photosCountOne: p.photosCountOne,
+            photosSold: p.photosSold,
+            photosSoldOne: p.photosSoldOne,
+          }}
+        />
+      </div>
+
+      <section className="mt-12 sm:mt-16">
+        <h2 className="mb-6 text-xl font-semibold tracking-tight sm:text-2xl">{p.events}</h2>
+        {photographerEvents.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed py-20 text-center sm:py-24">
+            <Camera className="mb-4 h-12 w-12 text-muted-foreground/40" aria-hidden />
+            <p className="font-medium">{p.noEvents}</p>
+            <p className="mt-1 max-w-sm text-sm text-muted-foreground">{p.noEventsBody}</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {photographerEvents.map((event) => (
+              <EventCard
+                key={event.id}
+                id={event.id}
+                hrefParam={(event as { slug?: string | null }).slug ?? event.id}
+                name={event.name}
+                date={event.date}
+                city={event.city}
+                country={event.country}
+                activity={event.activity}
+                activityLabel={
+                  dict.activities[event.activity as keyof typeof dict.activities] ?? event.activity
+                }
+                photoCount={event.photoCount}
+                coverUrl={event.coverUrl}
+                linkPrefix={`/${lang}/events`}
+                t={{
+                  photo: dict.eventCard.photo,
+                  photos: dict.eventCard.photos,
+                  noPhotosYet: dict.eventCard.noPhotosYet,
+                  imageUnavailable: dict.eventCard.imageUnavailable,
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    </>
+  );
+}

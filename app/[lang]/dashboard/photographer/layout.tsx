@@ -67,6 +67,7 @@ export default async function PhotographerLayout({ children }: { children: React
           profile: dict.dashboard.profile,
           settings: dict.dashboard.settings,
           billing: dict.dashboard.billing,
+          payouts: dict.dashboard.payouts,
           support: dict.dashboard.support,
           feedback: dict.dashboard.feedback,
           account: dict.dashboard.account,

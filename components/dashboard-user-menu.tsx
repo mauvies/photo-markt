@@ -1,6 +1,15 @@
 'use client';
 
-import { Camera, CreditCard, LifeBuoy, LogOut, Send, Settings, User } from 'lucide-react';
+import {
+  Camera,
+  CreditCard,
+  LifeBuoy,
+  LogOut,
+  Send,
+  Settings,
+  User,
+  WalletMinimal,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useOptimistic, useTransition } from 'react';
@@ -35,6 +44,7 @@ export function DashboardUserMenu({
     profile?: string;
     settings?: string;
     billing?: string;
+    payouts?: string;
     support?: string;
     feedback?: string;
     switchTo?: string;
@@ -81,9 +91,12 @@ export function DashboardUserMenu({
     });
   };
 
+  // Photographer "Profile" → dashboard-wrapped preview so the dashboard
+  // sidebar/header stay visible. The public profile URL is reserved for
+  // sharing externally (via the "Copy profile link" button on the page).
   const profileUrl =
     optimisticRole === 'photographer'
-      ? '/dashboard/photographer/profile'
+      ? '/dashboard/photographer/profile/preview'
       : '/dashboard/talent/profile';
   const settingsUrl =
     optimisticRole === 'photographer'
@@ -149,6 +162,16 @@ export function DashboardUserMenu({
               <span>{navLabels.profile ?? 'Profile'}</span>
             </Link>
           </DropdownMenuItem>
+          {/* Payouts — only relevant for photographer role; links straight to
+              the payout-profile config page that lives under settings/. */}
+          {optimisticRole === 'photographer' && (
+            <DropdownMenuItem asChild>
+              <Link href="/dashboard/photographer/settings/payout-profile">
+                <WalletMinimal className="mr-2 h-4 w-4" />
+                <span>{navLabels.payouts ?? 'Payouts'}</span>
+              </Link>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem asChild className={isSettingsActive ? 'bg-accent' : ''}>
             <Link href={settingsUrl}>
               <Settings className="mr-2 h-4 w-4" />

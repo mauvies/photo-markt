@@ -31,7 +31,7 @@ export function PayoutProfileBanner({ isComplete }: PayoutProfileBannerProps) {
             {t('payoutProfileBannerDesc')}
           </p>
           <div className="mt-3">
-            <Link href="/dashboard/photographer/profile/payout-profile">
+            <Link href="/dashboard/photographer/settings/payout-profile">
               <Button
                 size="sm"
                 variant="outline"
