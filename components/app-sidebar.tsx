@@ -43,11 +43,21 @@ export function AppSidebar({
 }) {
   const lp = useLocalizedPath();
 
-  const photographerNav = [
+  // "Profile" for photographers points to the dashboard-wrapped preview
+  // (`/dashboard/photographer/profile/preview`) — same UI as the public
+  // page but with the dashboard sidebar/header still visible. The public
+  // URL (`/photographer/{slug}`) is reserved for sharing externally; it's
+  // exposed via the "Copy profile link" button on the profile itself.
+  const photographerNav: Array<{ title: string; url: string; icon: typeof Home }> = [
     { title: navLabels.overview, url: '/dashboard/photographer', icon: Home },
     { title: navLabels.createEvent, url: '/dashboard/photographer/events/new', icon: CalendarPlus },
     { title: navLabels.events, url: '/dashboard/photographer/events', icon: CalendarDays },
     { title: navLabels.revenue, url: '/dashboard/photographer/sales', icon: TrendingUp },
+    {
+      title: navLabels.profile,
+      url: '/dashboard/photographer/profile/preview',
+      icon: User,
+    },
   ];
 
   const talentNav = [

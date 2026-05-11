@@ -218,7 +218,7 @@ export function PayoutProfileForm({
           postal_code: postalCode.trim(),
           is_payout_profile_complete: true,
         });
-        router.push(lp('/dashboard/photographer/profile'));
+        router.push(lp('/dashboard/photographer/settings'));
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : t('errorSaveFailed'));

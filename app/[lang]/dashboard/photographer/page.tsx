@@ -61,7 +61,7 @@ export default async function PhotographerDashboardPage({
             </div>
           </div>
           <Link
-            href={`/${lang}/dashboard/photographer/profile/payout-profile`}
+            href={`/${lang}/dashboard/photographer/settings/payout-profile`}
             className="shrink-0 self-start pl-8 text-sm font-medium text-yellow-800 underline sm:self-center sm:pl-0 dark:text-yellow-200"
           >
             {dict.stripeConnect.banner.goToPayoutProfile}

@@ -115,7 +115,9 @@
     "switchTo": "Switch to",
     "logOut": "Log out",
     "billing": "Billing",
-    "account": "Account"
+    "account": "Account",
+    "viewPublicProfile": "View public profile",
+    "payouts": "Payouts"
   },
   "events": {
     "editEvent": "Edit event",
@@ -301,6 +303,9 @@
     "tabEarnings": "Earnings",
     "profileTitle": "Profile",
     "profileSubtitle": "Manage your profile information, account details, and payout settings.",
+    "viewPublicProfile": "View public profile",
+    "copyProfileLink": "Copy profile link",
+    "copied": "Copied",
     "profileNotFound": "Profile not found.",
     "userDetails": "User Details",
     "userDetailsDesc": "Control how your photographer profile appears across Photo Markt: your username, public name, and short bio.",
@@ -872,7 +877,23 @@
   "photographerProfile": {
     "events": "Events",
     "photos": "Photos",
-    "noEvents": "No events yet"
+    "noEvents": "No events yet",
+    "photographerSince": "Photographer since {year}",
+    "eventsCount": "{n} events",
+    "eventsCountOne": "1 event",
+    "photosCount": "{n} photos",
+    "photosCountOne": "1 photo",
+    "photosSold": "{n} photos sold",
+    "photosSoldOne": "1 photo sold",
+    "locationFormat": "{city}, {country}",
+    "jobTitle": "Event Photographer",
+    "noEventsBody": "This photographer hasn't published any events yet.",
+    "editProfile": "Edit profile",
+    "copyProfileLink": "Copy profile link",
+    "copied": "Copied",
+    "editProfileTitle": "Edit profile",
+    "editProfileSubtitle": "Update your public profile info — name, username and short bio.",
+    "backToProfile": "Back to profile"
   },
   "privateEvent": {
     "title": "Private event access",

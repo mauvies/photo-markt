@@ -41,7 +41,7 @@ export function PayoutProfileSection({ profile }: PayoutProfileSectionProps) {
           <h2 className="text-lg sm:text-xl font-semibold">{t('payoutProfileTitle')}</h2>
           <p className="text-sm text-muted-foreground mt-1">{t('payoutProfileDesc')}</p>
         </div>
-        <Link href="/dashboard/photographer/profile/payout-profile">
+        <Link href="/dashboard/photographer/settings/payout-profile">
           <Button variant="outline" size="sm">
             {isComplete ? t('payoutProfileEdit') : t('payoutProfileCompleteButton')}
           </Button>

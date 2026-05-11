@@ -10,11 +10,14 @@ import {
 } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { getCurrentPlan } from '@/database/queries';
+import { getProfile } from '@/database/queries/profiles';
 import { createClient } from '@/database/server';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
+import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { formatPlanPrice, PLANS } from '@/lib/plans';
 import { getDashboardData } from '../actions';
+import { PayoutProfileSection } from './payout-profile-section';
 import { UpgradeHandler } from './upgrade-handler';
 import { UpgradePlanButton } from './upgrade-plan-button';
 
@@ -46,6 +49,10 @@ export default async function PhotographerSettingsPage({
   // Avoids pushing the most expensive plan first.
   const nextPlanId: 'starter' | 'pro' | null =
     currentPlanId === 'free' ? 'starter' : currentPlanId === 'starter' ? 'pro' : null;
+
+  // Payout profile lives here now (used to be on /profile/). Fetched alongside
+  // billing so settings is the single place for "money + plan" config.
+  const profile = user ? await getProfile(supabase, user.id) : null;
 
   return (
     <div className="flex flex-1 flex-col gap-4 sm:gap-6">
@@ -177,6 +184,12 @@ export default async function PhotographerSettingsPage({
             </p>
           </CardFooter>
         </Card>
+
+        {/* Payouts — moved here from /profile because it's an operational
+            financial config, not part of the photographer's public identity. */}
+        <TranslationsProvider translations={dict.photographerDashboard}>
+          <PayoutProfileSection profile={profile} />
+        </TranslationsProvider>
       </div>
     </div>
   );

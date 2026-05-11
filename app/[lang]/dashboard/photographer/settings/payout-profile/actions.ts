@@ -34,8 +34,8 @@ export async function updatePayoutProfileAction(updates: {
 
   await updateProfile(supabase, user.id, updates);
 
-  revalidatePath('/es/dashboard/photographer/profile');
-  revalidatePath('/en/dashboard/photographer/profile');
+  revalidatePath('/es/dashboard/photographer/settings');
+  revalidatePath('/en/dashboard/photographer/settings');
   revalidatePath('/es/dashboard/photographer/earnings');
   revalidatePath('/en/dashboard/photographer/earnings');
   revalidatePath('/es/dashboard/photographer/ventas');
@@ -114,8 +114,8 @@ export async function connectStripeAccountAction(lang: string): Promise<void> {
   }
 
   const base = env.SITE_URL;
-  const returnUrl = `${base}/${lang}/dashboard/photographer/profile/payout-profile?connect=success`;
-  const refreshUrl = `${base}/${lang}/dashboard/photographer/profile/payout-profile?connect=refresh`;
+  const returnUrl = `${base}/${lang}/dashboard/photographer/settings/payout-profile?connect=success`;
+  const refreshUrl = `${base}/${lang}/dashboard/photographer/settings/payout-profile?connect=refresh`;
 
   const onboardingUrl = await createAccountLink({
     accountId,
@@ -144,8 +144,8 @@ export async function refreshStripeAccountLinkAction(lang: string): Promise<void
   if (!accountId) throw new Error('No Stripe Connect account found');
 
   const base = env.SITE_URL;
-  const returnUrl = `${base}/${lang}/dashboard/photographer/profile/payout-profile?connect=success`;
-  const refreshUrl = `${base}/${lang}/dashboard/photographer/profile/payout-profile?connect=refresh`;
+  const returnUrl = `${base}/${lang}/dashboard/photographer/settings/payout-profile?connect=success`;
+  const refreshUrl = `${base}/${lang}/dashboard/photographer/settings/payout-profile?connect=refresh`;
 
   const onboardingUrl = await createAccountLink({ accountId, returnUrl, refreshUrl });
   redirect(onboardingUrl);

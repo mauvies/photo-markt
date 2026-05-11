@@ -12,6 +12,7 @@ import {
   Settings,
   TrendingUp,
   User,
+  WalletMinimal,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -51,6 +52,7 @@ export function PhotographerBottomNav({
     profile: string;
     settings: string;
     billing: string;
+    payouts: string;
     support: string;
     feedback: string;
     switchToTalent: string;
@@ -238,9 +240,19 @@ export function PhotographerBottomNav({
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
             <DropdownMenuItem asChild>
-              <Link href={lp('/dashboard/photographer/profile')}>
+              {/* "Profile" goes to the dashboard-wrapped preview so the
+                  photographer stays inside the dashboard chrome while
+                  viewing their own profile. The public URL is exposed
+                  separately via the "Copy profile link" button. */}
+              <Link href={lp('/dashboard/photographer/profile/preview')}>
                 <User className="mr-2 h-4 w-4" />
                 <span>{navLabels.profile}</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href={lp('/dashboard/photographer/settings/payout-profile')}>
+                <WalletMinimal className="mr-2 h-4 w-4" />
+                <span>{navLabels.payouts}</span>
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
