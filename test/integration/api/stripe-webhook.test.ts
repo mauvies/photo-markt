@@ -443,8 +443,8 @@ describe('app/api/stripe/webhook — checkout.session.completed (guest mode)', (
           object: 'checkout.session',
           mode: 'payment',
           customer: null,
-          customer_email: 'guest@picdemi.test',
-          customer_details: { email: 'guest@picdemi.test' },
+          customer_email: 'guest@photomarkt.test',
+          customer_details: { email: 'guest@photomarkt.test' },
           payment_intent: 'pi_guest_1',
           amount_total: 500,
           currency: 'usd',
@@ -465,7 +465,7 @@ describe('app/api/stripe/webhook — checkout.session.completed (guest mode)', (
       .select('id, guest_email, total_amount_cents')
       .eq('stripe_checkout_session_id', 'cs_guest_1')
       .single();
-    expect(guestOrder?.guest_email).toBe('guest@picdemi.test');
+    expect(guestOrder?.guest_email).toBe('guest@photomarkt.test');
     expect(guestOrder?.total_amount_cents).toBe(500);
 
     // Single guest_order_item — matches the cart payload.
@@ -516,7 +516,7 @@ describe('app/api/stripe/webhook — checkout.session.completed (guest mode)', (
             object: 'checkout.session',
             mode: 'payment',
             customer: null,
-            customer_details: { email: 'dup@picdemi.test' },
+            customer_details: { email: 'dup@photomarkt.test' },
             payment_intent: 'pi_guest_dup',
             amount_total: 500,
             currency: 'usd',

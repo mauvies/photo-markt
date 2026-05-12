@@ -50,7 +50,7 @@ SITE_URL=http://localhost:3000
 RESEND_API_KEY=re_...
 
 # Optional: enables location autocomplete in event creation
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
+NEXT_PUBLIC_GOOGLE_PLACES_API_KEY=
 ```
 
 ### 3. Run database migrations

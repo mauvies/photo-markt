@@ -2,11 +2,15 @@
 
 /*
  * MANUAL GOOGLE CLOUD CONSOLE STEPS — do not automate (see .env.example):
- * 1. Enable "Places API" in picdemi-staging and picdemi-prod projects.
+ * 1. Enable BOTH APIs in photomarkt-staging and photomarkt-prod projects:
+ *      - Maps JavaScript API   (loads the SDK)
+ *      - Places API            (the actual autocomplete calls)
  * 2. Restrict NEXT_PUBLIC_GOOGLE_PLACES_API_KEY to HTTP referrers:
- *    https://picdemi.com/*, https://www.picdemi.com/*, http://localhost:3000/*
- * 3. Restrict the key to "Places API" only.
- * 4. Set daily quota limits (1,000 staging / 5,000 prod).
+ *    https://photomarkt.com/*, https://www.photomarkt.com/*, http://localhost:3000/*
+ * 3. Under "API restrictions", allow BOTH Maps JavaScript API AND Places API.
+ *    Allowing only Places API yields ApiTargetBlockedMapError because the
+ *    SDK loader call counts as a Maps JavaScript API request.
+ * 4. Set daily quota limits on each API (1,000 staging / 5,000 prod).
  */
 
 import { useEffect, useRef, useState } from 'react';

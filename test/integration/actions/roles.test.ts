@@ -32,7 +32,9 @@ vi.mock('@/database/server', async () => {
           return { data: { user: null }, error: null } as never;
         }
         return {
-          data: { user: { id: mockSession.userId, email: `${mockSession.userId}@picdemi.test` } },
+          data: {
+            user: { id: mockSession.userId, email: `${mockSession.userId}@photomarkt.test` },
+          },
           error: null,
         } as never;
       });

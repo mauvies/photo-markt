@@ -422,7 +422,7 @@ sequenceDiagram
 
 ### 4.4 Guest cart merge on login
 
-Guest carts live in `localStorage` under `picdemi_guest_cart`. On `SIGNED_IN`,
+Guest carts live in `localStorage` under `photo-markt_guest_cart`. On `SIGNED_IN`,
 the client-side `GuestCartMerge` component calls a Server Action that
 re-validates each photo against the DB (re-fetching the current price — the
 client cannot tamper with prices) and adds it to the user's persistent cart.
@@ -435,7 +435,7 @@ sequenceDiagram
   participant App as Server Action
   participant SB as Supabase DB
 
-  Note over Browser: items live in localStorage<br/>(picdemi_guest_cart)
+  Note over Browser: items live in localStorage<br/>(photo-markt_guest_cart)
   Browser->>Auth: complete sign-in
   Auth-->>Browser: onAuthStateChange("SIGNED_IN")
   Browser->>App: mergeGuestCartAction(items)

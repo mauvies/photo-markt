@@ -5,7 +5,7 @@
 # get a consistent local environment and so the test helper can hardcode
 # `http://127.0.0.1:54321` without env-var juggling.
 
-project_id = "picdemi"
+project_id = "photomarkt"
 
 [api]
 enabled = true

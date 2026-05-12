@@ -22,7 +22,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
-import { GUEST_CART_KEY, LEGACY_GUEST_CART_KEY } from '@/lib/guest-cart';
+import { GUEST_CART_KEY } from '@/lib/guest-cart';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
   type CartData,
@@ -49,8 +49,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
   // the empty-cart flash on the post-login redirect.
   useLayoutEffect(() => {
     try {
-      const stored =
-        localStorage.getItem(GUEST_CART_KEY) ?? localStorage.getItem(LEGACY_GUEST_CART_KEY);
+      const stored = localStorage.getItem(GUEST_CART_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {

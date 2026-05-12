@@ -9,4 +9,3 @@ export interface GuestCartItem {
 }
 
 export const GUEST_CART_KEY = 'photo-markt_guest_cart';
-export const LEGACY_GUEST_CART_KEY = 'picdemi_guest_cart';

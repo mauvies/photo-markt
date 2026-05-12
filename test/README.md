@@ -134,7 +134,7 @@ sign in with the credentials returned by `createTestUser()` — its
    the last-run state survives between `pnpm test` invocations.
 3. **Tail Supabase logs**:
    ```bash
-   docker logs -f supabase_db_picdemi
+   docker logs -f supabase_db_photomarkt
    ```
 4. **Get the local connection string** for ad-hoc SQL:
    ```bash

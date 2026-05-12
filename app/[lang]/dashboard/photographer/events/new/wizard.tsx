@@ -22,7 +22,6 @@ import { type FilePreview, useEventForm } from './wizard-types';
 type NewEventT = Dictionary['newEvent'];
 
 const STORAGE_KEY = 'photo-markt_new_event_form';
-const LEGACY_STORAGE_KEY = 'picdemi_new_event_form';
 // Side-channel flag: set when the user picks at least one photo. We don't
 // store the photos themselves (File objects can't be serialized), but knowing
 // that they *had* selected something lets us distinguish a fresh arrival on
@@ -44,7 +43,7 @@ type StoredWizardState = {
 function readStoredState(): StoredWizardState | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
 

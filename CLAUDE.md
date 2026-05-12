@@ -137,7 +137,7 @@ Controlled in `lib/feature-flags.ts`. `AI_MATCHING` is currently disabled.
 
 **carts / cart_items**
 `carts: id, user_id` — `cart_items: id, cart_id, photo_id, photographer_id, unit_price_cents`
-- Guest cart stored in `localStorage` under `picdemi_guest_cart`
+- Guest cart stored in `localStorage` under `photo-markt_guest_cart`
 - Guest cart merged into authenticated cart on login via `components/guest-cart-merge.tsx`
 
 **orders / order_items**
@@ -318,7 +318,7 @@ STRIPE_PRICE_PRO=            # Pro plan price ID
 PLATFORM_FEE_BPS=            # Platform fee in basis points
 
 # Google
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=   # Places API — event location forms only
+NEXT_PUBLIC_GOOGLE_PLACES_API_KEY=   # Places API — event location forms only
 
 # AI (optional, feature-flagged)
 EMBEDDING_PROVIDER=

@@ -147,7 +147,7 @@ export async function createTestUser(
 ): Promise<{ id: string; email: string; username: string }> {
   const sb = client ?? createServiceClient();
   const suffix = crypto.randomUUID().slice(0, 8);
-  const email = overrides?.email ?? `test-${suffix}@picdemi.test`;
+  const email = overrides?.email ?? `test-${suffix}@photomarkt.test`;
   const username = overrides?.username ?? `test_${suffix}`;
 
   const { data, error } = await sb.auth.admin.createUser({

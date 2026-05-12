@@ -16,7 +16,7 @@
  * - Enable Stripe Connect with Express accounts (Connect > Get started)
  * - Set payout schedule to Weekly, minimum $25 (Connect > Settings > Payouts)
  * - Subscribe this endpoint to: account.updated, charge.refunded
- * - In production: https://picdemi.com/api/stripe/webhook
+ * - In production: https://photomarkt.com/api/stripe/webhook
  *
  * NOTE: Transfer reversal on refund is NOT automatic. Reverse manually via Stripe Dashboard
  * for refunded orders — Stripe does not auto-reverse transfers to connected accounts.

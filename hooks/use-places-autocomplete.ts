@@ -19,7 +19,7 @@ export type PlaceDetails = {
   formattedAddress: string;
 };
 
-// ─── Mock data (used when NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is absent) ──────────
+// ─── Mock data (used when NEXT_PUBLIC_GOOGLE_PLACES_API_KEY is absent) ────────
 
 const MOCK_PREDICTIONS: PlacePrediction[] = [
   {
@@ -141,6 +141,12 @@ export function usePlacesAutocomplete() {
           },
           (predictions, status) => {
             if (status !== google.maps.places.PlacesServiceStatus.OK || !predictions) {
+              if (
+                status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS &&
+                status !== google.maps.places.PlacesServiceStatus.OK
+              ) {
+                console.warn('[places] getPlacePredictions failed:', status);
+              }
               resolve([]);
               return;
             }
@@ -188,6 +194,7 @@ export function usePlacesAutocomplete() {
           },
           (place, status) => {
             if (status !== google.maps.places.PlacesServiceStatus.OK || !place) {
+              console.warn('[places] getDetails failed:', status);
               resolve(null);
               return;
             }

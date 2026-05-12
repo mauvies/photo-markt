@@ -3,7 +3,7 @@
 // flow to remember tokens after upload and by the public viewer to decide
 // which photos can be deleted.
 
-const KEY_PREFIX = 'picdemi_guest_uploads:';
+const KEY_PREFIX = 'photo-markt_guest_uploads:';
 
 export type GuestUpload = {
   photoId: string;

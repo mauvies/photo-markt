@@ -10,8 +10,8 @@ import { Dropzone } from '@/components/uploader/Dropzone';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useUploadProgress } from './upload-progress-provider';
 
-const GUEST_NAME_KEY = 'picdemi_guest_name';
-const GUEST_EMAIL_KEY = 'picdemi_guest_email';
+const GUEST_NAME_KEY = 'photo-markt_guest_name';
+const GUEST_EMAIL_KEY = 'photo-markt_guest_email';
 
 type CollaborativeT = Dictionary['collaborativeEvent'];
 

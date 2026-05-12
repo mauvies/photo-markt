@@ -1,5 +1,9 @@
 import { writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // 400×400 transparent tile with "PHOTO MARKT" rotated -30° at 17% opacity.
 // Generated once locally (where fontconfig works) and committed; runtime
@@ -21,5 +25,5 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${S
     transform="rotate(${ANGLE} ${SIZE / 2} ${SIZE / 2})">${TEXT}</text>
 </svg>`;
 const buffer = await sharp(Buffer.from(svg)).png().toBuffer();
-writeFileSync('/Users/mauricio/code/picdemi/public/watermark/watermark-tile.png', buffer);
+writeFileSync(resolve(__dirname, '../public/watermark/watermark-tile.png'), buffer);
 console.log(`Wrote ${buffer.length} bytes`);
