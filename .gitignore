@@ -14,6 +14,10 @@
 # testing
 /coverage
 
+# supabase local state (the CLI writes these on start/stop)
+/supabase/.branches
+/supabase/.temp
+
 # next.js
 /.next/
 /out/

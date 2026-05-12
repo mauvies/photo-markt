@@ -11,7 +11,13 @@ pnpm lint         # Biome check (linting)
 pnpm lint:fix     # Biome check with auto-fix
 pnpm format       # Biome format with auto-fix
 pnpm typecheck    # TypeScript type checking (no emit)
-pnpm test         # Run tests (tsx --test __tests__/**/*.ts)
+pnpm test         # Run all Vitest tests once
+pnpm test:watch   # Vitest watch mode
+pnpm test:coverage # Vitest run + coverage report
+pnpm db:start     # supabase start (Docker; local Supabase for integration tests)
+pnpm db:stop      # supabase stop
+pnpm db:reset     # supabase db reset (re-runs migrations + seed.sql)
+pnpm db:seed      # Re-run supabase/seed.sql via psql
 pnpm spell        # Spell check .ts/.tsx files
 ```
 
@@ -246,9 +252,43 @@ Helpers: `getClientIp(headers)` for unauthenticated keying, `retryAfterSeconds(r
 **`lib/auth/safe-next.ts`** — `safeNext(value)`
 Use for any redirect destination derived from user input (`?next=`, OAuth callback, etc). Rejects protocol-relative URLs (`//evil.com`), backslash variants, and control characters.
 
-## Tests
+## Testing
 
-`pnpm test` runs `tsx --test __tests__/**/*.ts`. Suite is small but targeted at security-critical helpers (escaping, magic-byte validation, rate limiter). When adding security-relevant utilities, add unit tests — keep the helpers pure where possible so tests don't need a DB.
+The project uses **Vitest** for tests and **Supabase local** (Docker) for integration tests that need a real database. Detailed conventions and debugging tips live in [`test/README.md`](./test/README.md).
+
+### Commands
+
+| Command | What it does |
+|---|---|
+| `pnpm test` | Run every test once |
+| `pnpm test:watch` | Watch mode |
+| `pnpm test:coverage` | Run + write coverage report under `coverage/` |
+| `pnpm db:start` / `db:stop` / `db:reset` | Boot or reset the local Supabase stack (Docker required) |
+
+### Directory layout
+
+```
+test/
+  unit/                # Pure functions — no DB, no mocks
+  integration/         # Hit local Supabase via test helpers
+  helpers/
+    supabase-test-client.ts   # createTestUser / createTestEvent / createTestPhoto / resetDatabase
+__tests__/             # Older unit tests (also discovered by Vitest)
+```
+
+Vitest discovers any file matching `**/*.test.ts(x)` or `**/__tests__/**/*.ts`.
+
+### Conventions
+
+- **Every bug fix should ship with a regression test.** The test should fail before the fix and pass after.
+- **Every new feature should include tests for the critical paths** — Server Actions, queries, payment flows, security helpers. UI polish can ship without component tests for now; payment/auth/data flow cannot.
+- **Choose the right client deliberately** in integration tests: service-role to assert *query behavior*, anon/user-scoped to assert *RLS behavior*. Helpers in `test/helpers/supabase-test-client.ts` make both easy.
+- **Use `beforeEach(resetDatabase)`** in integration tests so ordering can't quietly pass or fail one.
+- **Keep helpers pure where possible** — pure functions are testable without a DB and make unit tests cheap to write.
+
+### Coverage target
+
+The goal is **60% on lines, branches, functions, and statements**. Thresholds are not enforced in `vitest.config.ts` yet — the report is informational until we've written enough tests to clear the bar. Flip the gate on (uncomment `thresholds:` in the config) when ready.
 
 ## AI Photo Search
 
@@ -341,6 +381,7 @@ Skip planning mode for: bug fixes, UI tweaks, adding fields, isolated features, 
 - New env vars must be added to `env.mjs`
 - No `any` types in TypeScript
 - All async functions must have proper error handling — no silent catches
+- New features should include tests for critical logic (Server Actions, queries, payment flows). Bug fixes should include a regression test that fails before the fix and passes after
 
 ### Security Conventions
 - File uploads must validate via `lib/photo-upload.ts` — never trust client-supplied MIME or extension

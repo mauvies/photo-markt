@@ -1,0 +1,78 @@
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel superseded runs on the same branch — saves CI minutes when pushing
+# rapid fixes to an open PR.
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # Reasonable upper bound; the local Supabase image pull dominates first-time
+    # runs but stays under 10 min cached.
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          # No .nvmrc / engines.node in package.json — pin to the current LTS.
+          # Bump when the codebase opts into a newer minimum.
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        # --frozen-lockfile is the pnpm default in CI; explicit for clarity.
+        # supabase + sharp postinstalls are allowlisted in package.json's
+        # `pnpm.onlyBuiltDependencies`, so they download their binaries.
+        run: pnpm install --frozen-lockfile
+
+      - name: Start local Supabase
+        # The dev-dependency supabase CLI is on $PATH via `pnpm exec`. This
+        # boots Postgres + Auth + Storage and applies every migration in
+        # supabase/migrations/ + supabase/seed.sql.
+        # `--exclude` trims Studio + the imgproxy + the analytics services
+        # we never touch from tests, which keeps the cold-start under 60s.
+        run: pnpm exec supabase start --exclude studio,imgproxy,vector
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test (with coverage)
+        # Coverage thresholds are not enforced yet — the report is purely
+        # informational. We still run the coverage variant in CI so the
+        # artifact is produced on every run.
+        run: pnpm test:coverage
+
+      - name: Upload coverage report
+        # `if: always()` so the artifact still uploads when tests failed —
+        # the report is exactly what we'd want to look at in that case.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ github.run_id }}
+          path: coverage/
+          retention-days: 14
+
+      - name: Stop local Supabase
+        # Best-effort cleanup; doesn't fail the job if it errors.
+        if: always()
+        run: pnpm exec supabase stop --no-backup || true

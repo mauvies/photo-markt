@@ -1,0 +1,8 @@
+-- Local development seed data.
+-- Runs automatically as the last step of `supabase db reset`.
+--
+-- Intentionally empty for now. Integration tests create their own fixtures
+-- via `test/helpers/supabase-test-client.ts` (see createTestUser /
+-- createTestEvent / createTestPhoto). Manual dev seed data, if added later,
+-- should go below this line and be idempotent (use `ON CONFLICT DO NOTHING`
+-- or wrap in `if not exists` blocks) so re-running doesn't double-insert.
