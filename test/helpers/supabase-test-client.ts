@@ -36,6 +36,25 @@ export function createAnonClient(): SupabaseClient {
 }
 
 /**
+ * Build an authenticated client signed in as a previously-created test user.
+ * Uses the well-known password set by `createTestUser`. The returned client
+ * is anon-key-backed but carries the user's session JWT, so RLS evaluates
+ * `auth.uid()` against that user — exactly what authenticated app traffic
+ * looks like.
+ */
+export async function signInAs(email: string): Promise<SupabaseClient> {
+  const sb = createAnonClient();
+  const { error } = await sb.auth.signInWithPassword({
+    email,
+    password: 'test-password-1234',
+  });
+  if (error) {
+    throw new Error(`signInAs(${email}): ${error.message}`);
+  }
+  return sb;
+}
+
+/**
  * Wipe every user-data table between tests so each one starts from a known
  * state. Order matters when there are no `ON DELETE CASCADE` chains we can
  * rely on — auth.users cascades to profiles/photos/etc., so deleting users
