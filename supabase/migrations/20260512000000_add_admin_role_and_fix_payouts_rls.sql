@@ -39,10 +39,26 @@ drop policy if exists "System can insert order items" on public.order_items;
 -- avatar_url is rendered into <img src> across the app and OG tags. PostgREST
 -- PATCH on profiles bypasses our server actions; constrain the column to https
 -- URLs at the DB so a `data:` or `javascript:` URI cannot be persisted.
-alter table public.profiles drop constraint if exists profiles_avatar_url_https;
-alter table public.profiles
-  add constraint profiles_avatar_url_https
-  check (avatar_url is null or avatar_url ~ '^https://') not valid;
+-- Wrapped in a column-existence check because the schema dump in
+-- `20260427162800_remote_schema.sql` dropped `profiles.avatar_url` on some
+-- environments; in those cases the constraint is irrelevant (the column is
+-- gone) and we no-op rather than fail the reset.
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'profiles'
+      and column_name = 'avatar_url'
+  ) then
+    alter table public.profiles drop constraint if exists profiles_avatar_url_https;
+    alter table public.profiles
+      add constraint profiles_avatar_url_https
+      check (avatar_url is null or avatar_url ~ '^https://') not valid;
+  end if;
+end
+$$;
 -- Existing rows are seeded from Google OAuth (lh3.googleusercontent.com) and
 -- are already https, but `not valid` skips the historical-row check to keep
 -- this migration safe even if a stray row predates the constraint.

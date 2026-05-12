@@ -845,8 +845,7 @@ using (((bucket_id = 'photos'::text) AND (name ~~ ((auth.uid())::text || '/%'::t
   as permissive
   for insert
   to authenticated
-with check (((bucket_id = 'photos'::text) AND (name ~~ ((auth.uid())::text || '/%'::text)) AND (name ~* '\.(jpg|jpeg|png|heic);
-::text) AND ((metadata ->> 'mimetype'::text) = ANY (ARRAY['image/jpeg'::text, 'image/png'::text, 'image/heic'::text, 'image/heif'::text])) AND (COALESCE(((metadata ->> 'size'::text))::bigint, (0)::bigint) <= ((20 * 1024) * 1024))));
+with check (((bucket_id = 'photos'::text) AND (name ~~ ((auth.uid())::text || '/%'::text)) AND (name ~* '\.(jpg|jpeg|png|heic|heif)$'::text) AND ((metadata ->> 'mimetype'::text) = ANY (ARRAY['image/jpeg'::text, 'image/png'::text, 'image/heic'::text, 'image/heif'::text])) AND (COALESCE(((metadata ->> 'size'::text))::bigint, (0)::bigint) <= ((20 * 1024) * 1024))));
 
 
 
