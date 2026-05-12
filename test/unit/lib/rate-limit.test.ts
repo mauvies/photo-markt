@@ -6,7 +6,7 @@ import {
   type RateLimitBackend,
   rateLimit,
   retryAfterSeconds,
-} from '../../lib/rate-limit';
+} from '@/lib/rate-limit';
 
 describe('computeWindow', () => {
   it('aligns to multiples of windowSec from epoch', () => {

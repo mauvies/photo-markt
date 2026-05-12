@@ -12,7 +12,10 @@ export default defineConfig({
     // arrive (see `// @vitest-environment jsdom`).
     environment: 'node',
     globals: false,
-    include: ['**/*.test.ts', '**/*.test.tsx', '**/__tests__/**/*.ts'],
+    // Populate env-var defaults before any test file imports `env.mjs` — see
+    // test/setup.ts for the rationale.
+    setupFiles: ['./test/setup.ts'],
+    include: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
     exclude: ['node_modules', '.next', 'coverage', 'dist'],
     // Integration tests reset the DB between runs; without single-fork
     // execution they'd race against each other on the shared local Supabase

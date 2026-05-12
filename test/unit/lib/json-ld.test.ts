@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { stringifyJsonLd } from '../../lib/json-ld';
+import { stringifyJsonLd } from '@/lib/json-ld';
 
 describe('stringifyJsonLd', () => {
   it('escapes </script> so it cannot break out of an inline <script> block', () => {

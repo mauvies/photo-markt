@@ -270,13 +270,19 @@ The project uses **Vitest** for tests and **Supabase local** (Docker) for integr
 ```
 test/
   unit/                # Pure functions — no DB, no mocks
+    lib/               # Tests for helpers under lib/
   integration/         # Hit local Supabase via test helpers
+    actions/           # Server Actions
+    api/               # API route handlers (Stripe webhook, etc.)
+    queries/           # database/queries/* layer
+    security/          # RLS regression tests
   helpers/
-    supabase-test-client.ts   # createTestUser / createTestEvent / createTestPhoto / resetDatabase
-__tests__/             # Older unit tests (also discovered by Vitest)
+    supabase-test-client.ts   # createTestUser / createTestEvent / resetDatabase / ensurePhotosBucket
+    server-action-mocks.ts    # shared mockSession for Server Action tests
+  setup.ts             # env-var defaults loaded before each test file
 ```
 
-Vitest discovers any file matching `**/*.test.ts(x)` or `**/__tests__/**/*.ts`.
+Vitest discovers any file under `test/` matching `*.test.ts(x)`.
 
 ### Conventions
 

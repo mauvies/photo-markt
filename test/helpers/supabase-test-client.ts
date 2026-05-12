@@ -64,8 +64,40 @@ export async function signInAs(email: string): Promise<SupabaseClient> {
  * Cheaper than `supabase db reset` (which re-runs every migration) and
  * sufficient for between-test isolation.
  */
+/**
+ * Ensure the `photos` storage bucket exists. The migration set doesn't
+ * create buckets (they're managed via Supabase Studio in prod), so tests
+ * that exercise signed-URL helpers need this. Idempotent.
+ */
+export async function ensurePhotosBucket(client?: SupabaseClient): Promise<void> {
+  const sb = client ?? createServiceClient();
+  const { error } = await sb.storage.createBucket('photos', { public: false });
+  if (error && !error.message.toLowerCase().includes('already exists')) {
+    throw new Error(`ensurePhotosBucket: ${error.message}`);
+  }
+}
+
 export async function resetDatabase(client?: SupabaseClient): Promise<void> {
   const sb = client ?? createServiceClient();
+
+  // 0. Wipe tables that (a) have `ON DELETE RESTRICT` FKs to auth.users —
+  //    otherwise the auth-user delete in step 1 fails with a constraint
+  //    violation (`order_items`, `guest_order_items`) — or (b) have NO FK
+  //    to auth.users at all and therefore wouldn't be cascade-deleted
+  //    (`guest_orders`, `pending_guest_checkouts`, `download_tokens`). Order
+  //    matters: child rows before parents.
+  for (const table of [
+    'download_tokens',
+    'order_items',
+    'guest_order_items',
+    'guest_orders',
+    'pending_guest_checkouts',
+  ]) {
+    const { error } = await sb.from(table).delete().gt('created_at', '1900-01-01');
+    if (error && !error.message.includes('does not exist')) {
+      throw new Error(`resetDatabase: failed to wipe ${table}: ${error.message}`);
+    }
+  }
 
   // 1. Delete all auth users; FKs in public.* cascade.
   const { data: usersData, error: listError } = await sb.auth.admin.listUsers({ perPage: 1000 });
@@ -141,14 +173,14 @@ export async function createTestUser(
     throw new Error(`createTestUser: failed to upsert profile: ${profileError.message}`);
   }
 
-  // Record the role in user_roles so role-switching server actions see it.
+  // Record the role membership so role-switching server actions see it.
+  // The app reads `user_role_memberships` (composite PK on user_id+role)
+  // — NOT `user_roles`, which has a stale single-row-per-user constraint.
   const { error: roleError } = await sb
-    .from('user_roles')
+    .from('user_role_memberships')
     .upsert({ user_id: data.user.id, role }, { onConflict: 'user_id,role' });
-  // Older schemas may not have user_roles or may have a different shape — log
-  // and continue so tests that don't depend on role-switching still work.
   if (roleError) {
-    console.warn(`createTestUser: user_roles upsert skipped: ${roleError.message}`);
+    console.warn(`createTestUser: user_role_memberships upsert skipped: ${roleError.message}`);
   }
 
   return { id: data.user.id, email, username };

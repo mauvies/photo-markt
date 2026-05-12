@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
-import { validatePhotoUpload } from '../../lib/photo-upload';
+import { validatePhotoUpload } from '@/lib/photo-upload';
 
 function fileFrom(buffer: Buffer, name: string, type: string): File {
   // Wrap in a fresh Uint8Array so the BlobPart type resolves cleanly under
