@@ -15,16 +15,19 @@ local** (Docker-backed) for tests that need a real database.
 ```
 test/
   unit/                   # Pure functions, no DB, no mocks
+    lib/                  # Tests for lib/* helpers
   integration/            # Hit real local Supabase via test helpers
+    actions/              # Server Actions
+    api/                  # API route handlers (e.g. Stripe webhook)
+    queries/              # database/queries/* layer
+    security/             # RLS regression tests
   helpers/
     supabase-test-client.ts   # createTestUser / createTestEvent / etc.
-__tests__/                # Older tests still live here (also picked up)
-  lib/json-ld.test.ts
-  lib/photo-upload.test.ts
-  lib/rate-limit.test.ts
+    server-action-mocks.ts    # mockSession shared by Server Action tests
+  setup.ts                # env-var defaults loaded before each test file
 ```
 
-Vitest discovers any file matching `**/*.test.ts(x)` or `**/__tests__/**/*.ts`.
+Vitest discovers any file under `test/` matching `*.test.ts(x)`.
 
 ## Running tests
 
