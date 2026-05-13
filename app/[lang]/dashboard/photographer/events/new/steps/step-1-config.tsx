@@ -55,7 +55,7 @@ export function Step1Config({ form }: Step1ConfigProps) {
 
       <form.Subscribe selector={(state) => state.values.event_type}>
         {(eventType) => (
-          <div className="grid gap-3">
+          <div className="grid gap-3 md:grid-cols-2">
             {/* Visibility — hidden for organizer (always private). */}
             {eventType !== 'organizer' && (
               <form.Field name="is_public">

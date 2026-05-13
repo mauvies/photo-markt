@@ -62,6 +62,10 @@ type EventCardProps = {
   // Floating top-left slot (e.g. dropdown trigger with edit/delete options).
   // Only rendered for owner mode.
   actions?: ReactNode;
+  // Set on the first row of an above-the-fold grid so Next preloads the
+  // cover and skips lazy-loading. Defaults to false — too many priority
+  // images would defeat the preload budget.
+  priority?: boolean;
   t?: EventCardLabels;
 };
 
@@ -213,6 +217,7 @@ export function EventCard({
   photographer,
   ownerStats,
   actions,
+  priority = false,
   t = DEFAULT_LABELS,
 }: EventCardProps) {
   const formattedDate = format(new Date(date), 'MMM d, yyyy');
@@ -243,6 +248,7 @@ export function EventCard({
                 alt={`${name} cover`}
                 fill
                 sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
+                priority={priority}
                 className={cn(
                   'object-cover transition-[opacity,transform] duration-300',
                   imageStatus === 'loaded' ? 'opacity-100 group-hover:scale-[1.03]' : 'opacity-0',

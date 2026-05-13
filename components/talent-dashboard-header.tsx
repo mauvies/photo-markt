@@ -64,6 +64,7 @@ export function TalentDashboardHeader({
               className="h-10 w-auto mt-1"
               width={80}
               height={80}
+              priority
             />
           </Link>
 

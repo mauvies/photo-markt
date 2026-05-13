@@ -467,7 +467,7 @@ export default function NewEventForm() {
 
   return (
     <div>
-      <div className="mx-auto w-full max-w-3xl space-y-6 pb-28 md:pb-24">
+      <div className="w-full space-y-6 pb-28 md:pb-24">
         <header className="space-y-3">
           <DashboardHeader title={t('title')} />
           <p className="text-sm text-muted-foreground">

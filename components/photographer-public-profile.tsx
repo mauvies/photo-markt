@@ -5,10 +5,9 @@ import {
   getPhotographerEventsAction,
   getPhotographerProfileAction,
 } from '@/app/[lang]/photographer/[slug]/actions';
-import { ProfileHero } from '@/app/[lang]/photographer/[slug]/profile-hero';
-import { ProfileMetrics } from '@/app/[lang]/photographer/[slug]/profile-metrics';
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { EventCard } from '@/components/event-card';
+import { PhotographerProfileHeader } from '@/components/photographer-profile-header';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { getSiteUrl } from '@/lib/get-site-url';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
@@ -85,46 +84,21 @@ export async function PhotographerPublicProfile({
         dangerouslySetInnerHTML={{ __html: stringifyJsonLd(personSchema) }}
       />
 
-      <ProfileHero
-        displayName={displayName}
-        username={profile.username}
-        avatarUrl={profile.avatar_url}
-        bio={profile.bio}
-        city={profile.city}
-        countryCode={profile.country_code}
-        createdAt={profile.created_at}
-        labels={{
-          locationFormat: p.locationFormat,
-          photographerSince: p.photographerSince,
-        }}
-      />
-
-      {isOwner && (
-        // Owner-only action row — lets the photographer edit their info
-        // or grab their shareable URL (always the public path) without
-        // leaving the page.
-        <div className="mt-6 flex flex-wrap items-center gap-2">
-          <Link
-            href={`/${lang}/dashboard/photographer/profile/edit`}
-            className={buttonVariants({ variant: 'default', size: 'sm' })}
-          >
-            <Pencil className="mr-2 h-4 w-4" />
-            {p.editProfile}
-          </Link>
-          <CopyLinkButton
-            value={canonicalUrl}
-            copyLabel={p.copyProfileLink}
-            copiedLabel={p.copied}
-          />
-        </div>
-      )}
-
-      <div className="mt-8 sm:mt-10">
-        <ProfileMetrics
+      <div>
+        <PhotographerProfileHeader
+          displayName={displayName}
+          username={profile.username}
+          avatarUrl={profile.avatar_url}
+          bio={profile.bio}
+          city={profile.city}
+          countryCode={profile.country_code}
+          createdAt={profile.created_at}
           eventCount={profile.eventCount}
           photoCount={profile.photoCount}
           photosSoldCount={profile.photosSoldCount}
           labels={{
+            locationFormat: p.locationFormat,
+            photographerSince: p.photographerSince,
             eventsCount: p.eventsCount,
             eventsCountOne: p.eventsCountOne,
             photosCount: p.photosCount,
@@ -133,9 +107,29 @@ export async function PhotographerPublicProfile({
             photosSoldOne: p.photosSoldOne,
           }}
         />
+
+        {isOwner && (
+          // Owner-only action row — lets the photographer edit their info
+          // or grab their shareable URL (always the public path) without
+          // leaving the page.
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <Link
+              href={`/${lang}/dashboard/photographer/profile/edit`}
+              className={buttonVariants({ variant: 'default', size: 'sm' })}
+            >
+              <Pencil className="mr-2 h-4 w-4" />
+              {p.editProfile}
+            </Link>
+            <CopyLinkButton
+              value={canonicalUrl}
+              copyLabel={p.copyProfileLink}
+              copiedLabel={p.copied}
+            />
+          </div>
+        )}
       </div>
 
-      <section className="mt-12 sm:mt-16">
+      <section className="mt-4">
         <h2 className="mb-6 text-xl font-semibold tracking-tight sm:text-2xl">{p.events}</h2>
         {photographerEvents.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed py-20 text-center sm:py-24">
@@ -144,8 +138,8 @@ export async function PhotographerPublicProfile({
             <p className="mt-1 max-w-sm text-sm text-muted-foreground">{p.noEventsBody}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {photographerEvents.map((event) => (
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {photographerEvents.map((event, index) => (
               <EventCard
                 key={event.id}
                 id={event.id}
@@ -161,6 +155,7 @@ export async function PhotographerPublicProfile({
                 photoCount={event.photoCount}
                 coverUrl={event.coverUrl}
                 linkPrefix={`/${lang}/events`}
+                priority={index < 4}
                 t={{
                   photo: dict.eventCard.photo,
                   photos: dict.eventCard.photos,

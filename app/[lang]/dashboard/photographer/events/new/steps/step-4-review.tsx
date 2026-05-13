@@ -57,34 +57,36 @@ export function Step4Review({
         </div>
       )}
 
-      {sections.map((section) => (
-        <section key={section.title} className="rounded-lg border bg-card p-4">
-          <header className="mb-3 flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold">{section.title}</h3>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => goToStep(section.editStep)}
-              className="h-8 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <Pencil className="h-3 w-3" />
-              {t('wizardEdit')}
-            </Button>
-          </header>
-          <dl className="grid gap-1.5 text-sm">
-            {section.rows.map((row) => (
-              <div
-                key={row.label}
-                className="flex flex-wrap justify-between gap-x-4 gap-y-0.5 border-b border-border/40 pb-1.5 last:border-b-0 last:pb-0"
+      <div className="grid gap-4 md:grid-cols-2">
+        {sections.map((section) => (
+          <section key={section.title} className="rounded-lg border bg-card p-4">
+            <header className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">{section.title}</h3>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => goToStep(section.editStep)}
+                className="h-8 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
               >
-                <dt className="text-muted-foreground">{row.label}</dt>
-                <dd className="text-right font-medium">{row.value || '—'}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
-      ))}
+                <Pencil className="h-3 w-3" />
+                {t('wizardEdit')}
+              </Button>
+            </header>
+            <dl className="grid gap-1.5 text-sm">
+              {section.rows.map((row) => (
+                <div
+                  key={row.label}
+                  className="flex flex-wrap justify-between gap-x-4 gap-y-0.5 border-b border-border/40 pb-1.5 last:border-b-0 last:pb-0"
+                >
+                  <dt className="text-muted-foreground">{row.label}</dt>
+                  <dd className="text-right font-medium">{row.value || '—'}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        ))}
+      </div>
 
       <section className="rounded-lg border bg-card p-4">
         <header className="mb-3 flex items-center justify-between gap-2">

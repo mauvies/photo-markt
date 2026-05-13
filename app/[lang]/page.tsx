@@ -109,7 +109,7 @@ export default async function Home({
             </div>
 
             <div className="flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:grid xl:grid-cols-4 xl:overflow-visible xl:pb-0">
-              {topEvents.map((event) => (
+              {topEvents.map((event, index) => (
                 <div
                   key={event.id}
                   className="w-[80vw] shrink-0 snap-start sm:w-[45vw] xl:w-auto xl:shrink"
@@ -128,6 +128,7 @@ export default async function Home({
                     }
                     photoCount={event.photoCount}
                     coverUrl={event.coverUrl}
+                    priority={index < 4}
                     photographer={{
                       username: event.photographerUsername,
                       displayName: event.photographerDisplayName,

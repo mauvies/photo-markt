@@ -151,7 +151,7 @@ export default async function EventsPage({ params }: { params: Promise<{ lang: s
             {`${events.length} event${events.length === 1 ? '' : 's'}`}
           </div>
           <div className="mt-4 grid gap-5 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
-            {events.map((event) => {
+            {events.map((event, index) => {
               const stat = stats.get(event.id) ?? {
                 count: 0,
                 coverPath: null,
@@ -178,6 +178,7 @@ export default async function EventsPage({ params }: { params: Promise<{ lang: s
                   photoCount={count}
                   coverUrl={coverUrl}
                   status={event.date ? getEventStatus(event.date) : undefined}
+                  priority={index < 4}
                   ownerStats={{
                     isPublic: event.is_public,
                     privateLabel: dict.eventCard.privateEvent,

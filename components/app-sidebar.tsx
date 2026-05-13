@@ -91,6 +91,7 @@ export function AppSidebar({
               className="h-10 w-auto"
               width={80}
               height={80}
+              priority
             />
           </Link>
         </div>
