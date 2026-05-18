@@ -18,7 +18,7 @@ jobs:
       DB_URL: postgresql://postgres.yzdlueeeizdqwuicydbr@aws-0-eu-west-1.pooler.supabase.com:5432/postgres
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Create migration tracking table
         run: |
