@@ -71,7 +71,7 @@ import {
 } from '../../helpers/supabase-test-client';
 
 const ONE_GB = 1024 ** 3;
-const FREE_MAX_EVENTS = 3;
+const FREE_MAX_EVENTS = 5;
 const FREE_STORAGE_GB = 20;
 const FREE_STORAGE_BYTES = FREE_STORAGE_GB * ONE_GB;
 
