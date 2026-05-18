@@ -36,7 +36,7 @@ export default async function PhotographerSettingsPage({
   const { lang } = await params;
   const dict = await getDictionary(lang as Locale);
   const dashboardData = await getDashboardData();
-  const { storage } = dashboardData;
+  const { storage, totals } = dashboardData;
 
   const supabase = await createClient();
   const {
@@ -104,7 +104,7 @@ export default async function PhotographerSettingsPage({
                   className="h-2"
                 />
                 <p className="text-xs text-muted-foreground">
-                  {storage.totalPhotos} {dict.photographerDashboard.photosUploaded}
+                  {totals.totalPhotos} {dict.photographerDashboard.photosUploaded}
                 </p>
                 {storage.usedGB >= currentPlan.storageGB && (
                   <p className="mt-2 text-xs font-medium text-destructive">

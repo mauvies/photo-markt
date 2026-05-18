@@ -28,6 +28,18 @@ export interface SalesSummary {
   totalPhotosSold: number;
 }
 
+export interface SalesTrend {
+  revenuePct: number;
+  salesPct: number;
+  photosPct: number;
+}
+
+export interface SalesSummaryWithTrend {
+  current: SalesSummary;
+  previous: SalesSummary;
+  trend: SalesTrend | null;
+}
+
 export interface SalesByDate {
   date: string;
   revenue_cents: number;
@@ -126,6 +138,50 @@ export async function getSalesSummary(
     totalSales,
     averageOrderValueCents,
     totalPhotosSold,
+  };
+}
+
+/**
+ * Compute a percent delta. Returns null when the previous period had zero
+ * activity so callers can omit the trend indicator instead of rendering a
+ * meaningless "+∞%" or "0%".
+ */
+export function computeTrendPct(current: number, previous: number): number | null {
+  if (previous === 0) return null;
+  return ((current - previous) / previous) * 100;
+}
+
+/**
+ * Get a sales summary for the current period alongside the previous period of
+ * equal length, plus pre-computed percent deltas. Trend is null when the
+ * previous period contributed no revenue (i.e. nothing meaningful to compare
+ * against).
+ */
+export async function getSalesSummaryWithTrend(
+  supabase: SupabaseServerClient,
+  photographerId: string,
+  periodStart: string,
+  periodEnd: string,
+  prevStart: string,
+  prevEnd: string,
+): Promise<SalesSummaryWithTrend> {
+  const [current, previous] = await Promise.all([
+    getSalesSummary(supabase, photographerId, periodStart, periodEnd),
+    getSalesSummary(supabase, photographerId, prevStart, prevEnd),
+  ]);
+
+  if (previous.totalRevenueCents === 0) {
+    return { current, previous, trend: null };
+  }
+
+  return {
+    current,
+    previous,
+    trend: {
+      revenuePct: computeTrendPct(current.totalRevenueCents, previous.totalRevenueCents) ?? 0,
+      salesPct: computeTrendPct(current.totalSales, previous.totalSales) ?? 0,
+      photosPct: computeTrendPct(current.totalPhotosSold, previous.totalPhotosSold) ?? 0,
+    },
   };
 }
 

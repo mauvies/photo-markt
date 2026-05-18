@@ -11,7 +11,7 @@ interface QuickActionsProps {
 
 export function QuickActions({ cartItemCount }: QuickActionsProps) {
   return (
-    <div className="rounded-xl border bg-card p-4 sm:p-6 shadow-sm">
+    <div className="rounded-xl border bg-card p-4 shadow-sm">
       <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Quick Actions</h2>
       <div className="space-y-2 sm:space-y-3">
         <Link

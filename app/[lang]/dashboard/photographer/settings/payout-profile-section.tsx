@@ -35,7 +35,7 @@ export function PayoutProfileSection({ profile }: PayoutProfileSectionProps) {
   }[connectStatus];
 
   return (
-    <div className="rounded-xl border bg-card p-4 sm:p-6 shadow-sm lg:h-full lg:flex lg:flex-col">
+    <div className="rounded-xl border bg-card p-4 shadow-sm lg:h-full lg:flex lg:flex-col">
       <div className="mb-4 flex items-start justify-between">
         <div>
           <h2 className="text-lg sm:text-xl font-semibold">{t('payoutProfileTitle')}</h2>

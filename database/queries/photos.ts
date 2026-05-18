@@ -44,6 +44,34 @@ export interface PhotoDetail {
 }
 
 /**
+ * Count approved photos uploaded by a user within an optional time window.
+ * Used by the dashboard "photos uploaded" metric and its month-over-month
+ * trend.
+ */
+export async function getPhotosUploadedCount(
+  supabase: SupabaseServerClient,
+  userId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<number> {
+  let query = supabase
+    .from('photos')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId);
+
+  if (startDate) query = query.gte('created_at', startDate);
+  if (endDate) query = query.lte('created_at', endDate);
+
+  const { count, error } = await query;
+
+  if (error) {
+    throw new Error(`Failed to count photos: ${getErrorMessage(error)}`);
+  }
+
+  return count ?? 0;
+}
+
+/**
  * Get photos for multiple events. Excludes pending uploads so dashboard grids
  * and search results only show photos visible to viewers.
  */

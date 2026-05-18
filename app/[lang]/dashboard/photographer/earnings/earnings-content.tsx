@@ -58,7 +58,7 @@ interface SummaryCardProps {
 
 function SummaryCard({ title, value, icon, description, className }: SummaryCardProps) {
   return (
-    <div className={cn('rounded-xl border bg-card p-4 sm:p-6 shadow-sm', className)}>
+    <div className={cn('rounded-xl border bg-card p-4 shadow-sm', className)}>
       <div className="flex items-center justify-between">
         <div className="min-w-0 flex-1">
           <p className="text-xs sm:text-sm font-medium text-muted-foreground">{title}</p>
