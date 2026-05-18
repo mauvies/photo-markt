@@ -46,9 +46,9 @@ function LanguageSwitcherInner() {
           variant="outline"
           size="sm"
           aria-label="Switch language"
-          className="h-10 gap-1.5 px-3 text-xs font-semibold tracking-wide uppercase"
+          className="h-10 gap-1.5 px-3 text-sm font-semibold tracking-wide uppercase"
         >
-          <span aria-hidden="true" className="hidden text-sm leading-none md:inline">
+          <span aria-hidden="true" className="hidden text-xs leading-none md:inline">
             {flags[currentLang]}
           </span>
           {currentLang}
@@ -88,7 +88,7 @@ function LanguageSwitcherFallback() {
       disabled
       className="h-10 gap-1.5 px-3 text-xs font-semibold tracking-wide uppercase"
     >
-      <span aria-hidden="true" className="text-sm leading-none">
+      <span aria-hidden="true" className="hidden text-sm leading-none md:inline">
         🇪🇸
       </span>
       es

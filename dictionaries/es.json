@@ -13,6 +13,7 @@
   },
   "nav": {
     "login": "Iniciar sesión",
+    "loginShort": "Entrar",
     "getStarted": "Empezar",
     "explore": "Explorar",
     "myPhotos": "Mis fotos",

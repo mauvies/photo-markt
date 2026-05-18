@@ -13,6 +13,7 @@
   },
   "nav": {
     "login": "Log in",
+    "loginShort": "Log in",
     "getStarted": "Get started",
     "explore": "Explore",
     "myPhotos": "My photos",

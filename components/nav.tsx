@@ -65,8 +65,8 @@ export function Nav({ user, activeRole }: { user: User | null; activeRole: UserR
                 href={buildLoginHref()}
                 className="text-sm hover:text-foreground/70 transition-colors"
               >
-                <Button size="md" className="bg-gradient-starter h-10 md:hidden">
-                  {t('login')}
+                <Button size="md" className="bg-gradient-starter h-10 px-4 md:hidden">
+                  {t('loginShort')}
                 </Button>
                 <span className="hidden md:inline-flex">{t('login')}</span>
               </Link>
