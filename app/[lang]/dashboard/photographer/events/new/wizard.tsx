@@ -253,12 +253,28 @@ export default function NewEventForm() {
 
   const goToStep = useCallback(
     (step: StepNumber) => {
+      // Belt-and-suspenders: flush the latest form values to localStorage
+      // synchronously before navigating, so the destination step's
+      // re-hydration reads the user's actual data and not an older snapshot.
+      // The subscribe-based persistence already covers normal cases, but
+      // this guarantees correctness even if the subscription is mid-update.
+      if (hydratedFromStorage) {
+        try {
+          const payload: StoredWizardState = {
+            values: form.state.values,
+            reachedStep,
+          };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        } catch {
+          // Ignore quota / privacy-mode errors.
+        }
+      }
       const params = new URLSearchParams(searchParams.toString());
       params.set('step', String(step));
       router.push(`?${params.toString()}`);
       setReachedStep((prev) => (step > prev ? step : prev));
     },
-    [router, searchParams],
+    [router, searchParams, form, reachedStep, hydratedFromStorage],
   );
 
   // Keep the "had files" flag in sync. Set it when the user first picks
