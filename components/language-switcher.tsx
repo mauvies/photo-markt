@@ -1,6 +1,6 @@
 'use client';
 
-import { Globe } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { useParams, usePathname, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { Button } from '@/components/ui/button';
@@ -12,10 +12,16 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { type Locale, locales } from '@/lib/i18n/config';
 import { localizedPath } from '@/lib/i18n/localized-path';
+import { cn } from '@/lib/utils';
 
 const labels: Record<Locale, string> = {
   es: 'Español',
   en: 'English',
+};
+
+const flags: Record<Locale, string> = {
+  es: '🇪🇸',
+  en: '🇺🇸',
 };
 
 // Separated so the Suspense boundary is explicit on both server and client,
@@ -36,22 +42,38 @@ function LanguageSwitcherInner() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Switch language">
-          <Globe className="h-5 w-5" />
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label="Switch language"
+          className="h-10 gap-1.5 px-3 text-xs font-semibold tracking-wide uppercase"
+        >
+          <span aria-hidden="true" className="hidden text-sm leading-none md:inline">
+            {flags[currentLang]}
+          </span>
+          {currentLang}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {locales.map((lang) => (
-          <DropdownMenuItem key={lang} asChild>
-            <a
-              href={buildHref(lang)}
-              aria-current={lang === currentLang ? 'true' : undefined}
-              className={lang === currentLang ? 'font-medium' : ''}
-            >
-              {labels[lang]}
-            </a>
-          </DropdownMenuItem>
-        ))}
+        {locales.map((lang) => {
+          const isActive = lang === currentLang;
+          return (
+            <DropdownMenuItem key={lang} asChild>
+              <a
+                href={buildHref(lang)}
+                aria-current={isActive ? 'true' : undefined}
+                className={cn('flex items-center gap-2 pr-2', isActive && 'bg-accent font-medium')}
+              >
+                <span aria-hidden="true">{flags[lang]}</span>
+                <span>{labels[lang]}</span>
+                <Check
+                  className={cn('ml-auto size-4', isActive ? 'opacity-100' : 'opacity-0')}
+                  aria-hidden="true"
+                />
+              </a>
+            </DropdownMenuItem>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -59,8 +81,17 @@ function LanguageSwitcherInner() {
 
 function LanguageSwitcherFallback() {
   return (
-    <Button variant="ghost" size="icon" aria-label="Switch language" disabled>
-      <Globe className="h-5 w-5" />
+    <Button
+      variant="outline"
+      size="sm"
+      aria-label="Switch language"
+      disabled
+      className="h-10 gap-1.5 px-3 text-xs font-semibold tracking-wide uppercase"
+    >
+      <span aria-hidden="true" className="text-sm leading-none">
+        🇪🇸
+      </span>
+      es
     </Button>
   );
 }

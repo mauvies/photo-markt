@@ -53,7 +53,7 @@ export function Nav({ user, activeRole }: { user: User | null; activeRole: UserR
             <LanguageSwitcher />
           </div>
           {showCart && (
-            <div className="-ml-2">
+            <div>
               <CartLinkButton guest={!user} />
             </div>
           )}

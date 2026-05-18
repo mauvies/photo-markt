@@ -78,9 +78,9 @@ export function ProfileContent({
     <>
       {/* Profile Header */}
       {/* Mobile: avatar left + username inline; Desktop: Instagram-style with stats */}
-      <div className="sm:border-b sm:pb-8 mb-6 sm:mb-0">
+      <div className="sm:pb-5 mb-6 sm:mb-0">
         {/* Mobile layout */}
-        <div className="flex items-center gap-4 sm:hidden mb-6">
+        {/* <div className="flex items-center gap-4 sm:hidden mb-6">
           <Avatar className="h-16 w-16 shrink-0 border-2 border-border">
             <AvatarImage src={profile?.avatar_url ?? undefined} alt={displayName} />
             <AvatarFallback className="text-2xl font-semibold">
@@ -88,14 +88,13 @@ export function ProfileContent({
             </AvatarFallback>
           </Avatar>
           <h1 className="text-xl font-light">{displayName}</h1>
-        </div>
-
+        </div> */}
         {/* Desktop layout */}
-        <div className="hidden sm:flex gap-6">
+        <div className="flex gap-6">
           <div className="flex justify-start">
-            <Avatar className="h-32 w-32 border-2 border-border">
+            <Avatar className="h-26 w-26 shrink-0 border-2 border-border">
               <AvatarImage src={profile?.avatar_url ?? undefined} alt={displayName} />
-              <AvatarFallback className="text-4xl font-semibold">
+              <AvatarFallback className="text-2xl sm:text-4xl font-semibold">
                 {displayName.charAt(0).toUpperCase()}
               </AvatarFallback>
             </Avatar>
@@ -114,9 +113,9 @@ export function ProfileContent({
                 <span className="text-sm text-muted-foreground">events</span>
               </div>
             </div>
-            {profile?.bio && <p className="text-sm sm:text-base">{profile.bio}</p>}
           </div>
         </div>
+        {profile?.bio && <p className="text-base mt-4">{profile.bio}</p>}
       </div>
 
       {/* Photo Grid */}

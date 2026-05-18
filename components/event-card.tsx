@@ -77,7 +77,6 @@ const DEFAULT_LABELS: EventCardLabels = {
 
 function StatusBadge({
   status,
-  date,
   labels,
   isOwner,
   offsetLeft,
@@ -89,33 +88,18 @@ function StatusBadge({
   // Push the badge to the right when the owner dropdown sits in the top-left.
   offsetLeft?: boolean;
 }) {
+  // Owner-side shows the upcoming indicator inline next to the date instead of
+  // overlaying the cover — see `isUpcomingOwner` in `EventCard`.
+  if (isOwner) return null;
+  if (status !== 'upcoming') return null;
   const positionClass = offsetLeft ? 'left-12' : 'left-3 sm:left-2';
-  // Explore-side: hint at any upcoming event so browsers know it's not live
-  // yet. Keep the original "Coming Soon" framing.
-  if (!isOwner) {
-    if (status !== 'upcoming') return null;
-    return (
-      <span
-        className={`absolute ${positionClass} top-3 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground sm:top-2`}
-      >
-        {labels.comingSoon ?? 'Coming Soon'}
-      </span>
-    );
-  }
-
-  // Owner-side: only flag events that are imminent (within `UPCOMING_SOON_DAYS`
-  // days). Past and far-future events stay unbadged so the dashboard grid
-  // doesn't get noisy.
-  if (status === 'upcoming' && isEventSoon(date)) {
-    return (
-      <span
-        className={`absolute ${positionClass} top-3 rounded-full bg-black/55 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground sm:top-2`}
-      >
-        {labels.upcomingLabel ?? 'Upcoming'}
-      </span>
-    );
-  }
-  return null;
+  return (
+    <span
+      className={`absolute ${positionClass} top-3 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground sm:top-2`}
+    >
+      {labels.comingSoon ?? 'Coming Soon'}
+    </span>
+  );
 }
 
 // Renders an icon-only badge that overlays the cover. The label appears via
@@ -225,6 +209,10 @@ export function EventCard({
   const photographerHandle =
     photographer?.displayName || (photographer?.username ? `@${photographer.username}` : null);
   const isOwner = ownerStats !== undefined;
+  // Owner-side surfaces a status accent (amber left border + inline pill) for
+  // upcoming events within `UPCOMING_SOON_DAYS` — keeps the cover image clean
+  // and ties the status to the date it describes.
+  const isUpcomingOwner = isOwner && status === 'upcoming' && isEventSoon(date);
   // Track cover image loading so we can show a skeleton until it lands and
   // avoid rendering the badges/gradient over an empty placeholder.
   const [imageStatus, setImageStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
@@ -323,6 +311,11 @@ export function EventCard({
             <p className="flex items-center gap-1.5">
               <CalendarDays className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{formattedDate}</span>
+              {isUpcomingOwner && (
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  {t.upcomingLabel ?? 'Upcoming'}
+                </span>
+              )}
             </p>
             {photographerHandle && (
               <p className="flex items-center gap-1.5">
