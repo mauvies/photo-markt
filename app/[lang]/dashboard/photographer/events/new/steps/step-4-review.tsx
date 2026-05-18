@@ -24,7 +24,10 @@ type Step4ReviewProps = {
   // Disables the final submit by way of the parent (we just render the banner).
   photosLost: boolean;
   eventType: EventType;
-  goToStep: (step: StepNumber) => void;
+  // Optional `remember` hint lets Edit buttons here signal "after Next from
+  // the edited step, jump straight back to step 4" — preserving the user's
+  // review position rather than walking through intermediate steps.
+  goToStep: (step: StepNumber, opts?: { remember?: StepNumber }) => void;
 };
 
 export function Step4Review({
@@ -49,7 +52,7 @@ export function Step4Review({
               variant="outline"
               size="sm"
               className="mt-2"
-              onClick={() => goToStep(3)}
+              onClick={() => goToStep(3, { remember: 4 })}
             >
               {t('reviewEditPhotos')}
             </Button>
@@ -66,7 +69,7 @@ export function Step4Review({
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => goToStep(section.editStep)}
+                onClick={() => goToStep(section.editStep, { remember: 4 })}
                 className="h-8 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
               >
                 <Pencil className="h-3 w-3" />
@@ -96,7 +99,7 @@ export function Step4Review({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => goToStep(3)}
+              onClick={() => goToStep(3, { remember: 4 })}
               className="h-8 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
             >
               <Pencil className="h-3 w-3" />

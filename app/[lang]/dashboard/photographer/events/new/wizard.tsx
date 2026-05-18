@@ -22,12 +22,17 @@ import { type FilePreview, useEventForm } from './wizard-types';
 
 type NewEventT = Dictionary['newEvent'];
 
-const STORAGE_KEY = 'photo-markt_new_event_form';
+// sessionStorage key — scoped per-tab. The wizard draft is discarded when
+// the tab closes, which matches user expectation (no surprise drafts
+// resurfacing weeks later). Renamed from the previous localStorage key so
+// stale localStorage entries (from earlier hotfix layers) don't get
+// mistakenly re-read.
+const DRAFT_KEY = 'picdemi_event_wizard_draft';
 // Side-channel flag: set when the user picks at least one photo. We don't
 // store the photos themselves (File objects can't be serialized), but knowing
 // that they *had* selected something lets us distinguish a fresh arrival on
 // step 3 (no banner) from a refresh that wiped the in-memory File[] (banner).
-const HAD_FILES_KEY = 'photo-markt_new_event_had_files';
+const HAD_FILES_KEY = 'picdemi_event_wizard_had_files';
 
 const STEP_FIELDS: Record<StepNumber, Array<keyof FormValues>> = {
   1: [],
@@ -39,18 +44,23 @@ const STEP_FIELDS: Record<StepNumber, Array<keyof FormValues>> = {
 type StoredWizardState = {
   values: FormValues;
   reachedStep: StepNumber;
+  // When set, the next forward navigation (after Next from an edited step)
+  // jumps directly here instead of `currentStep + 1`. Set when the user
+  // clicks an Edit button from the step 4 review; cleared after the jump.
+  returnToStep: StepNumber | null;
 };
 
 function readStoredState(): StoredWizardState | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = sessionStorage.getItem(DRAFT_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
 
-    // The localStorage payload used to be the bare FormValues. Migrate to the
-    // new `{ values, reachedStep }` shape on the fly so existing drafts don't
-    // get dropped on first load after this change.
+    // Field-by-field coercion below handles older payloads and schema
+    // additions (e.g. `ai_matching_enabled` / `contains_minors`) gracefully
+    // by falling back to defaults — no separate "schema migration" step.
     const candidateValues =
       parsed && typeof parsed === 'object' && 'values' in parsed && parsed.values
         ? (parsed.values as Record<string, unknown>)
@@ -60,6 +70,10 @@ function readStoredState(): StoredWizardState | null {
       parsed && typeof parsed === 'object' && 'reachedStep' in parsed
         ? (parsed as { reachedStep: unknown }).reachedStep
         : 1;
+    const returnToStepRaw =
+      parsed && typeof parsed === 'object' && 'returnToStep' in parsed
+        ? (parsed as { returnToStep: unknown }).returnToStep
+        : null;
 
     // Validate event_type against the legacy is_collaborative flag — older
     // drafts predate the explicit type column.
@@ -123,9 +137,18 @@ function readStoredState(): StoredWizardState | null {
       reachedStepRaw === 1 || reachedStepRaw === 2 || reachedStepRaw === 3 || reachedStepRaw === 4
         ? reachedStepRaw
         : 1;
+    const returnToStep: StepNumber | null =
+      returnToStepRaw === 1 ||
+      returnToStepRaw === 2 ||
+      returnToStepRaw === 3 ||
+      returnToStepRaw === 4
+        ? returnToStepRaw
+        : null;
 
-    return { values, reachedStep };
+    return { values, reachedStep, returnToStep };
   } catch {
+    // Malformed JSON or unexpected shape — discard the draft silently and
+    // start fresh. Better UX than crashing the wizard on a stale entry.
     return null;
   }
 }
@@ -154,6 +177,11 @@ export default function NewEventForm() {
   const [createdEventName, setCreatedEventName] = useState<string | null>(null);
   const [createdEventId, setCreatedEventId] = useState<string | null>(null);
   const [reachedStep, setReachedStep] = useState<StepNumber>(currentStep);
+  // After an Edit-from-review jump, the next successful "Next" should bring
+  // the user back here directly (rather than walking through intermediate
+  // steps). null = normal sequential flow. Persisted in sessionStorage so a
+  // refresh mid-edit still respects the user's intent.
+  const [returnToStep, setReturnToStep] = useState<StepNumber | null>(null);
   const [hydratedFromStorage, setHydratedFromStorage] = useState(false);
 
   // True after a refresh-with-photos: the user had files in memory, the page
@@ -162,7 +190,11 @@ export default function NewEventForm() {
 
   const form = useEventForm();
 
-  // Hydrate localStorage values after mount to avoid SSR mismatch.
+  // Mount-time hydration. Reads sessionStorage once and seeds form values,
+  // reachedStep, and any pending returnToStep memo (so a refresh mid-edit
+  // still jumps back to the review on Next). No mid-render re-hydration
+  // effect — the TanStack form instance is stable across renders, so once
+  // values are seeded here they persist for the lifetime of the wizard.
   useEffect(() => {
     const stored = readStoredState();
     if (stored) {
@@ -170,12 +202,13 @@ export default function NewEventForm() {
       // Restore the highest step reached so the indicator keeps showing
       // earlier steps as completed/clickable after a refresh.
       setReachedStep((prev) => (stored.reachedStep > prev ? stored.reachedStep : prev));
+      if (stored.returnToStep !== null) setReturnToStep(stored.returnToStep);
     }
     // If the user had picked photos in a previous session (flag set on first
     // selection) and we're back without an in-memory File[], surface the
     // "photos lost" banner so they re-pick. Don't fire on a fresh visit.
     try {
-      if (localStorage.getItem(HAD_FILES_KEY) === 'true') {
+      if (sessionStorage.getItem(HAD_FILES_KEY) === 'true') {
         setPhotosLost(true);
       }
     } catch {
@@ -183,22 +216,6 @@ export default function NewEventForm() {
     }
     setHydratedFromStorage(true);
   }, [form]);
-
-  // Defensive re-hydration on every step navigation. The mount-time hydration
-  // above only runs once, so if anything during a step change causes the form
-  // state to drift from what's in localStorage (transient re-renders,
-  // navigation race conditions, etc.) the user sees stale or empty fields.
-  // Re-applying `form.reset(stored.values)` on every `currentStep` change is
-  // idempotent — the persistence subscription wrote the latest values to
-  // localStorage *before* this effect fires, so resetting either restores
-  // missing data or is a no-op.
-  useEffect(() => {
-    if (!hydratedFromStorage) return;
-    const stored = readStoredState();
-    if (stored) {
-      form.reset(stored.values);
-    }
-  }, [currentStep, form, hydratedFromStorage]);
 
   // Persist the entire wizard state on every change (post-hydration).
   //
@@ -215,14 +232,15 @@ export default function NewEventForm() {
         const payload: StoredWizardState = {
           values: form.state.values,
           reachedStep,
+          returnToStep,
         };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
       } catch {
         // Ignore quota / privacy-mode errors.
       }
     };
-    // Persist current state immediately (e.g. after `reachedStep` changes
-    // even if the form values haven't moved).
+    // Persist current state immediately (e.g. after `reachedStep` /
+    // `returnToStep` changes even if the form values haven't moved).
     writePayload();
     const subscription = form.store.subscribe(() => {
       writePayload();
@@ -235,7 +253,7 @@ export default function NewEventForm() {
       if (typeof sub === 'function') sub();
       else sub.unsubscribe?.();
     };
-  }, [form, hydratedFromStorage, reachedStep]);
+  }, [form, hydratedFromStorage, reachedStep, returnToStep]);
 
   // Generate object URLs for the file previews; revoke them on cleanup so we
   // don't leak memory when the user removes/reselects.
@@ -252,29 +270,19 @@ export default function NewEventForm() {
   }, [files]);
 
   const goToStep = useCallback(
-    (step: StepNumber) => {
-      // Belt-and-suspenders: flush the latest form values to localStorage
-      // synchronously before navigating, so the destination step's
-      // re-hydration reads the user's actual data and not an older snapshot.
-      // The subscribe-based persistence already covers normal cases, but
-      // this guarantees correctness even if the subscription is mid-update.
-      if (hydratedFromStorage) {
-        try {
-          const payload: StoredWizardState = {
-            values: form.state.values,
-            reachedStep,
-          };
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-        } catch {
-          // Ignore quota / privacy-mode errors.
-        }
+    (step: StepNumber, opts?: { remember?: StepNumber }) => {
+      // When `remember` is set (Edit-from-review), capture where to return
+      // to after the next Next click. The persistence subscription picks
+      // up the state change and writes it to sessionStorage.
+      if (opts?.remember !== undefined) {
+        setReturnToStep(opts.remember);
       }
       const params = new URLSearchParams(searchParams.toString());
       params.set('step', String(step));
       router.push(`?${params.toString()}`);
       setReachedStep((prev) => (step > prev ? step : prev));
     },
-    [router, searchParams, form, reachedStep, hydratedFromStorage],
+    [router, searchParams],
   );
 
   // Keep the "had files" flag in sync. Set it when the user first picks
@@ -286,11 +294,11 @@ export default function NewEventForm() {
     if (!hydratedFromStorage) return;
     try {
       if (files.length > 0) {
-        localStorage.setItem(HAD_FILES_KEY, 'true');
+        sessionStorage.setItem(HAD_FILES_KEY, 'true');
         if (photosLost) setPhotosLost(false);
-      } else if (localStorage.getItem(HAD_FILES_KEY) === 'true' && !photosLost) {
+      } else if (sessionStorage.getItem(HAD_FILES_KEY) === 'true' && !photosLost) {
         // Files were just cleared in this session — drop the flag too.
-        localStorage.removeItem(HAD_FILES_KEY);
+        sessionStorage.removeItem(HAD_FILES_KEY);
       }
     } catch {
       // Ignore.
@@ -346,9 +354,14 @@ export default function NewEventForm() {
       setPhotosError(null);
     }
 
-    const next = Math.min(currentStep + 1, 4) as StepNumber;
+    // After a successful Edit-from-review, jump back to where the user came
+    // from instead of walking the next sequential step. Clear the memo so
+    // subsequent Next clicks behave normally.
+    const next: StepNumber =
+      returnToStep !== null ? returnToStep : (Math.min(currentStep + 1, 4) as StepNumber);
+    if (returnToStep !== null) setReturnToStep(null);
     goToStep(next);
-  }, [currentStep, files.length, form, goToStep, t]);
+  }, [currentStep, files.length, form, goToStep, returnToStep, t]);
 
   const submit = useCallback(() => {
     if (isPending) return;
@@ -412,8 +425,8 @@ export default function NewEventForm() {
         if (!result?.eventId) throw new Error('Event could not be created');
         setSubmitError(null);
         try {
-          localStorage.removeItem(STORAGE_KEY);
-          localStorage.removeItem(HAD_FILES_KEY);
+          sessionStorage.removeItem(DRAFT_KEY);
+          sessionStorage.removeItem(HAD_FILES_KEY);
         } catch {
           // Ignore.
         }
@@ -581,7 +594,17 @@ export default function NewEventForm() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => router.back()}
+                  onClick={() => {
+                    // Explicit cancel clears the draft so a future visit
+                    // starts fresh rather than restoring the abandoned form.
+                    try {
+                      sessionStorage.removeItem(DRAFT_KEY);
+                      sessionStorage.removeItem(HAD_FILES_KEY);
+                    } catch {
+                      // Ignore.
+                    }
+                    router.back();
+                  }}
                   disabled={isPending}
                 >
                   {t('cancelButton')}
