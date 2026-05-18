@@ -184,6 +184,22 @@ export default function NewEventForm() {
     setHydratedFromStorage(true);
   }, [form]);
 
+  // Defensive re-hydration on every step navigation. The mount-time hydration
+  // above only runs once, so if anything during a step change causes the form
+  // state to drift from what's in localStorage (transient re-renders,
+  // navigation race conditions, etc.) the user sees stale or empty fields.
+  // Re-applying `form.reset(stored.values)` on every `currentStep` change is
+  // idempotent — the persistence subscription wrote the latest values to
+  // localStorage *before* this effect fires, so resetting either restores
+  // missing data or is a no-op.
+  useEffect(() => {
+    if (!hydratedFromStorage) return;
+    const stored = readStoredState();
+    if (stored) {
+      form.reset(stored.values);
+    }
+  }, [currentStep, form, hydratedFromStorage]);
+
   // Persist the entire wizard state on every change (post-hydration).
   //
   // We subscribe directly to the form's store rather than relying on a React
