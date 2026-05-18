@@ -29,13 +29,13 @@ export const PLANS: Plan[] = [
     description: 'Perfect for getting started and testing Photo Markt',
     storageGB: 20,
     maxEvents: 3,
-    salesFeePercent: 15,
+    salesFeePercent: 12,
     allowCustomBundles: false,
     features: [
       'Up to 3 events',
       'Default pricing bundles only',
       'Basic search & analytics',
-      '15% sales fee',
+      '12% sales fee',
     ],
   },
   {
@@ -80,7 +80,7 @@ export const PLANS: Plan[] = [
 ];
 
 export const PLATFORM_FEE_RATES: Record<PlanId, number> = {
-  free: 0.15,
+  free: 0.12,
   starter: 0.08,
   pro: 0.05,
 };

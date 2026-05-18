@@ -20,6 +20,7 @@ export interface Photo {
   guest_name?: string | null;
   guest_email?: string | null;
   upload_status?: UploadStatus;
+  size_bytes?: number | null;
   created_at?: string;
 }
 
@@ -69,6 +70,28 @@ export async function getPhotosUploadedCount(
   }
 
   return count ?? 0;
+}
+
+/**
+ * Sum `size_bytes` across all photos owned by a user. Backs the storage
+ * meter on the photographer dashboard and the per-upload plan-limit check
+ * in `lib/plan-limits.ts`. Rows with NULL `size_bytes` (legacy data
+ * uploaded before the column was added) contribute 0.
+ */
+export async function getStorageUsageBytes(
+  supabase: SupabaseServerClient,
+  userId: string,
+): Promise<number> {
+  const { data, error } = await supabase.from('photos').select('size_bytes').eq('user_id', userId);
+
+  if (error) {
+    throw new Error(`Failed to compute storage usage: ${getErrorMessage(error)}`);
+  }
+
+  return (data ?? []).reduce<number>(
+    (acc, row) => acc + (typeof row.size_bytes === 'number' ? row.size_bytes : 0),
+    0,
+  );
 }
 
 /**

@@ -4,12 +4,16 @@ import { useForm } from '@tanstack/react-form';
 import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
+import { toast } from 'sonner';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Dropzone } from '@/components/uploader/Dropzone';
 import type { Event } from '@/database/queries/events';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import type { Dictionary } from '@/lib/i18n/get-dictionary';
+import { useTranslations } from '@/lib/i18n/translations-provider';
+import { getPlanLimitType, isPlanLimitError } from '@/lib/plan-limits';
 import { updateEventAction } from './actions';
 import { EventFormFields } from './components/event-form-fields';
 import { EventPhotoGrid } from './components/event-photo-grid';
@@ -28,6 +32,7 @@ interface EditEventFormProps {
 
 export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
   const router = useRouter();
+  const { t } = useTranslations<Dictionary['newEvent']>();
   const lp = useLocalizedPath();
   const [isPending, startTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -151,10 +156,26 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
               photoIdsToDelete,
             );
             if (result?.success) {
+              if (result.uploaded === 0 && result.skipped.length > 0) {
+                toast.error(t('allPhotosSkippedStorageLimit'));
+              } else if (result.skipped.length > 0) {
+                toast.warning(
+                  t('nPhotosUploadedSomeSkipped')
+                    .replace('{uploaded}', String(result.uploaded))
+                    .replace('{skipped}', String(result.skipped.length)),
+                );
+              }
               router.push(lp(`/dashboard/photographer/events/${event.id}`));
             }
           } catch (error) {
             console.error(error);
+            if (isPlanLimitError(error)) {
+              const limitType = getPlanLimitType(error);
+              setSubmitError(
+                limitType === 'storage' ? t('storageLimitReached') : t('eventLimitReachedShort'),
+              );
+              return;
+            }
             setSubmitError(
               error instanceof Error ? error.message : 'Something went wrong. Please try again.',
             );

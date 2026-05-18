@@ -411,6 +411,8 @@ export default async function EventPage({
           successApproved: dict.collaborativeEvent.successApproved,
           successPending: dict.collaborativeEvent.successPending,
           errorGeneric: dict.collaborativeEvent.errorGeneric,
+          storageLimitPartial: dict.collaborativeEvent.storageLimitPartial,
+          storageLimitAll: dict.collaborativeEvent.storageLimitAll,
         }}
       >
         <div className="mx-auto max-w-7xl w-full flex-1 px-4 py-6">

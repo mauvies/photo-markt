@@ -11,10 +11,12 @@ import {
   uploadFile,
   uploadGuestPhoto,
 } from '@/database/queries';
+import { getStorageUsageBytes } from '@/database/queries/photos';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { isCollaborativeUploadOpen } from '@/lib/event-status';
 import { validatePhotoUpload } from '@/lib/photo-upload';
+import { assertCanUploadPhoto, isPlanLimitError } from '@/lib/plan-limits';
 import { getClientIp, rateLimit } from '@/lib/rate-limit';
 
 const MAX_GUEST_NAME_LENGTH = 60;
@@ -26,6 +28,8 @@ function buildCollaborativePhotoPath(eventId: string, extension: string): string
   return `collaborative/${eventId}/${crypto.randomUUID()}.${extension}`;
 }
 
+export type UploadGuestSkippedReason = 'storage_limit';
+
 export type UploadGuestPhotosResult = {
   uploadedCount: number;
   status: 'approved' | 'pending';
@@ -36,6 +40,12 @@ export type UploadGuestPhotosResult = {
    * unauthenticated guests.
    */
   uploads: Array<{ photoId: string; deleteToken: string | null }>;
+  /**
+   * Files dropped because the event owner is at their storage cap. The guest
+   * never sees the owner's plan tier — we only surface "storage_limit" as the
+   * reason so the UI can show a generic "owner is out of space" message.
+   */
+  skipped: Array<{ name: string; reason: UploadGuestSkippedReason }>;
 };
 
 export async function uploadGuestPhotosAction(
@@ -110,11 +120,26 @@ export async function uploadGuestPhotosAction(
 
   const status: 'approved' | 'pending' = event.require_upload_approval ? 'pending' : 'approved';
 
+  // Storage cap is enforced against the **event owner**, not the guest. A
+  // Free-tier owner can't be flooded into overage by anonymous uploads.
+  let ownerUsage = await getStorageUsageBytes(adminClient, event.user_id);
   const uploadedPaths: string[] = [];
   const uploads: Array<{ photoId: string; deleteToken: string | null }> = [];
+  const skipped: UploadGuestPhotosResult['skipped'] = [];
   try {
     for (const file of files) {
       const validated = await validatePhotoUpload(file);
+      const fileSize = validated.buffer.length;
+      try {
+        await assertCanUploadPhoto(adminClient, event.user_id, fileSize, ownerUsage);
+      } catch (err) {
+        if (isPlanLimitError(err)) {
+          skipped.push({ name: file.name, reason: 'storage_limit' });
+          continue;
+        }
+        throw err;
+      }
+
       const path = buildCollaborativePhotoPath(event.id, validated.extension);
       await uploadFile(adminClient, 'photos', path, validated.buffer, {
         contentType: validated.contentType,
@@ -134,9 +159,10 @@ export async function uploadGuestPhotosAction(
         upload_status: status,
         delete_token: deleteToken,
         taken_at: new Date().toISOString(),
-        size_bytes: file.size,
+        size_bytes: fileSize,
       });
       uploads.push({ photoId: inserted.id, deleteToken: inserted.delete_token });
+      ownerUsage += fileSize;
     }
   } catch (error) {
     if (uploadedPaths.length > 0) {
@@ -159,7 +185,7 @@ export async function uploadGuestPhotosAction(
   if (event.slug) revalidateTag(`event-${event.slug}`, 'max');
   if (event.share_code) revalidateTag(`event-${event.share_code}`, 'max');
 
-  return { uploadedCount: files.length, status, uploads };
+  return { uploadedCount: uploads.length, status, uploads, skipped };
 }
 
 /**

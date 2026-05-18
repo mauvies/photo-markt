@@ -10,8 +10,16 @@ import {
   deleteStorageFiles,
   uploadFile,
 } from '@/database/queries';
+import { getStorageUsageBytes } from '@/database/queries/photos';
+import { getCurrentPlan } from '@/database/queries/subscriptions';
 import { createClient } from '@/database/server';
 import { validatePhotoUpload } from '@/lib/photo-upload';
+import {
+  assertCanCreateEvent,
+  assertCanUploadPhoto,
+  isPlanLimitError,
+  PlanLimitError,
+} from '@/lib/plan-limits';
 import { generateEventSlug } from '@/lib/slugify';
 import { activityValues } from './activity-options';
 
@@ -80,9 +88,18 @@ const eventSchema = z.object({
 type EventPayload = z.infer<typeof eventSchema>;
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
+export type UploadSkippedReason = 'storage_limit';
+
 export type CreateEventResult = {
   eventId: string;
   shareCode: string | null;
+  uploaded: number;
+  skipped: Array<{ name: string; reason: UploadSkippedReason }>;
+};
+
+type UploadEventPhotosResult = {
+  uploaded: number;
+  skipped: Array<{ name: string; reason: UploadSkippedReason }>;
 };
 
 // --- Helpers ---
@@ -122,11 +139,28 @@ async function uploadEventPhotos(
   event: { id: string },
   files: File[],
   payload: Pick<EventPayload, 'date' | 'city' | 'country' | 'state'>,
-): Promise<void> {
+): Promise<UploadEventPhotosResult> {
+  // Pre-fetch the user's current storage once; the loop mutates this local
+  // total instead of re-querying per file.
+  let currentUsage = await getStorageUsageBytes(supabase, userId);
   const uploadedPaths: string[] = [];
+  const skipped: UploadEventPhotosResult['skipped'] = [];
+  let uploaded = 0;
+
   try {
     for (const file of files) {
       const validated = await validatePhotoUpload(file);
+      const fileSize = validated.buffer.length;
+      try {
+        await assertCanUploadPhoto(supabase, userId, fileSize, currentUsage);
+      } catch (err) {
+        if (isPlanLimitError(err)) {
+          skipped.push({ name: file.name, reason: 'storage_limit' });
+          continue;
+        }
+        throw err;
+      }
+
       const path = buildPhotoPath(userId, event.id, validated.extension);
       await uploadFile(supabase, 'photos', path, validated.buffer, {
         contentType: validated.contentType,
@@ -139,9 +173,11 @@ async function uploadEventPhotos(
         city: payload.city || '',
         country: payload.country,
         state: payload.state || null,
-        size_bytes: file.size,
+        size_bytes: fileSize,
       });
       uploadedPaths.push(path);
+      currentUsage += fileSize;
+      uploaded += 1;
     }
   } catch (error) {
     if (uploadedPaths.length > 0) {
@@ -149,6 +185,8 @@ async function uploadEventPhotos(
     }
     throw error;
   }
+
+  return { uploaded, skipped };
 }
 
 async function revalidateAfterEventCreate(
@@ -188,6 +226,11 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error('You must be signed in to create an event.');
+
+  // Plan ceiling — throws PlanLimitError (typed) which the UI surfaces as an
+  // upgrade prompt. Server-side enforcement; the wizard entry page also
+  // redirects at-limit users away as a UX nicety.
+  await assertCanCreateEvent(supabase, user.id);
 
   const parsed = eventSchema.safeParse({
     name: formData.get('name')?.toString() ?? '',
@@ -267,9 +310,10 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     await supabase.from('events').update({ slug }).eq('id', event.id).eq('user_id', user.id);
   }
 
+  let uploadResult: UploadEventPhotosResult = { uploaded: 0, skipped: [] };
   if (uploadedFiles.length > 0) {
     try {
-      await uploadEventPhotos(supabase, user.id, event, uploadedFiles, payload);
+      uploadResult = await uploadEventPhotos(supabase, user.id, event, uploadedFiles, payload);
     } catch (error) {
       console.error('createEvent: upload failed', error);
       await deleteEventPhotos(supabase, event.id, user.id);
@@ -278,9 +322,30 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
         error instanceof Error ? error.message : 'Unable to upload photos. Please try again.',
       );
     }
+
+    // Solo events require at least one photo. If every file was skipped due
+    // to the storage cap, roll back the event row and surface the upgrade
+    // prompt as a typed PlanLimitError.
+    if (eventType === 'solo' && uploadResult.uploaded === 0 && uploadResult.skipped.length > 0) {
+      await deleteEventPhotos(supabase, event.id, user.id);
+      await deleteEvent(supabase, event.id, user.id);
+      const plan = await getCurrentPlan(supabase, user.id);
+      const currentUsage = await getStorageUsageBytes(supabase, user.id);
+      throw new PlanLimitError({
+        limitType: 'storage',
+        current: currentUsage,
+        max: (plan.storageGB ?? 0) * 1024 ** 3,
+        planId: plan.id,
+      });
+    }
   }
 
   await revalidateAfterEventCreate(supabase, user.id, event.id);
 
-  return { eventId: event.id, shareCode };
+  return {
+    eventId: event.id,
+    shareCode,
+    uploaded: uploadResult.uploaded,
+    skipped: uploadResult.skipped,
+  };
 };

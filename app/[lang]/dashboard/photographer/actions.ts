@@ -2,7 +2,11 @@
 
 import { cacheLife, cacheTag } from 'next/cache';
 import { getEventsCreatedCount, getUserEvents } from '@/database/queries/events';
-import { getPhotosForEvents, getPhotosUploadedCount } from '@/database/queries/photos';
+import {
+  getPhotosForEvents,
+  getPhotosUploadedCount,
+  getStorageUsageBytes,
+} from '@/database/queries/photos';
 import {
   getRecentSales,
   getSalesOverTime,
@@ -162,7 +166,7 @@ async function getCachedDashboardData(userId: string): Promise<DashboardData> {
     eventsLastMonth,
     recentSalesRaw,
     currentPlan,
-    sizeRowsResult,
+    usedBytes,
     totalPhotosCountResult,
   ] = await Promise.all([
     getSalesSummaryWithTrend(
@@ -188,17 +192,10 @@ async function getCachedDashboardData(userId: string): Promise<DashboardData> {
     getEventsCreatedCount(supabaseAdmin, userId, month.prevStart, month.prevEnd),
     getRecentSales(supabaseAdmin, userId, 5),
     getCurrentPlan(supabaseAdmin, userId),
-    supabaseAdmin.from('photos').select('size_bytes').eq('user_id', userId),
+    getStorageUsageBytes(supabaseAdmin, userId),
     supabaseAdmin.from('photos').select('id', { count: 'exact', head: true }).eq('user_id', userId),
   ]);
 
-  if (sizeRowsResult.error) {
-    console.error('Failed to fetch photo sizes for storage usage:', sizeRowsResult.error);
-  }
-  const usedBytes = (sizeRowsResult.data ?? []).reduce<number>(
-    (acc, row) => acc + (typeof row.size_bytes === 'number' ? row.size_bytes : 0),
-    0,
-  );
   const storageUsedGB = usedBytes / 1024 ** 3;
   const storageLimitGB = currentPlan.storageGB ?? 0;
   const storageUsedPercent =

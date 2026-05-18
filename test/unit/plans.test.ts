@@ -36,15 +36,15 @@ describe('getPlatformFeeRate', () => {
 
 describe('getPhotographerNetCents', () => {
   it('subtracts the platform fee for a known plan', () => {
-    // free plan: 15% fee. 1000 cents → 850 cents net.
-    expect(getPhotographerNetCents(1000, 'free')).toBe(850);
+    // free plan: 12% fee. 1000 cents → 880 cents net.
+    expect(getPhotographerNetCents(1000, 'free')).toBe(880);
     // pro plan: 5% fee. 1000 cents → 950 cents net.
     expect(getPhotographerNetCents(1000, 'pro')).toBe(950);
   });
 
   it('floors fractional cents (no rounding-up favours the platform)', () => {
-    // 999 * 0.85 = 849.15 → 849 cents.
-    expect(getPhotographerNetCents(999, 'free')).toBe(849);
+    // 999 * 0.88 = 879.12 → 879 cents.
+    expect(getPhotographerNetCents(999, 'free')).toBe(879);
   });
 
   it('uses the free-plan fee on unknown plan id', () => {

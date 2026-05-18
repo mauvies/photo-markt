@@ -29,7 +29,17 @@ export function OrganizerUploadSection({ eventId }: OrganizerUploadSectionProps)
     startTransition(async () => {
       try {
         const result = await uploadOrganizerEventPhotoAction(formData);
-        toast.success(t('uploadSuccess').replace('{n}', String(result.uploaded)));
+        if (result.uploaded === 0 && result.skipped.length > 0) {
+          toast.error(t('allPhotosSkippedStorageLimit'));
+        } else if (result.skipped.length > 0) {
+          toast.warning(
+            t('nPhotosUploadedSomeSkipped')
+              .replace('{uploaded}', String(result.uploaded))
+              .replace('{skipped}', String(result.skipped.length)),
+          );
+        } else {
+          toast.success(t('uploadSuccess').replace('{n}', String(result.uploaded)));
+        }
         setFiles([]);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : t('uploadFailed'));
