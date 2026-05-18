@@ -9,8 +9,6 @@
 export * from './ai-search-profiles';
 // Re-export AI search usage queries
 export * from './ai-search-usage';
-// Re-export AI similarity search queries
-export * from './ai-similarity-search';
 // Re-export cart queries
 export * from './carts';
 // Re-export download token queries
@@ -37,6 +35,8 @@ export * from './photographers';
 export * from './photos';
 // Re-export profile queries
 export * from './profiles';
+// Re-export AWS Rekognition queries (event AI state + photo_faces)
+export * from './rekognition';
 // Re-export sales queries
 export * from './sales';
 // Re-export storage queries

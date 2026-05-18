@@ -1,6 +1,12 @@
 /**
  * AI Search Profiles database queries
- * For managing talent AI search profiles and presets
+ * For managing talent AI search profiles and presets.
+ *
+ * Note: the historical `selfie_embedding` column was dropped in
+ * 20260518000000_drop_legacy_ai_schema.sql — under the new AWS Rekognition
+ * design, selfies are sent live to `SearchFacesByImage` per request and
+ * never persisted. Profiles now hold only filters (activity, country,
+ * region, date range) + a name.
  */
 
 import type { SupabaseServerClient } from './types';
@@ -10,7 +16,6 @@ export interface AISearchProfile {
   id: string;
   user_id: string;
   name: string;
-  selfie_embedding: number[] | null;
   activity_type: string | null;
   country: string | null;
   region: string | null;
@@ -22,7 +27,6 @@ export interface AISearchProfile {
 
 export interface CreateAISearchProfileInput {
   name: string;
-  selfie_embedding: number[] | null;
   activity_type?: string | null;
   country?: string | null;
   region?: string | null;
@@ -32,7 +36,6 @@ export interface CreateAISearchProfileInput {
 
 export interface UpdateAISearchProfileInput {
   name?: string;
-  selfie_embedding?: number[] | null;
   activity_type?: string | null;
   country?: string | null;
   region?: string | null;
@@ -57,10 +60,7 @@ export async function getAISearchProfiles(
     throw new Error(`Failed to get AI search profiles: ${getErrorMessage(error)}`);
   }
 
-  return (data ?? []).map((profile) => ({
-    ...profile,
-    selfie_embedding: profile.selfie_embedding ? (profile.selfie_embedding as number[]) : null,
-  })) as AISearchProfile[];
+  return (data ?? []) as AISearchProfile[];
 }
 
 /**
@@ -82,14 +82,7 @@ export async function getAISearchProfile(
     throw new Error(`Failed to get AI search profile: ${getErrorMessage(error)}`);
   }
 
-  if (!data) {
-    return null;
-  }
-
-  return {
-    ...data,
-    selfie_embedding: data.selfie_embedding ? (data.selfie_embedding as number[]) : null,
-  } as AISearchProfile;
+  return (data ?? null) as AISearchProfile | null;
 }
 
 /**
@@ -105,7 +98,6 @@ export async function createAISearchProfile(
     .insert({
       user_id: userId,
       name: input.name,
-      selfie_embedding: input.selfie_embedding ? `[${input.selfie_embedding.join(',')}]` : null,
       activity_type: input.activity_type ?? null,
       country: input.country ?? null,
       region: input.region ?? null,
@@ -119,10 +111,7 @@ export async function createAISearchProfile(
     throw new Error(`Failed to create AI search profile: ${getErrorMessage(error)}`);
   }
 
-  return {
-    ...data,
-    selfie_embedding: data.selfie_embedding ? (data.selfie_embedding as number[]) : null,
-  } as AISearchProfile;
+  return data as AISearchProfile;
 }
 
 /**
@@ -138,11 +127,6 @@ export async function updateAISearchProfile(
 
   if (input.name !== undefined) {
     updateData.name = input.name;
-  }
-  if (input.selfie_embedding !== undefined) {
-    updateData.selfie_embedding = input.selfie_embedding
-      ? `[${input.selfie_embedding.join(',')}]`
-      : null;
   }
   if (input.activity_type !== undefined) {
     updateData.activity_type = input.activity_type;
@@ -172,10 +156,7 @@ export async function updateAISearchProfile(
     throw new Error(`Failed to update AI search profile: ${getErrorMessage(error)}`);
   }
 
-  return {
-    ...data,
-    selfie_embedding: data.selfie_embedding ? (data.selfie_embedding as number[]) : null,
-  } as AISearchProfile;
+  return data as AISearchProfile;
 }
 
 /**
