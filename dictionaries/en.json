@@ -747,8 +747,8 @@
   "newEvent": {
     "title": "Create Event",
     "subtitle": "Fill the details and add your photos.",
-    "nameLabel": "Name or place",
-    "namePlaceholder": "Event name or place",
+    "nameLabel": "Event",
+    "namePlaceholder": "Enter the event name",
     "nameRequired": "Name is required.",
     "activityLabel": "Activity",
     "activityPlaceholder": "Select an activity",
