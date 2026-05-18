@@ -459,6 +459,18 @@ export default function NewEventForm() {
       });
     }
 
+    // AI face matching + minors compliance — shown for every event type
+    // since the toggles live in step 1 for all of them.
+    configRows.push({
+      label: t('aiMatchingLabel' as keyof typeof t),
+      value:
+        v.contains_minors || !v.ai_matching_enabled ? t('summaryDisabled') : t('summaryEnabled'),
+    });
+    configRows.push({
+      label: t('containsMinorsLabel' as keyof typeof t),
+      value: v.contains_minors ? t('summaryEnabled') : t('summaryDisabled'),
+    });
+
     const detailsRows: Array<{ label: string; value: string }> = [
       { label: t('summaryName'), value: v.name },
       {
