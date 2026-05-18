@@ -11,6 +11,7 @@ import {
   getPhotoStoragePaths,
 } from '@/database/queries';
 import { createClient } from '@/database/server';
+import { inngest } from '@/lib/inngest/client';
 
 /**
  * Soft-delete an event along with all its photos from storage and the database.
@@ -52,6 +53,16 @@ export const deleteEventAction = async (eventId: string) => {
 
   // Delete event
   await deleteEvent(supabase, eventId, user.id);
+
+  // Fire-and-forget: clean up the AWS Rekognition collection (if any) on
+  // the worker side. Failure to enqueue shouldn't block the user-facing
+  // delete — log and continue. The collection will simply linger until a
+  // future maintenance sweep.
+  try {
+    await inngest.send({ name: 'event.deleted', data: { eventId } });
+  } catch (err) {
+    console.error('[deleteEventAction] failed to enqueue event.deleted', err);
+  }
 
   revalidatePath('/es/dashboard/photographer/events');
   revalidatePath('/en/dashboard/photographer/events');

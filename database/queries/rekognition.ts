@@ -230,3 +230,163 @@ export async function updatePhotoFaceIndexStatus(
     throw new Error(`Failed to update photo face_index_status: ${getErrorMessage(error)}`);
   }
 }
+
+export interface EventAiIndexingProgress {
+  /** Photos eligible for indexing (everything not marked `not_applicable`). */
+  totalApplicable: number;
+  /** Photos in terminal success states: `indexed` or `no_faces`. */
+  indexed: number;
+  /** Photos still in `pending` or `indexing`. */
+  pending: number;
+  /** Photos in `failed` (eligible for re-index). */
+  failed: number;
+  /** Most recent `photo_faces.indexed_at` for this event; null if none. */
+  lastIndexedAt: string | null;
+}
+
+/**
+ * Aggregate indexing progress for an event — used by the photographer
+ * dashboard's AI status card and metadata chip.
+ */
+export async function getEventAiIndexingProgress(
+  supabase: SupabaseServerClient,
+  eventId: string,
+): Promise<EventAiIndexingProgress> {
+  const { data: photoRows, error: photosError } = await supabase
+    .from('photos')
+    .select('id, face_index_status')
+    .eq('event_id', eventId);
+  if (photosError) {
+    throw new Error(`Failed to load event photos: ${getErrorMessage(photosError)}`);
+  }
+
+  let totalApplicable = 0;
+  let indexed = 0;
+  let pending = 0;
+  let failed = 0;
+  const photoIds: string[] = [];
+  for (const row of photoRows ?? []) {
+    photoIds.push(row.id as string);
+    const status = row.face_index_status as FaceIndexStatus | null;
+    if (!status || status === 'not_applicable') continue;
+    totalApplicable += 1;
+    if (status === 'indexed' || status === 'no_faces') indexed += 1;
+    else if (status === 'failed') failed += 1;
+    else pending += 1;
+  }
+
+  let lastIndexedAt: string | null = null;
+  if (photoIds.length > 0) {
+    const { data, error } = await supabase
+      .from('photo_faces')
+      .select('indexed_at')
+      .in('photo_id', photoIds)
+      .order('indexed_at', { ascending: false })
+      .limit(1);
+    if (error) {
+      throw new Error(`Failed to load latest face record: ${getErrorMessage(error)}`);
+    }
+    lastIndexedAt = ((data ?? [])[0]?.indexed_at as string | undefined) ?? null;
+  }
+
+  return { totalApplicable, indexed, pending, failed, lastIndexedAt };
+}
+
+/**
+ * Service-role only. List all photo ids for an event, regardless of status.
+ * Used by Inngest workers when fanning out re-index or marking statuses in
+ * bulk. Returns ids only — no per-photo metadata is needed at the call site.
+ */
+export async function listEventPhotoIds(
+  supabase: SupabaseServerClient,
+  eventId: string,
+): Promise<string[]> {
+  const { data, error } = await supabase.from('photos').select('id').eq('event_id', eventId);
+  if (error) {
+    throw new Error(`Failed to list event photo ids: ${getErrorMessage(error)}`);
+  }
+  return (data ?? []).map((row) => row.id as string);
+}
+
+/**
+ * Service-role only. Bulk-set `face_index_status` for an arbitrary id list.
+ * Used by the backfill and disable workers.
+ */
+export async function bulkSetPhotoFaceIndexStatus(
+  supabase: SupabaseServerClient,
+  photoIds: string[],
+  status: FaceIndexStatus,
+): Promise<void> {
+  if (photoIds.length === 0) return;
+  const { error } = await supabase
+    .from('photos')
+    .update({ face_index_status: status })
+    .in('id', photoIds);
+  if (error) {
+    throw new Error(`Failed to bulk-set face_index_status: ${getErrorMessage(error)}`);
+  }
+}
+
+/**
+ * Service-role only. Filter an id list to only those in given statuses.
+ * Returns nothing (mutation is via `bulkSetPhotoFaceIndexStatus`); callers
+ * use this to know which photos to fan out.
+ */
+export async function listEventPhotosByStatuses(
+  supabase: SupabaseServerClient,
+  eventId: string,
+  statuses: FaceIndexStatus[],
+): Promise<Array<{ id: string; storagePath: string | null }>> {
+  if (statuses.length === 0) return [];
+  const { data, error } = await supabase
+    .from('photos')
+    .select('id, original_url, face_index_status')
+    .eq('event_id', eventId)
+    .in('face_index_status', statuses);
+  if (error) {
+    throw new Error(`Failed to list photos by status: ${getErrorMessage(error)}`);
+  }
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    storagePath: (row.original_url as string | null) ?? null,
+  }));
+}
+
+/**
+ * Service-role only. Count photos for an event still in `pending` or
+ * `indexing`. Used by `indexPhotoFaces` to decide whether to flip the
+ * event status to `'ready'` after persisting its result. Fan-out
+ * completion tracker.
+ */
+export async function countEventPhotosInFlight(
+  supabase: SupabaseServerClient,
+  eventId: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from('photos')
+    .select('id', { count: 'exact', head: true })
+    .eq('event_id', eventId)
+    .in('face_index_status', ['pending', 'indexing']);
+  if (error) {
+    throw new Error(`Failed to count in-flight photos: ${getErrorMessage(error)}`);
+  }
+  return count ?? 0;
+}
+
+/**
+ * Service-role only. Bulk delete all `photo_faces` rows for an event.
+ * Used by the disable worker when tearing down a collection.
+ */
+export async function deletePhotoFacesByEventId(
+  supabase: SupabaseServerClient,
+  eventId: string,
+): Promise<void> {
+  // Two-step: faces are keyed by photo_id, not event_id. Resolve the ids
+  // first, then delete in a single `in` clause.
+  const photoIds = await listEventPhotoIds(supabase, eventId);
+  if (photoIds.length === 0) return;
+  const { error } = await supabase.from('photo_faces').delete().in('photo_id', photoIds);
+  if (error) {
+    throw new Error(`Failed to delete photo faces by event: ${getErrorMessage(error)}`);
+  }
+}

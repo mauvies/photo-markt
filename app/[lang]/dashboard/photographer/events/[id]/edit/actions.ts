@@ -14,7 +14,12 @@ import {
   uploadFile,
 } from '@/database/queries';
 import { getStorageUsageBytes } from '@/database/queries/photos';
+import {
+  getEventRekognitionState,
+  updatePhotoFaceIndexStatus,
+} from '@/database/queries/rekognition';
 import { createClient } from '@/database/server';
+import { inngest } from '@/lib/inngest/client';
 import { validatePhotoUpload } from '@/lib/photo-upload';
 import { assertCanUploadPhoto, isPlanLimitError } from '@/lib/plan-limits';
 
@@ -67,6 +72,16 @@ const eventSchema = z.object({
       const num = Number.parseFloat(val);
       return Number.isNaN(num) || num < 0 ? null : num;
     }),
+  ai_matching_enabled: z
+    .string()
+    .default('false')
+    .transform((val) => val === 'true'),
+  // Sent by the form for the immutability check below. Any change vs. the
+  // current DB value is rejected — defense in depth.
+  contains_minors: z
+    .string()
+    .default('false')
+    .transform((val) => val === 'true'),
 });
 
 // --- Types ---
@@ -102,6 +117,8 @@ async function uploadPhotos(
   location: { city: string; country: string; state: string },
 ): Promise<UploadPhotosResult> {
   let currentUsage = await getStorageUsageBytes(supabase, userId);
+  const aiState = await getEventRekognitionState(supabase, eventId);
+  const shouldIndex = Boolean(aiState?.enabled && !aiState.containsMinors);
   const uploadedPaths: string[] = [];
   const skipped: UploadPhotosResult['skipped'] = [];
   let uploaded = 0;
@@ -125,7 +142,7 @@ async function uploadPhotos(
         contentType: validated.contentType,
         upsert: false,
       });
-      await createPhoto(supabase, userId, {
+      const inserted = await createPhoto(supabase, userId, {
         event_id: eventId,
         original_url: path,
         taken_at: new Date(date).toISOString(),
@@ -134,6 +151,24 @@ async function uploadPhotos(
         state: location.state,
         size_bytes: fileSize,
       });
+      // Hook into AI face indexing — same pattern as the other photographer
+      // upload paths. Failure to enqueue isn't fatal; Re-index can pick up.
+      if (shouldIndex) {
+        try {
+          await inngest.send({
+            name: 'photo.uploaded',
+            data: { photoId: inserted.id, eventId, storagePath: path },
+          });
+        } catch (err) {
+          console.error('[uploadPhotos] failed to enqueue photo.uploaded', err);
+        }
+      } else {
+        try {
+          await updatePhotoFaceIndexStatus(supabase, inserted.id, 'not_applicable');
+        } catch (err) {
+          console.error('[uploadPhotos] failed to mark not_applicable', err);
+        }
+      }
       uploadedPaths.push(path);
       currentUsage += fileSize;
       uploaded += 1;
@@ -205,6 +240,8 @@ export async function updateEventAction(
     allow_guest_upload: formData.get('allow_guest_upload')?.toString() ?? 'true',
     require_upload_approval: formData.get('require_upload_approval')?.toString() ?? 'false',
     price_per_photo: formData.get('price_per_photo')?.toString(),
+    ai_matching_enabled: formData.get('ai_matching_enabled')?.toString() ?? 'false',
+    contains_minors: formData.get('contains_minors')?.toString() ?? 'false',
   });
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? 'Invalid event data provided.');
@@ -214,6 +251,21 @@ export async function updateEventAction(
 
   const currentEvent = await getEvent(supabase, eventId, user.id);
   if (!currentEvent) throw new Error('Event not found.');
+
+  // `contains_minors` is immutable post-creation — reject any change vs the
+  // stored value. Defense in depth: the form input is disabled, but a
+  // hand-crafted POST shouldn't be able to flip the flag either.
+  const currentContainsMinors = Boolean(
+    (currentEvent as unknown as Record<string, unknown>).contains_minors,
+  );
+  if (payload.contains_minors !== currentContainsMinors) {
+    throw new Error('This setting cannot be changed after event creation.');
+  }
+  // And: if the event contains minors, AI matching cannot be enabled.
+  const aiMatchingEnabled = currentContainsMinors ? false : payload.ai_matching_enabled;
+  const currentAiEnabled = Boolean(
+    (currentEvent as unknown as Record<string, unknown>).ai_matching_enabled,
+  );
 
   // Collaborative events always need a share code (that's the entry point for
   // contributors). Public non-collaborative events don't.
@@ -240,7 +292,30 @@ export async function updateEventAction(
     is_collaborative: payload.is_collaborative,
     allow_guest_upload: payload.allow_guest_upload,
     require_upload_approval: payload.require_upload_approval,
+    ai_matching_enabled: aiMatchingEnabled,
   });
+
+  // AI matching state transitions — kick the Inngest worker on change.
+  // Same payloads the dedicated server actions emit.
+  if (aiMatchingEnabled && !currentAiEnabled) {
+    try {
+      await inngest.send({
+        name: 'event.ai-matching-enabled',
+        data: { eventId, userId: user.id },
+      });
+    } catch (err) {
+      console.error('[updateEventAction] failed to enqueue ai-matching-enabled', err);
+    }
+  } else if (!aiMatchingEnabled && currentAiEnabled) {
+    try {
+      await inngest.send({
+        name: 'event.ai-matching-disabled',
+        data: { eventId },
+      });
+    } catch (err) {
+      console.error('[updateEventAction] failed to enqueue ai-matching-disabled', err);
+    }
+  }
 
   if (photoIdsToDelete && photoIdsToDelete.length > 0) {
     for (const photoId of photoIdsToDelete) {

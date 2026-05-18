@@ -28,6 +28,10 @@ export const eventSchema = z.object({
       const num = Number.parseFloat(strVal);
       return Number.isNaN(num) || num < 0 ? null : num;
     }),
+  // AI matching can be toggled here. `contains_minors` is included for echo
+  // purposes only — the server action rejects any change to it.
+  ai_matching_enabled: z.boolean().default(false),
+  contains_minors: z.boolean().default(false),
 });
 
 export type FormValues = z.infer<typeof eventSchema>;

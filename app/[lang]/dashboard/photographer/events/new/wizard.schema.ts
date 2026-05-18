@@ -44,6 +44,14 @@ export const eventSchema = z.object({
   // the organizer charges on top of the platform fee. Only applies when
   // event_type === 'organizer'.
   organizer_fee_per_photo: priceSchema,
+  // AWS Rekognition face matching opt-in. When ON, photos uploaded to this
+  // event are indexed so talents can later find their photos via selfie.
+  // Forced to false when `contains_minors` is true (compliance).
+  ai_matching_enabled: z.boolean().default(false),
+  // Compliance flag for events with photos of children. Logically immutable
+  // after event creation — enforcement of immutability lives in the edit
+  // server action. When true, AI matching cannot be enabled.
+  contains_minors: z.boolean().default(false),
 });
 
 export type FormValues = z.infer<typeof eventSchema>;

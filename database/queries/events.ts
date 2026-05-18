@@ -170,18 +170,26 @@ export async function createEvent(
     require_upload_approval?: boolean;
     type?: 'solo' | 'collaborative' | 'organizer';
     organizer_fee_per_photo_cents?: number | null;
+    ai_matching_enabled?: boolean;
+    contains_minors?: boolean;
   },
 ): Promise<{ id: string }> {
   // Only include the newer columns when they actually carry a value. Lets
   // the insert succeed against environments where the
   // `add_organizer_event_type` migration hasn't been applied yet, as long as
   // the event being created doesn't depend on those columns.
-  const { type, organizer_fee_per_photo_cents, ...rest } = eventData;
+  const { type, organizer_fee_per_photo_cents, ai_matching_enabled, contains_minors, ...rest } =
+    eventData;
   const insertPayload: Record<string, unknown> = { user_id: userId, ...rest };
   if (type && type !== 'solo') insertPayload.type = type;
   if (organizer_fee_per_photo_cents !== null && organizer_fee_per_photo_cents !== undefined) {
     insertPayload.organizer_fee_per_photo_cents = organizer_fee_per_photo_cents;
   }
+  // AI columns ship as part of the AWS Rekognition rollout — only include
+  // them when explicitly set so this query still works against older
+  // databases that haven't applied the migration.
+  if (ai_matching_enabled !== undefined) insertPayload.ai_matching_enabled = ai_matching_enabled;
+  if (contains_minors !== undefined) insertPayload.contains_minors = contains_minors;
 
   const { data, error } = await supabase.from('events').insert(insertPayload).select('id').single();
 
@@ -465,6 +473,7 @@ export async function updateEvent(
     is_collaborative?: boolean;
     allow_guest_upload?: boolean;
     require_upload_approval?: boolean;
+    ai_matching_enabled?: boolean;
   },
 ): Promise<void> {
   // Verify event belongs to user and is not deleted

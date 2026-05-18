@@ -779,6 +779,12 @@
     "eventLimitReachedShort": "Event limit reached — upgrade your plan to create more.",
     "nPhotosUploadedSomeSkipped": "{uploaded} photo(s) uploaded, {skipped} skipped (storage limit reached). Upgrade to upload more.",
     "allPhotosSkippedStorageLimit": "Storage limit reached — no photos uploaded. Upgrade to add more.",
+    "aiMatchingLabel": "Enable AI face matching",
+    "aiMatchingDesc": "Talents can find their photos by uploading a selfie. Each photo is processed once with AWS Rekognition.",
+    "aiMatchingDisabledByMinors": "AI matching is disabled because this event contains minors.",
+    "containsMinorsLabel": "This event contains minors",
+    "containsMinorsDesc": "Required for events with photos of children. Disables AI face matching.",
+    "containsMinorsImmutableHelper": "This setting cannot be changed after event creation.",
     "cancelButton": "Cancel",
     "creatingButton": "Creating Event...",
     "createButton": "Create Event",
@@ -1058,5 +1064,21 @@
       "commission": "Commission",
       "netEarnings": "Net Earnings"
     }
+  },
+  "rekognition": {
+    "cardTitle": "AI face matching",
+    "statusIdle": "Idle",
+    "statusIndexing": "Indexing…",
+    "statusReady": "Ready",
+    "statusFailed": "Failed",
+    "statusIndexedCount": "{count} of {total} photos indexed",
+    "lastIndexed": "Last indexed: {at}",
+    "actionsReindex": "Re-index event",
+    "actionsReindexConfirmTitle": "Re-index this event?",
+    "actionsReindexConfirmBody": "All photos will be re-processed. This may take a few minutes.",
+    "cancel": "Cancel",
+    "confirm": "Re-index",
+    "errorsMinorsCannotEnableAi": "AI matching can't be enabled on events that contain minors.",
+    "errorsAiEnableFailed": "Couldn't enable AI matching. Please try again."
   }
 }

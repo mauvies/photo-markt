@@ -230,7 +230,9 @@ export async function getPhoto(
 }
 
 /**
- * Create a photo record
+ * Create a photo record. Returns the inserted row's id so callers can
+ * forward it to background workers (e.g. Inngest `photo.uploaded` events
+ * carry the photo id).
  */
 export async function createPhoto(
   supabase: SupabaseServerClient,
@@ -247,15 +249,21 @@ export async function createPhoto(
     // 'pending' for organizer-event uploads when the event requires approval.
     upload_status?: UploadStatus;
   },
-): Promise<void> {
-  const { error } = await supabase.from('photos').insert({
-    user_id: userId,
-    ...photoData,
-  });
+): Promise<{ id: string }> {
+  const { data, error } = await supabase
+    .from('photos')
+    .insert({
+      user_id: userId,
+      ...photoData,
+    })
+    .select('id')
+    .single();
 
-  if (error) {
+  if (error || !data) {
     throw new Error(`Failed to create photo: ${getErrorMessage(error)}`);
   }
+
+  return { id: data.id as string };
 }
 
 /**
