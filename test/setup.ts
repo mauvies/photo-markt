@@ -28,6 +28,15 @@ const TEST_ENV_DEFAULTS: Record<string, string> = {
   STRIPE_PRICE_PRO: 'price_test_pro',
   RESEND_API_KEY: 're_test_dummy',
   SITE_URL: 'http://127.0.0.1:3000',
+  // AWS Rekognition credentials — fake values; tests never hit AWS.
+  AWS_REGION: 'eu-west-1',
+  AWS_ACCESS_KEY_ID: 'AKIAFAKEFAKEFAKEFAKE',
+  AWS_SECRET_ACCESS_KEY: 'fake-aws-secret-key-for-tests-only',
+  REKOGNITION_COLLECTION_PREFIX: 'photomarkt',
+  // Inngest credentials — fake values; tests don't hit Inngest, server-action
+  // tests mock `inngest.send()` when they care about emissions.
+  INNGEST_EVENT_KEY: 'inngest-event-key-fake-for-tests',
+  INNGEST_SIGNING_KEY: 'signkey-test-fake-for-tests',
 };
 
 for (const [key, value] of Object.entries(TEST_ENV_DEFAULTS)) {

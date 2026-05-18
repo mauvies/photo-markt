@@ -11,8 +11,10 @@ import {
   uploadFile,
 } from '@/database/queries';
 import { getStorageUsageBytes } from '@/database/queries/photos';
+import { updatePhotoFaceIndexStatus } from '@/database/queries/rekognition';
 import { getCurrentPlan } from '@/database/queries/subscriptions';
 import { createClient } from '@/database/server';
+import { inngest } from '@/lib/inngest/client';
 import { validatePhotoUpload } from '@/lib/photo-upload';
 import {
   assertCanCreateEvent,
@@ -81,6 +83,14 @@ const eventSchema = z.object({
       return Number.isNaN(num) || num < 0 ? null : num;
     }),
   organizer_fee_per_photo: z.string().optional(),
+  ai_matching_enabled: z
+    .string()
+    .default('false')
+    .transform((val) => val === 'true'),
+  contains_minors: z
+    .string()
+    .default('false')
+    .transform((val) => val === 'true'),
 });
 
 // --- Types ---
@@ -139,12 +149,19 @@ async function uploadEventPhotos(
   event: { id: string },
   files: File[],
   payload: Pick<EventPayload, 'date' | 'city' | 'country' | 'state'>,
+  /**
+   * AI matching state on the event being created. Determines whether the
+   * inserted photos get a `photo.uploaded` Inngest event (for indexing) or
+   * are marked `not_applicable` straight away.
+   */
+  aiState: { enabled: boolean; containsMinors: boolean },
 ): Promise<UploadEventPhotosResult> {
   // Pre-fetch the user's current storage once; the loop mutates this local
   // total instead of re-querying per file.
   let currentUsage = await getStorageUsageBytes(supabase, userId);
   const uploadedPaths: string[] = [];
   const skipped: UploadEventPhotosResult['skipped'] = [];
+  const shouldIndex = aiState.enabled && !aiState.containsMinors;
   let uploaded = 0;
 
   try {
@@ -166,7 +183,7 @@ async function uploadEventPhotos(
         contentType: validated.contentType,
         upsert: false,
       });
-      await createPhoto(supabase, userId, {
+      const inserted = await createPhoto(supabase, userId, {
         event_id: event.id,
         original_url: path,
         taken_at: new Date(payload.date).toISOString(),
@@ -176,6 +193,25 @@ async function uploadEventPhotos(
         size_bytes: fileSize,
       });
       uploadedPaths.push(path);
+      // Fire `photo.uploaded` (or mark not_applicable). Same pattern as
+      // `emitPhotoUploaded` in events/[id]/actions.ts — failure to enqueue
+      // isn't fatal; the photo can be picked up later via Re-index.
+      if (shouldIndex) {
+        try {
+          await inngest.send({
+            name: 'photo.uploaded',
+            data: { photoId: inserted.id, eventId: event.id, storagePath: path },
+          });
+        } catch (err) {
+          console.error('[createEvent] failed to enqueue photo.uploaded', err);
+        }
+      } else {
+        try {
+          await updatePhotoFaceIndexStatus(supabase, inserted.id, 'not_applicable');
+        } catch (err) {
+          console.error('[createEvent] failed to mark not_applicable', err);
+        }
+      }
       currentUsage += fileSize;
       uploaded += 1;
     }
@@ -280,6 +316,11 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
   const organizerFeeCents =
     eventType === 'organizer' ? dollarsToCents(payload.organizer_fee_per_photo) : null;
 
+  // `contains_minors=true` forces AI matching off regardless of what the form
+  // sent — defense in depth in case the UI was bypassed.
+  const aiMatchingEnabled = payload.contains_minors ? false : payload.ai_matching_enabled;
+  const containsMinors = payload.contains_minors;
+
   const event = await dbCreateEvent(supabase, user.id, {
     name: payload.name,
     activity: payload.activity,
@@ -297,6 +338,8 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     type: eventType,
     organizer_fee_per_photo_cents: organizerFeeCents,
     slug: null,
+    ai_matching_enabled: aiMatchingEnabled,
+    contains_minors: containsMinors,
   });
 
   if (isPublic) {
@@ -313,7 +356,10 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
   let uploadResult: UploadEventPhotosResult = { uploaded: 0, skipped: [] };
   if (uploadedFiles.length > 0) {
     try {
-      uploadResult = await uploadEventPhotos(supabase, user.id, event, uploadedFiles, payload);
+      uploadResult = await uploadEventPhotos(supabase, user.id, event, uploadedFiles, payload, {
+        enabled: aiMatchingEnabled,
+        containsMinors,
+      });
     } catch (error) {
       console.error('createEvent: upload failed', error);
       await deleteEventPhotos(supabase, event.id, user.id);
@@ -337,6 +383,22 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
         max: (plan.storageGB ?? 0) * 1024 ** 3,
         planId: plan.id,
       });
+    }
+  }
+
+  // If AI matching was turned on at create time, kick the backfill worker
+  // so the per-event collection is created and any photos uploaded with the
+  // event start indexing. Per-photo `photo.uploaded` events already fired
+  // for the initial batch; the backfill is what materializes the AWS
+  // collection and flips ai_matching_status to 'indexing'.
+  if (aiMatchingEnabled && !containsMinors) {
+    try {
+      await inngest.send({
+        name: 'event.ai-matching-enabled',
+        data: { eventId: event.id, userId: user.id },
+      });
+    } catch (err) {
+      console.error('[createEvent] failed to enqueue event.ai-matching-enabled', err);
     }
   }
 

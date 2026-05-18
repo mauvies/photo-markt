@@ -779,6 +779,12 @@
     "eventLimitReachedShort": "Límite de eventos alcanzado — mejora tu plan para crear más.",
     "nPhotosUploadedSomeSkipped": "{uploaded} foto(s) subida(s), {skipped} omitida(s) (límite de almacenamiento alcanzado). Mejora tu plan para subir más.",
     "allPhotosSkippedStorageLimit": "Límite de almacenamiento alcanzado — no se subió ninguna foto. Mejora tu plan para agregar más.",
+    "aiMatchingLabel": "Activar reconocimiento facial IA",
+    "aiMatchingDesc": "Los talentos podrán encontrar sus fotos subiendo una selfie",
+    "aiMatchingDisabledByMinors": "La reconocimiento facial está desactivada porque el evento incluye menores",
+    "containsMinorsLabel": "Este evento incluye menores",
+    "containsMinorsDesc": "Obligatorio para eventos con fotos de menores. Desactiva la reconocimiento facial IA.",
+    "containsMinorsImmutableHelper": "Este ajuste no se puede cambiar después de crear el evento.",
     "cancelButton": "Cancelar",
     "creatingButton": "Creando evento...",
     "createButton": "Crear evento",
@@ -813,7 +819,7 @@
     "collaborativeEnabled": "Activado",
     "collaborativeDisabled": "Desactivado",
     "allowGuestUploadLabel": "Permitir subidas de invitados",
-    "allowGuestUploadDesc": "Visitantes sin cuenta pueden contribuir fotos",
+    "allowGuestUploadDesc": "Visitantes con o sin cuenta pueden contribuir fotos",
     "requireApprovalLabel": "Requerir aprobación",
     "requireApprovalDesc": "Las subidas quedan pendientes hasta que las apruebes",
     "step1Title": "Configuración",
@@ -1058,5 +1064,21 @@
       "commission": "Comisión",
       "netEarnings": "Ingresos netos"
     }
+  },
+  "rekognition": {
+    "cardTitle": "Coincidencia facial IA",
+    "statusIdle": "Inactivo",
+    "statusIndexing": "Indexando…",
+    "statusReady": "Listo",
+    "statusFailed": "Falló",
+    "statusIndexedCount": "{count} de {total} fotos indexadas",
+    "lastIndexed": "Última indexación: {at}",
+    "actionsReindex": "Reindexar evento",
+    "actionsReindexConfirmTitle": "¿Reindexar este evento?",
+    "actionsReindexConfirmBody": "Todas las fotos se procesarán de nuevo. Esto puede tardar unos minutos.",
+    "cancel": "Cancelar",
+    "confirm": "Reindexar",
+    "errorsMinorsCannotEnableAi": "No se puede activar la coincidencia facial en eventos que incluyen menores.",
+    "errorsAiEnableFailed": "No se pudo activar la coincidencia facial. Por favor, inténtalo de nuevo."
   }
 }

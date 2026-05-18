@@ -19,6 +19,19 @@ export const env = createEnv({
     STRIPE_PRICE_AMATEUR: z.string(),
     STRIPE_PRICE_PRO: z.string(),
     RESEND_API_KEY: z.string().min(1),
+    // AWS Rekognition (face indexing). Region defaults to eu-west-1 — staging
+    // and prod both run there today. Credentials are required for the
+    // Inngest worker to call AWS; in tests they're fake strings.
+    AWS_REGION: z.string().default('eu-west-1'),
+    AWS_ACCESS_KEY_ID: z.string().min(1),
+    AWS_SECRET_ACCESS_KEY: z.string().min(1),
+    // Prefix on every Rekognition collection id. Lets us namespace per env
+    // (e.g. `photomarkt-staging-event-{uuid}` vs `-production-event-`).
+    REKOGNITION_COLLECTION_PREFIX: z.string().default('photomarkt'),
+    // Inngest credentials. EVENT_KEY signs outbound `inngest.send()` calls,
+    // SIGNING_KEY verifies inbound webhook payloads to /api/inngest.
+    INNGEST_EVENT_KEY: z.string().min(1),
+    INNGEST_SIGNING_KEY: z.string().min(1),
   },
   /*
    * Environment variables available on the client (and server).
@@ -54,5 +67,11 @@ export const env = createEnv({
     STRIPE_PRICE_AMATEUR: process.env.STRIPE_PRICE_AMATEUR,
     STRIPE_PRICE_PRO: process.env.STRIPE_PRICE_PRO,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
+    AWS_REGION: process.env.AWS_REGION,
+    AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
+    REKOGNITION_COLLECTION_PREFIX: process.env.REKOGNITION_COLLECTION_PREFIX,
+    INNGEST_EVENT_KEY: process.env.INNGEST_EVENT_KEY,
+    INNGEST_SIGNING_KEY: process.env.INNGEST_SIGNING_KEY,
   },
 });

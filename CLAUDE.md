@@ -320,11 +320,15 @@ PLATFORM_FEE_BPS=            # Platform fee in basis points
 # Google
 NEXT_PUBLIC_GOOGLE_PLACES_API_KEY=   # Places API — event location forms only
 
-# AI (optional, feature-flagged)
-EMBEDDING_PROVIDER=
-HUGGINGFACE_API_KEY=
-REPLICATE_API_TOKEN=
-AI_PROVIDER=
+# AWS Rekognition (face indexing, feature-flagged via AI_MATCHING)
+AWS_REGION=                          # default eu-west-1
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+REKOGNITION_COLLECTION_PREFIX=       # default "photomarkt"; namespace per env
+
+# Inngest (background-processing worker for face indexing)
+INNGEST_EVENT_KEY=                   # signs outbound inngest.send() calls
+INNGEST_SIGNING_KEY=                 # verifies inbound webhook payloads at /api/inngest
 
 # Email
 RESEND_API_KEY=

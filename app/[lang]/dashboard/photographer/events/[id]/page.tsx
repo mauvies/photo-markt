@@ -1,5 +1,6 @@
 import { DashboardHeader } from '@/components/dashboard-header';
 import { EventShareCode } from '@/components/event-share-code';
+import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   createSignedUrls,
@@ -9,6 +10,7 @@ import {
   isApprovedEventPhotographer,
   type SupabaseServerClient,
 } from '@/database/queries';
+import { type AiMatchingStatus, getEventAiIndexingProgress } from '@/database/queries/rekognition';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { redirectToLogin } from '@/lib/auth/redirect-to-login';
@@ -17,6 +19,7 @@ import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { getPhotoTags } from './actions';
+import { AiStatusCard } from './ai-status-card';
 import { EventActionsMenu } from './event-actions-menu';
 import { EventPhotoAlbum } from './event-photo-album';
 import { OrganizerUploadSection } from './organizer-upload-section';
@@ -191,6 +194,26 @@ export default async function EventDetailPage({
     })
     .filter((item): item is { id: string; url: string; uploaderLabel: string } => item !== null);
 
+  // AI matching status — only the owner sees the status surface. Contributors
+  // see indexing happen silently. The columns are absent on older event rows
+  // that pre-date the migration; cast through `unknown` so TS doesn't object.
+  const eventRecord = event as unknown as Record<string, unknown>;
+  const aiMatchingEnabled = Boolean(eventRecord.ai_matching_enabled);
+  const aiMatchingStatus =
+    (eventRecord.ai_matching_status as AiMatchingStatus | undefined) ?? 'idle';
+  const aiProgress =
+    role === 'owner' && aiMatchingEnabled
+      ? await getEventAiIndexingProgress(adminClient, id)
+      : null;
+  const aiChipLabel =
+    aiMatchingStatus === 'idle'
+      ? dict.rekognition.statusIdle
+      : aiMatchingStatus === 'indexing'
+        ? dict.rekognition.statusIndexing
+        : aiMatchingStatus === 'ready'
+          ? dict.rekognition.statusReady
+          : dict.rekognition.statusFailed;
+
   return (
     <div>
       <div className="flex items-start justify-between gap-3">
@@ -199,16 +222,53 @@ export default async function EventDetailPage({
           <EventActionsMenu eventId={id} t={dict.events} />
         </div>
       </div>
-      <div className="text-sm text-muted-foreground">
-        {new Date(event.date).toDateString().split(' ').slice(1).join(' ')} •{' '}
-        {event.city[0]?.toUpperCase() + event.city.slice(1)}
-        {event.price_per_photo !== null && (
-          <>
-            {' '}
-            • ${event.price_per_photo.toFixed(2)} {dict.photographerDashboard.perPhoto}
-          </>
+      <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        <span>
+          {new Date(event.date).toDateString().split(' ').slice(1).join(' ')} •{' '}
+          {event.city[0]?.toUpperCase() + event.city.slice(1)}
+          {event.price_per_photo !== null && (
+            <>
+              {' '}
+              • ${event.price_per_photo.toFixed(2)} {dict.photographerDashboard.perPhoto}
+            </>
+          )}
+        </span>
+        {role === 'owner' && aiMatchingEnabled && (
+          <Badge variant="secondary" className="font-normal">
+            {`AI · ${aiChipLabel}${
+              aiProgress ? ` · ${aiProgress.indexed}/${aiProgress.totalApplicable}` : ''
+            }`}
+          </Badge>
         )}
       </div>
+      {role === 'owner' && aiMatchingEnabled && aiProgress && (
+        <div className="mt-4">
+          <AiStatusCard
+            eventId={id}
+            status={aiMatchingStatus}
+            totalApplicable={aiProgress.totalApplicable}
+            indexed={aiProgress.indexed}
+            pending={aiProgress.pending}
+            failed={aiProgress.failed}
+            lastIndexedAt={aiProgress.lastIndexedAt}
+            labels={{
+              title: dict.rekognition.cardTitle,
+              statusIdle: dict.rekognition.statusIdle,
+              statusIndexing: dict.rekognition.statusIndexing,
+              statusReady: dict.rekognition.statusReady,
+              statusFailed: dict.rekognition.statusFailed,
+              indexedCount: dict.rekognition.statusIndexedCount,
+              lastIndexed: dict.rekognition.lastIndexed,
+              reindex: dict.rekognition.actionsReindex,
+              reindexConfirmTitle: dict.rekognition.actionsReindexConfirmTitle,
+              reindexConfirmBody: dict.rekognition.actionsReindexConfirmBody,
+              cancel: dict.rekognition.cancel,
+              confirm: dict.rekognition.confirm,
+              reindexFailed: dict.rekognition.errorsAiEnableFailed,
+            }}
+          />
+        </div>
+      )}
       {event.share_code && (
         <div className="mt-4">
           <EventShareCode

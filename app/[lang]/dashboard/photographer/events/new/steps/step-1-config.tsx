@@ -171,10 +171,83 @@ export function Step1Config({ form }: Step1ConfigProps) {
                 )}
               </form.Field>
             )}
+
+            <AiMatchingSwitches form={form} />
           </div>
         )}
       </form.Subscribe>
     </div>
+  );
+}
+
+/**
+ * AI face-matching opt-in + "contains minors" compliance flag.
+ *
+ * The two toggles interact: flipping `contains_minors` ON forces
+ * `ai_matching_enabled` to OFF and disables the AI switch (compliance —
+ * we don't index faces of children). The minors toggle is editable here
+ * during create; in the edit form it becomes read-only.
+ */
+function AiMatchingSwitches({ form }: { form: EventForm }) {
+  const { t } = useTranslations<NewEventT>();
+  return (
+    <form.Subscribe selector={(state) => state.values.contains_minors}>
+      {(containsMinors) => (
+        <>
+          <form.Field name="ai_matching_enabled">
+            {(field) => (
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
+                <div className="grid gap-1">
+                  <Label htmlFor="ai_matching_enabled">
+                    {t('aiMatchingLabel' as keyof NewEventT)}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {containsMinors
+                      ? t('aiMatchingDisabledByMinors' as keyof NewEventT)
+                      : t('aiMatchingDesc' as keyof NewEventT)}
+                  </p>
+                </div>
+                <Switch
+                  id="ai_matching_enabled"
+                  checked={!containsMinors && field.state.value}
+                  disabled={containsMinors}
+                  onCheckedChange={(checked) => {
+                    field.handleChange(checked);
+                    field.handleBlur();
+                  }}
+                />
+              </div>
+            )}
+          </form.Field>
+          <form.Field name="contains_minors">
+            {(field) => (
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
+                <div className="grid gap-1">
+                  <Label htmlFor="contains_minors">
+                    {t('containsMinorsLabel' as keyof NewEventT)}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t('containsMinorsDesc' as keyof NewEventT)}
+                  </p>
+                </div>
+                <Switch
+                  id="contains_minors"
+                  checked={field.state.value}
+                  onCheckedChange={(checked) => {
+                    field.handleChange(checked);
+                    field.handleBlur();
+                    if (checked) {
+                      // Hard-pair: enabling minors flag clears AI matching.
+                      form.setFieldValue('ai_matching_enabled', false);
+                    }
+                  }}
+                />
+              </div>
+            )}
+          </form.Field>
+        </>
+      )}
+    </form.Subscribe>
   );
 }
 

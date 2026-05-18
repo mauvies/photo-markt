@@ -109,6 +109,14 @@ function readStoredState(): StoredWizardState | null {
         typeof candidateValues.organizer_fee_per_photo === 'number'
           ? candidateValues.organizer_fee_per_photo
           : null,
+      ai_matching_enabled:
+        typeof candidateValues.ai_matching_enabled === 'boolean'
+          ? candidateValues.ai_matching_enabled
+          : false,
+      contains_minors:
+        typeof candidateValues.contains_minors === 'boolean'
+          ? candidateValues.contains_minors
+          : false,
     };
 
     const reachedStep: StepNumber =
@@ -340,6 +348,8 @@ export default function NewEventForm() {
     formData.append('is_collaborative', parsed.event_type === 'collaborative' ? 'true' : 'false');
     formData.append('allow_guest_upload', parsed.allow_guest_upload ? 'true' : 'false');
     formData.append('require_upload_approval', parsed.require_upload_approval ? 'true' : 'false');
+    formData.append('ai_matching_enabled', parsed.ai_matching_enabled ? 'true' : 'false');
+    formData.append('contains_minors', parsed.contains_minors ? 'true' : 'false');
     if (parsed.price_per_photo !== null && parsed.price_per_photo !== undefined) {
       const price =
         typeof parsed.price_per_photo === 'string'
@@ -448,6 +458,18 @@ export default function NewEventForm() {
         value: v.require_upload_approval ? t('summaryEnabled') : t('summaryDisabled'),
       });
     }
+
+    // AI face matching + minors compliance — shown for every event type
+    // since the toggles live in step 1 for all of them.
+    configRows.push({
+      label: t('aiMatchingLabel' as keyof typeof t),
+      value:
+        v.contains_minors || !v.ai_matching_enabled ? t('summaryDisabled') : t('summaryEnabled'),
+    });
+    configRows.push({
+      label: t('containsMinorsLabel' as keyof typeof t),
+      value: v.contains_minors ? t('summaryEnabled') : t('summaryDisabled'),
+    });
 
     const detailsRows: Array<{ label: string; value: string }> = [
       { label: t('summaryName'), value: v.name },

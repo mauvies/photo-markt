@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Dropzone } from '@/components/uploader/Dropzone';
 import type { Event } from '@/database/queries/events';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
@@ -50,6 +51,13 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
 
   const eventDate = event.date ? format(new Date(event.date), 'yyyy-MM-dd') : '';
 
+  // `Event` is typed broadly enough that the AI columns may be optional
+  // depending on whether the migration has been applied — read defensively.
+  const eventAiEnabled = Boolean((event as unknown as Record<string, unknown>).ai_matching_enabled);
+  const eventContainsMinors = Boolean(
+    (event as unknown as Record<string, unknown>).contains_minors,
+  );
+
   const defaultValues: FormValues = {
     name: event.name,
     activity: event.activity as FormValues['activity'],
@@ -61,6 +69,8 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
     allow_guest_upload: event.allow_guest_upload,
     require_upload_approval: event.require_upload_approval,
     price_per_photo: event.price_per_photo,
+    ai_matching_enabled: eventAiEnabled,
+    contains_minors: eventContainsMinors,
   };
 
   const handleDeletePhoto = (photoId: string) => {
@@ -131,6 +141,11 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
           'require_upload_approval',
           parsed.require_upload_approval ? 'true' : 'false',
         );
+        formData.append('ai_matching_enabled', parsed.ai_matching_enabled ? 'true' : 'false');
+        // `contains_minors` is read-only post-creation. We still send the
+        // current value so the server-side guard can compare and reject any
+        // tampering. The form input is disabled either way.
+        formData.append('contains_minors', parsed.contains_minors ? 'true' : 'false');
         if (parsed.price_per_photo !== undefined && parsed.price_per_photo !== null) {
           const price =
             typeof parsed.price_per_photo === 'string'
@@ -229,6 +244,53 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
               className="flex-1 rounded-lg"
             />
           </div>
+        </div>
+
+        {/* AI matching block */}
+        <div className="grid gap-3 md:grid-cols-2">
+          <form.Subscribe selector={(state) => state.values.contains_minors}>
+            {(containsMinors) => (
+              <>
+                <form.Field name="ai_matching_enabled">
+                  {(field) => (
+                    <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
+                      <div className="grid gap-1">
+                        <Label htmlFor="edit_ai_matching_enabled">
+                          {t('aiMatchingLabel' as keyof Dictionary['newEvent'])}
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          {containsMinors
+                            ? t('aiMatchingDisabledByMinors' as keyof Dictionary['newEvent'])
+                            : t('aiMatchingDesc' as keyof Dictionary['newEvent'])}
+                        </p>
+                      </div>
+                      <Switch
+                        id="edit_ai_matching_enabled"
+                        checked={!containsMinors && field.state.value}
+                        disabled={containsMinors}
+                        onCheckedChange={(checked) => {
+                          field.handleChange(checked);
+                          field.handleBlur();
+                        }}
+                      />
+                    </div>
+                  )}
+                </form.Field>
+                {/* `contains_minors` is read-only after event creation. */}
+                <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3 opacity-90">
+                  <div className="grid gap-1">
+                    <Label htmlFor="edit_contains_minors">
+                      {t('containsMinorsLabel' as keyof Dictionary['newEvent'])}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      {t('containsMinorsImmutableHelper' as keyof Dictionary['newEvent'])}
+                    </p>
+                  </div>
+                  <Switch id="edit_contains_minors" checked={containsMinors} disabled />
+                </div>
+              </>
+            )}
+          </form.Subscribe>
         </div>
 
         {/* Photos Section - Full Width */}

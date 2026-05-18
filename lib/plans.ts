@@ -28,11 +28,11 @@ export const PLANS: Plan[] = [
     priceInterval: null,
     description: 'Perfect for getting started and testing Photo Markt',
     storageGB: 20,
-    maxEvents: 3,
+    maxEvents: 5,
     salesFeePercent: 12,
     allowCustomBundles: false,
     features: [
-      'Up to 3 events',
+      'Up to 5 events',
       'Default pricing bundles only',
       'Basic search & analytics',
       '12% sales fee',
@@ -45,11 +45,12 @@ export const PLANS: Plan[] = [
     priceInterval: 'month',
     description: 'For active creators who publish events regularly',
     storageGB: 50,
-    maxEvents: 200,
+    // Marketing copy advertises "Unlimited events" on Starter; null = no cap.
+    maxEvents: null,
     salesFeePercent: 8,
     allowCustomBundles: true,
     features: [
-      'Up to 200 events',
+      'Unlimited events',
       { text: 'AI-assisted talent tagging', badge: 'Coming soon' },
       'Advanced analytics',
       'Custom pricing bundles',
