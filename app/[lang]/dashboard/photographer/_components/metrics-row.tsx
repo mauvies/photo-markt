@@ -23,7 +23,7 @@ interface MetricsRowProps {
 }
 
 export function MetricsRow({ metrics, t }: MetricsRowProps) {
-  const iconClass = 'h-5 w-5 sm:h-6 sm:w-6 text-primary';
+  const iconClass = 'h-4 w-4 sm:h-6 sm:w-6 text-primary';
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
