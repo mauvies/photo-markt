@@ -6,11 +6,15 @@ import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 import { createBillingCheckoutAction } from '@/app/[lang]/dashboard/photographer/billing/actions';
 import { Button } from '@/components/ui/button';
+import type { BillingPeriod } from '@/lib/plans';
 
 interface PricingPlanButtonProps {
   planId: 'free' | 'starter' | 'pro';
   isFree: boolean;
   isAuthenticated?: boolean;
+  /** Billing period the toggle currently has selected. Defaults to monthly
+   * for callers that haven't been migrated yet. */
+  period?: BillingPeriod;
   label: string;
   loadingLabel: string;
   className?: string;
@@ -20,6 +24,7 @@ export function PricingPlanButton({
   planId,
   isFree,
   isAuthenticated = false,
+  period = 'monthly',
   label,
   loadingLabel,
   className,
@@ -55,7 +60,7 @@ export function PricingPlanButton({
 
   if (!isAuthenticated) {
     return (
-      <Link href={`/signup?plan=${planId}`} className={className}>
+      <Link href={`/signup?plan=${planId}&period=${period}`} className={className}>
         <Button variant="default" size="lg" className={buttonClassName}>
           {label}
           <ArrowRight className="h-4 w-4" />
@@ -67,7 +72,7 @@ export function PricingPlanButton({
   const handleUpgrade = () => {
     startTransition(async () => {
       try {
-        const result = await createBillingCheckoutAction(planId as 'starter' | 'pro');
+        const result = await createBillingCheckoutAction(planId as 'starter' | 'pro', period);
         if ('url' in result) {
           window.location.href = result.url;
         } else if (result.updated) {
@@ -75,7 +80,7 @@ export function PricingPlanButton({
         }
       } catch (error) {
         console.error('Checkout error:', error);
-        router.push(`/signup?plan=${planId}`);
+        router.push(`/signup?plan=${planId}&period=${period}`);
       }
     });
   };

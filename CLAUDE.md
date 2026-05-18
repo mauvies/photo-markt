@@ -313,8 +313,10 @@ SUPABASE_JWT_SECRET=
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
-STRIPE_PRICE_AMATEUR=        # Starter plan price ID
-STRIPE_PRICE_PRO=            # Pro plan price ID
+STRIPE_PRICE_AMATEUR=        # Starter plan monthly price ID
+STRIPE_PRICE_PRO=            # Pro plan monthly price ID
+STRIPE_PRICE_AMATEUR_YEARLY= # Starter yearly price ID (optional; required only once yearly checkout is enabled)
+STRIPE_PRICE_PRO_YEARLY=     # Pro yearly price ID (optional; same as above)
 PLATFORM_FEE_BPS=            # Platform fee in basis points
 
 # Google

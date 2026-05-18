@@ -17,6 +17,7 @@ import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { formatPlanPrice, PLANS } from '@/lib/plans';
 import { getDashboardData } from '../actions';
+import { AvailablePlansSection } from './available-plans-section';
 import { PayoutProfileSection } from './payout-profile-section';
 import { UpgradeHandler } from './upgrade-handler';
 import { UpgradePlanButton } from './upgrade-plan-button';
@@ -76,7 +77,7 @@ export default async function PhotographerSettingsPage({
                 <p className="font-medium">{dict.photographerDashboard.currentPlan}</p>
                 <p className="text-sm text-muted-foreground">
                   {currentPlan.name} Plan
-                  {currentPlan.price !== null && ` • ${formatPlanPrice(currentPlan)}`}
+                  {currentPlan.pricing !== null && ` • ${formatPlanPrice(currentPlan)}`}
                 </p>
               </div>
               {nextPlanId && (
@@ -135,48 +136,21 @@ export default async function PhotographerSettingsPage({
               </ul>
             </div>
 
-            {/* Available Plans */}
-            <div className="space-y-4">
-              <p className="text-sm font-medium">{dict.photographerDashboard.availablePlans}</p>
-              <div className="grid gap-4 pt-4 sm:grid-cols-2">
-                {PLANS.filter((plan) => plan.id !== currentPlanId).map((plan) => (
-                  <div
-                    key={plan.id}
-                    className={[
-                      'relative rounded-lg border p-4 transition-all sm:p-5',
-                      plan.popular
-                        ? 'shadow-lg border-[#ee9da4] bg-gradient-starter-card hover:border-[#ed737d]'
-                        : 'hover:border-primary/50',
-                    ].join(' ')}
-                  >
-                    {plan.popular && (
-                      <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                        <span className="bg-gradient-starter rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white shadow-sm">
-                          {dict.photographerDashboard.popular}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h4 className="font-semibold">{plan.name}</h4>
-                        <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>
-                        <p className="mt-2 text-lg font-bold">{formatPlanPrice(plan)}</p>
-                      </div>
-                    </div>
-                    <div className="mt-4">
-                      <UpgradePlanButton
-                        planId={plan.id as 'starter' | 'pro'}
-                        className={
-                          plan.popular
-                            ? 'w-full bg-gradient-starter border-0 text-white hover:opacity-90'
-                            : 'w-full'
-                        }
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            {/* Available Plans + monthly/yearly toggle — lifted into a
+                client component so the toggle drives both the displayed
+                price and the period the Upgrade button posts. */}
+            <AvailablePlansSection
+              plans={PLANS.filter((plan) => plan.id !== currentPlanId && plan.id !== 'free')}
+              labels={{
+                sectionTitle: dict.photographerDashboard.availablePlans,
+                popularBadge: dict.photographerDashboard.popular,
+                toggleMonthly: dict.pricingSection.monthly,
+                toggleYearly: dict.pricingSection.yearly,
+                toggleBadge: dict.pricingSection.twoMonthsFree,
+                billedYearlyPrefix: dict.pricingSection.billedYearlyPrefix,
+                billedYearlySuffix: dict.pricingSection.billedYearlySuffix,
+              }}
+            />
           </CardContent>
           <CardFooter className="p-4 pt-0 sm:p-6 sm:pt-0">
             <p className="text-xs text-muted-foreground">

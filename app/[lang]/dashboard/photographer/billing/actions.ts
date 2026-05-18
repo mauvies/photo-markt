@@ -3,18 +3,38 @@
 import { getSubscription } from '@/database/queries/subscriptions';
 import { createClient } from '@/database/server';
 import { env } from '@/env.mjs';
+import type { BillingPeriod } from '@/lib/plans';
 import { stripe } from '@/lib/stripe/config';
 
-const PLAN_TO_PRICE: Record<string, string> = {
-  starter: env.STRIPE_PRICE_AMATEUR,
-  pro: env.STRIPE_PRICE_PRO,
-};
+/**
+ * Resolve the Stripe Price ID for a (plan, period) pair. Yearly prices are
+ * optional env vars — they only exist once the user has created the
+ * corresponding Stripe yearly Prices and populated the env. Throws a clear
+ * error in that case so the UI can surface a translated message rather
+ * than 500-ing.
+ */
+function priceIdFor(planId: 'starter' | 'pro', period: BillingPeriod): string {
+  if (period === 'monthly') {
+    return planId === 'starter' ? env.STRIPE_PRICE_AMATEUR : env.STRIPE_PRICE_PRO;
+  }
+  const yearly =
+    planId === 'starter' ? env.STRIPE_PRICE_AMATEUR_YEARLY : env.STRIPE_PRICE_PRO_YEARLY;
+  if (!yearly) {
+    throw new Error("Yearly billing isn't available yet for this plan. Please contact support.");
+  }
+  return yearly;
+}
 
 /**
- * Create checkout session for subscription upgrade/change
+ * Create checkout session for subscription upgrade/change.
+ *
+ * `period` defaults to 'monthly' so existing call sites that don't pass it
+ * keep the prior behavior. The settings page and home page pricing toggle
+ * pass the selected period explicitly.
  */
 export async function createBillingCheckoutAction(
   planId: 'starter' | 'pro',
+  period: BillingPeriod = 'monthly',
 ): Promise<{ url: string } | { updated: boolean }> {
   const supabase = await createClient();
 
@@ -28,9 +48,14 @@ export async function createBillingCheckoutAction(
     throw new Error('Unauthorized');
   }
 
-  if (!planId || !PLAN_TO_PRICE[planId]) {
+  if (planId !== 'starter' && planId !== 'pro') {
     throw new Error('Invalid plan');
   }
+
+  // Resolve the right Stripe Price ID — throws if yearly is requested and
+  // the env var isn't populated yet. Lifted above the customer/subscription
+  // checks so the error surfaces before we touch Stripe.
+  const priceId = priceIdFor(planId, period);
 
   // Check if we already have a Stripe customer and active subscription
   const subscription = await getSubscription(supabase, user.id);
@@ -49,18 +74,19 @@ export async function createBillingCheckoutAction(
         subscription.stripe_subscription_id,
       );
 
-      // Update subscription to new plan
+      // Update subscription to new plan (and/or new period).
       await stripe.subscriptions.update(subscription.stripe_subscription_id, {
         items: [
           {
             id: stripeSubscription.items.data[0]?.id,
-            price: PLAN_TO_PRICE[planId],
+            price: priceId,
           },
         ],
         proration_behavior: 'always_invoice',
         metadata: {
           supabase_user_id: user.id,
           plan_id: planId,
+          billing_period: period,
         },
       });
 
@@ -94,7 +120,6 @@ export async function createBillingCheckoutAction(
     });
   }
 
-  const priceId = PLAN_TO_PRICE[planId];
   const baseUrl = env.SITE_URL;
 
   const sessionStripe = await stripe.checkout.sessions.create({
@@ -111,6 +136,7 @@ export async function createBillingCheckoutAction(
     metadata: {
       supabase_user_id: user.id,
       plan_id: planId,
+      billing_period: period,
     },
   });
 

@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import type { BillingPeriod } from '@/lib/plans';
 import { cn } from '@/lib/utils';
 import { createBillingCheckoutAction } from '../billing/actions';
 
 interface UpgradePlanButtonProps {
   planId: 'starter' | 'pro';
+  period?: BillingPeriod;
   variant?: 'default' | 'outline';
   size?: 'sm' | 'lg';
   className?: string;
@@ -17,6 +19,7 @@ interface UpgradePlanButtonProps {
 
 export function UpgradePlanButton({
   planId,
+  period = 'monthly',
   variant = 'default',
   size = 'sm',
   className,
@@ -27,7 +30,7 @@ export function UpgradePlanButton({
   const handleUpgrade = () => {
     startTransition(async () => {
       try {
-        const result = await createBillingCheckoutAction(planId);
+        const result = await createBillingCheckoutAction(planId, period);
 
         if ('url' in result) {
           // Redirect to Stripe Checkout

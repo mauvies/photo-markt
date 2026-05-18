@@ -3,22 +3,30 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
+import type { BillingPeriod } from '@/lib/plans';
 import { createBillingCheckoutAction } from '../billing/actions';
 
 /**
  * Client component to handle upgrade query parameter
- * Automatically triggers upgrade when ?upgrade=plan is in URL
+ * Automatically triggers upgrade when ?upgrade=plan (with optional ?period=)
+ * is in the URL — used after the post-signup redirect from the home page
+ * pricing CTA so the right billing period is preserved.
  */
 export function UpgradeHandler() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const upgradePlan = searchParams.get('upgrade');
+  const periodParam = searchParams.get('period');
+  const period: BillingPeriod = periodParam === 'yearly' ? 'yearly' : 'monthly';
 
   useEffect(() => {
     if (upgradePlan && (upgradePlan === 'starter' || upgradePlan === 'pro')) {
       const handleUpgrade = async () => {
         try {
-          const result = await createBillingCheckoutAction(upgradePlan as 'starter' | 'pro');
+          const result = await createBillingCheckoutAction(
+            upgradePlan as 'starter' | 'pro',
+            period,
+          );
 
           // Remove query parameter from URL
           router.replace('/dashboard/photographer/settings', { scroll: false });
@@ -41,7 +49,7 @@ export function UpgradeHandler() {
 
       void handleUpgrade();
     }
-  }, [upgradePlan, router]);
+  }, [upgradePlan, period, router]);
 
   return null;
 }

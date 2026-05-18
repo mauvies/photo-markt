@@ -3,14 +3,13 @@
 import { CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { BillingPeriodToggle } from '@/components/billing-period-toggle';
 import { PricingPlanButton } from '@/components/pricing-plan-button';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
+import { type BillingPeriod, getPlanById } from '@/lib/plans';
 
 type PricingT = Dictionary['pricingSection'];
-
-type BillingPeriod = 'monthly' | 'yearly';
 
 export function PricingSection({ isAuthenticated, t }: { isAuthenticated: boolean; t: PricingT }) {
   const [billing, setBilling] = useState<BillingPeriod>('yearly');
@@ -45,6 +44,11 @@ export function PricingSection({ isAuthenticated, t }: { isAuthenticated: boolea
     ],
   };
 
+  // Read pricing from `lib/plans.ts` (single source of truth) so the home
+  // page and the settings page can't drift apart. Free plan has no pricing
+  // and renders the zero amounts.
+  const starterPricing = getPlanById('starter')?.pricing ?? null;
+  const proPricing = getPlanById('pro')?.pricing ?? null;
   const plans = [
     {
       id: 'free' as const,
@@ -58,18 +62,18 @@ export function PricingSection({ isAuthenticated, t }: { isAuthenticated: boolea
       id: 'starter' as const,
       name: t.starterName,
       description: t.starterDesc,
-      monthlyPrice: 14.99,
-      yearlyMonthlyPrice: 11.99,
-      yearlyTotal: 143.88,
+      monthlyPrice: starterPricing?.monthly ?? 0,
+      yearlyMonthlyPrice: starterPricing?.yearlyMonthlyEquivalent ?? 0,
+      yearlyTotal: starterPricing?.yearlyTotal ?? 0,
       popular: true,
     },
     {
       id: 'pro' as const,
       name: t.proName,
       description: t.proDesc,
-      monthlyPrice: 29.99,
-      yearlyMonthlyPrice: 23.99,
-      yearlyTotal: 287.88,
+      monthlyPrice: proPricing?.monthly ?? 0,
+      yearlyMonthlyPrice: proPricing?.yearlyMonthlyEquivalent ?? 0,
+      yearlyTotal: proPricing?.yearlyTotal ?? 0,
     },
   ];
 
@@ -89,31 +93,12 @@ export function PricingSection({ isAuthenticated, t }: { isAuthenticated: boolea
         </div>
 
         {/* Billing toggle */}
-        <div className="mt-8 flex items-center justify-center gap-3">
-          <span
-            className={
-              !isYearly ? 'text-sm font-medium text-foreground' : 'text-sm text-muted-foreground'
-            }
-          >
-            {t.monthly}
-          </span>
-          <Switch
-            checked={isYearly}
-            onCheckedChange={(v) => setBilling(v ? 'yearly' : 'monthly')}
-            aria-label="Toggle billing period"
+        <div className="mt-8">
+          <BillingPeriodToggle
+            value={billing}
+            onChange={setBilling}
+            labels={{ monthly: t.monthly, yearly: t.yearly, badge: t.twoMonthsFree }}
           />
-          <span
-            className={
-              isYearly ? 'text-sm font-medium text-foreground' : 'text-sm text-muted-foreground'
-            }
-          >
-            {t.yearly}
-          </span>
-          {isYearly && (
-            <Badge variant="outline" className="ml-1 text-[11px]">
-              {t.twoMonthsFree}
-            </Badge>
-          )}
         </div>
 
         {/* Plan cards */}
@@ -188,6 +173,7 @@ export function PricingSection({ isAuthenticated, t }: { isAuthenticated: boolea
                     planId={plan.id}
                     isFree={isFree}
                     isAuthenticated={isAuthenticated}
+                    period={billing}
                     label={ctaLabel(plan.id)}
                     loadingLabel={t.ctaProcessing}
                   />

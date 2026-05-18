@@ -6,11 +6,25 @@ export type PlanId = 'free' | 'starter' | 'pro';
 
 export type PlanFeature = string | { text: string; badge?: string };
 
+export type BillingPeriod = 'monthly' | 'yearly';
+
+export interface PlanPricing {
+  /** Monthly recurring price (USD), shown when the user picks "monthly". */
+  monthly: number;
+  /** Lump-sum yearly recurring price (USD), what Stripe actually charges. */
+  yearlyTotal: number;
+  /**
+   * Display-only: `yearlyTotal / 12`. We show this on the pricing cards
+   * when "yearly" is selected so users see the per-month equivalent.
+   */
+  yearlyMonthlyEquivalent: number;
+}
+
 export interface Plan {
   id: PlanId;
   name: string;
-  price: number | null; // null for free plan
-  priceInterval: 'month' | 'year' | null;
+  /** null for the Free plan. */
+  pricing: PlanPricing | null;
   description: string;
   storageGB: number | null; // null for unlimited
   maxEvents: number | null; // null for unlimited
@@ -24,8 +38,7 @@ export const PLANS: Plan[] = [
   {
     id: 'free',
     name: 'Free',
-    price: 0,
-    priceInterval: null,
+    pricing: null,
     description: 'Perfect for getting started and testing Photo Markt',
     storageGB: 20,
     maxEvents: 5,
@@ -41,8 +54,10 @@ export const PLANS: Plan[] = [
   {
     id: 'starter',
     name: 'Starter',
-    price: 14.99,
-    priceInterval: 'month',
+    // 20% off yearly — 14.99 * 12 = 179.88, charged as 143.88 → effectively
+    // 2 months free. The per-month-equivalent shown on the yearly card is
+    // 143.88 / 12 = 11.99.
+    pricing: { monthly: 14.99, yearlyTotal: 143.88, yearlyMonthlyEquivalent: 11.99 },
     description: 'For active creators who publish events regularly',
     storageGB: 50,
     // Marketing copy advertises "Unlimited events" on Starter; null = no cap.
@@ -62,8 +77,9 @@ export const PLANS: Plan[] = [
   {
     id: 'pro',
     name: 'Pro',
-    price: 29.99,
-    priceInterval: 'month',
+    // Same 20% off yearly structure as Starter — 29.99 * 12 = 359.88, charged
+    // as 287.88 → 287.88 / 12 = 23.99 per-month equivalent.
+    pricing: { monthly: 29.99, yearlyTotal: 287.88, yearlyMonthlyEquivalent: 23.99 },
     description: 'For professional photographers and studios',
     storageGB: 250,
     maxEvents: null, // Unlimited
@@ -104,9 +120,15 @@ export function getPlanById(id: PlanId): Plan | undefined {
   return PLANS.find((plan) => plan.id === id);
 }
 
-export function formatPlanPrice(plan: Plan): string {
-  if (plan.price === null) {
+/**
+ * Format a plan's price for display. Defaults to monthly. For yearly, shows
+ * the per-month-equivalent (which is what the home page does) — the
+ * "billed yearly: $X" subtitle is rendered separately by the calling UI.
+ */
+export function formatPlanPrice(plan: Plan, period: BillingPeriod = 'monthly'): string {
+  if (plan.pricing === null) {
     return 'Free';
   }
-  return `$${plan.price}/${plan.priceInterval === 'month' ? 'mo' : 'yr'}`;
+  const amount = period === 'yearly' ? plan.pricing.yearlyMonthlyEquivalent : plan.pricing.monthly;
+  return `$${amount}/mo`;
 }
