@@ -10,6 +10,11 @@ type Labels = {
   successApproved: string;
   successPending: string;
   errorGeneric: string;
+  /** Toast shown when some files uploaded but others were skipped due to the
+   *  event owner's storage limit. Template: replaces {uploaded}/{skipped}. */
+  storageLimitPartial: string;
+  /** Toast shown when every file was skipped — owner is out of space. */
+  storageLimitAll: string;
 };
 
 type TriggerArgs = {
@@ -54,7 +59,19 @@ export function UploadProgressProvider({
         if (!isAuthenticated) {
           appendGuestUploads(shareCode, result.uploads);
         }
-        toast.success(result.status === 'pending' ? labels.successPending : labels.successApproved);
+        if (result.uploadedCount === 0 && result.skipped.length > 0) {
+          toast.error(labels.storageLimitAll);
+        } else if (result.skipped.length > 0) {
+          toast.warning(
+            labels.storageLimitPartial
+              .replace('{uploaded}', String(result.uploadedCount))
+              .replace('{skipped}', String(result.skipped.length)),
+          );
+        } else {
+          toast.success(
+            result.status === 'pending' ? labels.successPending : labels.successApproved,
+          );
+        }
         router.refresh();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : labels.errorGeneric);

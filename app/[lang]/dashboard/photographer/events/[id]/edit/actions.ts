@@ -13,8 +13,10 @@ import {
   updateEvent,
   uploadFile,
 } from '@/database/queries';
+import { getStorageUsageBytes } from '@/database/queries/photos';
 import { createClient } from '@/database/server';
 import { validatePhotoUpload } from '@/lib/photo-upload';
+import { assertCanUploadPhoto, isPlanLimitError } from '@/lib/plan-limits';
 
 // --- Constants ---
 
@@ -84,6 +86,13 @@ function buildPhotoPath(userId: string, eventId: string, extension: string): str
   return `${userId}/${eventId}/${crypto.randomUUID()}.${extension}`;
 }
 
+export type UploadSkippedReason = 'storage_limit';
+
+export interface UploadPhotosResult {
+  uploaded: number;
+  skipped: Array<{ name: string; reason: UploadSkippedReason }>;
+}
+
 async function uploadPhotos(
   supabase: SupabaseClient,
   userId: string,
@@ -91,11 +100,26 @@ async function uploadPhotos(
   files: File[],
   date: string,
   location: { city: string; country: string; state: string },
-): Promise<void> {
+): Promise<UploadPhotosResult> {
+  let currentUsage = await getStorageUsageBytes(supabase, userId);
   const uploadedPaths: string[] = [];
+  const skipped: UploadPhotosResult['skipped'] = [];
+  let uploaded = 0;
+
   try {
     for (const file of files) {
       const validated = await validatePhotoUpload(file);
+      const fileSize = validated.buffer.length;
+      try {
+        await assertCanUploadPhoto(supabase, userId, fileSize, currentUsage);
+      } catch (err) {
+        if (isPlanLimitError(err)) {
+          skipped.push({ name: file.name, reason: 'storage_limit' });
+          continue;
+        }
+        throw err;
+      }
+
       const path = buildPhotoPath(userId, eventId, validated.extension);
       await uploadFile(supabase, 'photos', path, validated.buffer, {
         contentType: validated.contentType,
@@ -108,9 +132,11 @@ async function uploadPhotos(
         city: location.city,
         country: location.country,
         state: location.state,
-        size_bytes: file.size,
+        size_bytes: fileSize,
       });
       uploadedPaths.push(path);
+      currentUsage += fileSize;
+      uploaded += 1;
     }
   } catch (error) {
     console.error('Photo upload failed', error);
@@ -119,6 +145,8 @@ async function uploadPhotos(
     }
     throw error;
   }
+
+  return { uploaded, skipped };
 }
 
 function revalidateAfterEventMutation(
@@ -154,7 +182,7 @@ export async function updateEventAction(
   formData: FormData,
   photoFormData?: FormData,
   photoIdsToDelete?: string[],
-): Promise<{ success: true }> {
+): Promise<{ success: true; uploaded: number; skipped: UploadPhotosResult['skipped'] }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -226,13 +254,14 @@ export async function updateEventAction(
     }
   }
 
+  let uploadResult: UploadPhotosResult = { uploaded: 0, skipped: [] };
   if (photoFormData) {
     const uploadedFiles = photoFormData
       .getAll('photos')
       .filter((value): value is File => value instanceof File && value.size > 0);
 
     if (uploadedFiles.length > 0) {
-      await uploadPhotos(supabase, user.id, eventId, uploadedFiles, payload.date, {
+      uploadResult = await uploadPhotos(supabase, user.id, eventId, uploadedFiles, payload.date, {
         city: payload.city || '',
         country: payload.country,
         state: payload.state,
@@ -247,7 +276,7 @@ export async function updateEventAction(
   });
   revalidateTag('filter-options', 'max');
 
-  return { success: true };
+  return { success: true, uploaded: uploadResult.uploaded, skipped: uploadResult.skipped };
 }
 
 /**
@@ -287,7 +316,10 @@ export async function deletePhotoAction(photoId: string, eventId: string): Promi
 /**
  * Add new photos to an existing event.
  */
-export async function addPhotosAction(eventId: string, formData: FormData): Promise<void> {
+export async function addPhotosAction(
+  eventId: string,
+  formData: FormData,
+): Promise<UploadPhotosResult> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -305,7 +337,7 @@ export async function addPhotosAction(eventId: string, formData: FormData): Prom
     .filter((value): value is File => value instanceof File && value.size > 0);
   if (uploadedFiles.length === 0) throw new Error('No photos provided.');
 
-  await uploadPhotos(supabase, user.id, event.id, uploadedFiles, event.date, {
+  const result = await uploadPhotos(supabase, user.id, event.id, uploadedFiles, event.date, {
     city: event.city,
     country: event.country,
     state: event.state || '',
@@ -316,4 +348,6 @@ export async function addPhotosAction(eventId: string, formData: FormData): Prom
     slug: event.slug,
     share_code: event.share_code,
   });
+
+  return result;
 }

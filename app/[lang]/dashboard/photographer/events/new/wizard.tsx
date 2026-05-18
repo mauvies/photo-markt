@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
+import { getPlanLimitType, isPlanLimitError } from '@/lib/plan-limits';
 import { createEvent } from './actions';
 import { activityOptions, activityValues } from './activity-options';
 import { ShareCodeDialog } from './components/share-code-dialog';
@@ -386,6 +387,16 @@ export default function NewEventForm() {
         }
       } catch (error) {
         console.error(error);
+        // Plan-limit errors carry a parseable prefix in their message so we
+        // can distinguish them from generic failures and surface the upgrade
+        // copy the user expects.
+        if (isPlanLimitError(error)) {
+          const limitType = getPlanLimitType(error);
+          setSubmitError(
+            limitType === 'maxEvents' ? t('eventLimitReachedShort') : t('storageLimitReached'),
+          );
+          return;
+        }
         setSubmitError(error instanceof Error ? error.message : t('submitError'));
       }
     });

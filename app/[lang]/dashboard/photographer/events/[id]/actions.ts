@@ -19,8 +19,10 @@ import {
   updatePhotoUploadStatus,
   uploadFile,
 } from '@/database/queries';
+import { getStorageUsageBytes } from '@/database/queries/photos';
 import { createClient } from '@/database/server';
 import { validatePhotoUpload } from '@/lib/photo-upload';
+import { assertCanUploadPhoto, isPlanLimitError } from '@/lib/plan-limits';
 
 // Invalidates the `event-${param}` cache tag for every param a viewer might
 // have used to reach the event (UUID, slug, or share_code). Without this,
@@ -182,9 +184,14 @@ export async function respondToEventInvitationAction(
  * The contributor's own user_id is set on the resulting `photos` rows so they
  * own their submissions (and any future revenue routing flows to them).
  */
-export async function uploadOrganizerEventPhotoAction(
-  formData: FormData,
-): Promise<{ uploaded: number }> {
+export type UploadSkippedReason = 'storage_limit';
+
+export interface UploadResult {
+  uploaded: number;
+  skipped: Array<{ name: string; reason: UploadSkippedReason }>;
+}
+
+export async function uploadOrganizerEventPhotoAction(formData: FormData): Promise<UploadResult> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -221,10 +228,29 @@ export async function uploadOrganizerEventPhotoAction(
 
   const status: 'approved' | 'pending' = event.require_upload_approval ? 'pending' : 'approved';
 
+  // Pre-compute current storage once. We mutate this local total after every
+  // successful upload so subsequent files see an accurate running total
+  // without re-querying the DB per file. Contributor uploads count against
+  // the contributor's own plan — they own the resulting `photos` rows.
+  let currentUsage = await getStorageUsageBytes(supabase, user.id);
+  const skipped: UploadResult['skipped'] = [];
   const uploadedPaths: string[] = [];
+  let uploaded = 0;
+
   try {
     for (const file of files) {
       const validated = await validatePhotoUpload(file);
+      const fileSize = validated.buffer.length;
+      try {
+        await assertCanUploadPhoto(supabase, user.id, fileSize, currentUsage);
+      } catch (err) {
+        if (isPlanLimitError(err)) {
+          skipped.push({ name: file.name, reason: 'storage_limit' });
+          continue;
+        }
+        throw err;
+      }
+
       const path = `${user.id}/${eventId}/${crypto.randomUUID()}.${validated.extension}`;
       await uploadFile(supabase, 'photos', path, validated.buffer, {
         contentType: validated.contentType,
@@ -238,9 +264,11 @@ export async function uploadOrganizerEventPhotoAction(
         city: (event.city as string) || '',
         country: (event.country as string) || '',
         state: (event.state as string | null) ?? null,
-        size_bytes: file.size,
+        size_bytes: fileSize,
         upload_status: status,
       });
+      currentUsage += fileSize;
+      uploaded += 1;
     }
   } catch (error) {
     if (uploadedPaths.length > 0) {
@@ -252,7 +280,7 @@ export async function uploadOrganizerEventPhotoAction(
   revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
   revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
   await revalidateEventPhotoCacheTags(eventId);
-  return { uploaded: files.length };
+  return { uploaded, skipped };
 }
 
 /**

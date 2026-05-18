@@ -17,6 +17,7 @@ import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { deleteEventAction as deleteEvent } from './actions';
 import { EventCardActions } from './event-card-actions';
+import { LimitReachedToast } from './limit-reached-toast';
 import { PendingInvitationsPanel } from './pending-invitations-panel';
 
 type PhotoStat = {
@@ -90,8 +91,15 @@ async function getCachedEventsData(userId: string): Promise<{
   return { events, stats, coverUrls };
 }
 
-export default async function EventsPage({ params }: { params: Promise<{ lang: string }> }) {
+export default async function EventsPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ lang: string }>;
+  searchParams: Promise<{ limit?: string }>;
+}) {
   const { lang } = await params;
+  const { limit } = await searchParams;
   const dict = await getDictionary(lang as Locale);
   const supabase = await createClient();
   const {
@@ -114,6 +122,13 @@ export default async function EventsPage({ params }: { params: Promise<{ lang: s
 
   return (
     <div>
+      {limit === 'events' && (
+        <LimitReachedToast
+          message={dict.photographerDashboard.eventLimitReachedShort}
+          ctaLabel={dict.photographerDashboard.upgradeCta}
+          ctaHref={`/${lang}/dashboard/photographer/settings`}
+        />
+      )}
       <DashboardHeader title={dict.dashboard.events} />
       <TranslationsProvider translations={dict.organizerEvent}>
         <PendingInvitationsPanel initialInvitations={pendingInvitations} />
