@@ -4,6 +4,8 @@ import type { User } from '@supabase/supabase-js';
 import { LayoutDashboard, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/database/client';
+import type { Dictionary } from '@/lib/i18n/get-dictionary';
+import { useTranslations } from '@/lib/i18n/translations-provider';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
 import {
@@ -20,6 +22,7 @@ interface Props {
 export function UserAvatar({ user }: Props) {
   const router = useRouter();
   const supabase = createClient();
+  const { t } = useTranslations<Dictionary['nav']>();
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -33,9 +36,14 @@ export function UserAvatar({ user }: Props) {
 
   return (
     <div className="flex items-center gap-3">
-      <Button variant="outline" size="sm" onClick={goToDashboard} className="hidden sm:flex">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={goToDashboard}
+        className="hidden h-10 px-4 sm:flex"
+      >
         <LayoutDashboard className="mr-2 h-4 w-4" />
-        Go to dashboard
+        {t('goToDashboard')}
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -56,7 +64,7 @@ export function UserAvatar({ user }: Props) {
           </div>
           <DropdownMenuItem onClick={goToDashboard} className="sm:hidden">
             <LayoutDashboard className="mr-2 h-4 w-4" />
-            Go to dashboard
+            {t('goToDashboard')}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={signOut}>
             <LogOut className="mr-2 h-4 w-4" />

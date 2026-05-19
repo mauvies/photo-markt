@@ -35,20 +35,18 @@ export function BottomNav({ items }: { items: BottomNavItem[] }) {
             key={item.href}
             href={item.href}
             className={cn(
-              'flex flex-1 flex-col items-center justify-center gap-1 py-3 transition-colors duration-150',
+              'flex flex-1 flex-col items-center justify-center gap-1.5 min-h-16 py-2 transition-colors duration-150',
               active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground/70',
             )}
           >
             <item.icon
               className={cn(
-                'h-5 w-5 shrink-0 transition-all duration-150',
+                'h-6 w-6 shrink-0 transition-all duration-150',
                 active ? 'stroke-[2.5]' : 'stroke-[1.5]',
               )}
               aria-hidden="true"
             />
-            <span
-              className={cn('text-[10px] leading-none tracking-tight', active && 'font-semibold')}
-            >
+            <span className={cn('text-xs leading-none tracking-tight', active && 'font-semibold')}>
               {item.label}
             </span>
           </Link>

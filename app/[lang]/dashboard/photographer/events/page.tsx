@@ -15,9 +15,10 @@ import { getEventStatus } from '@/lib/event-status';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
+import { getUsageStats } from '@/lib/plan-limits';
 import { deleteEventAction as deleteEvent } from './actions';
 import { EventCardActions } from './event-card-actions';
-import { LimitReachedToast } from './limit-reached-toast';
+import { EventLimitReachedDialog } from './event-limit-reached-dialog';
 import { PendingInvitationsPanel } from './pending-invitations-panel';
 
 type PhotoStat = {
@@ -115,18 +116,26 @@ export default async function EventsPage({
     );
   }
 
-  const [{ events, stats, coverUrls }, pendingInvitations] = await Promise.all([
+  const [{ events, stats, coverUrls }, pendingInvitations, usageStats] = await Promise.all([
     getCachedEventsData(user.id),
     getPendingInvitationsForPhotographer(supabase, user.id),
+    limit === 'events' ? getUsageStats(supabase, user.id) : Promise.resolve(null),
   ]);
 
   return (
     <div>
-      {limit === 'events' && (
-        <LimitReachedToast
-          message={dict.photographerDashboard.eventLimitReachedShort}
-          ctaLabel={dict.photographerDashboard.upgradeCta}
-          ctaHref={`/${lang}/dashboard/photographer/settings`}
+      {limit === 'events' && usageStats && usageStats.eventsLimit !== null && (
+        <EventLimitReachedDialog
+          current={usageStats.eventsCount}
+          max={usageStats.eventsLimit}
+          planName={dict.plans[usageStats.planId]}
+          upgradeHref={`/${lang}/dashboard/photographer/settings?tab=billing`}
+          t={{
+            title: dict.photographerDashboard.eventLimitDialogTitle,
+            body: dict.photographerDashboard.eventLimitDialogBody,
+            upgradeCta: dict.photographerDashboard.upgradeCta,
+            closeLabel: dict.common.close,
+          }}
         />
       )}
       <DashboardHeader title={dict.dashboard.events} />
@@ -153,7 +162,7 @@ export default async function EventsPage({
             </svg>
           </div>
           <h3 className="text-lg font-semibold">{dict.photographerDashboard.noEventsYet}</h3>
-          <p className="mt-2 mb-6 max-w-sm text-sm text-muted-foreground">
+          <p className="mt-2 mb-6 max-w-sm text-base text-muted-foreground md:text-sm">
             {dict.photographerDashboard.noEventsYetDesc}
           </p>
           <Link href={`/${lang}/dashboard/photographer/events/new`}>
@@ -162,7 +171,7 @@ export default async function EventsPage({
         </div>
       ) : (
         <>
-          <div className="text-sm text-muted-foreground">
+          <div className="text-base text-muted-foreground md:text-sm">
             {`${events.length} event${events.length === 1 ? '' : 's'}`}
           </div>
           <div className="mt-4 grid gap-5 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">

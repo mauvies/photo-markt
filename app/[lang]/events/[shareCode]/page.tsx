@@ -5,7 +5,7 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { getActiveRole } from '@/app/[lang]/actions/roles';
 import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/activity-options';
-import { AIMatchingButton } from '@/app/[lang]/dashboard/talent/photos/ai-matching/ai-matching-button';
+import { EventGalleryWithFaceSearch } from '@/components/event-gallery-with-face-search';
 import {
   createPhotoUrls,
   getEventByShareCode,
@@ -14,9 +14,14 @@ import {
   getPhotoIdsInCart,
   type SupabaseServerClient,
 } from '@/database/queries';
+import {
+  getEventAiIndexingProgress,
+  getEventRekognitionState,
+} from '@/database/queries/rekognition';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { getEventStatus, isCollaborativeUploadOpen } from '@/lib/event-status';
+import { isFeatureEnabled } from '@/lib/feature-flags';
 import { getBaseUrl } from '@/lib/get-base-url';
 import { getSiteUrl } from '@/lib/get-site-url';
 import type { Locale } from '@/lib/i18n/config';
@@ -279,6 +284,32 @@ export default async function EventPage({
   } = await supabase.auth.getUser();
 
   const eventStatus = getEventStatus(event.date);
+  // AI face search eligibility — computed server-side. We hide the banner
+  // entirely for events that can't surface useful results: AI disabled,
+  // contains_minors, failed indexing, or nothing indexed yet (counter at 0).
+  // The wrapper component handles the matches-view state purely client-side.
+  let aiSearchEligible = false;
+  let aiBannerState: 'ready' | 'indexing' = 'ready';
+  if (isFeatureEnabled('AI_MATCHING')) {
+    try {
+      const adminClientForAi = supabaseAdmin as unknown as SupabaseServerClient;
+      const aiState = await getEventRekognitionState(adminClientForAi, event.id);
+      if (
+        aiState?.enabled &&
+        !aiState.containsMinors &&
+        aiState.collectionId &&
+        aiState.status !== 'failed'
+      ) {
+        const aiProgress = await getEventAiIndexingProgress(adminClientForAi, event.id);
+        if (aiProgress.indexed > 0) {
+          aiSearchEligible = true;
+          aiBannerState = aiState.status === 'indexing' ? 'indexing' : 'ready';
+        }
+      }
+    } catch {
+      // Best-effort — if AI state lookup fails the banner just won't render.
+    }
+  }
   // Free collaborative events skip the cart entirely — no purchase flow.
   const isForSale = event.price_per_photo !== null;
   const showCartUi = isForSale;
@@ -480,60 +511,66 @@ export default async function EventPage({
               <p className="text-sm text-muted-foreground">{dict.events.photosAfterEvent}</p>
             </div>
           ) : (
-            <>
-              {showCartUi && photoItems.length > 0 && (
-                <div className="mb-3 flex justify-end">
-                  <AIMatchingButton className="h-9 rounded-full" />
-                </div>
-              )}
-              <Suspense
-                fallback={
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                    {Array.from({ length: 12 }).map((_, i) => (
-                      // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton items
-                      <div key={i} className="aspect-square animate-pulse rounded-lg bg-muted" />
-                    ))}
-                  </div>
-                }
-              >
-                <PublicEventPhotoViewer
-                  photos={photoItems}
-                  eventId={event.id}
-                  eventName={event.name}
-                  eventDate={event.date}
-                  pricePerPhoto={event.price_per_photo}
-                  photographerId={event.user_id}
-                  isAuthenticated={!!user}
-                  currentUserId={user?.id ?? null}
-                  shareCode={event.share_code ?? null}
-                  initialPhotosInCart={photosInCart}
-                  iconTooltips={dict.photoIconButtons}
-                  showAddToCart={showCartUi}
-                  emptyText={dict.events.galleryEmpty}
-                  uploadingLabel={dict.collaborativeEvent.galleryUploadingLabel}
-                  uploaderLabels={{
-                    tooltip: dict.collaborativeEvent.uploaderTooltip,
-                    popoverHeading: dict.collaborativeEvent.uploaderPopoverHeading,
-                    guestLabel: dict.collaborativeEvent.uploaderGuestLabel,
-                    authenticatedLabel: dict.collaborativeEvent.uploaderAuthenticatedLabel,
-                  }}
-                  deleteLabels={{
-                    tooltip: dict.events.deletePhoto,
-                    confirmTitle: dict.events.deletePhotoConfirmTitle,
-                    confirmDesc: dict.events.deletePhotoConfirmDesc,
-                    confirmButton: dict.events.confirmButton,
-                    cancelButton: dict.events.cancelButton,
-                    successToast: dict.events.deletePhotoToast,
-                    failedToast: dict.events.deletePhotoFailed,
-                  }}
-                  cartToastLabels={{
-                    failedAdd: dict.eventPhotoViewer.failedAddCart,
-                    failedRemove: dict.eventPhotoViewer.failedRemoveCart,
-                  }}
-                  imageUnavailableLabel={dict.eventCard.imageUnavailable}
-                />
-              </Suspense>
-            </>
+            <EventGalleryWithFaceSearch
+              photos={photoItems}
+              shareCode={event.share_code ?? event.id}
+              aiSearchEligible={aiSearchEligible}
+              aiState={aiBannerState}
+              bannerLabels={dict.aiSearch.banner}
+              modalLabels={dict.aiSearch.modal}
+              resultsLabels={dict.aiSearch.results}
+              iconTooltips={dict.photoIconButtons}
+              imageUnavailableLabel={dict.eventCard.imageUnavailable}
+              fullGallery={
+                <Suspense
+                  fallback={
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                      {Array.from({ length: 12 }).map((_, i) => (
+                        // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton items
+                        <div key={i} className="aspect-square animate-pulse rounded-lg bg-muted" />
+                      ))}
+                    </div>
+                  }
+                >
+                  <PublicEventPhotoViewer
+                    photos={photoItems}
+                    eventId={event.id}
+                    eventName={event.name}
+                    eventDate={event.date}
+                    pricePerPhoto={event.price_per_photo}
+                    photographerId={event.user_id}
+                    isAuthenticated={!!user}
+                    currentUserId={user?.id ?? null}
+                    shareCode={event.share_code ?? null}
+                    initialPhotosInCart={photosInCart}
+                    iconTooltips={dict.photoIconButtons}
+                    showAddToCart={showCartUi}
+                    emptyText={dict.events.galleryEmpty}
+                    uploadingLabel={dict.collaborativeEvent.galleryUploadingLabel}
+                    uploaderLabels={{
+                      tooltip: dict.collaborativeEvent.uploaderTooltip,
+                      popoverHeading: dict.collaborativeEvent.uploaderPopoverHeading,
+                      guestLabel: dict.collaborativeEvent.uploaderGuestLabel,
+                      authenticatedLabel: dict.collaborativeEvent.uploaderAuthenticatedLabel,
+                    }}
+                    deleteLabels={{
+                      tooltip: dict.events.deletePhoto,
+                      confirmTitle: dict.events.deletePhotoConfirmTitle,
+                      confirmDesc: dict.events.deletePhotoConfirmDesc,
+                      confirmButton: dict.events.confirmButton,
+                      cancelButton: dict.events.cancelButton,
+                      successToast: dict.events.deletePhotoToast,
+                      failedToast: dict.events.deletePhotoFailed,
+                    }}
+                    cartToastLabels={{
+                      failedAdd: dict.eventPhotoViewer.failedAddCart,
+                      failedRemove: dict.eventPhotoViewer.failedRemoveCart,
+                    }}
+                    imageUnavailableLabel={dict.eventCard.imageUnavailable}
+                  />
+                </Suspense>
+              }
+            />
           )}
         </div>
       </UploadProgressProvider>

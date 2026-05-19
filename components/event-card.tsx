@@ -301,7 +301,7 @@ export function EventCard({
             {name}
           </h3>
 
-          <div className="space-y-0.5 text-xs text-muted-foreground">
+          <div className="space-y-0.5 text-sm text-muted-foreground md:text-xs">
             {location && (
               <p className="flex items-center gap-1.5">
                 <MapPin className="h-3.5 w-3.5 shrink-0" />

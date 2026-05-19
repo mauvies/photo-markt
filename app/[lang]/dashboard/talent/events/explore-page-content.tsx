@@ -5,7 +5,6 @@ import type { EventWithStats, FilterOptions } from '@/hooks/use-event-search';
 import { useEventSearch } from '@/hooks/use-event-search';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
-import { AIMatchingButton } from '../photos/ai-matching/ai-matching-button';
 import { EventFilterBar } from './components/event-filter-bar';
 import { EventGrid } from './components/event-grid';
 import { EventInfoCards } from './components/event-info-cards';
@@ -27,6 +26,10 @@ export function ExplorePageContent({
   initialPhotographerQuery,
   initialPreset,
   hideTopFilters = false,
+  // `showFindMe` is intentionally unused after PR 3 (AI face search moved
+  // to a per-event banner). Kept on the prop API so callers don't break;
+  // re-wire in a future PR if a multi-event find-me surface returns.
+  // biome-ignore lint/correctness/noUnusedFunctionParameters: kept for API stability
   showFindMe = false,
   eventSearchBarDict,
   searchKey,
@@ -83,6 +86,12 @@ export function ExplorePageContent({
               initialPhotographer={initialPhotographerQuery ?? ''}
               sortBy={search.sortBy}
               onSortChange={search.setSortBy}
+              // Forward the page-level event-link prefix so an access code
+              // entered here lands on the matching detail route (dashboard
+              // wrapper vs public viewer). `eventLinkPrefix` already drives
+              // EventGrid's card links — reusing it keeps a single source
+              // of truth for "where does an event-detail page live".
+              accessCodeHref={eventLinkPrefix}
             />
           </TranslationsProvider>
         </div>
@@ -116,7 +125,11 @@ export function ExplorePageContent({
         handleFilterChange={search.handleFilterChange}
         clearFilters={search.clearFilters}
         setHasSearched={search.setHasSearched}
-        extraButtons={showFindMe ? <AIMatchingButton className="h-9 rounded-full" /> : undefined}
+        // AI face search lives at the per-event level (banner inside an
+        // event page) — there's no multi-event "find me" surface in v0.
+        // `showFindMe` is kept on the prop API in case a future PR wires
+        // a different entry point here.
+        extraButtons={undefined}
         photographerQuery={search.photographerQuery}
         setPhotographerQuery={search.setPhotographerQuery}
         radiusKm={search.radiusKm}

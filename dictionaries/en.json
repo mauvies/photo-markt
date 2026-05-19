@@ -15,10 +15,12 @@
     "login": "Log in",
     "loginShort": "Log in",
     "getStarted": "Get started",
+    "goToDashboard": "Go to dashboard",
     "explore": "Explore",
     "myPhotos": "My photos",
     "orders": "Orders",
     "profile": "Profile",
+    "privacy": "Privacy",
     "support": "Support",
     "feedback": "Feedback",
     "settings": "Settings",
@@ -241,6 +243,20 @@
     "es": "Español",
     "en": "English"
   },
+  "settings": {
+    "title": "Settings",
+    "tabs": {
+      "profile": "Profile",
+      "billing": "Billing & Plan",
+      "payouts": "Payouts",
+      "account": "Account",
+      "language": "Language"
+    },
+    "language": {
+      "heading": "Language",
+      "description": "Choose your preferred language for Photo Markt. The change applies immediately and keeps your current page."
+    }
+  },
   "talentDashboard": {
     "myPhotos": "My Photos",
     "myPhotosSubtitle": "Photos you have selected or tagged.",
@@ -325,6 +341,8 @@
     "storageLimitReached": "Storage limit reached — upgrade to add more photos",
     "eventLimitReached": "You've reached the event limit for your plan ({current}/{max}). Upgrade to create more.",
     "eventLimitReachedShort": "Event limit reached — upgrade your plan to create more.",
+    "eventLimitDialogTitle": "You've reached your event limit",
+    "eventLimitDialogBody": "Your {planName} plan allows {max} events. You've created {current} of {max}. Upgrade to create more.",
     "upgradeCta": "Upgrade plan",
     "planFeatures": "Plan Features",
     "availablePlans": "Available Plans",
@@ -1097,5 +1115,72 @@
     "indexingComplete": "All photos indexed",
     "failedPhotosWarning": "{count} photo(s) failed to index.",
     "failedPhotosRetry": "Retry"
+  },
+  "aiSearch": {
+    "banner": {
+      "titleReady": "Find yourself in this event",
+      "titleIndexing": "Processing photos…",
+      "descriptionReady": "Upload a selfie and we'll surface the photos with you in them.",
+      "descriptionIndexing": "You can still search what's ready now — more matches may appear once indexing completes.",
+      "cta": "Find my photos"
+    },
+    "modal": {
+      "title": "Find your photos",
+      "description": "Take a selfie or upload one and we'll search for you in this event.",
+      "takePhotoButton": "Take photo",
+      "choosePhotoButton": "Upload photo",
+      "uploadHint": "A clear, front-facing photo works best. JPG, PNG or HEIC, max 10 MB.",
+      "consentLine": "By submitting, you confirm you're 18 or older and accept that your photo is processed only for this search.",
+      "detailsShow": "How we handle your photo",
+      "detailsHide": "Hide details",
+      "detailsBullet1": "Your photo is sent to a face-matching service to find you in this event's gallery.",
+      "detailsBullet2": "It is discarded right after the search — we don't keep it and we don't store any biometric data derived from it.",
+      "detailsBullet3": "We only log that a search ran (timestamp + IP) so we can prevent abuse.",
+      "cameraCaptureButton": "Take photo",
+      "cameraRetakeButton": "Retake",
+      "cameraDismissButton": "Back",
+      "cameraError": "Couldn't open the camera. Upload a photo instead.",
+      "cameraErrorPermission": "Camera permission denied. Allow it in your browser settings, or upload a photo instead.",
+      "cameraErrorNoDevice": "No camera available on this device. Upload a photo instead.",
+      "cameraErrorInsecure": "The camera requires HTTPS. Upload a photo, or try again on a secure connection.",
+      "submitButton": "Accept",
+      "searching": "Searching…",
+      "errorRateLimit": "Too many searches. Try again later.",
+      "errorInvalidSelfie": "Please use a photo with a single, clear face.",
+      "errorCollectionMissing": "This event no longer supports face search.",
+      "errorGeneric": "Search failed. Please try again.",
+      "cancelButton": "Cancel",
+      "removeSelfie": "Remove photo"
+    },
+    "results": {
+      "veryLikelyTitle": "Very likely you",
+      "veryLikelySubtitle": "These are highly confident matches.",
+      "likelyTitle": "Likely you",
+      "likelySubtitle": "These are likely matches.",
+      "possiblyTitle": "Possibly you",
+      "possiblySubtitle": "These might be you.",
+      "viewAllPhotos": "View all photos",
+      "noMatchesTitle": "We couldn't find you",
+      "noMatchesBody": "This can happen if you're wearing a helmet/glasses or facing away in the photos.",
+      "tryAgain": "Try a different selfie",
+      "partialIndexingNotice": "Some photos are still being processed. Try again later if you don't find yourself here."
+    }
+  },
+  "privacy": {
+    "title": "Your biometric data",
+    "howItWorksTitle": "How face search works",
+    "howItWorksBody": "When you tap \"Find my photos\", your selfie is sent securely to AWS Rekognition (region eu-west-1) for a single face-similarity search against the photos of that event. Once the search completes, your selfie is discarded — Photo Markt does not retain it and AWS Rekognition does not store it as part of this flow.",
+    "whatWeStoreTitle": "What we store",
+    "whatWeStoreBullet1": "We do not store your selfies.",
+    "whatWeStoreBullet2": "We do not store biometric embeddings derived from you.",
+    "whatWeStoreBullet3": "We do record that you performed searches (timestamp + IP) for rate-limiting and abuse prevention, but not the content of those searches.",
+    "gdprTitle": "Your rights under GDPR",
+    "gdprBody": "You have the right to access, correct, and request deletion of any personal data we hold about you. Because we don't persist your selfie or biometric data from a face search, the only relevant records are search-event logs (rate-limit telemetry). For any data request or question about this processing, contact us at",
+    "gdprContact": "privacy@photomarkt.com"
+  },
+  "plans": {
+    "free": "Free",
+    "starter": "Starter",
+    "pro": "Pro"
   }
 }

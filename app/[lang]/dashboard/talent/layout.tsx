@@ -41,6 +41,7 @@ export default async function TalentLayout({ children }: { children: React.React
           myPhotos: dict.nav.myPhotos,
           orders: dict.nav.orders,
           profile: dict.nav.profile,
+          privacy: dict.nav.privacy,
           settings: dict.dashboard.settings,
           billing: dict.dashboard.billing,
           support: dict.dashboard.support,

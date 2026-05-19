@@ -363,7 +363,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
       </div>
 
       {/* Mobile summary - sticky footer (stacked above BottomNav) */}
-      <div className="md:hidden fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom))] left-0 right-0 z-50 border-t border-border bg-card shadow-lg">
+      <div className="md:hidden fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 z-50 border-t border-border bg-card shadow-lg">
         <div className="p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-medium text-muted-foreground">{t('subtotal')}</span>

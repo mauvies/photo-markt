@@ -7,6 +7,7 @@ import {
   LogOut,
   Send,
   Settings,
+  Shield,
   User,
   WalletMinimal,
 } from 'lucide-react';
@@ -42,6 +43,10 @@ export function DashboardUserMenu({
   navLabels?: {
     activeRole?: string;
     profile?: string;
+    /** Talent-only — rendered as a dropdown item under the support group.
+     *  Photographer menus hide the item entirely (the privacy page is
+     *  talent-facing). */
+    privacy?: string;
     settings?: string;
     billing?: string;
     payouts?: string;
@@ -136,23 +141,38 @@ export function DashboardUserMenu({
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
               <span className="truncate font-medium">{user.name}</span>
-              <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+              <span className="truncate text-sm text-muted-foreground md:text-xs">
+                {user.email}
+              </span>
             </div>
           </div>
         </DropdownMenuLabel>
 
         {/* Active role indicator */}
         <div className="px-2 py-1.5">
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5 whitespace-nowrap text-sm text-muted-foreground md:text-xs">
             {optimisticRole === 'photographer' ? (
-              <Camera className="h-3 w-3" />
+              <Camera className="h-3.5 w-3.5 md:h-3 md:w-3" />
             ) : (
-              <User className="h-3 w-3" />
+              <User className="h-3.5 w-3.5 md:h-3 md:w-3" />
             )}
-            {navLabels.activeRole ?? 'Active role'}:
+            {navLabels.activeRole ?? 'Role'}:
             <span className="font-medium text-foreground">{currentRoleLabel}</span>
           </span>
         </div>
+
+        {/* Role switch — surfaced near the role indicator so the user can
+            toggle without scanning the full menu. */}
+        <DropdownMenuItem onClick={() => handleSwitchRole(otherRole)} disabled={isPending}>
+          {otherRole === 'photographer' ? (
+            <Camera className="mr-2 h-4 w-4" />
+          ) : (
+            <User className="mr-2 h-4 w-4" />
+          )}
+          <span>
+            {navLabels.switchTo ?? 'Switch to'} {otherRoleLabel}
+          </span>
+        </DropdownMenuItem>
 
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
@@ -160,6 +180,12 @@ export function DashboardUserMenu({
             <Link href={profileUrl}>
               <User className="mr-2 h-4 w-4" />
               <span>{navLabels.profile ?? 'Profile'}</span>
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild className={isSettingsActive ? 'bg-accent' : ''}>
+            <Link href={settingsUrl}>
+              <Settings className="mr-2 h-4 w-4" />
+              <span>{navLabels.settings ?? 'Settings'}</span>
             </Link>
           </DropdownMenuItem>
           {/* Payouts — only relevant for photographer role; links straight to
@@ -172,15 +198,6 @@ export function DashboardUserMenu({
               </Link>
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem asChild className={isSettingsActive ? 'bg-accent' : ''}>
-            <Link href={settingsUrl}>
-              <Settings className="mr-2 h-4 w-4" />
-              <span>{navLabels.settings ?? 'Settings'}</span>
-            </Link>
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
           {optimisticRole === 'photographer' && (
             <DropdownMenuItem asChild>
               <Link href="/dashboard/photographer/settings?tab=billing">
@@ -189,6 +206,9 @@ export function DashboardUserMenu({
               </Link>
             </DropdownMenuItem>
           )}
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
           <DropdownMenuItem asChild>
             <Link href={`/dashboard/${optimisticRole}/support`}>
               <LifeBuoy className="mr-2 h-4 w-4" />
@@ -201,15 +221,16 @@ export function DashboardUserMenu({
               <span>{navLabels.feedback ?? 'Feedback'}</span>
             </Link>
           </DropdownMenuItem>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem onClick={() => handleSwitchRole(otherRole)} disabled={isPending}>
-            <Camera className="mr-2 h-4 w-4" />
-            <span>
-              {navLabels.switchTo ?? 'Switch to'} {otherRoleLabel}
-            </span>
-          </DropdownMenuItem>
+          {/* Privacy disclosure — talent-only. Lives here rather than in
+              the top nav so it doesn't compete with primary destinations. */}
+          {optimisticRole === 'talent' && navLabels.privacy ? (
+            <DropdownMenuItem asChild>
+              <Link href="/dashboard/talent/privacy">
+                <Shield className="mr-2 h-4 w-4" />
+                <span>{navLabels.privacy}</span>
+              </Link>
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout}>

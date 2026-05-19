@@ -14,7 +14,9 @@
  * Set to false to disable AI matching feature across the application
  */
 export const FEATURE_FLAGS = {
-  AI_MATCHING: false, // Disabled - Coming soon
+  // Enabled in PR 3 of the AI matching epic. Server-side defense in
+  // `searchFacesInEvent` re-checks this flag — keep both gates in sync.
+  AI_MATCHING: true,
 } as const;
 
 /**

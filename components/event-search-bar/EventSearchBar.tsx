@@ -60,9 +60,17 @@ export function EventSearchBar({
   onSortChange,
   onSearch,
   searchHref = '/events',
+  accessCodeHref,
   showMobileFilters = true,
   className,
 }: EventSearchBarProps) {
+  // Default the access-code redirect to the same base as the search-results
+  // redirect. Both happen to share the same prefix on every consumer today
+  // (`/events` for public, `/dashboard/talent/events` for talent dashboard),
+  // so a single `searchHref` covers both routes without callers having to
+  // repeat themselves. Callers that need to diverge can still pass an
+  // explicit `accessCodeHref`.
+  const resolvedAccessCodeHref = accessCodeHref ?? searchHref;
   const router = useRouter();
   const { t } = useTranslations<Dictionary['eventSearchBar']>();
   const lp = useLocalizedPath();
@@ -165,11 +173,15 @@ export function EventSearchBar({
     const validatedActivity = activity.validate();
     if (validatedActivity === null) return;
 
-    // If the where input looks like an access code, route directly to that event
+    // If the where input looks like an access code, route directly to that
+    // event. The destination route is controlled by `resolvedAccessCodeHref`
+    // — the public viewer renders at `/events/<code>`, while the talent
+    // dashboard wraps the same content at `/dashboard/talent/events/<code>`
+    // so the dashboard chrome stays visible for authenticated talents.
     const trimmedWhere = where.trim();
     if (trimmedWhere && isLikelyAccessCode(trimmedWhere)) {
       setMobileDialogOpen(false);
-      router.push(lp(`/events/${trimmedWhere.toUpperCase()}`));
+      router.push(lp(`${resolvedAccessCodeHref}/${trimmedWhere.toUpperCase()}`));
       return;
     }
 
@@ -190,7 +202,18 @@ export function EventSearchBar({
     if (photographer.trim()) params.set('photographer', photographer.trim());
     setMobileDialogOpen(false);
     router.push(`${searchHref}?${params.toString()}`);
-  }, [activity, where, dateRange, onSearch, searchHref, router, presetLabel, photographer, lp]);
+  }, [
+    activity,
+    where,
+    dateRange,
+    onSearch,
+    searchHref,
+    resolvedAccessCodeHref,
+    router,
+    presetLabel,
+    photographer,
+    lp,
+  ]);
 
   const displayLabel = presetLabel ?? whenLabel(dateRange?.from, dateRange?.to);
 

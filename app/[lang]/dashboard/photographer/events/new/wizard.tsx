@@ -630,7 +630,7 @@ export default function NewEventForm() {
 
         {/* Sticky bottom action bar — same offsets as the original form so it
             sits above the mobile bottom nav and aligns with the desktop sidebar. */}
-        <div className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom))] left-0 right-0 z-50 border-t border-border bg-background/95 shadow-lg backdrop-blur supports-backdrop-filter:bg-background/80 md:bottom-0 md:left-(--sidebar-width)">
+        <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 z-50 border-t border-border bg-background/95 shadow-lg backdrop-blur supports-backdrop-filter:bg-background/80 md:bottom-0 md:left-(--sidebar-width)">
           <div className="mx-auto flex w-full max-w-full flex-col items-end gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-end sm:px-6">
             {submitError ? (
               <p className="text-sm text-destructive text-right sm:text-left">{submitError}</p>

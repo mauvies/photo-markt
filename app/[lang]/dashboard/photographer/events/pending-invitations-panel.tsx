@@ -54,11 +54,11 @@ export function PendingInvitationsPanel({ initialInvitations }: PendingInvitatio
               className="flex flex-col gap-3 rounded-md border border-border/60 p-3 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{event.name}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
+                <p className="truncate text-base font-medium md:text-sm">{event.name}</p>
+                <p className="mt-0.5 text-sm text-muted-foreground md:text-xs">
                   {t('invitationFromOrganizer').replace('{name}', organizerName)}
                 </p>
-                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground md:text-xs">
                   {event.date && (
                     <span className="inline-flex items-center gap-1">
                       <Calendar className="h-3 w-3" />

@@ -63,6 +63,7 @@ export default async function PhotographerLayout({ children }: { children: React
           createEvent: dict.dashboard.createEvent,
           events: dict.dashboard.events,
           revenue: dict.dashboard.revenue,
+          activeRoleLabel: dict.dashboard.activeRole,
           roleLabel: dict.photographerDashboard.rolePhotographer,
           profile: dict.dashboard.profile,
           settings: dict.dashboard.settings,
@@ -71,7 +72,7 @@ export default async function PhotographerLayout({ children }: { children: React
           support: dict.dashboard.support,
           feedback: dict.dashboard.feedback,
           account: dict.dashboard.account,
-          switchToTalent: `${dict.dashboard.switchTo} Talent`,
+          switchToTalent: `${dict.dashboard.switchTo} ${dict.talentDashboard.talentRole}`,
           logOut: dict.dashboard.logOut,
         }}
       />
