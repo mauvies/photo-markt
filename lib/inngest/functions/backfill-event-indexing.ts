@@ -71,6 +71,10 @@ export const backfillEventIndexing = inngest.createFunction(
       });
     });
 
+    // step output: Array<{id, storagePath}>. <800 KB at the per-event cap
+    // (5000 photos × ~150 B each). Well under Inngest's ~4 MB step-output
+    // limit. If MAX_PHOTOS_PER_EVENT ever raises beyond ~25 000, paginate
+    // or collapse list+reset+fanout into a single mega-step.
     const photos = await step.run('list-photos-to-process', async () => {
       return await listEventPhotosByStatuses(adminClient, eventId, [
         'pending',

@@ -4,17 +4,18 @@ import { useForm } from '@tanstack/react-form';
 import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
-import { toast } from 'sonner';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { UploadProgressDialog } from '@/components/upload-progress-dialog';
 import { Dropzone } from '@/components/uploader/Dropzone';
 import type { Event } from '@/database/queries/events';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { getPlanLimitType, isPlanLimitError } from '@/lib/plan-limits';
+import { usePhotoUpload } from '@/lib/use-photo-upload';
 import { updateEventAction } from './actions';
 import { EventFormFields } from './components/event-form-fields';
 import { EventPhotoGrid } from './components/event-photo-grid';
@@ -42,6 +43,7 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
   const [photos, setPhotos] = useState<PhotoWithUrl[]>(initialPhotos);
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [pendingDeletions, setPendingDeletions] = useState<Set<string>>(new Set());
+  const upload = usePhotoUpload();
 
   useEffect(() => {
     setPhotos(initialPhotos);
@@ -156,31 +158,32 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
           }
         }
 
-        const photoFormData = new FormData();
-        for (const file of newFiles) {
-          photoFormData.append('photos', file);
-        }
         const photoIdsToDelete = Array.from(pendingDeletions);
 
+        // Two-stage flow: save metadata first (and apply deletes), then run
+        // the byte-free direct-upload flow for new files.
         startTransition(async () => {
           try {
-            const result = await updateEventAction(
-              event.id,
-              formData,
-              photoFormData,
-              photoIdsToDelete,
-            );
-            if (result?.success) {
-              if (result.uploaded === 0 && result.skipped.length > 0) {
-                toast.error(t('allPhotosSkippedStorageLimit'));
-              } else if (result.skipped.length > 0) {
-                toast.warning(
-                  t('nPhotosUploadedSomeSkipped')
-                    .replace('{uploaded}', String(result.uploaded))
-                    .replace('{skipped}', String(result.skipped.length)),
+            const result = await updateEventAction(event.id, formData, photoIdsToDelete);
+            if (!result?.success) return;
+
+            const dashboardPath = lp(`/dashboard/photographer/events/${event.id}`);
+            if (newFiles.length === 0) {
+              router.push(dashboardPath);
+              return;
+            }
+
+            try {
+              const uploadResult = await upload.run({ eventId: event.id, files: newFiles });
+              if (uploadResult.failed.length === 0) {
+                const succeeded = uploadResult.attached.length;
+                router.push(
+                  succeeded > 0 ? `${dashboardPath}?uploaded=${succeeded}` : dashboardPath,
                 );
               }
-              router.push(lp(`/dashboard/photographer/events/${event.id}`));
+              // partial-failed handled by modal
+            } catch (uploadErr) {
+              console.error(uploadErr);
             }
           } catch (error) {
             console.error(error);
@@ -311,15 +314,45 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
             type="button"
             variant="outline"
             onClick={() => router.back()}
-            disabled={isPending}
+            disabled={isPending || upload.isActive}
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={isPending}>
-            {isPending ? 'Saving...' : 'Save Changes'}
+          <Button type="submit" disabled={isPending || upload.isActive}>
+            {isPending || upload.isActive ? 'Saving...' : 'Save Changes'}
           </Button>
         </div>
       </form>
+
+      <UploadProgressDialog
+        stage={upload.stage}
+        progressBytes={upload.progressBytes}
+        totalBytes={upload.totalBytes}
+        completedCount={upload.completedCount}
+        totalCount={upload.totalCount}
+        failedCount={upload.failedCount}
+        errorMessage={upload.errorMessage}
+        labels={{
+          title: t('uploadProgressTitle' as keyof Dictionary['newEvent']),
+          preparing: t('uploadStatePreparing' as keyof Dictionary['newEvent']),
+          uploading: t('uploadStateUploading' as keyof Dictionary['newEvent']),
+          finalizing: t('uploadStateFinalizing' as keyof Dictionary['newEvent']),
+          done: t('uploadStateDone' as keyof Dictionary['newEvent']),
+          partialFailed: t('uploadStatePartialFailed' as keyof Dictionary['newEvent']),
+          errorTitle: t('uploadStateError' as keyof Dictionary['newEvent']),
+          cancelButton: t('uploadCancelButton' as keyof Dictionary['newEvent']),
+          closeButton: t('uploadCloseButton' as keyof Dictionary['newEvent']),
+          retryFailedButton: t('uploadRetryFailedButton' as keyof Dictionary['newEvent']),
+        }}
+        onCancel={() => void upload.cancel()}
+        onRetryFailed={() => void upload.retryFailed()}
+        onClose={() => {
+          const succeeded = upload.completedCount - upload.failedCount;
+          const dashboardPath = lp(`/dashboard/photographer/events/${event.id}`);
+          upload.reset();
+          router.push(succeeded > 0 ? `${dashboardPath}?uploaded=${succeeded}` : dashboardPath);
+        }}
+      />
     </div>
   );
 }

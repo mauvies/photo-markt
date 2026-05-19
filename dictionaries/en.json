@@ -788,6 +788,18 @@
     "cancelButton": "Cancel",
     "creatingButton": "Creating Event...",
     "createButton": "Create Event",
+    "uploadProgressTitle": "Uploading photos",
+    "uploadStatePreparing": "Preparing upload…",
+    "uploadStateUploading": "Uploading {current}/{total}…",
+    "uploadStateFinalizing": "Finalizing…",
+    "uploadStateDone": "Done",
+    "uploadStatePartialFailed": "{count} photo(s) failed to upload",
+    "uploadStateError": "Upload failed",
+    "uploadCancelButton": "Cancel",
+    "uploadCloseButton": "Close",
+    "uploadRetryFailedButton": "Retry failed ({count})",
+    "uploadRejectedToast": "{n} photo(s) couldn't be processed (invalid format).",
+    "uploadValidatingBadge": "Validating",
     "summaryName": "Name",
     "summaryActivity": "Activity",
     "summaryDate": "Date",
@@ -1079,6 +1091,11 @@
     "cancel": "Cancel",
     "confirm": "Re-index",
     "errorsMinorsCannotEnableAi": "AI matching can't be enabled on events that contain minors.",
-    "errorsAiEnableFailed": "Couldn't enable AI matching. Please try again."
+    "errorsAiEnableFailed": "Couldn't enable AI matching. Please try again.",
+    "pollUpdating": "Updating…",
+    "pollError": "Couldn't refresh progress. Retrying…",
+    "indexingComplete": "All photos indexed",
+    "failedPhotosWarning": "{count} photo(s) failed to index.",
+    "failedPhotosRetry": "Retry"
   }
 }

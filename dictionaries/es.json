@@ -788,6 +788,18 @@
     "cancelButton": "Cancelar",
     "creatingButton": "Creando evento...",
     "createButton": "Crear evento",
+    "uploadProgressTitle": "Subiendo fotos",
+    "uploadStatePreparing": "Preparando subida…",
+    "uploadStateUploading": "Subiendo {current}/{total}…",
+    "uploadStateFinalizing": "Finalizando…",
+    "uploadStateDone": "Listo",
+    "uploadStatePartialFailed": "{count} foto(s) no se subieron",
+    "uploadStateError": "Error al subir",
+    "uploadCancelButton": "Cancelar",
+    "uploadCloseButton": "Cerrar",
+    "uploadRetryFailedButton": "Reintentar fallidas ({count})",
+    "uploadRejectedToast": "{n} foto(s) no pudieron procesarse (formato no válido).",
+    "uploadValidatingBadge": "Validando",
     "summaryName": "Nombre",
     "summaryActivity": "Actividad",
     "summaryDate": "Fecha",
@@ -1079,6 +1091,11 @@
     "cancel": "Cancelar",
     "confirm": "Reindexar",
     "errorsMinorsCannotEnableAi": "No se puede activar la coincidencia facial en eventos que incluyen menores.",
-    "errorsAiEnableFailed": "No se pudo activar la coincidencia facial. Por favor, inténtalo de nuevo."
+    "errorsAiEnableFailed": "No se pudo activar la coincidencia facial. Por favor, inténtalo de nuevo.",
+    "pollUpdating": "Actualizando…",
+    "pollError": "No se pudo actualizar el progreso. Reintentando…",
+    "indexingComplete": "Todas las fotos indexadas",
+    "failedPhotosWarning": "{count} foto(s) no se pudieron indexar.",
+    "failedPhotosRetry": "Reintentar"
   }
 }

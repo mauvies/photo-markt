@@ -4,6 +4,14 @@
 
 export type PlanId = 'free' | 'starter' | 'pro';
 
+/**
+ * Hard ceiling on photos per single event, applied uniformly across plan
+ * tiers. Enforced in the upload flow's `createPhotoUploadUrls` server
+ * action; not a DB CHECK because counting 5000 rows per call would be
+ * wasteful relative to the per-batch precheck we do once.
+ */
+export const MAX_PHOTOS_PER_EVENT = 5000;
+
 export type PlanFeature = string | { text: string; badge?: string };
 
 export type BillingPeriod = 'monthly' | 'yearly';
