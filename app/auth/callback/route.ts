@@ -30,6 +30,7 @@ export async function GET(request: Request) {
   // This avoids putting state in the redirectTo URL, which must exactly match
   // Supabase's configured allowed redirect URLs (query params break the match).
   let plan: string | null = null;
+  let period: string | null = null;
   let downloadToken: string | null = null;
   let nextParam: string | null = null;
 
@@ -39,6 +40,7 @@ export async function GET(request: Request) {
     try {
       const state = JSON.parse(oauthStateCookie.value) as Record<string, string>;
       plan = state.plan ?? null;
+      period = state.period ?? null;
       nextParam = state.next ?? null;
     } catch {
       // Ignore malformed cookie — fall through to query param fallback
@@ -48,6 +50,7 @@ export async function GET(request: Request) {
 
   // Fall back to query params for any non-Google flows that still pass them directly
   if (!plan) plan = requestUrl.searchParams.get('plan');
+  if (!period) period = requestUrl.searchParams.get('period');
   if (!downloadToken) downloadToken = requestUrl.searchParams.get('token');
   if (!nextParam) nextParam = requestUrl.searchParams.get('next');
 
@@ -67,10 +70,13 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}${localizedPath(lang, '/login?error=auth_failed')}`);
   }
 
-  // If user has a plan parameter, redirect to billing checkout
+  // If user has a plan parameter, redirect to billing checkout. Forward
+  // `period` too so the post-signup auto-checkout in `UpgradeHandler`
+  // picks the right monthly/yearly Stripe Price.
   if (plan && (plan === 'starter' || plan === 'pro')) {
+    const periodSuffix = period === 'monthly' || period === 'yearly' ? `&period=${period}` : '';
     return NextResponse.redirect(
-      `${origin}${localizedPath(lang, `/dashboard/photographer/settings?upgrade=${plan}`)}`,
+      `${origin}${localizedPath(lang, `/dashboard/photographer/settings?upgrade=${plan}${periodSuffix}`)}`,
     );
   }
 

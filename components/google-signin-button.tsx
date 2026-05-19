@@ -8,6 +8,11 @@ import { Button } from '@/components/ui/button';
 
 interface GoogleSignInButtonProps {
   plan?: string;
+  /**
+   * Billing period to forward through the OAuth flow → settings's UpgradeHandler.
+   * Only relevant when `plan` is also set (post-signup checkout flow).
+   */
+  period?: string;
   next?: string;
   variant?: 'default' | 'outline' | 'ghost' | 'link' | 'destructive' | 'secondary';
   className?: string;
@@ -16,6 +21,7 @@ interface GoogleSignInButtonProps {
 
 export function GoogleSignInButton({
   plan,
+  period,
   next,
   variant = 'outline',
   className,
@@ -26,7 +32,7 @@ export function GoogleSignInButton({
 
   const handleClick = () => {
     startTransition(async () => {
-      const result = await signInWithGoogle(plan, next);
+      const result = await signInWithGoogle(plan, next, period);
       const nextSuffix = next ? `&next=${encodeURIComponent(next)}` : '';
       if (result.error) {
         router.push(

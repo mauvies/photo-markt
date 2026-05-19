@@ -5,7 +5,7 @@ import { createClient } from '@/database/server';
 import { safeNext } from '@/lib/auth/safe-next';
 import { getSiteUrl } from '@/lib/get-site-url';
 
-export async function signInWithGoogle(plan?: string, next?: string) {
+export async function signInWithGoogle(plan?: string, next?: string, period?: string) {
   const supabase = await createClient();
   const origin = getSiteUrl();
 
@@ -15,6 +15,9 @@ export async function signInWithGoogle(plan?: string, next?: string) {
   const cookieStore = await cookies();
   const oauthState: Record<string, string> = {};
   if (plan) oauthState.plan = plan;
+  // Constrained values: only 'monthly' / 'yearly'. Anything else is dropped
+  // so callers can't smuggle arbitrary strings through the cookie.
+  if (period === 'monthly' || period === 'yearly') oauthState.period = period;
   const safeNextPath = safeNext(next);
   if (safeNextPath) oauthState.next = safeNextPath;
   if (Object.keys(oauthState).length > 0) {

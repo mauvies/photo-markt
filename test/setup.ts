@@ -26,6 +26,8 @@ const TEST_ENV_DEFAULTS: Record<string, string> = {
   STRIPE_WEBHOOK_SECRET: 'whsec_test_dummy_for_tests_at_least_32_chars',
   STRIPE_PRICE_AMATEUR: 'price_test_amateur',
   STRIPE_PRICE_PRO: 'price_test_pro',
+  STRIPE_PRICE_AMATEUR_YEARLY: 'price_test_amateur_yearly',
+  STRIPE_PRICE_PRO_YEARLY: 'price_test_pro_yearly',
   RESEND_API_KEY: 're_test_dummy',
   SITE_URL: 'http://127.0.0.1:3000',
   // AWS Rekognition credentials — fake values; tests never hit AWS.

@@ -19,13 +19,24 @@ export default async function Signup({
   searchParams,
 }: {
   params: Promise<{ lang: string }>;
-  searchParams: Promise<{ message?: string; plan?: string; token?: string; next?: string }>;
+  searchParams: Promise<{
+    message?: string;
+    plan?: string;
+    period?: string;
+    token?: string;
+    next?: string;
+  }>;
 }) {
   const { lang } = await routeParams;
   const dict = await getDictionary(lang as Locale);
   const params = await searchParams;
   const supabase = await createClient();
   const nextParam = safeNext(params.next);
+  // Constrain to the two known values; ignore anything else so callers can't
+  // smuggle arbitrary strings into the upgrade URL.
+  const period: 'monthly' | 'yearly' | null =
+    params.period === 'monthly' || params.period === 'yearly' ? params.period : null;
+  const periodSuffix = period ? `&period=${period}` : '';
 
   const {
     data: { user },
@@ -33,7 +44,10 @@ export default async function Signup({
 
   // If user is logged in and has a plan parameter, redirect to settings page
   if (user && params.plan && (params.plan === 'starter' || params.plan === 'pro')) {
-    return localizedRedirect(lang, `/dashboard/photographer/settings?upgrade=${params.plan}`);
+    return localizedRedirect(
+      lang,
+      `/dashboard/photographer/settings?upgrade=${params.plan}${periodSuffix}`,
+    );
   }
 
   if (user) {
@@ -80,13 +94,14 @@ export default async function Signup({
       );
     }
 
-    // Preserve plan, token, and next parameters if present
+    // Preserve plan, period, token, and next parameters if present.
     const planParam = params.plan ? `&plan=${params.plan}` : '';
+    const periodParam = period ? `&period=${period}` : '';
     const tokenParam = params.token ? `&token=${params.token}` : '';
     const nextSuffix = nextQuerySuffix(nextParam, '&');
     return localizedRedirect(
       lang,
-      `/login?success=Check email to continue sign in process${planParam}${tokenParam}${nextSuffix}`,
+      `/login?success=Check email to continue sign in process${planParam}${periodParam}${tokenParam}${nextSuffix}`,
     );
   };
 
@@ -100,6 +115,7 @@ export default async function Signup({
         <div className="mt-4">
           <GoogleSignInButton
             plan={params.plan}
+            period={period ?? undefined}
             next={nextParam ?? undefined}
             label={dict.auth.continueWithGoogle}
             className="w-full h-10 border-1 rounded-full"

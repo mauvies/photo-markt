@@ -24,6 +24,7 @@ export default async function Login({
     message?: string;
     error?: string;
     plan?: string;
+    period?: string;
     success?: string;
     reset?: string;
     token?: string;
@@ -35,14 +36,21 @@ export default async function Login({
   const params = await searchParams;
   const supabase = await createClient();
   const nextParam = safeNext(params.next);
+  const period: 'monthly' | 'yearly' | null =
+    params.period === 'monthly' || params.period === 'yearly' ? params.period : null;
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // If user is logged in and has a plan parameter, redirect to billing checkout
+  // If user is logged in and has a plan parameter, redirect to billing checkout.
+  // Forward `period` so UpgradeHandler picks the right Stripe Price.
   if (user && params.plan && (params.plan === 'starter' || params.plan === 'pro')) {
-    return localizedRedirect(lang, `/dashboard/photographer/settings?upgrade=${params.plan}`);
+    const periodSuffix = period ? `&period=${period}` : '';
+    return localizedRedirect(
+      lang,
+      `/dashboard/photographer/settings?upgrade=${params.plan}${periodSuffix}`,
+    );
   }
 
   if (user) {
@@ -150,6 +158,7 @@ export default async function Login({
           <div className="mt-4">
             <GoogleSignInButton
               plan={params.plan}
+              period={period ?? undefined}
               next={nextParam ?? undefined}
               label={dict.auth.continueWithGoogle}
               className="w-full h-10 border-1 rounded-full"
