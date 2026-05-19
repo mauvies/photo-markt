@@ -47,7 +47,10 @@ export const indexPhotoFaces = inngest.createFunction(
     id: 'index-photo-faces',
     // Per-event concurrency cap so a single 2000-photo bulk upload doesn't
     // drown out other events' work or hammer AWS in one shot.
-    concurrency: [{ limit: 10, key: 'event.data.eventId' }],
+    // Limit set to 5 to fit the Inngest free-tier plan ceiling.
+    // TODO: raise to 10–50 once we upgrade to Inngest Pro (Pro caps are
+    // 50/function on Hobby and higher on Team).
+    concurrency: [{ limit: 5, key: 'event.data.eventId' }],
     retries: 3,
     triggers: [{ event: 'photo.uploaded' }],
     onFailure: async ({ event }) => {
