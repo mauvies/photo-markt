@@ -56,6 +56,10 @@ export default async function TalentExplorePage({
           initialDateTo={dateTo}
           hideTopFilters={true}
           showFindMe={false}
+          // Forwarded into the inner EventSearchBar so access codes typed
+          // here land on the talent-dashboard event detail route (which
+          // now resolves share codes — see `events/[id]/page.tsx`).
+          eventLinkPrefix="/dashboard/talent/events"
         />
       </TranslationsProvider>
     </div>

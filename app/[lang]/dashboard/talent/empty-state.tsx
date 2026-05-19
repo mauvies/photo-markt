@@ -9,8 +9,8 @@ export function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
       <Camera className="h-12 w-12 text-muted-foreground/50 mb-4" />
-      <p className="text-sm font-medium text-muted-foreground">No photos added yet</p>
-      <p className="mt-1 text-xs text-muted-foreground">
+      <p className="text-base font-medium text-muted-foreground md:text-sm">No photos added yet</p>
+      <p className="mt-1 text-sm text-muted-foreground md:text-xs">
         Photos where you&apos;re tagged will appear here
       </p>
       <Link

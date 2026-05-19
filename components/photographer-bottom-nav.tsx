@@ -48,6 +48,9 @@ export function PhotographerBottomNav({
     createEvent: string;
     revenue: string;
     account: string;
+    /** Generic "Role" label (e.g. en="Role", es="Rol"). Prefix for the role row. */
+    activeRoleLabel: string;
+    /** Localized photographer role name shown after `activeRoleLabel:` (e.g. "Photographer"). */
     roleLabel: string;
     profile: string;
     settings: string;
@@ -166,20 +169,18 @@ export function PhotographerBottomNav({
             key={item.href}
             href={lp(item.href)}
             className={cn(
-              'flex flex-1 flex-col items-center justify-center gap-1 py-3 transition-colors duration-150',
+              'flex flex-1 flex-col items-center justify-center gap-1.5 min-h-16 py-2 transition-colors duration-150',
               active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground/70',
             )}
           >
             <item.icon
               className={cn(
-                'h-5 w-5 shrink-0 transition-all duration-150',
+                'h-6 w-6 shrink-0 transition-all duration-150',
                 active ? 'stroke-[2.5]' : 'stroke-[1.5]',
               )}
               aria-hidden="true"
             />
-            <span
-              className={cn('text-[10px] leading-none tracking-tight', active && 'font-semibold')}
-            >
+            <span className={cn('text-xs leading-none tracking-tight', active && 'font-semibold')}>
               {item.label}
             </span>
           </Link>
@@ -190,25 +191,25 @@ export function PhotographerBottomNav({
       <DropdownMenu>
         <DropdownMenuTrigger
           className={cn(
-            'flex flex-1 flex-col items-center justify-center gap-1 py-3 transition-colors duration-150 outline-none',
+            'flex flex-1 flex-col items-center justify-center gap-1.5 min-h-16 py-2 transition-colors duration-150 outline-none',
             isAccountActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground/70',
           )}
           aria-label="Account menu"
         >
           <Avatar
             className={cn(
-              'h-5 w-5 transition-all duration-150',
+              'h-6 w-6 transition-all duration-150',
               isAccountActive ? 'ring-[2px] ring-foreground ring-offset-1' : '',
             )}
           >
             <AvatarImage src={user.avatar ?? undefined} alt={user.name} />
-            <AvatarFallback className="text-[9px]">
+            <AvatarFallback className="text-[10px]">
               {user.name?.charAt(0).toUpperCase() ?? 'U'}
             </AvatarFallback>
           </Avatar>
           <span
             className={cn(
-              'text-[10px] leading-none tracking-tight',
+              'text-xs leading-none tracking-tight',
               isAccountActive && 'font-semibold',
             )}
           >
@@ -225,34 +226,38 @@ export function PhotographerBottomNav({
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
-                <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+                <span className="truncate text-sm text-muted-foreground md:text-xs">
+                  {user.email}
+                </span>
               </div>
             </div>
           </DropdownMenuLabel>
 
           <div className="px-2 py-1.5">
-            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Camera className="h-3 w-3" />
-              {navLabels.roleLabel}
+            <span className="flex items-center gap-1.5 whitespace-nowrap text-sm text-muted-foreground md:text-xs">
+              <Camera className="h-3.5 w-3.5 md:h-3 md:w-3" />
+              {navLabels.activeRoleLabel}:
+              <span className="font-medium text-foreground">{navLabels.roleLabel}</span>
             </span>
           </div>
 
+          {/* Role switch — surfaced near the role indicator so the user can
+              toggle without scanning the full menu. */}
+          <DropdownMenuItem onClick={handleSwitchRole} disabled={isPending}>
+            <User className="mr-2 h-4 w-4" />
+            <span>{navLabels.switchToTalent}</span>
+          </DropdownMenuItem>
+
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
+            {/* "Profile" goes to the dashboard-wrapped preview so the
+                photographer stays inside the dashboard chrome while
+                viewing their own profile. The public URL is exposed
+                separately via the "Copy profile link" button. */}
             <DropdownMenuItem asChild>
-              {/* "Profile" goes to the dashboard-wrapped preview so the
-                  photographer stays inside the dashboard chrome while
-                  viewing their own profile. The public URL is exposed
-                  separately via the "Copy profile link" button. */}
               <Link href={lp('/dashboard/photographer/profile/preview')}>
                 <User className="mr-2 h-4 w-4" />
                 <span>{navLabels.profile}</span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href={lp('/dashboard/photographer/settings/payout-profile')}>
-                <WalletMinimal className="mr-2 h-4 w-4" />
-                <span>{navLabels.payouts}</span>
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
@@ -262,11 +267,21 @@ export function PhotographerBottomNav({
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
+              <Link href={lp('/dashboard/photographer/settings/payout-profile')}>
+                <WalletMinimal className="mr-2 h-4 w-4" />
+                <span>{navLabels.payouts}</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
               <Link href={lp('/dashboard/photographer/settings?tab=billing')}>
                 <CreditCard className="mr-2 h-4 w-4" />
                 <span>{navLabels.billing}</span>
               </Link>
             </DropdownMenuItem>
+          </DropdownMenuGroup>
+
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
             <DropdownMenuItem asChild>
               <Link href={lp('/dashboard/photographer/support')}>
                 <LifeBuoy className="mr-2 h-4 w-4" />
@@ -278,14 +293,6 @@ export function PhotographerBottomNav({
                 <Send className="mr-2 h-4 w-4" />
                 <span>{navLabels.feedback}</span>
               </Link>
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-
-          <DropdownMenuSeparator />
-          <DropdownMenuGroup>
-            <DropdownMenuItem onClick={handleSwitchRole} disabled={isPending}>
-              <Camera className="mr-2 h-4 w-4" />
-              <span>{navLabels.switchToTalent}</span>
             </DropdownMenuItem>
           </DropdownMenuGroup>
 

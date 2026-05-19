@@ -1,34 +1,65 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useEffect, useRef } from 'react';
-import { toast } from 'sonner';
+import { Crown } from 'lucide-react';
+import Link from 'next/link';
+import { useState } from 'react';
+import { Button, buttonVariants } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
-interface LimitReachedToastProps {
-  message: string;
-  ctaLabel: string;
-  ctaHref: string;
+interface EventLimitReachedDialogProps {
+  current: number;
+  max: number;
+  planName: string;
+  upgradeHref: string;
+  t: {
+    title: string;
+    /** Template with `{planName}`, `{current}`, `{max}` placeholders. */
+    body: string;
+    upgradeCta: string;
+    closeLabel: string;
+  };
 }
 
-/**
- * Fires a one-shot error toast on mount. Used when the new-event wizard
- * redirects an at-limit user back to the events list with `?limit=events`.
- * `useRef` guards against StrictMode's double-mount in dev.
- */
-export function LimitReachedToast({ message, ctaLabel, ctaHref }: LimitReachedToastProps) {
-  const router = useRouter();
-  const fired = useRef(false);
+export function EventLimitReachedDialog({
+  current,
+  max,
+  planName,
+  upgradeHref,
+  t,
+}: EventLimitReachedDialogProps) {
+  const [open, setOpen] = useState(true);
 
-  useEffect(() => {
-    if (fired.current) return;
-    fired.current = true;
-    toast.error(message, {
-      action: {
-        label: ctaLabel,
-        onClick: () => router.push(ctaHref),
-      },
-    });
-  }, [message, ctaLabel, ctaHref, router]);
+  const body = t.body
+    .replace('{planName}', planName)
+    .replace('{current}', String(current))
+    .replace('{max}', String(max));
 
-  return null;
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader className="items-center text-center sm:items-start sm:text-left">
+          <div className="mb-2 inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Crown className="h-6 w-6" aria-hidden="true" />
+          </div>
+          <DialogTitle>{t.title}</DialogTitle>
+          <DialogDescription>{body}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="flex-col gap-2 sm:flex-row">
+          <Button variant="outline" onClick={() => setOpen(false)} className="sm:order-1">
+            {t.closeLabel}
+          </Button>
+          <Link href={upgradeHref} className={buttonVariants({ className: 'sm:order-2' })}>
+            {t.upgradeCta}
+          </Link>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
