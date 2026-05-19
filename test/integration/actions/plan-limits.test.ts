@@ -286,13 +286,13 @@ describe('createEvent — maxEvents enforcement', () => {
     );
   });
 
-  it('returns { uploaded, skipped: [] } on a successful create within the cap', async () => {
+  it('returns an eventId on a successful create within the cap', async () => {
     const user = await createTestUser('PHOTOGRAPHER');
     mockSession.userId = user.id;
 
-    const result = await createEvent(buildEventFormData({}, [await makeJpegFile()]));
-    expect(result.uploaded).toBe(1);
-    expect(result.skipped).toEqual([]);
+    // createEvent is byte-free post-refactor; photos flow through the
+    // direct-upload SAs separately. Pass no photos here.
+    const result = await createEvent(buildEventFormData({}, []));
     expect(result.eventId).toBeTruthy();
   });
 });

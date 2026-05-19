@@ -2,7 +2,6 @@
 
 import { revalidatePath, revalidateTag } from 'next/cache';
 import {
-  createPhoto,
   deletePhoto,
   deleteStorageFiles,
   eventExists,
@@ -10,24 +9,20 @@ import {
   getPhoto,
   getTagsForPhotos,
   inviteEventPhotographer,
-  isApprovedEventPhotographer,
   isPhotoTaggedForTalent,
   revokeEventPhotographer,
   searchPhotographers,
   tagPhotosForTalent,
   untagPhotoForTalent,
   updatePhotoUploadStatus,
-  uploadFile,
 } from '@/database/queries';
-import { getStorageUsageBytes } from '@/database/queries/photos';
 import {
+  type AiMatchingStatus,
+  getEventAiIndexingProgress,
   getEventRekognitionState,
-  updatePhotoFaceIndexStatus,
 } from '@/database/queries/rekognition';
 import { createClient } from '@/database/server';
 import { inngest } from '@/lib/inngest/client';
-import { validatePhotoUpload } from '@/lib/photo-upload';
-import { assertCanUploadPhoto, isPlanLimitError } from '@/lib/plan-limits';
 
 // Invalidates the `event-${param}` cache tag for every param a viewer might
 // have used to reach the event (UUID, slug, or share_code). Without this,
@@ -182,124 +177,6 @@ export async function respondToEventInvitationAction(
   revalidatePath('/es/dashboard/photographer/events');
   revalidatePath('/en/dashboard/photographer/events');
   return { status };
-}
-
-/**
- * Upload one or more photos to an organizer event as an accepted photographer.
- * The contributor's own user_id is set on the resulting `photos` rows so they
- * own their submissions (and any future revenue routing flows to them).
- */
-export type UploadSkippedReason = 'storage_limit';
-
-export interface UploadResult {
-  uploaded: number;
-  skipped: Array<{ name: string; reason: UploadSkippedReason }>;
-}
-
-export async function uploadOrganizerEventPhotoAction(formData: FormData): Promise<UploadResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error('You must be signed in to upload photos.');
-
-  const eventId = formData.get('event_id')?.toString();
-  if (!eventId) throw new Error('Missing event id.');
-
-  // Look up the event without ownership check — the caller is a contributor,
-  // not the owner. We re-read it via a non-owner-scoped query below.
-  const { data: event } = await supabase
-    .from('events')
-    .select('id, type, require_upload_approval, date, city, country, state, deleted_at')
-    .eq('id', eventId)
-    .maybeSingle();
-  if (!event || event.deleted_at) throw new Error('Event not found.');
-  if (event.type !== 'organizer') {
-    throw new Error('This event does not accept contributor uploads.');
-  }
-
-  const isAccepted = await isApprovedEventPhotographer(supabase, {
-    eventId,
-    photographerId: user.id,
-  });
-  if (!isAccepted) {
-    throw new Error('You are not an accepted photographer for this event.');
-  }
-
-  const files = formData
-    .getAll('photos')
-    .filter((value): value is File => value instanceof File && value.size > 0);
-  if (files.length === 0) throw new Error('No photos provided.');
-
-  const status: 'approved' | 'pending' = event.require_upload_approval ? 'pending' : 'approved';
-
-  // Pre-compute current storage once. We mutate this local total after every
-  // successful upload so subsequent files see an accurate running total
-  // without re-querying the DB per file. Contributor uploads count against
-  // the contributor's own plan — they own the resulting `photos` rows.
-  let currentUsage = await getStorageUsageBytes(supabase, user.id);
-  // AI matching state is owned by the event organizer; contributor uploads
-  // still get indexed into the event's Rekognition collection if enabled.
-  const aiState = await getEventRekognitionState(supabase, eventId);
-  const shouldIndex = Boolean(aiState?.enabled && !aiState.containsMinors);
-  const skipped: UploadResult['skipped'] = [];
-  const uploadedPaths: string[] = [];
-  let uploaded = 0;
-
-  try {
-    for (const file of files) {
-      const validated = await validatePhotoUpload(file);
-      const fileSize = validated.buffer.length;
-      try {
-        await assertCanUploadPhoto(supabase, user.id, fileSize, currentUsage);
-      } catch (err) {
-        if (isPlanLimitError(err)) {
-          skipped.push({ name: file.name, reason: 'storage_limit' });
-          continue;
-        }
-        throw err;
-      }
-
-      const path = `${user.id}/${eventId}/${crypto.randomUUID()}.${validated.extension}`;
-      await uploadFile(supabase, 'photos', path, validated.buffer, {
-        contentType: validated.contentType,
-        upsert: false,
-      });
-      uploadedPaths.push(path);
-      const inserted = await createPhoto(supabase, user.id, {
-        event_id: eventId,
-        original_url: path,
-        taken_at: new Date(event.date as string).toISOString(),
-        city: (event.city as string) || '',
-        country: (event.country as string) || '',
-        state: (event.state as string | null) ?? null,
-        size_bytes: fileSize,
-        upload_status: status,
-      });
-      // Emit `photo.uploaded` so the Inngest worker indexes faces. Failure to
-      // enqueue isn't fatal — the photo sits at face_index_status='pending'
-      // and a future Re-index can pick it up.
-      await emitPhotoUploaded({
-        shouldIndex,
-        photoId: inserted.id,
-        eventId,
-        storagePath: path,
-        supabase,
-      });
-      currentUsage += fileSize;
-      uploaded += 1;
-    }
-  } catch (error) {
-    if (uploadedPaths.length > 0) {
-      await deleteStorageFiles(supabase, 'photos', uploadedPaths).catch(() => {});
-    }
-    throw error;
-  }
-
-  revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
-  revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
-  await revalidateEventPhotoCacheTags(eventId);
-  return { uploaded, skipped };
 }
 
 /**
@@ -566,47 +443,6 @@ export async function rejectPendingPhotoAction(
 // ─── AI matching toggle + re-index ────────────────────────────────────────────
 
 /**
- * Helper used by every photographer-side upload path. When the event has AI
- * matching enabled and is not flagged as containing minors, fires a
- * `photo.uploaded` Inngest event so the worker indexes faces. Otherwise marks
- * the photo `not_applicable` directly.
- *
- * Inngest emission failures are logged but never thrown — a transient
- * dispatcher outage shouldn't fail the upload. The photo sits at
- * `face_index_status='pending'` and a future Re-index will pick it up.
- */
-async function emitPhotoUploaded(params: {
-  shouldIndex: boolean;
-  photoId: string;
-  eventId: string;
-  storagePath: string;
-  supabase: Awaited<ReturnType<typeof createClient>>;
-}): Promise<void> {
-  if (!params.shouldIndex) {
-    try {
-      await updatePhotoFaceIndexStatus(params.supabase, params.photoId, 'not_applicable');
-    } catch (err) {
-      console.error('[emitPhotoUploaded] failed to mark not_applicable', err);
-    }
-    return;
-  }
-  try {
-    await inngest.send({
-      name: 'photo.uploaded',
-      data: {
-        photoId: params.photoId,
-        eventId: params.eventId,
-        storagePath: params.storagePath,
-      },
-    });
-  } catch (err) {
-    console.error('[emitPhotoUploaded] failed to enqueue photo.uploaded', err);
-  }
-}
-
-export { emitPhotoUploaded };
-
-/**
  * Auth gate shared by the three AI server actions. Verifies an authenticated
  * photographer owns the event. Returns the user id on success.
  */
@@ -683,6 +519,41 @@ export async function disableAIMatchingForEvent(eventId: string): Promise<{ succ
   revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
   revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
   return { success: true };
+}
+
+/**
+ * Lightweight progress poll for the owner's AI-status card. Returns a
+ * compact JSON payload so the client can refresh "X of Y indexed" without
+ * a full page reload. Owner-only — uses `requireEventOwner` for auth.
+ *
+ * Calling cadence is owned by the caller (`AiStatusCard` polls every 5s
+ * while the event is in `idle`-with-pending or `indexing` state). The
+ * helper is otherwise stateless.
+ */
+export interface EventIndexingProgress {
+  status: AiMatchingStatus;
+  indexedCount: number;
+  totalCount: number;
+  failedCount: number;
+  pendingCount: number;
+  lastIndexedAt: string | null;
+}
+
+export async function getEventIndexingProgress(eventId: string): Promise<EventIndexingProgress> {
+  const supabase = await createClient();
+  await requireEventOwner(supabase, eventId);
+
+  const state = await getEventRekognitionState(supabase, eventId);
+  const progress = await getEventAiIndexingProgress(supabase, eventId);
+
+  return {
+    status: state?.status ?? 'idle',
+    indexedCount: progress.indexed,
+    totalCount: progress.totalApplicable,
+    failedCount: progress.failed,
+    pendingCount: progress.pending,
+    lastIndexedAt: progress.lastIndexedAt,
+  };
 }
 
 /** Re-run indexing across an event's photos. Reuses the backfill worker

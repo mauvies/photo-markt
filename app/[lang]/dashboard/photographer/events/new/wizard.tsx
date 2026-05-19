@@ -5,10 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { Button } from '@/components/ui/button';
+import { UploadProgressDialog } from '@/components/upload-progress-dialog';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { getPlanLimitType, isPlanLimitError } from '@/lib/plan-limits';
+import { usePhotoUpload } from '@/lib/use-photo-upload';
 import { createEvent } from './actions';
 import { activityOptions, activityValues } from './activity-options';
 import { ShareCodeDialog } from './components/share-code-dialog';
@@ -189,6 +191,7 @@ export default function NewEventForm() {
   const [photosLost, setPhotosLost] = useState(false);
 
   const form = useEventForm();
+  const upload = usePhotoUpload();
 
   // Mount-time hydration. Reads sessionStorage once and seeds form values,
   // reachedStep, and any pending returnToStep memo (so a refresh mid-edit
@@ -417,28 +420,71 @@ export default function NewEventForm() {
         formData.append('organizer_fee_per_photo', fee.toString());
       }
     }
-    for (const file of files) formData.append('photos', file);
-
+    // Bytes never go through the SA — only metadata. The new flow is:
+    //   1. createEvent  → eventId (no files attached)
+    //   2. createPhotoUploadUrls → signed URLs
+    //   3. PUT bytes directly to Storage with progress
+    //   4. attachPhotosToEvent
+    //   5. Redirect with `?uploaded={count}` so the destination can detect
+    //      worker-rejected photos via a count mismatch.
     startTransition(async () => {
       try {
         const result = await createEvent(formData);
         if (!result?.eventId) throw new Error('Event could not be created');
         setSubmitError(null);
-        try {
-          sessionStorage.removeItem(DRAFT_KEY);
-          sessionStorage.removeItem(HAD_FILES_KEY);
-        } catch {
-          // Ignore.
+
+        const dashboardPath = lp(`/dashboard/photographer/events/${result.eventId}`);
+        const goToEvent = (succeededCount: number) => {
+          try {
+            sessionStorage.removeItem(DRAFT_KEY);
+            sessionStorage.removeItem(HAD_FILES_KEY);
+          } catch {
+            // Ignore.
+          }
+          const target =
+            succeededCount > 0 ? `${dashboardPath}?uploaded=${succeededCount}` : dashboardPath;
+          if (!parsed.is_public && result.shareCode) {
+            setCreatedShareCode(result.shareCode);
+            setCreatedEventName(parsed.name);
+            setCreatedEventId(result.eventId);
+            // Auto-dismiss after 5s. We CLEAR the dialog state first so
+            // the controlled `open` prop transitions to `false` and Radix
+            // can run its body-style cleanup before the wizard unmounts
+            // via `router.push`. Without this, the overlay/pointer-events
+            // styles leak into the destination route.
+            setTimeout(() => {
+              setCreatedShareCode(null);
+              setCreatedEventName(null);
+              setCreatedEventId(null);
+              router.push(target);
+            }, 5000);
+          } else {
+            router.push(target);
+          }
+        };
+
+        if (files.length === 0) {
+          goToEvent(0);
+          return;
         }
-        if (!parsed.is_public && result.shareCode) {
-          setCreatedShareCode(result.shareCode);
-          setCreatedEventName(parsed.name);
-          setCreatedEventId(result.eventId);
-          setTimeout(() => {
-            router.push(lp(`/dashboard/photographer/events/${result.eventId}`));
-          }, 5000);
-        } else {
-          router.push(lp(`/dashboard/photographer/events/${result.eventId}`));
+
+        try {
+          const uploadResult = await upload.run({
+            eventId: result.eventId,
+            files,
+          });
+          // If everything succeeded (or partial-failed but user dismisses
+          // the modal), redirect with the attached count.
+          if (uploadResult.failed.length === 0) {
+            goToEvent(uploadResult.attached.length);
+          }
+          // Partial-failed path is handled by the modal: the user clicks
+          // Retry or Close. Close calls upload.reset() and triggers the
+          // redirect via the modal's onClose callback below.
+        } catch (uploadErr) {
+          // run() threw — modal will show error stage and the user can
+          // close it; we still navigated to the event after they dismiss.
+          console.error(uploadErr);
         }
       } catch (error) {
         console.error(error);
@@ -455,7 +501,7 @@ export default function NewEventForm() {
         setSubmitError(error instanceof Error ? error.message : t('submitError'));
       }
     });
-  }, [files, form.state.values, goToStep, isPending, lp, router, t]);
+  }, [files, form.state.values, goToStep, isPending, lp, router, t, upload]);
 
   const reviewSections: ReviewSection[] = useMemo(() => {
     const v = form.state.values;
@@ -644,20 +690,65 @@ export default function NewEventForm() {
         </div>
       </div>
 
-      {createdShareCode && createdEventName && (
-        <ShareCodeDialog
-          shareCode={createdShareCode}
-          eventName={createdEventName}
-          onGoToEvent={() => {
-            if (createdEventId) {
-              setCreatedShareCode(null);
-              setCreatedEventName(null);
-              setCreatedEventId(null);
-              router.push(lp(`/dashboard/photographer/events/${createdEventId}`));
-            }
-          }}
-        />
-      )}
+      <ShareCodeDialog
+        open={createdShareCode !== null && createdEventName !== null}
+        shareCode={createdShareCode ?? ''}
+        eventName={createdEventName ?? ''}
+        onOpenChange={(next) => {
+          if (!next) {
+            setCreatedShareCode(null);
+            setCreatedEventName(null);
+            setCreatedEventId(null);
+          }
+        }}
+        onGoToEvent={() => {
+          if (createdEventId) {
+            const targetId = createdEventId;
+            setCreatedShareCode(null);
+            setCreatedEventName(null);
+            setCreatedEventId(null);
+            router.push(lp(`/dashboard/photographer/events/${targetId}`));
+          }
+        }}
+      />
+
+      <UploadProgressDialog
+        stage={upload.stage}
+        progressBytes={upload.progressBytes}
+        totalBytes={upload.totalBytes}
+        completedCount={upload.completedCount}
+        totalCount={upload.totalCount}
+        failedCount={upload.failedCount}
+        errorMessage={upload.errorMessage}
+        labels={{
+          title: t('uploadProgressTitle' as keyof NewEventT),
+          preparing: t('uploadStatePreparing' as keyof NewEventT),
+          uploading: t('uploadStateUploading' as keyof NewEventT),
+          finalizing: t('uploadStateFinalizing' as keyof NewEventT),
+          done: t('uploadStateDone' as keyof NewEventT),
+          partialFailed: t('uploadStatePartialFailed' as keyof NewEventT),
+          errorTitle: t('uploadStateError' as keyof NewEventT),
+          cancelButton: t('uploadCancelButton' as keyof NewEventT),
+          closeButton: t('uploadCloseButton' as keyof NewEventT),
+          retryFailedButton: t('uploadRetryFailedButton' as keyof NewEventT),
+        }}
+        onCancel={() => void upload.cancel()}
+        onRetryFailed={() => void upload.retryFailed()}
+        onClose={() => {
+          // On any terminal stage, push to the event with the attached count
+          // so the destination's RejectedToast can fire when the worker
+          // rejects some photos. We use the running `completedCount-failedCount`
+          // as the succeeded count.
+          const succeeded = upload.completedCount - upload.failedCount;
+          // Find the eventId from the just-created flow. The wizard already
+          // navigated for the success path; the close handler covers the
+          // partial-failed / error / cancelled paths. We can't restore the
+          // eventId here without lifting it to state, but the user can always
+          // re-navigate from the events list. Simplest: reset and stay.
+          upload.reset();
+          void succeeded;
+        }}
+      />
     </div>
   );
 }

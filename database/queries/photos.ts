@@ -5,7 +5,7 @@
 import type { SupabaseServerClient } from './types';
 import { getErrorMessage } from './types';
 
-export type UploadStatus = 'approved' | 'pending';
+export type UploadStatus = 'approved' | 'pending' | 'rejected';
 
 export interface Photo {
   id: string;
@@ -21,6 +21,7 @@ export interface Photo {
   guest_email?: string | null;
   upload_status?: UploadStatus;
   size_bytes?: number | null;
+  original_filename?: string | null;
   created_at?: string;
 }
 
@@ -42,6 +43,20 @@ export interface PhotoDetail {
   guest_name?: string | null;
   guest_email?: string | null;
   upload_status?: UploadStatus;
+}
+
+/**
+ * Filters that `getEventPhotos` accepts. The legacy callers pass a single
+ * `status: UploadStatus` and an optional `skipUserIdFilter`. The new
+ * direct-upload flow needs to render the owner's own *pending* photos
+ * (the "Validating" badge) alongside approved ones — `includePending: true`
+ * widens the filter to `approved + pending` for owner views.
+ */
+export interface GetEventPhotosOptions {
+  status?: UploadStatus;
+  skipUserIdFilter?: boolean;
+  /** Owner view: include freshly-uploaded photos still being validated. */
+  includePending?: boolean;
 }
 
 /**
@@ -95,6 +110,32 @@ export async function getStorageUsageBytes(
 }
 
 /**
+ * Count non-rejected photos for an event. Used to enforce the
+ * `MAX_PHOTOS_PER_EVENT` cap when minting signed upload URLs — `rejected`
+ * photos don't occupy storage and shouldn't count toward the limit.
+ *
+ * Pending photos DO count: a pending photo has bytes in Storage waiting on
+ * worker validation. Treating it as 0 would let a caller race the worker
+ * and exceed the cap.
+ */
+export async function countEventPhotos(
+  supabase: SupabaseServerClient,
+  eventId: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from('photos')
+    .select('id', { count: 'exact', head: true })
+    .eq('event_id', eventId)
+    .neq('upload_status', 'rejected');
+
+  if (error) {
+    throw new Error(`Failed to count event photos: ${getErrorMessage(error)}`);
+  }
+
+  return count ?? 0;
+}
+
+/**
  * Get photos for multiple events. Excludes pending uploads so dashboard grids
  * and search results only show photos visible to viewers.
  */
@@ -136,16 +177,25 @@ export async function getEventPhotos(
   supabase: SupabaseServerClient,
   eventId: string,
   userId: string,
-  options?: { status?: UploadStatus; skipUserIdFilter?: boolean },
+  options?: GetEventPhotosOptions,
 ): Promise<PhotoDetail[]> {
-  const status = options?.status ?? 'approved';
   let query = supabase
     .from('photos')
     .select(
       'id, original_url, taken_at, city, country, uploaded_by, guest_name, guest_email, upload_status',
     )
-    .eq('event_id', eventId)
-    .eq('upload_status', status);
+    .eq('event_id', eventId);
+
+  if (options?.includePending) {
+    // Owner-side widening: show photos still mid-validation in the grid so
+    // the photographer sees their upload-in-progress state, not a phantom
+    // gap. Rejected photos stay hidden — they're surfaced via the toast.
+    query = query.in('upload_status', ['approved', 'pending']);
+  } else {
+    const status = options?.status ?? 'approved';
+    query = query.eq('upload_status', status);
+  }
+
   if (!options?.skipUserIdFilter) {
     query = query.eq('user_id', userId);
   }
@@ -246,8 +296,12 @@ export async function createPhoto(
     state: string | null;
     size_bytes: number;
     // Optional. Defaults to 'approved' on insert (the column default). Pass
-    // 'pending' for organizer-event uploads when the event requires approval.
+    // 'pending' for organizer-event uploads when the event requires approval,
+    // OR for the direct-upload flow where photos sit 'pending' until the
+    // Inngest worker has validated their bytes.
     upload_status?: UploadStatus;
+    /** User-supplied filename, kept for download-suggestion display only. */
+    original_filename?: string | null;
   },
 ): Promise<{ id: string }> {
   const { data, error } = await supabase

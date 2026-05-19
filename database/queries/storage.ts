@@ -64,6 +64,115 @@ export async function createSignedUrls(
 }
 
 /**
+ * Mint a single signed UPLOAD URL the client PUTs photo bytes to directly.
+ *
+ * Unlike `createSignedUrl` (download), Supabase's `createSignedUploadUrl`
+ * is single-use and does not accept a TTL parameter — the server default
+ * (~2h) applies. Orphan cleanup is handled separately by the Inngest cron
+ * (`cleanup-orphaned-storage-files`), so TTL isn't load-bearing here.
+ */
+export async function createSignedUploadUrl(
+  supabase: SupabaseServerClient,
+  bucket: string,
+  path: string,
+  options?: { upsert?: boolean },
+): Promise<{ path: string; token: string; signedUrl: string }> {
+  const upsert = options?.upsert ?? false;
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .createSignedUploadUrl(path, { upsert });
+
+  if (error || !data?.signedUrl) {
+    throw new Error(`Failed to create signed upload URL: ${getErrorMessage(error)}`);
+  }
+
+  return {
+    path: data.path ?? path,
+    token: data.token,
+    signedUrl: data.signedUrl,
+  };
+}
+
+/**
+ * Batch variant of `createSignedUploadUrl`. Fails the whole batch on any
+ * per-path failure — partial success would force callers to track which
+ * subset of files to re-mint URLs for, which is a footgun. Loud-and-retry
+ * is the better default.
+ */
+export async function createSignedUploadUrls(
+  supabase: SupabaseServerClient,
+  bucket: string,
+  paths: string[],
+  options?: { upsert?: boolean },
+): Promise<Array<{ path: string; token: string; signedUrl: string }>> {
+  if (paths.length === 0) {
+    return [];
+  }
+  return Promise.all(paths.map((p) => createSignedUploadUrl(supabase, bucket, p, options)));
+}
+
+/**
+ * List storage objects under a bucket whose `created_at` is older than
+ * `olderThanMs` from now. Pages through the bucket up to `maxResults`.
+ * Backs the Inngest orphan-cleanup cron.
+ *
+ * Note: Supabase Storage `.list()` is recursive only when called with a
+ * prefix and `sortBy.column = 'created_at'` doesn't propagate into nested
+ * folders without a prefix. We page through top-level "user-id" folders
+ * and then their per-event subfolders. At early scale this is a single
+ * page; the helper paginates defensively for the future.
+ */
+export async function listStorageObjectsOlderThan(
+  supabase: SupabaseServerClient,
+  bucket: string,
+  olderThanMs: number,
+  maxResults = 1000,
+): Promise<Array<{ path: string; createdAt: string }>> {
+  const cutoff = Date.now() - olderThanMs;
+  const out: Array<{ path: string; createdAt: string }> = [];
+
+  // Top-level: photographer owner-id folders + the `collaborative/` prefix.
+  const { data: topLevel, error: topErr } = await supabase.storage
+    .from(bucket)
+    .list('', { limit: maxResults, sortBy: { column: 'created_at', order: 'asc' } });
+  if (topErr || !topLevel) {
+    throw new Error(`Failed to list storage root: ${getErrorMessage(topErr)}`);
+  }
+
+  for (const folder of topLevel) {
+    // Storage folders have `id === null`; files have an `id`. Skip files at
+    // the root (we never write any) — only descend into folders.
+    if (folder.id !== null) continue;
+    const folderName = folder.name;
+
+    // List event subfolders under each top-level folder.
+    const { data: subfolders } = await supabase.storage
+      .from(bucket)
+      .list(folderName, { limit: maxResults, sortBy: { column: 'created_at', order: 'asc' } });
+
+    for (const sub of subfolders ?? []) {
+      if (sub.id !== null) continue;
+      const subPrefix = `${folderName}/${sub.name}`;
+      const { data: files } = await supabase.storage.from(bucket).list(subPrefix, {
+        limit: maxResults,
+        sortBy: { column: 'created_at', order: 'asc' },
+      });
+      for (const file of files ?? []) {
+        if (file.id === null) continue;
+        const createdAtRaw = (file as { created_at?: string }).created_at;
+        if (!createdAtRaw) continue;
+        const createdAtMs = Date.parse(createdAtRaw);
+        if (Number.isNaN(createdAtMs) || createdAtMs > cutoff) continue;
+        out.push({ path: `${subPrefix}/${file.name}`, createdAt: createdAtRaw });
+        if (out.length >= maxResults) return out;
+      }
+    }
+  }
+
+  return out;
+}
+
+/**
  * Upload a file to storage
  */
 export async function uploadFile(

@@ -16,6 +16,7 @@ const GUEST_EMAIL_KEY = 'photo-markt_guest_email';
 type CollaborativeT = Dictionary['collaborativeEvent'];
 
 type ContributeSectionProps = {
+  eventId: string;
   shareCode: string;
   isAuthenticated: boolean;
   requireApproval: boolean;
@@ -29,6 +30,7 @@ type ContributeSectionProps = {
 type FilePreview = { id: string; url: string; file: File };
 
 export function ContributeSection({
+  eventId,
   shareCode,
   isAuthenticated,
   requireApproval,
@@ -117,22 +119,18 @@ export function ContributeSection({
       }
     }
 
-    const formData = new FormData();
-    formData.append('share_code', shareCode);
-    if (!isAuthenticated) {
-      formData.append('guest_name', guestName.trim());
-      if (guestEmail.trim()) {
-        formData.append('guest_email', guestEmail.trim());
-      }
-    }
-    for (const file of files) {
-      formData.append('photos', file);
-    }
-
     // Fire-and-forget: kick off the upload via the page-level provider so it
     // survives the modal unmounting. Then close the modal immediately so the
     // user can keep browsing while the gallery shows a loading overlay.
-    void triggerUpload({ formData, isAuthenticated, shareCode });
+    void triggerUpload({
+      eventId,
+      files,
+      isAuthenticated,
+      shareCode,
+      guestName: !isAuthenticated ? guestName.trim() : null,
+      guestEmail: !isAuthenticated && guestEmail.trim() ? guestEmail.trim() : null,
+      requireApproval,
+    });
     setFiles([]);
     onSuccess?.();
   };

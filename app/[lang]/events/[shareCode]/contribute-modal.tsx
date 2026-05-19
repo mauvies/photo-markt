@@ -17,6 +17,7 @@ const MODAL_PARAM = 'contribute';
 type CollaborativeT = Dictionary['collaborativeEvent'];
 
 type ContributeModalProps = {
+  eventId: string;
   shareCode: string;
   isAuthenticated: boolean;
   requireApproval: boolean;
@@ -24,6 +25,7 @@ type ContributeModalProps = {
 };
 
 export function ContributeModal({
+  eventId,
   shareCode,
   isAuthenticated,
   requireApproval,
@@ -63,6 +65,7 @@ export function ContributeModal({
           </DialogDescription>
         </DialogHeader>
         <ContributeSection
+          eventId={eventId}
           shareCode={shareCode}
           isAuthenticated={isAuthenticated}
           requireApproval={requireApproval}

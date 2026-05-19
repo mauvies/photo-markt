@@ -4,24 +4,15 @@ import { revalidatePath, revalidateTag, updateTag } from 'next/cache';
 import { z } from 'zod';
 import { activityValues } from '@/app/[lang]/dashboard/photographer/events/new/activity-options';
 import {
-  createPhoto,
   deletePhoto as dbDeletePhoto,
   deleteStorageFiles,
   eventExists,
   getEvent,
   getPhoto,
   updateEvent,
-  uploadFile,
 } from '@/database/queries';
-import { getStorageUsageBytes } from '@/database/queries/photos';
-import {
-  getEventRekognitionState,
-  updatePhotoFaceIndexStatus,
-} from '@/database/queries/rekognition';
 import { createClient } from '@/database/server';
 import { inngest } from '@/lib/inngest/client';
-import { validatePhotoUpload } from '@/lib/photo-upload';
-import { assertCanUploadPhoto, isPlanLimitError } from '@/lib/plan-limits';
 
 // --- Constants ---
 
@@ -84,104 +75,12 @@ const eventSchema = z.object({
     .transform((val) => val === 'true'),
 });
 
-// --- Types ---
-
-type EventPayload = z.infer<typeof eventSchema>;
-type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
-
 // --- Helpers ---
 
 function generateShareCode(): string {
   return Array.from({ length: SHARE_CODE_LENGTH }, () =>
     SHARE_CODE_CHARSET.charAt(Math.floor(Math.random() * SHARE_CODE_CHARSET.length)),
   ).join('');
-}
-
-function buildPhotoPath(userId: string, eventId: string, extension: string): string {
-  return `${userId}/${eventId}/${crypto.randomUUID()}.${extension}`;
-}
-
-export type UploadSkippedReason = 'storage_limit';
-
-export interface UploadPhotosResult {
-  uploaded: number;
-  skipped: Array<{ name: string; reason: UploadSkippedReason }>;
-}
-
-async function uploadPhotos(
-  supabase: SupabaseClient,
-  userId: string,
-  eventId: string,
-  files: File[],
-  date: string,
-  location: { city: string; country: string; state: string },
-): Promise<UploadPhotosResult> {
-  let currentUsage = await getStorageUsageBytes(supabase, userId);
-  const aiState = await getEventRekognitionState(supabase, eventId);
-  const shouldIndex = Boolean(aiState?.enabled && !aiState.containsMinors);
-  const uploadedPaths: string[] = [];
-  const skipped: UploadPhotosResult['skipped'] = [];
-  let uploaded = 0;
-
-  try {
-    for (const file of files) {
-      const validated = await validatePhotoUpload(file);
-      const fileSize = validated.buffer.length;
-      try {
-        await assertCanUploadPhoto(supabase, userId, fileSize, currentUsage);
-      } catch (err) {
-        if (isPlanLimitError(err)) {
-          skipped.push({ name: file.name, reason: 'storage_limit' });
-          continue;
-        }
-        throw err;
-      }
-
-      const path = buildPhotoPath(userId, eventId, validated.extension);
-      await uploadFile(supabase, 'photos', path, validated.buffer, {
-        contentType: validated.contentType,
-        upsert: false,
-      });
-      const inserted = await createPhoto(supabase, userId, {
-        event_id: eventId,
-        original_url: path,
-        taken_at: new Date(date).toISOString(),
-        city: location.city,
-        country: location.country,
-        state: location.state,
-        size_bytes: fileSize,
-      });
-      // Hook into AI face indexing — same pattern as the other photographer
-      // upload paths. Failure to enqueue isn't fatal; Re-index can pick up.
-      if (shouldIndex) {
-        try {
-          await inngest.send({
-            name: 'photo.uploaded',
-            data: { photoId: inserted.id, eventId, storagePath: path },
-          });
-        } catch (err) {
-          console.error('[uploadPhotos] failed to enqueue photo.uploaded', err);
-        }
-      } else {
-        try {
-          await updatePhotoFaceIndexStatus(supabase, inserted.id, 'not_applicable');
-        } catch (err) {
-          console.error('[uploadPhotos] failed to mark not_applicable', err);
-        }
-      }
-      uploadedPaths.push(path);
-      currentUsage += fileSize;
-      uploaded += 1;
-    }
-  } catch (error) {
-    console.error('Photo upload failed', error);
-    if (uploadedPaths.length > 0) {
-      await deleteStorageFiles(supabase, 'photos', uploadedPaths);
-    }
-    throw error;
-  }
-
-  return { uploaded, skipped };
 }
 
 function revalidateAfterEventMutation(
@@ -210,14 +109,14 @@ function revalidateAfterEventMutation(
 // --- Exports ---
 
 /**
- * Update event metadata, optionally add new photos and/or delete existing ones.
+ * Update event metadata. Photo uploads happen separately via the
+ * direct-to-Storage flow (`createPhotoUploadUrls` → PUT → `attachPhotosToEvent`).
  */
 export async function updateEventAction(
   eventId: string,
   formData: FormData,
-  photoFormData?: FormData,
   photoIdsToDelete?: string[],
-): Promise<{ success: true; uploaded: number; skipped: UploadPhotosResult['skipped'] }> {
+): Promise<{ success: true }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -247,7 +146,7 @@ export async function updateEventAction(
     throw new Error(parsed.error.issues[0]?.message ?? 'Invalid event data provided.');
   }
 
-  const payload: EventPayload = parsed.data;
+  const payload = parsed.data;
 
   const currentEvent = await getEvent(supabase, eventId, user.id);
   if (!currentEvent) throw new Error('Event not found.');
@@ -329,21 +228,6 @@ export async function updateEventAction(
     }
   }
 
-  let uploadResult: UploadPhotosResult = { uploaded: 0, skipped: [] };
-  if (photoFormData) {
-    const uploadedFiles = photoFormData
-      .getAll('photos')
-      .filter((value): value is File => value instanceof File && value.size > 0);
-
-    if (uploadedFiles.length > 0) {
-      uploadResult = await uploadPhotos(supabase, user.id, eventId, uploadedFiles, payload.date, {
-        city: payload.city || '',
-        country: payload.country,
-        state: payload.state,
-      });
-    }
-  }
-
   revalidateAfterEventMutation(user.id, {
     id: eventId,
     slug: currentEvent.slug,
@@ -351,7 +235,7 @@ export async function updateEventAction(
   });
   revalidateTag('filter-options', 'max');
 
-  return { success: true, uploaded: uploadResult.uploaded, skipped: uploadResult.skipped };
+  return { success: true };
 }
 
 /**
@@ -386,43 +270,4 @@ export async function deletePhotoAction(photoId: string, eventId: string): Promi
     slug: event?.slug ?? null,
     share_code: event?.share_code ?? null,
   });
-}
-
-/**
- * Add new photos to an existing event.
- */
-export async function addPhotosAction(
-  eventId: string,
-  formData: FormData,
-): Promise<UploadPhotosResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error('You must be signed in to add photos.');
-  }
-
-  const event = await getEvent(supabase, eventId, user.id);
-  if (!event) throw new Error('Event not found or access denied.');
-
-  const uploadedFiles = formData
-    .getAll('photos')
-    .filter((value): value is File => value instanceof File && value.size > 0);
-  if (uploadedFiles.length === 0) throw new Error('No photos provided.');
-
-  const result = await uploadPhotos(supabase, user.id, event.id, uploadedFiles, event.date, {
-    city: event.city,
-    country: event.country,
-    state: event.state || '',
-  });
-
-  revalidateAfterEventMutation(user.id, {
-    id: eventId,
-    slug: event.slug,
-    share_code: event.share_code,
-  });
-
-  return result;
 }

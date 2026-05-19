@@ -1,14 +1,16 @@
 'use client';
 
-import { Loader2 } from 'lucide-react';
-import { useId, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { useId, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { UploadProgressDialog } from '@/components/upload-progress-dialog';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
-import { uploadOrganizerEventPhotoAction } from './actions';
+import { usePhotoUpload } from '@/lib/use-photo-upload';
 
 type OrganizerEventT = Dictionary['organizerEvent'];
+type NewEventT = Dictionary['newEvent'];
 
 type OrganizerUploadSectionProps = {
   eventId: string;
@@ -16,35 +18,32 @@ type OrganizerUploadSectionProps = {
 
 export function OrganizerUploadSection({ eventId }: OrganizerUploadSectionProps) {
   const { t } = useTranslations<OrganizerEventT>();
-  const [isPending, startTransition] = useTransition();
+  // Sharing the upload-modal labels with the wizard avoids re-defining keys.
+  const { t: tNew } = useTranslations<NewEventT>();
+  const router = useRouter();
   const inputId = useId();
+  const upload = usePhotoUpload();
 
   const [files, setFiles] = useState<File[]>([]);
 
-  const submit = () => {
-    if (files.length === 0) return;
-    const formData = new FormData();
-    formData.append('event_id', eventId);
-    for (const file of files) formData.append('photos', file);
-    startTransition(async () => {
-      try {
-        const result = await uploadOrganizerEventPhotoAction(formData);
-        if (result.uploaded === 0 && result.skipped.length > 0) {
-          toast.error(t('allPhotosSkippedStorageLimit'));
-        } else if (result.skipped.length > 0) {
-          toast.warning(
-            t('nPhotosUploadedSomeSkipped')
-              .replace('{uploaded}', String(result.uploaded))
-              .replace('{skipped}', String(result.skipped.length)),
-          );
-        } else {
-          toast.success(t('uploadSuccess').replace('{n}', String(result.uploaded)));
-        }
+  const submit = async () => {
+    if (files.length === 0 || upload.isActive) return;
+    try {
+      const result = await upload.run({ eventId, files });
+      if (result.failed.length === 0) {
+        const succeeded = result.attached.length;
+        toast.success(t('uploadSuccess').replace('{n}', String(succeeded)));
         setFiles([]);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : t('uploadFailed'));
+        upload.reset();
+        // Push with ?uploaded so the page can render the rejected toast
+        // when the worker rejects bytes server-side.
+        router.replace(`?uploaded=${succeeded}`);
+        router.refresh();
       }
-    });
+      // Partial-failed handled by the dialog's Retry/Close.
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('uploadFailed'));
+    }
   };
 
   return (
@@ -65,11 +64,43 @@ export function OrganizerUploadSection({ eventId }: OrganizerUploadSectionProps)
           />
           <span>{files.length === 0 ? t('uploadButton') : `${files.length} file(s)`}</span>
         </label>
-        <Button type="button" onClick={submit} disabled={isPending || files.length === 0}>
-          {isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
-          {isPending ? t('uploadingButton') : t('uploadButton')}
+        <Button type="button" onClick={submit} disabled={upload.isActive || files.length === 0}>
+          {upload.isActive ? t('uploadingButton') : t('uploadButton')}
         </Button>
       </div>
+
+      <UploadProgressDialog
+        stage={upload.stage}
+        progressBytes={upload.progressBytes}
+        totalBytes={upload.totalBytes}
+        completedCount={upload.completedCount}
+        totalCount={upload.totalCount}
+        failedCount={upload.failedCount}
+        errorMessage={upload.errorMessage}
+        labels={{
+          title: tNew('uploadProgressTitle' as keyof NewEventT),
+          preparing: tNew('uploadStatePreparing' as keyof NewEventT),
+          uploading: tNew('uploadStateUploading' as keyof NewEventT),
+          finalizing: tNew('uploadStateFinalizing' as keyof NewEventT),
+          done: tNew('uploadStateDone' as keyof NewEventT),
+          partialFailed: tNew('uploadStatePartialFailed' as keyof NewEventT),
+          errorTitle: tNew('uploadStateError' as keyof NewEventT),
+          cancelButton: tNew('uploadCancelButton' as keyof NewEventT),
+          closeButton: tNew('uploadCloseButton' as keyof NewEventT),
+          retryFailedButton: tNew('uploadRetryFailedButton' as keyof NewEventT),
+        }}
+        onCancel={() => void upload.cancel()}
+        onRetryFailed={() => void upload.retryFailed()}
+        onClose={() => {
+          const succeeded = upload.completedCount - upload.failedCount;
+          if (succeeded > 0) {
+            router.replace(`?uploaded=${succeeded}`);
+            router.refresh();
+          }
+          setFiles([]);
+          upload.reset();
+        }}
+      />
     </section>
   );
 }

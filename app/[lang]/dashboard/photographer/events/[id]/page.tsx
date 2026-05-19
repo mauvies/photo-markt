@@ -25,13 +25,21 @@ import { EventPhotoAlbum } from './event-photo-album';
 import { OrganizerUploadSection } from './organizer-upload-section';
 import { PendingPhotosTab } from './pending-photos-tab';
 import { PhotographersSection } from './photographers-section';
+import { RejectedToast } from './rejected-toast';
 
 export default async function EventDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ lang: string; id: string }>;
+  searchParams: Promise<{ uploaded?: string }>;
 }) {
   const { lang, id } = await params;
+  // `uploaded` is the count of photos the client attached in the previous
+  // wizard/edit submit. If the worker later rejects any of those (invalid
+  // bytes, size-mismatch), the rendered grid will show fewer than `uploaded`
+  // — `RejectedToast` does the diff and fires a single toast.
+  const { uploaded: uploadedParam } = await searchParams;
   const dict = await getDictionary(lang as Locale);
   const supabase = await createClient();
 
@@ -88,12 +96,21 @@ export default async function EventDetailPage({
 
   if (!event) return localizedRedirect(lang, '/dashboard/photographer/events');
 
-  const photos = await getEventPhotos(adminClient, id, user.id, { skipUserIdFilter: true });
-
   // Pending photos surface for both collaborative-with-approval AND
-  // organizer-with-approval events.
+  // organizer-with-approval events. Those land in the dedicated "Pending"
+  // tab queue. For everything else, `includePending: true` widens the main
+  // grid to show owner uploads still being validated by the worker, so the
+  // photographer sees their in-flight uploads instead of a phantom gap.
   const showPendingTab =
     (event.is_collaborative || event.type === 'organizer') && event.require_upload_approval;
+
+  const photos = showPendingTab
+    ? await getEventPhotos(adminClient, id, user.id, { skipUserIdFilter: true })
+    : await getEventPhotos(adminClient, id, user.id, {
+        skipUserIdFilter: true,
+        includePending: true,
+      });
+
   const pendingPhotos = showPendingTab
     ? await getEventPhotos(adminClient, id, user.id, {
         status: 'pending',
@@ -214,8 +231,19 @@ export default async function EventDetailPage({
           ? dict.rekognition.statusReady
           : dict.rekognition.statusFailed;
 
+  // Pull the upload-rejected toast copy from the existing newEvent
+  // dictionary — shared with the wizard's "Upload rejected" messaging.
+  const rejectedToastLabel = dict.newEvent.uploadRejectedToast;
+  // For the count-mismatch check, "visible" means anything the worker has
+  // either approved or is still mid-validation. Rejected rows are filtered
+  // out by the queries above.
+  const visibleCount = albumItems.length;
+
   return (
     <div>
+      {uploadedParam ? (
+        <RejectedToast visibleCount={visibleCount} label={rejectedToastLabel} />
+      ) : null}
       <div className="flex items-start justify-between gap-3">
         <DashboardHeader title={event.name} />
         <div className="shrink-0">
@@ -265,6 +293,11 @@ export default async function EventDetailPage({
               cancel: dict.rekognition.cancel,
               confirm: dict.rekognition.confirm,
               reindexFailed: dict.rekognition.errorsAiEnableFailed,
+              pollUpdating: dict.rekognition.pollUpdating,
+              pollError: dict.rekognition.pollError,
+              indexingComplete: dict.rekognition.indexingComplete,
+              failedPhotosWarning: dict.rekognition.failedPhotosWarning,
+              failedPhotosRetry: dict.rekognition.failedPhotosRetry,
             }}
           />
         </div>

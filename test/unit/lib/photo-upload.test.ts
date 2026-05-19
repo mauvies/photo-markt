@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
-import { validatePhotoUpload } from '@/lib/photo-upload';
+import { validatePhotoBuffer, validatePhotoUpload } from '@/lib/photo-upload';
 
 function fileFrom(buffer: Buffer, name: string, type: string): File {
   // Wrap in a fresh Uint8Array so the BlobPart type resolves cleanly under
@@ -55,5 +55,29 @@ describe('validatePhotoUpload', () => {
     const big = Buffer.alloc(51 * 1024 * 1024);
     const file = fileFrom(big, 'big.jpg', 'image/jpeg');
     await expect(validatePhotoUpload(file)).rejects.toThrow(/too large/i);
+  });
+});
+
+describe('validatePhotoBuffer', () => {
+  it('accepts a real JPEG buffer directly (used by the Inngest worker)', async () => {
+    const jpeg = await sharp({
+      create: { width: 4, height: 4, channels: 3, background: '#102030' },
+    })
+      .jpeg()
+      .toBuffer();
+    const result = await validatePhotoBuffer(jpeg);
+    expect(result.contentType).toBe('image/jpeg');
+    expect(result.extension).toBe('jpg');
+    expect(result.buffer.byteLength).toBe(jpeg.byteLength);
+  });
+
+  it('rejects a buffer that is not a valid image', async () => {
+    const garbage = Buffer.from('not an image at all, just text\n', 'utf8');
+    await expect(validatePhotoBuffer(garbage)).rejects.toThrow(/not a valid image|Unsupported/);
+  });
+
+  it('rejects an oversized buffer (>50 MB) before invoking Sharp', async () => {
+    const big = Buffer.alloc(51 * 1024 * 1024);
+    await expect(validatePhotoBuffer(big)).rejects.toThrow(/too large/i);
   });
 });

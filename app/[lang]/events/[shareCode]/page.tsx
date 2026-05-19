@@ -413,6 +413,16 @@ export default async function EventPage({
           errorGeneric: dict.collaborativeEvent.errorGeneric,
           storageLimitPartial: dict.collaborativeEvent.storageLimitPartial,
           storageLimitAll: dict.collaborativeEvent.storageLimitAll,
+          progressTitle: dict.newEvent.uploadProgressTitle,
+          progressPreparing: dict.newEvent.uploadStatePreparing,
+          progressUploading: dict.newEvent.uploadStateUploading,
+          progressFinalizing: dict.newEvent.uploadStateFinalizing,
+          progressDone: dict.newEvent.uploadStateDone,
+          progressPartialFailed: dict.newEvent.uploadStatePartialFailed,
+          progressError: dict.newEvent.uploadStateError,
+          cancelButton: dict.newEvent.uploadCancelButton,
+          closeButton: dict.newEvent.uploadCloseButton,
+          retryFailedButton: dict.newEvent.uploadRetryFailedButton,
         }}
       >
         <div className="mx-auto max-w-7xl w-full flex-1 px-4 py-6">
@@ -444,6 +454,7 @@ export default async function EventPage({
                 useTranslations. */}
               <TranslationsProvider translations={dict.newEvent}>
                 <ContributeModal
+                  eventId={event.id}
                   shareCode={event.share_code}
                   isAuthenticated={Boolean(user)}
                   requireApproval={event.require_upload_approval}

@@ -2,26 +2,10 @@
 
 import { revalidatePath, revalidateTag, updateTag } from 'next/cache';
 import { z } from 'zod';
-import {
-  createPhoto,
-  createEvent as dbCreateEvent,
-  deleteEvent,
-  deleteEventPhotos,
-  deleteStorageFiles,
-  uploadFile,
-} from '@/database/queries';
-import { getStorageUsageBytes } from '@/database/queries/photos';
-import { updatePhotoFaceIndexStatus } from '@/database/queries/rekognition';
-import { getCurrentPlan } from '@/database/queries/subscriptions';
+import { createEvent as dbCreateEvent } from '@/database/queries';
 import { createClient } from '@/database/server';
 import { inngest } from '@/lib/inngest/client';
-import { validatePhotoUpload } from '@/lib/photo-upload';
-import {
-  assertCanCreateEvent,
-  assertCanUploadPhoto,
-  isPlanLimitError,
-  PlanLimitError,
-} from '@/lib/plan-limits';
+import { assertCanCreateEvent } from '@/lib/plan-limits';
 import { generateEventSlug } from '@/lib/slugify';
 import { activityValues } from './activity-options';
 
@@ -95,21 +79,11 @@ const eventSchema = z.object({
 
 // --- Types ---
 
-type EventPayload = z.infer<typeof eventSchema>;
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
-
-export type UploadSkippedReason = 'storage_limit';
 
 export type CreateEventResult = {
   eventId: string;
   shareCode: string | null;
-  uploaded: number;
-  skipped: Array<{ name: string; reason: UploadSkippedReason }>;
-};
-
-type UploadEventPhotosResult = {
-  uploaded: number;
-  skipped: Array<{ name: string; reason: UploadSkippedReason }>;
 };
 
 // --- Helpers ---
@@ -118,12 +92,6 @@ function generateShareCode(): string {
   return Array.from({ length: SHARE_CODE_LENGTH }, () =>
     SHARE_CODE_CHARSET.charAt(Math.floor(Math.random() * SHARE_CODE_CHARSET.length)),
   ).join('');
-}
-
-function buildPhotoPath(userId: string, eventId: string, extension: string): string {
-  const fileId = crypto.randomUUID();
-  const safeName = `${fileId}.${extension}`;
-  return `${userId}/${eventId}/${safeName}`;
 }
 
 async function resolvePublicEventSlug(
@@ -141,88 +109,6 @@ async function resolvePublicEventSlug(
     .eq('slug', baseSlug)
     .maybeSingle();
   return existing ? generateEventSlug(name, city, year, eventId.slice(0, 6)) : baseSlug;
-}
-
-async function uploadEventPhotos(
-  supabase: SupabaseClient,
-  userId: string,
-  event: { id: string },
-  files: File[],
-  payload: Pick<EventPayload, 'date' | 'city' | 'country' | 'state'>,
-  /**
-   * AI matching state on the event being created. Determines whether the
-   * inserted photos get a `photo.uploaded` Inngest event (for indexing) or
-   * are marked `not_applicable` straight away.
-   */
-  aiState: { enabled: boolean; containsMinors: boolean },
-): Promise<UploadEventPhotosResult> {
-  // Pre-fetch the user's current storage once; the loop mutates this local
-  // total instead of re-querying per file.
-  let currentUsage = await getStorageUsageBytes(supabase, userId);
-  const uploadedPaths: string[] = [];
-  const skipped: UploadEventPhotosResult['skipped'] = [];
-  const shouldIndex = aiState.enabled && !aiState.containsMinors;
-  let uploaded = 0;
-
-  try {
-    for (const file of files) {
-      const validated = await validatePhotoUpload(file);
-      const fileSize = validated.buffer.length;
-      try {
-        await assertCanUploadPhoto(supabase, userId, fileSize, currentUsage);
-      } catch (err) {
-        if (isPlanLimitError(err)) {
-          skipped.push({ name: file.name, reason: 'storage_limit' });
-          continue;
-        }
-        throw err;
-      }
-
-      const path = buildPhotoPath(userId, event.id, validated.extension);
-      await uploadFile(supabase, 'photos', path, validated.buffer, {
-        contentType: validated.contentType,
-        upsert: false,
-      });
-      const inserted = await createPhoto(supabase, userId, {
-        event_id: event.id,
-        original_url: path,
-        taken_at: new Date(payload.date).toISOString(),
-        city: payload.city || '',
-        country: payload.country,
-        state: payload.state || null,
-        size_bytes: fileSize,
-      });
-      uploadedPaths.push(path);
-      // Fire `photo.uploaded` (or mark not_applicable). Same pattern as
-      // `emitPhotoUploaded` in events/[id]/actions.ts — failure to enqueue
-      // isn't fatal; the photo can be picked up later via Re-index.
-      if (shouldIndex) {
-        try {
-          await inngest.send({
-            name: 'photo.uploaded',
-            data: { photoId: inserted.id, eventId: event.id, storagePath: path },
-          });
-        } catch (err) {
-          console.error('[createEvent] failed to enqueue photo.uploaded', err);
-        }
-      } else {
-        try {
-          await updatePhotoFaceIndexStatus(supabase, inserted.id, 'not_applicable');
-        } catch (err) {
-          console.error('[createEvent] failed to mark not_applicable', err);
-        }
-      }
-      currentUsage += fileSize;
-      uploaded += 1;
-    }
-  } catch (error) {
-    if (uploadedPaths.length > 0) {
-      await deleteStorageFiles(supabase, 'photos', uploadedPaths);
-    }
-    throw error;
-  }
-
-  return { uploaded, skipped };
 }
 
 async function revalidateAfterEventCreate(
@@ -253,7 +139,10 @@ async function revalidateAfterEventCreate(
 // --- Export ---
 
 /**
- * Create a new event with photos from the given form data.
+ * Create a new event row from the wizard form data. Bytes are NEVER
+ * uploaded through this SA — the client follows up with
+ * `createPhotoUploadUrls` → direct PUT to Storage → `attachPhotosToEvent`.
+ *
  * Private events receive a random share code; public events get a SEO slug.
  */
 export const createEvent = async (formData: FormData): Promise<CreateEventResult> => {
@@ -283,6 +172,10 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     require_upload_approval: formData.get('require_upload_approval')?.toString() ?? 'false',
     price_per_photo: formData.get('price_per_photo')?.toString(),
     organizer_fee_per_photo: formData.get('organizer_fee_per_photo')?.toString(),
+    // Without these, the schema's `'false'` default sticks and AI matching
+    // silently never persists — regression from the upload refactor.
+    ai_matching_enabled: formData.get('ai_matching_enabled')?.toString() ?? 'false',
+    contains_minors: formData.get('contains_minors')?.toString() ?? 'false',
   });
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? 'Invalid event data provided.');
@@ -296,15 +189,6 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
   // Organizer events are always private (membership-gated) and have no public
   // share code — access is via the event_photographers join table.
   const isPublic = eventType === 'organizer' ? false : payload.is_public;
-
-  const uploadedFiles = formData
-    .getAll('photos')
-    .filter((value): value is File => value instanceof File && value.size > 0);
-  // Solo events require at least one initial photo. Collaborative + organizer
-  // both expect contributions to arrive after creation.
-  if (eventType === 'solo' && uploadedFiles.length === 0) {
-    throw new Error('Add at least one photo to continue.');
-  }
 
   // Public solo events use a SEO slug; everything else needs a share code
   // (collaborative) or has no public access at all (organizer).
@@ -353,44 +237,9 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     await supabase.from('events').update({ slug }).eq('id', event.id).eq('user_id', user.id);
   }
 
-  let uploadResult: UploadEventPhotosResult = { uploaded: 0, skipped: [] };
-  if (uploadedFiles.length > 0) {
-    try {
-      uploadResult = await uploadEventPhotos(supabase, user.id, event, uploadedFiles, payload, {
-        enabled: aiMatchingEnabled,
-        containsMinors,
-      });
-    } catch (error) {
-      console.error('createEvent: upload failed', error);
-      await deleteEventPhotos(supabase, event.id, user.id);
-      await deleteEvent(supabase, event.id, user.id);
-      throw new Error(
-        error instanceof Error ? error.message : 'Unable to upload photos. Please try again.',
-      );
-    }
-
-    // Solo events require at least one photo. If every file was skipped due
-    // to the storage cap, roll back the event row and surface the upgrade
-    // prompt as a typed PlanLimitError.
-    if (eventType === 'solo' && uploadResult.uploaded === 0 && uploadResult.skipped.length > 0) {
-      await deleteEventPhotos(supabase, event.id, user.id);
-      await deleteEvent(supabase, event.id, user.id);
-      const plan = await getCurrentPlan(supabase, user.id);
-      const currentUsage = await getStorageUsageBytes(supabase, user.id);
-      throw new PlanLimitError({
-        limitType: 'storage',
-        current: currentUsage,
-        max: (plan.storageGB ?? 0) * 1024 ** 3,
-        planId: plan.id,
-      });
-    }
-  }
-
-  // If AI matching was turned on at create time, kick the backfill worker
-  // so the per-event collection is created and any photos uploaded with the
-  // event start indexing. Per-photo `photo.uploaded` events already fired
-  // for the initial batch; the backfill is what materializes the AWS
-  // collection and flips ai_matching_status to 'indexing'.
+  // If AI matching is enabled at create time, kick the backfill worker so
+  // the per-event collection is materialized — even before any photos exist.
+  // Per-photo `photo.uploaded` events emit later from `attachPhotosToEvent`.
   if (aiMatchingEnabled && !containsMinors) {
     try {
       await inngest.send({
@@ -407,7 +256,5 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
   return {
     eventId: event.id,
     shareCode,
-    uploaded: uploadResult.uploaded,
-    skipped: uploadResult.skipped,
   };
 };
