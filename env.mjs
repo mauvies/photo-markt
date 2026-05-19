@@ -18,11 +18,8 @@ export const env = createEnv({
     SITE_URL: z.url(),
     STRIPE_PRICE_AMATEUR: z.string(),
     STRIPE_PRICE_PRO: z.string(),
-    // Yearly recurring Price IDs. Optional until the user creates them in
-    // the Stripe dashboard and populates them in Vercel — `createBillingCheckoutAction`
-    // throws a clear "yearly billing isn't available yet" error when missing.
-    STRIPE_PRICE_AMATEUR_YEARLY: z.string().optional(),
-    STRIPE_PRICE_PRO_YEARLY: z.string().optional(),
+    STRIPE_PRICE_AMATEUR_YEARLY: z.string(),
+    STRIPE_PRICE_PRO_YEARLY: z.string(),
     RESEND_API_KEY: z.string().min(1),
     // AWS Rekognition (face indexing). Region defaults to eu-west-1 — staging
     // and prod both run there today. Credentials are required for the
