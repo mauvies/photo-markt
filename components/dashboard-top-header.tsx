@@ -2,7 +2,6 @@ import { ShoppingCart } from 'lucide-react';
 import Link from 'next/link';
 import { getCartItemCountAction } from '@/app/[lang]/dashboard/talent/cart/actions';
 import { DashboardUserMenu } from '@/components/dashboard-user-menu';
-import { LanguageSwitcher } from '@/components/language-switcher';
 import { Button } from '@/components/ui/button';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
@@ -50,9 +49,6 @@ export async function DashboardTopHeader({
           </Button>
         </Link>
       )}
-      <div className="pointer-events-auto">
-        <LanguageSwitcher />
-      </div>
       <div className="pointer-events-auto">
         <DashboardUserMenu
           user={user}

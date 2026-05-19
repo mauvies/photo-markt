@@ -10,7 +10,6 @@ import { DashboardUserMenu } from '@/components/dashboard-user-menu';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { RoleSlug } from '@/lib/roles';
 import { cn } from '@/lib/utils';
-import { LanguageSwitcher } from './language-switcher';
 
 export function TalentDashboardHeader({
   user,
@@ -28,6 +27,10 @@ export function TalentDashboardHeader({
     myPhotos: string;
     orders: string;
     profile: string;
+    privacy: string;
+    /** Passed to the avatar dropdown only — the talent-side privacy page
+     *  is surfaced there instead of in the top nav. The key stays on this
+     *  type for ergonomics so the layout can pass it through unchanged. */
     settings: string;
     billing: string;
     support: string;
@@ -48,6 +51,8 @@ export function TalentDashboardHeader({
     { href: '/dashboard/talent/photos', label: navLabels.myPhotos, icon: Package },
     { href: '/dashboard/talent/orders', label: navLabels.orders, icon: ShoppingBag },
     { href: '/dashboard/talent/profile', label: navLabels.profile, icon: User },
+    // Privacy lives in the avatar dropdown, not the top nav — it's a
+    // reference page that doesn't earn primary-nav real estate.
   ];
 
   const isActive = (href: string) => pathWithoutLang.startsWith(href);
@@ -61,9 +66,17 @@ export function TalentDashboardHeader({
             <Image
               src="/logo.svg"
               alt="Photo Markt"
-              className="h-10 w-auto mt-1"
+              className="mt-1 hidden h-10 w-auto md:block"
               width={80}
               height={80}
+              priority
+            />
+            <Image
+              src="/logo-icon.svg"
+              alt="Photo Markt"
+              className="block h-9 w-auto md:hidden"
+              width={40}
+              height={40}
               priority
             />
           </Link>
@@ -89,7 +102,6 @@ export function TalentDashboardHeader({
 
           {/* Right: Cart + User Avatar */}
           <div className="flex items-center gap-5">
-            <LanguageSwitcher />
             <div className="-ml-2">
               <CartLinkButton />
             </div>
@@ -99,6 +111,7 @@ export function TalentDashboardHeader({
               navLabels={{
                 activeRole: navLabels.activeRole,
                 profile: navLabels.profile,
+                privacy: navLabels.privacy,
                 settings: navLabels.settings,
                 billing: navLabels.billing,
                 support: navLabels.support,

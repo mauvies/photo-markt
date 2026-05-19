@@ -24,20 +24,30 @@ const flags: Record<Locale, string> = {
   en: '🇺🇸',
 };
 
-// Separated so the Suspense boundary is explicit on both server and client,
-// preventing useSearchParams() from causing a useId() counter mismatch.
-function LanguageSwitcherInner() {
-  const params = useParams();
+interface LanguageSwitcherProps {
+  inline?: boolean;
+}
+
+function useBuildHref() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-
-  const currentLang = (params?.lang as Locale) ?? 'es';
-
-  function buildHref(targetLang: Locale): string {
+  return (targetLang: Locale): string => {
     const pathWithoutLang = pathname.replace(/^\/(es|en)/, '') || '/';
     const search = searchParams.toString();
     return localizedPath(targetLang, search ? `${pathWithoutLang}?${search}` : pathWithoutLang);
-  }
+  };
+}
+
+function useCurrentLang(): Locale {
+  const params = useParams();
+  return (params?.lang as Locale) ?? 'es';
+}
+
+// Separated so the Suspense boundary is explicit on both server and client,
+// preventing useSearchParams() from causing a useId() counter mismatch.
+function LanguageSwitcherDropdown() {
+  const currentLang = useCurrentLang();
+  const buildHref = useBuildHref();
 
   return (
     <DropdownMenu>
@@ -79,7 +89,46 @@ function LanguageSwitcherInner() {
   );
 }
 
-function LanguageSwitcherFallback() {
+function LanguageSwitcherInline() {
+  const currentLang = useCurrentLang();
+  const buildHref = useBuildHref();
+
+  return (
+    <ul className="flex flex-col gap-1">
+      {locales.map((lang) => {
+        const isActive = lang === currentLang;
+        return (
+          <li key={lang}>
+            <a
+              href={buildHref(lang)}
+              aria-current={isActive ? 'true' : undefined}
+              className={cn(
+                'flex items-center gap-3 rounded-md border px-3 py-2.5 text-sm transition-colors',
+                isActive
+                  ? 'border-primary bg-accent font-medium'
+                  : 'border-input hover:bg-accent/50',
+              )}
+            >
+              <span aria-hidden="true" className="text-lg leading-none">
+                {flags[lang]}
+              </span>
+              <span>{labels[lang]}</span>
+              <Check
+                className={cn('ml-auto size-4', isActive ? 'opacity-100' : 'opacity-0')}
+                aria-hidden="true"
+              />
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function LanguageSwitcherFallback({ inline }: LanguageSwitcherProps) {
+  if (inline) {
+    return <ul className="flex flex-col gap-1" aria-busy="true" />;
+  }
   return (
     <Button
       variant="outline"
@@ -96,10 +145,10 @@ function LanguageSwitcherFallback() {
   );
 }
 
-export function LanguageSwitcher() {
+export function LanguageSwitcher({ inline = false }: LanguageSwitcherProps = {}) {
   return (
-    <Suspense fallback={<LanguageSwitcherFallback />}>
-      <LanguageSwitcherInner />
+    <Suspense fallback={<LanguageSwitcherFallback inline={inline} />}>
+      {inline ? <LanguageSwitcherInline /> : <LanguageSwitcherDropdown />}
     </Suspense>
   );
 }

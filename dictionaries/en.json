@@ -15,6 +15,7 @@
     "login": "Log in",
     "loginShort": "Log in",
     "getStarted": "Get started",
+    "goToDashboard": "Go to dashboard",
     "explore": "Explore",
     "myPhotos": "My photos",
     "orders": "Orders",
@@ -240,6 +241,20 @@
   "languageSwitcher": {
     "es": "Español",
     "en": "English"
+  },
+  "settings": {
+    "title": "Settings",
+    "tabs": {
+      "profile": "Profile",
+      "billing": "Billing & Plan",
+      "payouts": "Payouts",
+      "account": "Account",
+      "language": "Language"
+    },
+    "language": {
+      "heading": "Language",
+      "description": "Choose your preferred language for Photo Markt. The change applies immediately and keeps your current page."
+    }
   },
   "talentDashboard": {
     "myPhotos": "My Photos",
