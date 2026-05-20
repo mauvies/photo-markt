@@ -30,6 +30,13 @@ import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { RoleSlug } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 
+/**
+ * Shared sizing for every account-dropdown row: slightly taller and a slightly
+ * larger font than the Shadcn default for easier tapping. Applied to the
+ * interactive items AND the informational role row so every row lines up.
+ */
+const MENU_ITEM_CLASS = 'py-2 text-[15px]';
+
 export interface BottomNavAccountLabels {
   /** Label rendered under the avatar in the nav bar. */
   accountTab: string;
@@ -144,7 +151,14 @@ export function BottomNavAccount({
         </span>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent className="w-56 rounded-lg mb-1" side="top" align="end" sideOffset={8}>
+      {/* `collisionPadding` keeps the menu off the viewport edge on mobile. */}
+      <DropdownMenuContent
+        className="w-56 rounded-lg mb-1"
+        side="top"
+        align="end"
+        sideOffset={8}
+        collisionPadding={12}
+      >
         <DropdownMenuLabel className="p-0 font-normal">
           <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
             <Avatar className="h-8 w-8">
@@ -160,21 +174,23 @@ export function BottomNavAccount({
           </div>
         </DropdownMenuLabel>
 
-        <div className="px-2 py-1.5">
-          <span className="flex items-center gap-1.5 whitespace-nowrap text-sm text-muted-foreground md:text-xs">
-            {isPhotographer ? (
-              <Camera className="h-3.5 w-3.5 md:h-3 md:w-3" />
-            ) : (
-              <User className="h-3.5 w-3.5 md:h-3 md:w-3" />
-            )}
-            {labels.activeRoleLabel}:
+        {/* Active role indicator — informational, non-interactive. Mirrors the
+            icon size, gap and padding of the menu items so it lines up. */}
+        <div className={cn('flex items-center gap-2 px-2 text-muted-foreground', MENU_ITEM_CLASS)}>
+          {isPhotographer ? <Camera className="mr-2 h-4 w-4" /> : <User className="mr-2 h-4 w-4" />}
+          <span>
+            {labels.activeRoleLabel}:{' '}
             <span className="font-medium text-foreground">{labels.currentRoleName}</span>
           </span>
         </div>
 
         {/* Role switch — surfaced near the role indicator so the user can
             toggle without scanning the full menu. */}
-        <DropdownMenuItem onClick={handleSwitchRole} disabled={isPending}>
+        <DropdownMenuItem
+          onClick={handleSwitchRole}
+          disabled={isPending}
+          className={MENU_ITEM_CLASS}
+        >
           {otherRole === 'photographer' ? (
             <Camera className="mr-2 h-4 w-4" />
           ) : (
@@ -185,20 +201,20 @@ export function BottomNavAccount({
 
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem asChild>
+          <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
             <Link href={lp(profileHref)}>
               <User className="mr-2 h-4 w-4" />
               <span>{labels.profile}</span>
             </Link>
           </DropdownMenuItem>
-          <DropdownMenuItem asChild>
+          <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
             <Link href={lp(settingsHref)}>
               <Settings className="mr-2 h-4 w-4" />
               <span>{labels.settings}</span>
             </Link>
           </DropdownMenuItem>
           {isPhotographer && labels.payouts ? (
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
               <Link href={lp('/dashboard/photographer/settings/payout-profile')}>
                 <WalletMinimal className="mr-2 h-4 w-4" />
                 <span>{labels.payouts}</span>
@@ -206,7 +222,7 @@ export function BottomNavAccount({
             </DropdownMenuItem>
           ) : null}
           {isPhotographer && labels.billing ? (
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
               <Link href={lp('/dashboard/photographer/settings/billing')}>
                 <CreditCard className="mr-2 h-4 w-4" />
                 <span>{labels.billing}</span>
@@ -217,20 +233,20 @@ export function BottomNavAccount({
 
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem asChild>
+          <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
             <Link href={lp(`/dashboard/${activeRole}/support`)}>
               <LifeBuoy className="mr-2 h-4 w-4" />
               <span>{labels.support}</span>
             </Link>
           </DropdownMenuItem>
-          <DropdownMenuItem asChild>
+          <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
             <Link href={lp(`/dashboard/${activeRole}/feedback`)}>
               <Send className="mr-2 h-4 w-4" />
               <span>{labels.feedback}</span>
             </Link>
           </DropdownMenuItem>
           {!isPhotographer && labels.privacy ? (
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
               <Link href={lp('/dashboard/talent/privacy')}>
                 <Shield className="mr-2 h-4 w-4" />
                 <span>{labels.privacy}</span>
@@ -240,7 +256,7 @@ export function BottomNavAccount({
         </DropdownMenuGroup>
 
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleLogout}>
+        <DropdownMenuItem onClick={handleLogout} className={MENU_ITEM_CLASS}>
           <LogOut className="mr-2 h-4 w-4" />
           <span>{labels.logOut}</span>
         </DropdownMenuItem>

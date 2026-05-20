@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { EventCard } from '@/components/event-card';
 import { EventSearchBar } from '@/components/event-search-bar';
-import { Footer } from '@/components/footer';
 import { HomeAuthRedirect } from '@/components/home-auth-redirect';
 import { PricingSection } from '@/components/pricing-section';
 import { Button } from '@/components/ui/button';
@@ -160,10 +159,12 @@ export default async function Home({
       )}
 
       {/* Pricing */}
-      <PricingSection isAuthenticated={isAuthenticated} t={dict.pricingSection} />
+      <div id="pricing" className="scroll-mt-20">
+        <PricingSection isAuthenticated={isAuthenticated} t={dict.pricingSection} />
+      </div>
 
       {/* How It Works */}
-      <section className="bg-background py-24">
+      <section id="how-it-works" className="scroll-mt-20 bg-background py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           {/* Header */}
           <div className="mx-auto max-w-2xl text-center">
@@ -248,8 +249,6 @@ export default async function Home({
           </div>
         </div>
       </section>
-
-      <Footer dict={dict} lang={lang} />
     </div>
   );
 }
