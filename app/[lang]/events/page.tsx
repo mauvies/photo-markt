@@ -3,7 +3,6 @@ import {
   searchEventsAction,
 } from '@/app/[lang]/dashboard/talent/events/actions';
 import { ExplorePageContent } from '@/app/[lang]/dashboard/talent/events/explore-page-content';
-import { Footer } from '@/components/footer';
 import type { EventWithStats } from '@/hooks/use-event-search';
 import {
   type EventStatus,
@@ -109,7 +108,6 @@ export default async function PublicEventsPage({
           />
         </TranslationsProvider>
       </div>
-      <Footer dict={dict} lang={lang} />
     </div>
   );
 }

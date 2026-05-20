@@ -1,4 +1,6 @@
+import { ConditionalFooter } from '@/components/conditional-footer';
 import { ConditionalHeader } from '@/components/conditional-header';
+import { Footer } from '@/components/footer';
 import { GuestCartMerge } from '@/components/guest-cart-merge';
 import { GuestCartProvider } from '@/components/guest-cart-provider';
 import Header from '@/components/header';
@@ -35,6 +37,9 @@ export default async function LangLayout({
           </TranslationsProvider>
         </ConditionalHeader>
         <Main>{children}</Main>
+        <ConditionalFooter>
+          <Footer dict={dict} lang={lang} />
+        </ConditionalFooter>
         <Toaster />
       </GuestCartProvider>
     </QueryProvider>

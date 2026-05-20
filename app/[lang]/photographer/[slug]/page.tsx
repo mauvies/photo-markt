@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { Footer } from '@/components/footer';
 import { PhotographerPublicProfile } from '@/components/photographer-public-profile';
 import { createClient } from '@/database/server';
 import { getSiteUrl } from '@/lib/get-site-url';
@@ -71,8 +70,6 @@ export default async function PhotographerProfilePage({ params }: { params: Para
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-10 sm:py-14 md:py-16">
         <PhotographerPublicProfile slug={slug} lang={lang} dict={dict} isOwner={isOwner} />
       </main>
-
-      <Footer dict={dict} lang={lang} />
     </div>
   );
 }

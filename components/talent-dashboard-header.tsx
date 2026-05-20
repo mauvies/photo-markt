@@ -95,28 +95,32 @@ export function TalentDashboardHeader({
             ))}
           </nav>
 
-          {/* Right: Cart + User Avatar */}
+          {/* Right: cart (all viewports) + account avatar. The avatar is
+              desktop-only — on mobile the account dropdown lives in the
+              bottom nav, so rendering it here too would duplicate it. */}
           <div className="flex items-center gap-5">
             <div className="-ml-2">
               <CartLinkButton />
             </div>
-            <DashboardUserMenu
-              user={user}
-              activeRole={activeRole}
-              navLabels={{
-                activeRole: navLabels.activeRole,
-                profile: navLabels.profile,
-                privacy: navLabels.privacy,
-                settings: navLabels.settings,
-                billing: navLabels.billing,
-                support: navLabels.support,
-                feedback: navLabels.feedback,
-                switchTo: navLabels.switchTo,
-                logOut: navLabels.logOut,
-                rolePhotographer: navLabels.rolePhotographer,
-                roleTalent: navLabels.roleTalent,
-              }}
-            />
+            <div className="hidden md:block">
+              <DashboardUserMenu
+                user={user}
+                activeRole={activeRole}
+                navLabels={{
+                  activeRole: navLabels.activeRole,
+                  profile: navLabels.profile,
+                  privacy: navLabels.privacy,
+                  settings: navLabels.settings,
+                  billing: navLabels.billing,
+                  support: navLabels.support,
+                  feedback: navLabels.feedback,
+                  switchTo: navLabels.switchTo,
+                  logOut: navLabels.logOut,
+                  rolePhotographer: navLabels.rolePhotographer,
+                  roleTalent: navLabels.roleTalent,
+                }}
+              />
+            </div>
           </div>
         </div>
       </header>

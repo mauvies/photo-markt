@@ -28,6 +28,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { createClient } from '@/database/client';
 import type { RoleSlug } from '@/lib/roles';
+import { cn } from '@/lib/utils';
+
+/**
+ * Shared sizing for every account-dropdown row: slightly taller and a slightly
+ * larger font than the Shadcn default for easier tapping. Applied to the
+ * interactive items AND the informational role row so every row lines up.
+ */
+const MENU_ITEM_CLASS = 'py-2 text-[15px]';
 
 export function DashboardUserMenu({
   user,
@@ -132,7 +140,14 @@ export function DashboardUserMenu({
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56 rounded-lg" side="bottom" align="end" sideOffset={8}>
+      {/* `collisionPadding` keeps the menu off the viewport edge on mobile. */}
+      <DropdownMenuContent
+        className="w-56 rounded-lg"
+        side="bottom"
+        align="end"
+        sideOffset={8}
+        collisionPadding={12}
+      >
         <DropdownMenuLabel className="p-0 font-normal">
           <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
             <Avatar className="h-8 w-8">
@@ -148,22 +163,27 @@ export function DashboardUserMenu({
           </div>
         </DropdownMenuLabel>
 
-        {/* Active role indicator */}
-        <div className="px-2 py-1.5">
-          <span className="flex items-center gap-1.5 whitespace-nowrap text-sm text-muted-foreground md:text-xs">
-            {optimisticRole === 'photographer' ? (
-              <Camera className="h-3.5 w-3.5 md:h-3 md:w-3" />
-            ) : (
-              <User className="h-3.5 w-3.5 md:h-3 md:w-3" />
-            )}
-            {navLabels.activeRole ?? 'Role'}:
+        {/* Active role indicator — informational, non-interactive. Mirrors the
+            icon size, gap and padding of the menu items so it lines up. */}
+        <div className={cn('flex items-center gap-2 px-2 text-muted-foreground', MENU_ITEM_CLASS)}>
+          {optimisticRole === 'photographer' ? (
+            <Camera className="mr-2 h-4 w-4" />
+          ) : (
+            <User className="mr-2 h-4 w-4" />
+          )}
+          <span>
+            {navLabels.activeRole ?? 'Role'}:{' '}
             <span className="font-medium text-foreground">{currentRoleLabel}</span>
           </span>
         </div>
 
         {/* Role switch — surfaced near the role indicator so the user can
             toggle without scanning the full menu. */}
-        <DropdownMenuItem onClick={() => handleSwitchRole(otherRole)} disabled={isPending}>
+        <DropdownMenuItem
+          onClick={() => handleSwitchRole(otherRole)}
+          disabled={isPending}
+          className={MENU_ITEM_CLASS}
+        >
           {otherRole === 'photographer' ? (
             <Camera className="mr-2 h-4 w-4" />
           ) : (
@@ -176,13 +196,16 @@ export function DashboardUserMenu({
 
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem asChild className={isProfileActive ? 'bg-accent' : ''}>
+          <DropdownMenuItem asChild className={cn(MENU_ITEM_CLASS, isProfileActive && 'bg-accent')}>
             <Link href={profileUrl}>
               <User className="mr-2 h-4 w-4" />
               <span>{navLabels.profile ?? 'Profile'}</span>
             </Link>
           </DropdownMenuItem>
-          <DropdownMenuItem asChild className={isSettingsActive ? 'bg-accent' : ''}>
+          <DropdownMenuItem
+            asChild
+            className={cn(MENU_ITEM_CLASS, isSettingsActive && 'bg-accent')}
+          >
             <Link href={settingsUrl}>
               <Settings className="mr-2 h-4 w-4" />
               <span>{navLabels.settings ?? 'Settings'}</span>
@@ -191,7 +214,7 @@ export function DashboardUserMenu({
           {/* Payouts — only relevant for photographer role; links straight to
               the payout-profile config page that lives under settings/. */}
           {optimisticRole === 'photographer' && (
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
               <Link href="/dashboard/photographer/settings/payout-profile">
                 <WalletMinimal className="mr-2 h-4 w-4" />
                 <span>{navLabels.payouts ?? 'Payouts'}</span>
@@ -199,7 +222,7 @@ export function DashboardUserMenu({
             </DropdownMenuItem>
           )}
           {optimisticRole === 'photographer' && (
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
               <Link href="/dashboard/photographer/settings?tab=billing">
                 <CreditCard className="mr-2 h-4 w-4" />
                 <span>{navLabels.billing ?? 'Billing'}</span>
@@ -209,13 +232,13 @@ export function DashboardUserMenu({
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem asChild>
+          <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
             <Link href={`/dashboard/${optimisticRole}/support`}>
               <LifeBuoy className="mr-2 h-4 w-4" />
               <span>{navLabels.support ?? 'Support'}</span>
             </Link>
           </DropdownMenuItem>
-          <DropdownMenuItem asChild>
+          <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
             <Link href={`/dashboard/${optimisticRole}/feedback`}>
               <Send className="mr-2 h-4 w-4" />
               <span>{navLabels.feedback ?? 'Feedback'}</span>
@@ -224,7 +247,7 @@ export function DashboardUserMenu({
           {/* Privacy disclosure — talent-only. Lives here rather than in
               the top nav so it doesn't compete with primary destinations. */}
           {optimisticRole === 'talent' && navLabels.privacy ? (
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
               <Link href="/dashboard/talent/privacy">
                 <Shield className="mr-2 h-4 w-4" />
                 <span>{navLabels.privacy}</span>
@@ -233,7 +256,7 @@ export function DashboardUserMenu({
           ) : null}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleLogout}>
+        <DropdownMenuItem onClick={handleLogout} className={MENU_ITEM_CLASS}>
           <LogOut className="mr-2 h-4 w-4" />
           <span>{navLabels.logOut ?? 'Log out'}</span>
         </DropdownMenuItem>
