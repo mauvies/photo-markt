@@ -14,6 +14,8 @@ import {
   getEventPhotosPublic,
   getPhoto,
   getPhotosForEvents,
+  getPhotosUploadedCount,
+  getStorageUsageBytes,
   updatePhotoUploadStatus,
 } from '@/database/queries/photos';
 import {
@@ -192,6 +194,70 @@ describe('database/queries/photos', () => {
       await updatePhotoUploadStatus(sb, { photoId: id, eventId: event.id, status: 'approved' });
       const { data: after } = await sb.from('photos').select('upload_status').eq('id', id).single();
       expect(after?.upload_status).toBe('approved');
+    });
+
+    it('getPhotosUploadedCount and getStorageUsageBytes ignore soft-deleted events', async () => {
+      // Regression for the "85 uploaded / 45 visible" discrepancy: photos
+      // attached to a soft-deleted event must not inflate the photographer's
+      // counter or storage meter. Both queries join `events!inner` and
+      // filter `deleted_at IS NULL` — this asserts that.
+      const owner = await createTestUser('PHOTOGRAPHER');
+      const activeEvent = await createTestEvent(owner.id);
+      const softDeletedEvent = await createTestEvent(owner.id);
+      const sb = createServiceClient();
+
+      // 5 photos in the active event (1_000 bytes each → 5_000 total).
+      for (let i = 0; i < 5; i += 1) {
+        await sb.from('photos').insert({
+          user_id: owner.id,
+          event_id: activeEvent.id,
+          original_url: `${owner.id}/${activeEvent.id}/active-${i}.jpg`,
+          taken_at: new Date().toISOString(),
+          city: 'Barcelona',
+          country: 'ES',
+          size_bytes: 1000,
+        });
+      }
+
+      // 2 photos in an event that's about to be soft-deleted (9_999 bytes
+      // each → if the join filter is missing, getStorageUsageBytes would
+      // return 5_000 + 19_998 = 24_998 instead of 5_000).
+      for (let i = 0; i < 2; i += 1) {
+        await sb.from('photos').insert({
+          user_id: owner.id,
+          event_id: softDeletedEvent.id,
+          original_url: `${owner.id}/${softDeletedEvent.id}/stale-${i}.jpg`,
+          taken_at: new Date().toISOString(),
+          city: 'Barcelona',
+          country: 'ES',
+          size_bytes: 9999,
+        });
+      }
+
+      await sb
+        .from('events')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', softDeletedEvent.id);
+
+      expect(await getPhotosUploadedCount(sb, owner.id)).toBe(5);
+      expect(await getStorageUsageBytes(sb, owner.id)).toBe(5000);
+    });
+
+    it('rejects inserting a photo with a null event_id (orphan guard)', async () => {
+      // Verifies the `photos_event_id_not_null` CHECK constraint added in
+      // migration 20260520000002 — no new row may be created without an
+      // event, so the orphan class can't recur.
+      const owner = await createTestUser('PHOTOGRAPHER');
+      const sb = createServiceClient();
+      const { error } = await sb.from('photos').insert({
+        user_id: owner.id,
+        event_id: null,
+        original_url: `${owner.id}/orphan.jpg`,
+        taken_at: new Date().toISOString(),
+        city: 'Barcelona',
+        country: 'ES',
+      });
+      expect(error).not.toBeNull();
     });
 
     it('deletePhoto removes the row', async () => {

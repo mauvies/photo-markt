@@ -60,9 +60,24 @@ export interface GetEventPhotosOptions {
 }
 
 /**
- * Count approved photos uploaded by a user within an optional time window.
- * Used by the dashboard "photos uploaded" metric and its month-over-month
- * trend.
+ * Count photos uploaded by a user that are attached to a non-soft-deleted
+ * event. Backs the photographer dashboard "photos uploaded" metric.
+ *
+ * Filters:
+ *   - `user_id = userId` — owner-scoped.
+ *   - `events!inner` — inner-join via Postgrest's relational select. Drops
+ *     photos whose joined event doesn't satisfy the conjunction below.
+ *     `event_id` is `NOT NULL` at the schema level (post-migration), so
+ *     this also acts as a redundant null filter — defense in depth in
+ *     case the constraint is ever relaxed.
+ *   - `events.deleted_at IS NULL` — exclude photos whose event was
+ *     soft-deleted. Those rows still exist for analytics + restoration
+ *     but should not inflate the "uploaded" count surfaced to the user.
+ *
+ * Pre-migration this query returned ~85 for a user with 45 visible
+ * photos because 40 historical orphans (event_id NULL) were counted.
+ * Post-migration the orphans are gone AND this filter would have caught
+ * them anyway.
  */
 export async function getPhotosUploadedCount(
   supabase: SupabaseServerClient,
@@ -72,8 +87,9 @@ export async function getPhotosUploadedCount(
 ): Promise<number> {
   let query = supabase
     .from('photos')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId);
+    .select('id, events!inner(deleted_at)', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .is('events.deleted_at', null);
 
   if (startDate) query = query.gte('created_at', startDate);
   if (endDate) query = query.lte('created_at', endDate);
@@ -88,16 +104,27 @@ export async function getPhotosUploadedCount(
 }
 
 /**
- * Sum `size_bytes` across all photos owned by a user. Backs the storage
- * meter on the photographer dashboard and the per-upload plan-limit check
- * in `lib/plan-limits.ts`. Rows with NULL `size_bytes` (legacy data
- * uploaded before the column was added) contribute 0.
+ * Sum `size_bytes` across photos owned by a user that are attached to a
+ * non-soft-deleted event. Backs the storage meter on the photographer
+ * dashboard and the per-upload plan-limit check in `lib/plan-limits.ts`.
+ *
+ * Mirrors `getPhotosUploadedCount`'s filter set so the two surfaces never
+ * disagree about what's "active" storage. Without this join, soft-deleted
+ * events kept charging the photographer's plan quota — which is the bug
+ * a 45-visible / 85-counted discrepancy exposed.
+ *
+ * Rows with NULL `size_bytes` (legacy data from before the column was
+ * added) contribute 0.
  */
 export async function getStorageUsageBytes(
   supabase: SupabaseServerClient,
   userId: string,
 ): Promise<number> {
-  const { data, error } = await supabase.from('photos').select('size_bytes').eq('user_id', userId);
+  const { data, error } = await supabase
+    .from('photos')
+    .select('size_bytes, events!inner(deleted_at)')
+    .eq('user_id', userId)
+    .is('events.deleted_at', null);
 
   if (error) {
     throw new Error(`Failed to compute storage usage: ${getErrorMessage(error)}`);

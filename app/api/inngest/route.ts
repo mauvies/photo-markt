@@ -15,6 +15,7 @@ import { inngest } from '@/lib/inngest/client';
 import { backfillEventIndexing } from '@/lib/inngest/functions/backfill-event-indexing';
 import { cleanupOnEventDelete } from '@/lib/inngest/functions/cleanup-on-event-delete';
 import { cleanupOrphanedStorageFiles } from '@/lib/inngest/functions/cleanup-orphaned-storage';
+import { cleanupOrphanedStorageFromMigration } from '@/lib/inngest/functions/cleanup-orphaned-storage-from-migration';
 import { disableEventIndexing } from '@/lib/inngest/functions/disable-event-indexing';
 import { indexPhotoFaces } from '@/lib/inngest/functions/index-photo-faces';
 
@@ -26,5 +27,6 @@ export const { GET, POST, PUT } = serve({
     disableEventIndexing,
     cleanupOnEventDelete,
     cleanupOrphanedStorageFiles,
+    cleanupOrphanedStorageFromMigration,
   ],
 });
