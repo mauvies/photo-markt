@@ -107,7 +107,11 @@ export default async function Home({
               </div>
             </div>
 
-            <div className="flex gap-4 overflow-x-auto overscroll-x-contain touch-pan-x scroll-smooth snap-x snap-mandatory pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:grid xl:grid-cols-4 xl:overflow-visible xl:pb-0">
+            {/* `touch-pan-x touch-pan-y`: the browser handles horizontal panning
+                of this carousel AND vertical panning (page scroll) natively.
+                `touch-pan-x` alone blocks vertical scroll for touches that
+                start on a carousel item. */}
+            <div className="flex gap-4 overflow-x-auto overscroll-x-contain touch-pan-x touch-pan-y scroll-smooth snap-x snap-mandatory pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:grid xl:grid-cols-4 xl:overflow-visible xl:pb-0">
               {topEvents.map((event, index) => (
                 <div
                   key={event.id}

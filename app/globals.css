@@ -99,8 +99,8 @@
   --chart-4: oklch(0.88 0.04 310);
   --chart-5: oklch(0.8 0.06 250);
 
-  /* Sidebar — neutral grayscale palette */
-  --sidebar: oklch(0.985 0 0);
+  /* Sidebar — white surface, matching the page background */
+  --sidebar: oklch(1 0 0); /* pure white (#FFFFFF) */
   --sidebar-foreground: oklch(0.47 0 270);
   --sidebar-primary: oklch(0.72 0.08 254);
   --sidebar-primary-foreground: oklch(0.985 0 0);
