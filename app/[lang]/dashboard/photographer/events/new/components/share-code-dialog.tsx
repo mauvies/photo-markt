@@ -23,6 +23,8 @@ type ShareCodeDialogProps = {
   open: boolean;
   shareCode: string;
   eventName: string;
+  /** Translated copy for the embedded EventShareCode (share section + QR modal). */
+  shareEventLabels: Dictionary['shareEvent'];
   onOpenChange: (open: boolean) => void;
   onGoToEvent: () => void;
 };
@@ -31,6 +33,7 @@ export function ShareCodeDialog({
   open,
   shareCode,
   eventName,
+  shareEventLabels,
   onOpenChange,
   onGoToEvent,
 }: ShareCodeDialogProps) {
@@ -44,7 +47,7 @@ export function ShareCodeDialog({
           <DialogDescription>{t('shareDesc')}</DialogDescription>
         </DialogHeader>
         <div className="mt-2">
-          <EventShareCode shareCode={shareCode} eventName={eventName} />
+          <EventShareCode shareCode={shareCode} eventName={eventName} t={shareEventLabels} />
         </div>
         <div className="mt-2 flex justify-end">
           <Button type="button" onClick={onGoToEvent} className="rounded-md">

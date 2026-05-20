@@ -161,7 +161,11 @@ function parseStepParam(value: string | null): StepNumber {
   return 1;
 }
 
-export default function NewEventForm() {
+export default function NewEventForm({
+  shareEventLabels,
+}: {
+  shareEventLabels: Dictionary['shareEvent'];
+}) {
   const { t } = useTranslations<NewEventT>();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -694,6 +698,7 @@ export default function NewEventForm() {
         open={createdShareCode !== null && createdEventName !== null}
         shareCode={createdShareCode ?? ''}
         eventName={createdEventName ?? ''}
+        shareEventLabels={shareEventLabels}
         onOpenChange={(next) => {
           if (!next) {
             setCreatedShareCode(null);

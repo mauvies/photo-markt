@@ -1,25 +1,28 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { safeNext } from '@/lib/auth/safe-next';
 
 export function CloseButton({ className = '' }: { className?: string }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const lp = useLocalizedPath();
 
   const handleClick = () => {
     if (pathname?.startsWith('/auth/reset-password')) {
-      router.push('/login');
+      router.push(lp('/login'));
       return;
     }
 
-    const referrer = document.referrer;
-    const isSameDomain = referrer && new URL(referrer).origin === window.location.origin;
-
-    if (isSameDomain && window.history.length > 1) {
-      router.back();
-    } else {
-      router.push('/');
-    }
+    // Return to the page the user came from. `useLoginHref` / `useSignupHref`
+    // capture it as a (locale-stripped) `?next=` param when sending the user
+    // here; `safeNext` rejects open-redirect targets. Pushing this known
+    // destination is deterministic — unlike `router.back()`, which depends on
+    // an unpredictable history stack and can re-fetch an unexpected route.
+    const next = safeNext(searchParams.get('next'));
+    router.push(lp(next ?? '/'));
   };
 
   return (

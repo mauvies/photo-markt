@@ -184,7 +184,7 @@ export function PricingSection({ isAuthenticated, t }: { isAuthenticated: boolea
         </div>
 
         {/* Footer */}
-        <div className="mx-auto mt-10 max-w-6xl border-t border-border/40 pt-6 text-center">
+        <div className="mx-auto mt-4 max-w-6xl pt-6 text-center">
           <p className="text-[11px] text-muted-foreground">
             {t.footerNote}{' '}
             <Link href="/contact" className="underline underline-offset-4 hover:text-foreground">

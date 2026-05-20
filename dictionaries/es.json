@@ -1124,6 +1124,42 @@
     "failedPhotosWarning": "{count} foto(s) no se pudieron indexar.",
     "failedPhotosRetry": "Reintentar"
   },
+  "eventDetails": {
+    "title": "Detalles del evento",
+    "eventType": "Tipo de evento",
+    "typeSolo": "Individual",
+    "typeCollaborative": "Colaborativo",
+    "typeOrganizer": "Organizador",
+    "activity": "Actividad",
+    "date": "Fecha",
+    "location": "Ubicación",
+    "pricePerPhoto": "Precio por foto",
+    "free": "Gratis",
+    "visibility": "Visibilidad",
+    "public": "Público",
+    "private": "Privado",
+    "watermark": "Marca de agua",
+    "aiMatching": "Reconocimiento facial IA",
+    "containsMinors": "Incluye menores",
+    "uploadApproval": "Requiere aprobación de subidas",
+    "guestUpload": "Permite subidas de invitados",
+    "enabled": "Activado",
+    "disabled": "Desactivado",
+    "yes": "Sí",
+    "no": "No"
+  },
+  "shareEvent": {
+    "heading": "Código para compartir",
+    "description": "Comparte este código con las personas que deban tener acceso a «{eventName}».",
+    "copyCode": "Copiar código",
+    "copyCodeDone": "¡Copiado!",
+    "copyLink": "Copiar enlace",
+    "copyLinkDone": "¡Enlace copiado!",
+    "showQr": "Mostrar código QR",
+    "qrTitle": "Compartir evento",
+    "qrDescription": "Escanea este código QR para abrir el evento.",
+    "qrFooter": "O comparte el código directamente"
+  },
   "aiSearch": {
     "banner": {
       "titleReady": "Encuéntrate en este evento",
