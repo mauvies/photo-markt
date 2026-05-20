@@ -227,12 +227,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleClearCart}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  {t('clearCart')}
-                </AlertDialogAction>
+                <AlertDialogAction onClick={handleClearCart}>{t('clearCart')}</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>

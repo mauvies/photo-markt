@@ -142,12 +142,7 @@ export function GuestCartContent() {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={clearCart}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                {t('clearCart')}
-              </AlertDialogAction>
+              <AlertDialogAction onClick={clearCart}>{t('clearCart')}</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

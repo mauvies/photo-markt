@@ -3,7 +3,11 @@
 import { ImageOff } from 'lucide-react';
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { type Photo, type RenderPhotoContext, RowsPhotoAlbum } from 'react-photo-album';
-import { PhotoIconButtons, type PhotoIconTooltips } from '@/components/photo-icon-buttons';
+import {
+  PhotoIconButtons,
+  type PhotoIconTooltips,
+  type PhotoMoreMenuConfig,
+} from '@/components/photo-icon-buttons';
 import { PhotoLightbox, type PhotoLightboxItem } from '@/components/photo-lightbox';
 import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -65,6 +69,8 @@ type PhotoAlbumViewerProps = {
   };
   /** Fallback text shown in tiles whose image fails to load. */
   imageUnavailableLabel?: string;
+  /** When set, each tile shows a 3-dot "more options" menu (collaborative photographer view). */
+  moreMenu?: PhotoMoreMenuConfig;
 };
 
 export default function PhotoAlbumViewer({
@@ -94,6 +100,7 @@ export default function PhotoAlbumViewer({
   deleteTooltip,
   uploaderLabels,
   imageUnavailableLabel = 'Image unavailable',
+  moreMenu,
 }: PhotoAlbumViewerProps) {
   const { index, openAt, switchTo, close } = usePhotoLightboxUrl(items);
   const [dimensions, setDimensions] = useState<Record<string, { width: number; height: number }>>(
@@ -250,6 +257,7 @@ export default function PhotoAlbumViewer({
           photosInMyPhotos={photosInMyPhotos}
           onAddToPhotos={onAddToPhotos}
           onRemoveFromPhotos={onRemoveFromPhotos}
+          moreMenu={moreMenu}
           tooltips={iconTooltips}
         />
       );
@@ -279,6 +287,7 @@ export default function PhotoAlbumViewer({
       onDeleteOwn,
       deleteTooltip,
       uploaderLabels,
+      moreMenu,
     ],
   );
 

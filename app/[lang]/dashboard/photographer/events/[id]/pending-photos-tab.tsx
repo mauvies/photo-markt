@@ -101,7 +101,7 @@ export function PendingPhotosTab({ eventId, photos, labels }: PendingPhotosTabPr
               <Button
                 type="button"
                 size="icon"
-                variant="destructive"
+                variant="outline"
                 onClick={() => handleReject(photo.id)}
                 disabled={isProcessing}
                 aria-label={labels.rejectAria}

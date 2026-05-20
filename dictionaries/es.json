@@ -123,6 +123,12 @@
     "payouts": "Pagos"
   },
   "events": {
+    "moreOptions": "Más opciones",
+    "tagPeople": "Etiquetar personas",
+    "share": "Compartir",
+    "download": "Descargar",
+    "shareCopied": "Enlace de la foto copiado",
+    "downloadFailed": "No se pudo descargar la foto.",
     "editEvent": "Editar evento",
     "deleteEvent": "Eliminar evento",
     "eventActionsMenuLabel": "Más opciones",
