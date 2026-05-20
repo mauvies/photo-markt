@@ -3,6 +3,7 @@
 import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 export interface BottomNavItem {
@@ -14,7 +15,14 @@ export interface BottomNavItem {
   isActive?: (pathname: string) => boolean;
 }
 
-export function BottomNav({ items }: { items: BottomNavItem[] }) {
+export function BottomNav({
+  items,
+  account,
+}: {
+  items: BottomNavItem[];
+  /** Optional rightmost slot — e.g. the avatar account dropdown. */
+  account?: ReactNode;
+}) {
   const pathname = usePathname();
 
   return (
@@ -41,17 +49,20 @@ export function BottomNav({ items }: { items: BottomNavItem[] }) {
           >
             <item.icon
               className={cn(
-                'h-6 w-6 shrink-0 transition-all duration-150',
+                'h-5 w-5 shrink-0 transition-all duration-150',
                 active ? 'stroke-[2.5]' : 'stroke-[1.5]',
               )}
               aria-hidden="true"
             />
-            <span className={cn('text-xs leading-none tracking-tight', active && 'font-semibold')}>
+            <span
+              className={cn('text-[11px] leading-none tracking-tight', active && 'font-semibold')}
+            >
               {item.label}
             </span>
           </Link>
         );
       })}
+      {account}
     </nav>
   );
 }

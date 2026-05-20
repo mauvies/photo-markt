@@ -41,17 +41,9 @@ export function Nav({ user, activeRole }: { user: User | null; activeRole: UserR
           <Image
             src="/logo.svg"
             alt="Photo Markt"
-            className="mt-1 hidden h-10 w-auto md:block"
+            className="mt-1 h-8 w-auto md:h-10"
             width={80}
             height={80}
-            priority
-          />
-          <Image
-            src="/logo-icon.svg"
-            alt="Photo Markt"
-            className="block h-7 w-auto md:hidden"
-            width={40}
-            height={40}
             priority
           />
         </Link>

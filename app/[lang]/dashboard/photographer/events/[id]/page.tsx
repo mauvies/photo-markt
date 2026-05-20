@@ -81,7 +81,7 @@ export default async function EventDetailPage({
     return (
       <div>
         <DashboardHeader title={event.name} />
-        <div className="text-sm text-muted-foreground">
+        <div className="mt-2 text-sm leading-relaxed text-muted-foreground">
           {new Date(event.date).toDateString().split(' ').slice(1).join(' ')} •{' '}
           {event.city[0]?.toUpperCase() + event.city.slice(1)}
         </div>
@@ -250,7 +250,7 @@ export default async function EventDetailPage({
           <EventActionsMenu eventId={id} t={dict.events} />
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm leading-relaxed text-muted-foreground">
         <span>
           {new Date(event.date).toDateString().split(' ').slice(1).join(' ')} •{' '}
           {event.city[0]?.toUpperCase() + event.city.slice(1)}

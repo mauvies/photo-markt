@@ -30,8 +30,7 @@ import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { stringifyJsonLd } from '@/lib/json-ld';
-import { ContributeModal } from './contribute-modal';
-import { ContributeTriggerCard } from './contribute-trigger-card';
+import { ContributeDialog } from './contribute-dialog';
 import { PublicEventPhotoViewer } from './public-event-photo-viewer';
 import { UploadProgressProvider } from './upload-progress-provider';
 
@@ -69,9 +68,8 @@ async function getCachedEventData(
   photos: Awaited<ReturnType<typeof getEventPhotosPublic>>;
   /**
    * Pre-signed photo URLs keyed by storage path, generated inside the cache
-   * so they survive trivial re-renders (e.g. opening/closing the contribute
-   * modal via `?contribute=1`). Without caching, every render produced new
-   * signed strings, the `<Image>` src changed, and the browser re-fetched —
+   * so they survive trivial re-renders. Without caching, every render produced
+   * new signed strings, the `<Image>` src changed, and the browser re-fetched —
    * producing a visible flash.
    */
   signed: Record<string, string>;
@@ -460,7 +458,7 @@ export default async function EventPage({
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold">{event.name}</h1>
-              <div className="mt-1 text-sm text-muted-foreground">
+              <div className="mt-2 text-sm leading-relaxed text-muted-foreground">
                 {new Date(event.date).toDateString().split(' ').slice(1).join(' ')} •{' '}
                 {event.city[0]?.toUpperCase() + event.city.slice(1)}
                 {event.price_per_photo !== null && (
@@ -475,16 +473,11 @@ export default async function EventPage({
 
           {showContribute && event.share_code ? (
             <div className="mb-6">
-              <ContributeTriggerCard
-                title={dict.collaborativeEvent.contributeCardTitle}
-                description={dict.collaborativeEvent.contributeCardDesc}
-                buttonLabel={dict.collaborativeEvent.contributeCardButton}
-              />
               {/* The Dropzone inside the modal reads its labels ("Upload",
                 "Or drag files here") from the newEvent namespace via
                 useTranslations. */}
               <TranslationsProvider translations={dict.newEvent}>
-                <ContributeModal
+                <ContributeDialog
                   eventId={event.id}
                   shareCode={event.share_code}
                   isAuthenticated={Boolean(user)}

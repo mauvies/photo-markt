@@ -2,8 +2,7 @@ import { CalendarClock } from 'lucide-react';
 import { cacheLife, cacheTag } from 'next/cache';
 import { notFound } from 'next/navigation';
 import { getActiveRole } from '@/app/[lang]/actions/roles';
-import { ContributeModal } from '@/app/[lang]/events/[shareCode]/contribute-modal';
-import { ContributeTriggerCard } from '@/app/[lang]/events/[shareCode]/contribute-trigger-card';
+import { ContributeDialog } from '@/app/[lang]/events/[shareCode]/contribute-dialog';
 import { UploadProgressProvider } from '@/app/[lang]/events/[shareCode]/upload-progress-provider';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { EventGalleryWithFaceSearch } from '@/components/event-gallery-with-face-search';
@@ -222,12 +221,12 @@ export default async function ExploreEventDetailPage({
   // Render the page body. We wrap in <UploadProgressProvider> ONLY when
   // contribute is relevant — non-collaborative events don't need the
   // in-flight upload modal infrastructure. The provider supplies labels +
-  // owns the progress dialog that `ContributeModal` triggers indirectly.
+  // owns the progress dialog that `ContributeDialog` triggers indirectly.
   const body = (
     <div className="space-y-4">
       <div>
         <DashboardHeader title={event.name} />
-        <div className="text-sm text-muted-foreground">
+        <div className="mt-2 text-sm leading-relaxed text-muted-foreground">
           {new Date(event.date).toDateString().split(' ').slice(1).join(' ')} •{' '}
           {event.city[0]?.toUpperCase() + event.city.slice(1)}
           {event.price_per_photo !== null && (
@@ -245,16 +244,11 @@ export default async function ExploreEventDetailPage({
           land here with a code. */}
       {showContribute && event.share_code ? (
         <div className="mb-2">
-          <ContributeTriggerCard
-            title={dict.collaborativeEvent.contributeCardTitle}
-            description={dict.collaborativeEvent.contributeCardDesc}
-            buttonLabel={dict.collaborativeEvent.contributeCardButton}
-          />
           {/* The Dropzone inside the modal reads its labels ("Upload",
               "Or drag files here") from the newEvent namespace via
               useTranslations. */}
           <TranslationsProvider translations={dict.newEvent}>
-            <ContributeModal
+            <ContributeDialog
               eventId={event.id}
               shareCode={event.share_code}
               isAuthenticated={Boolean(user)}
