@@ -13,6 +13,7 @@ import {
   getEventPhotosPublic,
   getPhotoIdsInCart,
 } from '@/database/queries';
+import { getPurchasedPhotoIdsForEvent } from '@/database/queries/orders';
 import {
   getEventAiIndexingProgress,
   getEventRekognitionState,
@@ -182,6 +183,8 @@ export default async function ExploreEventDetailPage({
   // into one query each instead of looping isPhotoInCart per photo.
   const photosInCart: string[] = [];
   const photosInMyPhotos: string[] = [];
+  // Photos this talent has purchased — gates the bulk download on paid events.
+  let purchasedPhotoIds = new Set<string>();
   if (user && eventStatus !== 'upcoming' && activeRole === 'talent') {
     const photoIds = photos.map((p) => p.id);
     if (photoIds.length > 0) {
@@ -195,6 +198,10 @@ export default async function ExploreEventDetailPage({
       ]);
       for (const id of cartIds) photosInCart.push(id);
       for (const tag of tagsResult.data ?? []) photosInMyPhotos.push(tag.photo_id);
+      // Free events are downloadable by anyone — only paid events need this.
+      if (event.price_per_photo !== null) {
+        purchasedPhotoIds = await getPurchasedPhotoIdsForEvent(supabase, user.id, event.id);
+      }
     }
   }
 
@@ -294,6 +301,21 @@ export default async function ExploreEventDetailPage({
               <TranslationsProvider translations={dict.eventPhotoViewer}>
                 <EventPhotoViewer
                   items={photoItems}
+                  eventId={event.id}
+                  isFreeEvent={event.price_per_photo === null}
+                  purchasedPhotoIds={purchasedPhotoIds}
+                  bulkDownload={{
+                    select: dict.events.selectButton,
+                    clear: dict.events.clearButton,
+                    countNone: dict.events.noPhotosSelected,
+                    countOne: dict.events.onePhotoSelected,
+                    countMany: dict.events.nPhotosSelected,
+                    download: dict.events.download,
+                    preparing: dict.events.preparingDownload,
+                    failed: dict.events.downloadFailed,
+                    skipped: dict.events.downloadSkipped,
+                    nonePurchased: dict.events.downloadNonePurchased,
+                  }}
                   showAddToCart={user !== null}
                   photosInCart={new Set(photosInCart)}
                   photosInMyPhotos={new Set(photosInMyPhotos)}

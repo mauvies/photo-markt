@@ -14,6 +14,7 @@ import {
   getPhotoIdsInCart,
   type SupabaseServerClient,
 } from '@/database/queries';
+import { getPurchasedPhotoIdsForEvent } from '@/database/queries/orders';
 import {
   getEventAiIndexingProgress,
   getEventRekognitionState,
@@ -335,6 +336,21 @@ export default async function EventPage({
     // ignore — photosInCart stays empty
   }
 
+  // Purchased photos — only needed to gate bulk download on a paid event for a
+  // signed-in viewer. Free events download for anyone; guests get an empty set.
+  let purchasedPhotoIds = new Set<string>();
+  if (user && event.price_per_photo !== null && eventStatus !== 'upcoming') {
+    try {
+      purchasedPhotoIds = await getPurchasedPhotoIdsForEvent(
+        supabase as unknown as SupabaseServerClient,
+        user.id,
+        event.id,
+      );
+    } catch {
+      // best-effort — leave the set empty
+    }
+  }
+
   const activityLabel =
     activityOptions.find((o) => o.value === event.activity)?.label ?? event.activity;
   const location = [event.city, event.country].filter(Boolean).join(', ');
@@ -558,6 +574,19 @@ export default async function EventPage({
                     cartToastLabels={{
                       failedAdd: dict.eventPhotoViewer.failedAddCart,
                       failedRemove: dict.eventPhotoViewer.failedRemoveCart,
+                    }}
+                    purchasedPhotoIds={purchasedPhotoIds}
+                    bulkDownload={{
+                      select: dict.events.selectButton,
+                      clear: dict.events.clearButton,
+                      countNone: dict.events.noPhotosSelected,
+                      countOne: dict.events.onePhotoSelected,
+                      countMany: dict.events.nPhotosSelected,
+                      download: dict.events.download,
+                      preparing: dict.events.preparingDownload,
+                      failed: dict.events.downloadFailed,
+                      skipped: dict.events.downloadSkipped,
+                      nonePurchased: dict.events.downloadNonePurchased,
                     }}
                     imageUnavailableLabel={dict.eventCard.imageUnavailable}
                   />

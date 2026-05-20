@@ -11,6 +11,7 @@ import {
   createOrder,
   getOrderByCheckoutSessionId,
   getOrderByPaymentIntentId,
+  getPurchasedPhotoIdsForEvent,
   getUserOrders,
   updateOrderStatus,
 } from '@/database/queries/orders';
@@ -167,6 +168,74 @@ describe('database/queries/orders', () => {
       }
       const orders = await getUserOrders(sb, t.id, 3);
       expect(orders).toHaveLength(3);
+    });
+  });
+
+  // This query is the authoritative paid-event permission check behind the
+  // bulk-download API route — a regression here would leak unpurchased photos.
+  describe('getPurchasedPhotoIdsForEvent', () => {
+    it('returns photo ids the user purchased in completed orders for the event', async () => {
+      const { photographer, event, photo, talent } = await setupCommerce();
+      const sb = createServiceClient();
+      const order = await createOrder(sb, talent.id, {
+        total_amount_cents: 300,
+        status: 'completed',
+      });
+      await addOrderItems(sb, order.id, [
+        { photo_id: photo.id, photographer_id: photographer.id, unit_price_cents: 300 },
+      ]);
+
+      const purchased = await getPurchasedPhotoIdsForEvent(sb, talent.id, event.id);
+      expect(purchased.has(photo.id)).toBe(true);
+      expect(purchased.size).toBe(1);
+    });
+
+    it('excludes photos from non-completed orders', async () => {
+      const { photographer, event, photo, talent } = await setupCommerce();
+      const sb = createServiceClient();
+      const order = await createOrder(sb, talent.id, {
+        total_amount_cents: 300,
+        status: 'pending',
+      });
+      await addOrderItems(sb, order.id, [
+        { photo_id: photo.id, photographer_id: photographer.id, unit_price_cents: 300 },
+      ]);
+
+      const purchased = await getPurchasedPhotoIdsForEvent(sb, talent.id, event.id);
+      expect(purchased.size).toBe(0);
+    });
+
+    it("excludes another user's purchases", async () => {
+      const { photographer, event, photo, talent } = await setupCommerce();
+      const other = await createTestUser('TALENT');
+      const sb = createServiceClient();
+      const order = await createOrder(sb, other.id, {
+        total_amount_cents: 300,
+        status: 'completed',
+      });
+      await addOrderItems(sb, order.id, [
+        { photo_id: photo.id, photographer_id: photographer.id, unit_price_cents: 300 },
+      ]);
+
+      const purchased = await getPurchasedPhotoIdsForEvent(sb, talent.id, event.id);
+      expect(purchased.size).toBe(0);
+    });
+
+    it('excludes purchased photos that belong to a different event', async () => {
+      const { photographer, photo, talent } = await setupCommerce();
+      const otherEvent = await createTestEvent(photographer.id);
+      const sb = createServiceClient();
+      const order = await createOrder(sb, talent.id, {
+        total_amount_cents: 300,
+        status: 'completed',
+      });
+      await addOrderItems(sb, order.id, [
+        { photo_id: photo.id, photographer_id: photographer.id, unit_price_cents: 300 },
+      ]);
+
+      // `photo` belongs to `event`, so scoping to `otherEvent` must return nothing.
+      const purchased = await getPurchasedPhotoIdsForEvent(sb, talent.id, otherEvent.id);
+      expect(purchased.size).toBe(0);
     });
   });
 });

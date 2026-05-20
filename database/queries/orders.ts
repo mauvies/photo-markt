@@ -317,3 +317,24 @@ export async function getPhotographerOrders(
 
   return Array.from(uniqueOrders.values());
 }
+
+/**
+ * Photo IDs the given user has purchased within a specific event. Backs the
+ * bulk-download permission check (paid events) and the talent/public viewer's
+ * skipped-count UX. Returns an empty set on any error (fail-closed).
+ */
+export async function getPurchasedPhotoIdsForEvent(
+  supabase: SupabaseServerClient,
+  userId: string,
+  eventId: string,
+): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from('order_items')
+    .select('photo_id, orders!inner(user_id, status), photos!inner(event_id)')
+    .eq('orders.user_id', userId)
+    .eq('orders.status', 'completed')
+    .eq('photos.event_id', eventId);
+
+  if (error || !data) return new Set<string>();
+  return new Set((data as Array<{ photo_id: string }>).map((row) => row.photo_id));
+}
