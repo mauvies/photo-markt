@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { BottomNav } from '@/components/bottom-nav';
+import { BottomNavAccount } from '@/components/bottom-nav-account';
 import { CartLinkButton } from '@/components/cart-link-button';
 import { DashboardUserMenu } from '@/components/dashboard-user-menu';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
@@ -40,6 +41,8 @@ export function TalentDashboardHeader({
     logOut: string;
     rolePhotographer: string;
     roleTalent: string;
+    /** Label under the avatar in the mobile bottom nav. */
+    account: string;
   };
 }) {
   const pathname = usePathname();
@@ -66,17 +69,9 @@ export function TalentDashboardHeader({
             <Image
               src="/logo.svg"
               alt="Photo Markt"
-              className="mt-1 hidden h-10 w-auto md:block"
-              width={80}
-              height={80}
-              priority
-            />
-            <Image
-              src="/logo-icon.svg"
-              alt="Photo Markt"
-              className="block h-9 w-auto md:hidden"
-              width={40}
-              height={40}
+              className="mt-1 h-9 w-auto md:h-10"
+              width={90}
+              height={90}
               priority
             />
           </Link>
@@ -126,7 +121,31 @@ export function TalentDashboardHeader({
         </div>
       </header>
 
-      <BottomNav items={talentNavLinks.map((item) => ({ ...item, href: lp(item.href) }))} />
+      {/* Mobile bottom nav: the "Profile" link is dropped here — the profile
+          page is reachable from the avatar account dropdown instead. */}
+      <BottomNav
+        items={talentNavLinks
+          .filter((item) => item.href !== '/dashboard/talent/profile')
+          .map((item) => ({ ...item, href: lp(item.href) }))}
+        account={
+          <BottomNavAccount
+            user={user}
+            activeRole={activeRole}
+            labels={{
+              accountTab: navLabels.account,
+              activeRoleLabel: navLabels.activeRole,
+              currentRoleName: navLabels.roleTalent,
+              switchRoleLabel: `${navLabels.switchTo} ${navLabels.rolePhotographer}`,
+              profile: navLabels.profile,
+              settings: navLabels.settings,
+              privacy: navLabels.privacy,
+              support: navLabels.support,
+              feedback: navLabels.feedback,
+              logOut: navLabels.logOut,
+            }}
+          />
+        }
+      />
     </>
   );
 }

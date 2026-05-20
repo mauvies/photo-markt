@@ -39,8 +39,13 @@ const nextConfig: NextConfig = {
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           {
+            // `camera=(self)` allows getUserMedia on our own origin (used by
+            // the AI face-search selfie capture) while still blocking it for
+            // cross-origin iframes. An empty allowlist `camera=()` blocks the
+            // camera everywhere — including same-origin — so the browser never
+            // shows a permission prompt and getUserMedia throws NotAllowedError.
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=(self)',
+            value: 'camera=(self), microphone=(), geolocation=(self)',
           },
         ],
       },

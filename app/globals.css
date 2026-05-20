@@ -61,10 +61,10 @@
   --gradient-starter: linear-gradient(135deg, #ed737d 0%, #e12e3d 100%);
 
   /* Base background &  — clean, neutral Unsplash style */
-  --background: oklch(0.985 0 0); /* near white (#FAFAFA) */
+  --background: oklch(1 0 0); /* pure white (#FFFFFF) */
   --foreground: oklch(0.47 0 270); /* charcoal text (#2C2C2C) */
 
-  --card: oklch(0.985 0 0);
+  --card: oklch(1 0 0); /* pure white (#FFFFFF) */
   --card-foreground: oklch(0.47 0 270);
 
   --popover: oklch(1 0 0);
