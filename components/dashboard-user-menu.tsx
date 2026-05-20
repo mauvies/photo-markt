@@ -34,8 +34,14 @@ import { cn } from '@/lib/utils';
  * Shared sizing for every account-dropdown row: slightly taller and a slightly
  * larger font than the Shadcn default for easier tapping. Applied to the
  * interactive items AND the informational role row so every row lines up.
+ *
+ * `cursor-pointer` is deliberate: Shadcn's DropdownMenuItem ships `cursor-default`,
+ * and iOS Safari only fires a synthetic `click` on elements it treats as
+ * interactive. The `asChild` link items are fine (an <a> qualifies), but the
+ * plain-<div> items (log out, role switch) never received the tap without a
+ * pointer cursor — keeps the menu reliable on touch laptops/tablets too.
  */
-const MENU_ITEM_CLASS = 'py-2 text-[15px]';
+const MENU_ITEM_CLASS = 'cursor-pointer py-2 text-[15px]';
 
 export function DashboardUserMenu({
   user,
