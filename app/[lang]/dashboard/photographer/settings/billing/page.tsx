@@ -73,6 +73,26 @@ export default async function PhotographerSettingsBillingPage({
             )}
           </div>
 
+          <div className="space-y-2">
+            <p className="text-sm font-medium">{dict.photographerDashboard.planFeatures}</p>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              {[
+                ...(currentPlan.storageGB !== null
+                  ? [`${currentPlan.storageGB}GB storage`]
+                  : ['Unlimited storage']),
+                ...currentPlan.features,
+              ].map((feature) => {
+                const text = typeof feature === 'string' ? feature : feature.text;
+                return (
+                  <li key={text} className="flex items-start gap-2">
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                    <span>{text}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
           {currentPlan.storageGB !== null && (
             <div className="space-y-2 rounded-lg border p-4">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
@@ -98,26 +118,6 @@ export default async function PhotographerSettingsBillingPage({
               )}
             </div>
           )}
-
-          <div className="space-y-2">
-            <p className="text-sm font-medium">{dict.photographerDashboard.planFeatures}</p>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              {[
-                ...(currentPlan.storageGB !== null
-                  ? [`${currentPlan.storageGB}GB storage`]
-                  : ['Unlimited storage']),
-                ...currentPlan.features,
-              ].map((feature) => {
-                const text = typeof feature === 'string' ? feature : feature.text;
-                return (
-                  <li key={text} className="flex items-start gap-2">
-                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                    <span>{text}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
 
           <AvailablePlansSection
             plans={PLANS.filter((plan) => plan.id !== currentPlanId && plan.id !== 'free')}
