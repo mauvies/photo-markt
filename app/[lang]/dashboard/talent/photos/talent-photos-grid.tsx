@@ -411,12 +411,7 @@ export function TalentPhotosGrid({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmRemove}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {t('remove')}
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleConfirmRemove}>{t('remove')}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

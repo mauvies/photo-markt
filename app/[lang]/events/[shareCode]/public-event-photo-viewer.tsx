@@ -298,7 +298,6 @@ export function PublicEventPhotoViewer({
           description={deleteLabels.confirmDesc}
           confirmText={deleteLabels.confirmButton}
           cancelText={deleteLabels.cancelButton}
-          variant="destructive"
           onConfirm={handleDeleteConfirm}
         />
       ) : null}

@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
+import { PhotoMoreMenu, type PhotoMoreMenuLabels } from '@/components/photo-more-menu';
 import { PhotoTagsIndicator } from '@/components/photo-tags-indicator';
 import {
   PhotoUploaderIndicator,
@@ -8,6 +9,20 @@ import {
 } from '@/components/photo-uploader-indicator';
 import { PhotoActionIcon } from '@/components/ui/photo-action-icon';
 import { cn } from '@/lib/utils';
+
+/**
+ * Optional "more options" 3-dot menu config. When provided, the menu renders
+ * in the top-right and the standalone tag-add + delete icons are suppressed
+ * (their actions move into the menu). Used for collaborative events on the
+ * photographer dashboard.
+ */
+export interface PhotoMoreMenuConfig {
+  labels: PhotoMoreMenuLabels;
+  onDelete: (photoId: string) => void;
+  onTagPeople: (photoId: string) => void;
+  onShare: (photoId: string) => void;
+  onDownload: (photoId: string) => void;
+}
 
 export interface PhotoIconTooltips {
   addToCart: string;
@@ -68,6 +83,8 @@ interface PhotoIconButtonsProps {
   photosInMyPhotos?: Set<string>;
   onAddToPhotos?: (photoId: string) => void;
   onRemoveFromPhotos?: (photoId: string) => void;
+  /** When set, renders the 3-dot menu and hides the standalone tag/delete icons. */
+  moreMenu?: PhotoMoreMenuConfig;
   className?: string;
   tooltips?: Partial<PhotoIconTooltips>;
 }
@@ -97,11 +114,15 @@ export function PhotoIconButtons({
   photosInMyPhotos = new Set(),
   onAddToPhotos,
   onRemoveFromPhotos,
+  moreMenu,
   className,
   tooltips,
 }: PhotoIconButtonsProps) {
   const tt: PhotoIconTooltips = { ...DEFAULT_TOOLTIPS, ...tooltips };
-  const hasAnyOpen = isPopoverOpen;
+  // The 3-dot menu keeps its own open state — separate from the shared
+  // uploader/tags popover channel so the two never collide.
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const hasAnyOpen = isPopoverOpen || moreMenuOpen;
   const inCart = photosInCart.has(photoId);
   const inMyPhotos = photosInMyPhotos.has(photoId);
 
@@ -201,6 +222,20 @@ export function PhotoIconButtons({
               />
             </div>
           )}
+          {moreMenu && !selectionActive && (
+            <div className={cn(ICON_WRAP, (moreMenuOpen || hasAnyOpen) && 'md:opacity-100')}>
+              <PhotoMoreMenu
+                photoId={photoId}
+                labels={moreMenu.labels}
+                open={moreMenuOpen}
+                onOpenChange={setMoreMenuOpen}
+                onDelete={moreMenu.onDelete}
+                onTagPeople={moreMenu.onTagPeople}
+                onShare={moreMenu.onShare}
+                onDownload={moreMenu.onDownload}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -209,7 +244,7 @@ export function PhotoIconButtons({
         <div className="relative z-10 mt-auto flex w-full items-end justify-between">
           {/* Tag button */}
           <div className="pointer-events-auto">
-            {onTagPhoto && !hasTags && (
+            {onTagPhoto && !hasTags && !moreMenu && (
               <div className={cn(ICON_WRAP, hasAnyOpen && 'md:opacity-100')}>
                 <PhotoActionIcon
                   icon="tag"
@@ -254,7 +289,7 @@ export function PhotoIconButtons({
                 />
               </div>
             )}
-            {canDelete && onDelete && (
+            {canDelete && onDelete && !moreMenu && (
               <div className={cn(ICON_WRAP, hasAnyOpen && 'md:opacity-100')}>
                 <PhotoActionIcon
                   icon="delete"

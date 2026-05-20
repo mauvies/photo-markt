@@ -123,6 +123,12 @@
     "payouts": "Payouts"
   },
   "events": {
+    "moreOptions": "More options",
+    "tagPeople": "Tag people",
+    "share": "Share",
+    "download": "Download",
+    "shareCopied": "Photo link copied",
+    "downloadFailed": "Could not download the photo.",
     "editEvent": "Edit event",
     "deleteEvent": "Delete event",
     "eventActionsMenuLabel": "More options",

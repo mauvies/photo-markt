@@ -19,7 +19,8 @@ interface ConfirmDialogProps {
   description: string;
   confirmText?: string;
   cancelText?: string;
-  variant?: 'default' | 'destructive';
+  /** Shown on the confirm button while the async action runs. Falls back to confirmText. */
+  pendingText?: string;
   onConfirm: () => void | Promise<void>;
 }
 
@@ -30,19 +31,23 @@ export function ConfirmDialog({
   description,
   confirmText = 'Confirm',
   cancelText = 'Cancel',
-  variant = 'default',
+  pendingText,
   onConfirm,
 }: ConfirmDialogProps) {
   const [isPending, setIsPending] = useState(false);
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (event: React.MouseEvent) => {
+    // Keep the dialog mounted while the async action runs — AlertDialogAction
+    // otherwise closes it immediately, so the loading state would never show.
+    event.preventDefault();
     setIsPending(true);
     try {
       await onConfirm();
       onOpenChange(false);
     } catch (error) {
+      // Leave the dialog open on error so the user can retry; the caller is
+      // responsible for surfacing the error message (e.g. a toast).
       console.error('Confirm action failed:', error);
-      // Don't close dialog on error - let the caller handle it
     } finally {
       setIsPending(false);
     }
@@ -57,16 +62,10 @@ export function ConfirmDialog({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isPending}>{cancelText}</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={handleConfirm}
-            disabled={isPending}
-            className={
-              variant === 'destructive'
-                ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
-                : undefined
-            }
-          >
-            {isPending ? 'Processing...' : confirmText}
+          {/* Standard button styling — no destructive red variant. The action
+              is still gated behind this confirmation dialog. */}
+          <AlertDialogAction onClick={handleConfirm} disabled={isPending}>
+            {isPending ? (pendingText ?? confirmText) : confirmText}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

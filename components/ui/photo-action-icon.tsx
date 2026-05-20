@@ -5,6 +5,14 @@ import { useCoarsePointer } from '@/hooks/use-coarse-pointer';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 
+/**
+ * Shared visual for photo-overlay action buttons: a dark semi-transparent
+ * round pill with a white icon. Exported so non-`PhotoActionIcon` triggers
+ * (e.g. the "more options" dropdown trigger) match the pattern exactly.
+ */
+export const photoActionIconClass =
+  'flex size-6 items-center justify-center rounded-full text-white bg-gray-900/45 backdrop-blur-sm shadow-sm transition-colors hover:bg-gray-900/80';
+
 type PhotoActionIconProps = {
   icon: 'cart' | 'check' | 'tag' | 'save' | 'delete';
   active: boolean;

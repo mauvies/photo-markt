@@ -285,6 +285,34 @@ export async function getPhotoTags(photoIds: string[]): Promise<
 }
 
 /**
+ * Returns a short-lived signed URL for downloading a photo's ORIGINAL file.
+ * The URL carries `Content-Disposition: attachment` so the browser saves it
+ * rather than navigating. Verifies the caller owns the event.
+ */
+export async function getPhotoDownloadUrlAction(photoId: string, eventId: string): Promise<string> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('You must be signed in to download a photo.');
+
+  if (!(await eventExists(supabase, eventId, user.id))) {
+    throw new Error('Event not found or access denied.');
+  }
+
+  const photo = await getPhoto(supabase, photoId, eventId, user.id);
+  if (!photo?.original_url) throw new Error('Photo not found.');
+
+  const { data, error } = await supabase.storage
+    .from('photos')
+    .createSignedUrl(photo.original_url, 300, { download: true });
+  if (error || !data?.signedUrl) {
+    throw new Error('Could not prepare the download.');
+  }
+  return data.signedUrl;
+}
+
+/**
  * Tag multiple photos for a talent user
  */
 export async function tagPhotosForTalentAction(

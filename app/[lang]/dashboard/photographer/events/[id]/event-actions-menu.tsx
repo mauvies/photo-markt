@@ -76,7 +76,6 @@ export function EventActionsMenu({ eventId, t }: EventActionsMenuProps) {
         description={t.deleteConfirmDesc}
         confirmText={t.confirmButton}
         cancelText={t.cancelButton}
-        variant="destructive"
         onConfirm={confirmDeleteEvent}
       />
     </>

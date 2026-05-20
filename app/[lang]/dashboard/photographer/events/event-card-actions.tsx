@@ -109,7 +109,6 @@ export function EventCardActions({ editHref, onDelete, labels }: EventCardAction
         description={labels.deleteDescription}
         confirmText={labels.deleteConfirm}
         cancelText={labels.deleteCancel}
-        variant="destructive"
         onConfirm={handleDelete}
       />
     </>

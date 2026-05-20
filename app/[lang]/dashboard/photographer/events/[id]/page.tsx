@@ -348,6 +348,13 @@ export default async function EventDetailPage({
               <TabsContent value="all" className="mt-4">
                 <EventPhotoAlbum
                   eventId={id}
+                  isCollaborative={event.is_collaborative}
+                  uploaderLabels={{
+                    tooltip: dict.collaborativeEvent.uploaderTooltip,
+                    popoverHeading: dict.collaborativeEvent.uploaderPopoverHeading,
+                    guestLabel: dict.collaborativeEvent.uploaderGuestLabel,
+                    authenticatedLabel: dict.collaborativeEvent.uploaderAuthenticatedLabel,
+                  }}
                   iconTooltips={dict.photoIconButtons}
                   items={albumItems}
                   imageUnavailableLabel={dict.eventCard.imageUnavailable}
@@ -369,6 +376,13 @@ export default async function EventDetailPage({
           ) : (
             <EventPhotoAlbum
               eventId={id}
+              isCollaborative={event.is_collaborative}
+              uploaderLabels={{
+                tooltip: dict.collaborativeEvent.uploaderTooltip,
+                popoverHeading: dict.collaborativeEvent.uploaderPopoverHeading,
+                guestLabel: dict.collaborativeEvent.uploaderGuestLabel,
+                authenticatedLabel: dict.collaborativeEvent.uploaderAuthenticatedLabel,
+              }}
               iconTooltips={dict.photoIconButtons}
               items={albumItems}
               imageUnavailableLabel={dict.eventCard.imageUnavailable}
