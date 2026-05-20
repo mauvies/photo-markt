@@ -1,6 +1,5 @@
 import { DashboardHeader } from '@/components/dashboard-header';
 import { EventShareCode } from '@/components/event-share-code';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   createSignedUrls,
@@ -18,9 +17,11 @@ import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
+import { cn } from '@/lib/utils';
 import { getPhotoTags } from './actions';
 import { AiStatusCard } from './ai-status-card';
 import { EventActionsMenu } from './event-actions-menu';
+import { EventDetailsCard } from './event-details-card';
 import { EventPhotoAlbum } from './event-photo-album';
 import { OrganizerUploadSection } from './organizer-upload-section';
 import { PendingPhotosTab } from './pending-photos-tab';
@@ -216,20 +217,13 @@ export default async function EventDetailPage({
   // that pre-date the migration; cast through `unknown` so TS doesn't object.
   const eventRecord = event as unknown as Record<string, unknown>;
   const aiMatchingEnabled = Boolean(eventRecord.ai_matching_enabled);
+  const containsMinors = Boolean(eventRecord.contains_minors);
   const aiMatchingStatus =
     (eventRecord.ai_matching_status as AiMatchingStatus | undefined) ?? 'idle';
   const aiProgress =
     role === 'owner' && aiMatchingEnabled
       ? await getEventAiIndexingProgress(adminClient, id)
       : null;
-  const aiChipLabel =
-    aiMatchingStatus === 'idle'
-      ? dict.rekognition.statusIdle
-      : aiMatchingStatus === 'indexing'
-        ? dict.rekognition.statusIndexing
-        : aiMatchingStatus === 'ready'
-          ? dict.rekognition.statusReady
-          : dict.rekognition.statusFailed;
 
   // Pull the upload-rejected toast copy from the existing newEvent
   // dictionary — shared with the wizard's "Upload rejected" messaging.
@@ -250,65 +244,88 @@ export default async function EventDetailPage({
           <EventActionsMenu eventId={id} t={dict.events} />
         </div>
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm leading-relaxed text-muted-foreground">
-        <span>
-          {new Date(event.date).toDateString().split(' ').slice(1).join(' ')} •{' '}
-          {event.city[0]?.toUpperCase() + event.city.slice(1)}
-          {event.price_per_photo !== null && (
-            <>
-              {' '}
-              • ${event.price_per_photo.toFixed(2)} {dict.photographerDashboard.perPhoto}
-            </>
-          )}
-        </span>
-        {role === 'owner' && aiMatchingEnabled && (
-          <Badge variant="secondary" className="font-normal">
-            {`AI · ${aiChipLabel}${
-              aiProgress ? ` · ${aiProgress.indexed}/${aiProgress.totalApplicable}` : ''
-            }`}
-          </Badge>
+      <div className="mt-2 text-sm leading-relaxed text-muted-foreground">
+        {new Date(event.date).toDateString().split(' ').slice(1).join(' ')} •{' '}
+        {event.city[0]?.toUpperCase() + event.city.slice(1)}
+        {event.price_per_photo !== null && (
+          <>
+            {' '}
+            • ${event.price_per_photo.toFixed(2)} {dict.photographerDashboard.perPhoto}
+          </>
         )}
       </div>
-      {role === 'owner' && aiMatchingEnabled && aiProgress && (
-        <div className="mt-4">
-          <AiStatusCard
-            eventId={id}
-            status={aiMatchingStatus}
-            totalApplicable={aiProgress.totalApplicable}
-            indexed={aiProgress.indexed}
-            pending={aiProgress.pending}
-            failed={aiProgress.failed}
-            lastIndexedAt={aiProgress.lastIndexedAt}
-            labels={{
-              title: dict.rekognition.cardTitle,
-              statusIdle: dict.rekognition.statusIdle,
-              statusIndexing: dict.rekognition.statusIndexing,
-              statusReady: dict.rekognition.statusReady,
-              statusFailed: dict.rekognition.statusFailed,
-              indexedCount: dict.rekognition.statusIndexedCount,
-              lastIndexed: dict.rekognition.lastIndexed,
-              reindex: dict.rekognition.actionsReindex,
-              reindexConfirmTitle: dict.rekognition.actionsReindexConfirmTitle,
-              reindexConfirmBody: dict.rekognition.actionsReindexConfirmBody,
-              cancel: dict.rekognition.cancel,
-              confirm: dict.rekognition.confirm,
-              reindexFailed: dict.rekognition.errorsAiEnableFailed,
-              pollUpdating: dict.rekognition.pollUpdating,
-              pollError: dict.rekognition.pollError,
-              indexingComplete: dict.rekognition.indexingComplete,
-              failedPhotosWarning: dict.rekognition.failedPhotosWarning,
-              failedPhotosRetry: dict.rekognition.failedPhotosRetry,
-            }}
-          />
-        </div>
-      )}
-      {event.share_code && (
-        <div className="mt-4">
-          <EventShareCode
-            shareCode={event.share_code}
-            eventName={event.name}
-            label={event.is_collaborative ? dict.collaborativeEvent.shareLinkLabel : undefined}
-          />
+
+      {/* Event details — full-width summary of every configuration field. */}
+      <div className="mt-4">
+        <EventDetailsCard
+          t={dict.eventDetails}
+          type={event.type}
+          isCollaborative={event.is_collaborative}
+          activityLabel={
+            dict.activities[event.activity as keyof typeof dict.activities] ?? event.activity
+          }
+          date={new Date(event.date).toDateString().split(' ').slice(1).join(' ')}
+          location={[event.city[0]?.toUpperCase() + event.city.slice(1), event.country]
+            .filter(Boolean)
+            .join(', ')}
+          pricePerPhoto={event.price_per_photo}
+          isPublic={event.is_public}
+          watermarkEnabled={event.watermark_enabled}
+          aiMatchingEnabled={aiMatchingEnabled}
+          containsMinors={containsMinors}
+          requireUploadApproval={event.require_upload_approval}
+          allowGuestUpload={event.allow_guest_upload}
+        />
+      </div>
+
+      {/* Share + AI face matching — side by side on desktop when both are
+          present; a section shown alone spans the full width. Stacked on mobile. */}
+      {(Boolean(event.share_code) || (aiMatchingEnabled && aiProgress)) && (
+        <div
+          className={cn(
+            'mt-4 grid items-start gap-4',
+            event.share_code && aiMatchingEnabled && aiProgress ? 'md:grid-cols-2' : '',
+          )}
+        >
+          {event.share_code && (
+            <EventShareCode
+              shareCode={event.share_code}
+              eventName={event.name}
+              t={dict.shareEvent}
+              label={event.is_collaborative ? dict.collaborativeEvent.shareLinkLabel : undefined}
+            />
+          )}
+          {aiMatchingEnabled && aiProgress && (
+            <AiStatusCard
+              eventId={id}
+              status={aiMatchingStatus}
+              totalApplicable={aiProgress.totalApplicable}
+              indexed={aiProgress.indexed}
+              pending={aiProgress.pending}
+              failed={aiProgress.failed}
+              lastIndexedAt={aiProgress.lastIndexedAt}
+              labels={{
+                title: dict.rekognition.cardTitle,
+                statusIdle: dict.rekognition.statusIdle,
+                statusIndexing: dict.rekognition.statusIndexing,
+                statusReady: dict.rekognition.statusReady,
+                statusFailed: dict.rekognition.statusFailed,
+                indexedCount: dict.rekognition.statusIndexedCount,
+                lastIndexed: dict.rekognition.lastIndexed,
+                reindex: dict.rekognition.actionsReindex,
+                reindexConfirmTitle: dict.rekognition.actionsReindexConfirmTitle,
+                reindexConfirmBody: dict.rekognition.actionsReindexConfirmBody,
+                cancel: dict.rekognition.cancel,
+                confirm: dict.rekognition.confirm,
+                reindexFailed: dict.rekognition.errorsAiEnableFailed,
+                pollUpdating: dict.rekognition.pollUpdating,
+                pollError: dict.rekognition.pollError,
+                indexingComplete: dict.rekognition.indexingComplete,
+                failedPhotosWarning: dict.rekognition.failedPhotosWarning,
+                failedPhotosRetry: dict.rekognition.failedPhotosRetry,
+              }}
+            />
+          )}
         </div>
       )}
       {event.type === 'organizer' && (

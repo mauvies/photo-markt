@@ -1124,6 +1124,42 @@
     "failedPhotosWarning": "{count} photo(s) failed to index.",
     "failedPhotosRetry": "Retry"
   },
+  "eventDetails": {
+    "title": "Event details",
+    "eventType": "Event type",
+    "typeSolo": "Solo",
+    "typeCollaborative": "Collaborative",
+    "typeOrganizer": "Organizer",
+    "activity": "Activity",
+    "date": "Date",
+    "location": "Location",
+    "pricePerPhoto": "Price per photo",
+    "free": "Free",
+    "visibility": "Visibility",
+    "public": "Public",
+    "private": "Private",
+    "watermark": "Watermark",
+    "aiMatching": "AI face matching",
+    "containsMinors": "Contains minors",
+    "uploadApproval": "Upload approval required",
+    "guestUpload": "Guest upload allowed",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "shareEvent": {
+    "heading": "Share code",
+    "description": "Share this code with people who should have access to \"{eventName}\".",
+    "copyCode": "Copy code",
+    "copyCodeDone": "Copied!",
+    "copyLink": "Copy link",
+    "copyLinkDone": "Link copied!",
+    "showQr": "Show QR code",
+    "qrTitle": "Share event",
+    "qrDescription": "Scan this QR code to open the event.",
+    "qrFooter": "Or share the code directly"
+  },
   "aiSearch": {
     "banner": {
       "titleReady": "Find yourself in this event",

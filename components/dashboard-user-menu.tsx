@@ -16,7 +16,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useOptimistic, useTransition } from 'react';
 import { switchRole } from '@/app/[lang]/actions/roles';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -133,18 +132,20 @@ export function DashboardUserMenu({
 
   return (
     <DropdownMenu>
+      {/* Circular trigger: the hover affordance is a ring that traces the
+          avatar's circle exactly — no background tint that would darken the
+          user's photo or bleed past it as a rounded square. */}
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-10 w-10 rounded-lg hover:bg-accent"
+        <button
+          type="button"
           aria-label="User menu"
+          className="rounded-full ring-offset-background transition-shadow hover:ring-2 hover:ring-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <Avatar className="h-10 w-10">
             <AvatarImage src={user.avatar ?? undefined} alt={user.name} />
             <AvatarFallback>{user.name?.charAt(0).toUpperCase() ?? 'U'}</AvatarFallback>
           </Avatar>
-        </Button>
+        </button>
       </DropdownMenuTrigger>
       {/* `collisionPadding` keeps the menu off the viewport edge on mobile. */}
       <DropdownMenuContent
