@@ -7,8 +7,9 @@ import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { getClientIp, rateLimit, retryAfterSeconds } from '@/lib/rate-limit';
 
-// archiver is a Node library — must run on the Node runtime, not edge.
-export const runtime = 'nodejs';
+// Route handlers run on the Node runtime by default (which archiver needs) —
+// `runtime` is intentionally not pinned, as that conflicts with the
+// `experimental.useCache` config.
 // Streaming many high-res originals into a ZIP takes time; allow up to 60s.
 // The 50-photo cap below keeps a single request well within that budget.
 export const maxDuration = 60;
