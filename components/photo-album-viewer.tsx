@@ -42,6 +42,8 @@ type PhotoAlbumViewerProps = {
   onToggleSelect?: (photoId: string) => void;
   onTagPhoto?: (photoId: string) => void;
   onUntag?: () => void;
+  /** Custom lightbox Share handler — defaults to the native share sheet. */
+  onShare?: (photoId: string) => void;
   showAddToCart?: boolean;
   photosInCart?: Set<string>;
   onAddToCart?: (photoId: string) => void;
@@ -94,6 +96,7 @@ export default function PhotoAlbumViewer({
   onToggleSelect,
   onTagPhoto,
   onUntag,
+  onShare,
   showAddToCart = false,
   photosInCart = new Set(),
   onAddToCart,
@@ -483,6 +486,7 @@ export default function PhotoAlbumViewer({
         onRemove={onRemove}
         onTagTalent={onTagTalent}
         onUntag={onUntag}
+        onShare={onShare}
         photosInMyPhotos={photosInMyPhotos}
         photosInCart={photosInCart}
         actionBar={lightboxActionBar}

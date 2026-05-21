@@ -7,7 +7,6 @@ import { useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { usePhotoLightboxUrl } from '@/hooks/use-photo-lightbox-url';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import type { ProfileData } from './actions';
 import { ProfilePhotoViewer } from './profile-photo-viewer';
@@ -48,8 +47,6 @@ export function ProfileContent({
       }))
       .filter((item) => item.url);
   }, [photos]);
-
-  const { index, openAt, switchTo, close } = usePhotoLightboxUrl(photoItems);
 
   const photoMetadata = useMemo(() => {
     const metadata: Record<
@@ -142,14 +139,7 @@ export function ProfileContent({
       ) : (
         <div className="w-full pt-2 sm:pt-4">
           <TranslationsProvider translations={translations}>
-            <ProfilePhotoViewer
-              items={photoItems}
-              photoMetadata={photoMetadata}
-              currentIndex={index}
-              onOpenPhoto={openAt}
-              onSwitchPhoto={switchTo}
-              onClose={close}
-            />
+            <ProfilePhotoViewer items={photoItems} photoMetadata={photoMetadata} />
           </TranslationsProvider>
         </div>
       )}

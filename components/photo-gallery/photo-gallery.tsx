@@ -43,10 +43,20 @@ interface PhotoGalleryProps {
   /** Slot on the desktop toolbar — the filter tabs. */
   toolbarLeading?: ReactNode;
   toolbarClassName?: string;
-  labels: PhotoGallerySelectionLabels;
+  /** Selection-bar copy — only needed when `selectable` (the default). */
+  labels?: PhotoGallerySelectionLabels;
   /** Rendered when there are no photos. */
   emptyState?: ReactNode;
 }
+
+const EMPTY_SELECTION_LABELS: PhotoGallerySelectionLabels = {
+  select: '',
+  clear: '',
+  countNone: '',
+  countOne: '',
+  countMany: '',
+  exitSelection: '',
+};
 
 /**
  * The event photo gallery: a clean grid, tap → lightbox, long-press → selection
@@ -64,7 +74,7 @@ export function PhotoGallery({
   selectionResetKey,
   toolbarLeading,
   toolbarClassName,
-  labels,
+  labels = EMPTY_SELECTION_LABELS,
   emptyState,
 }: PhotoGalleryProps) {
   const selection = usePhotoSelection();
