@@ -3,9 +3,9 @@
 import { getProfile } from '@/database/queries/profiles';
 import { createSignedUrls } from '@/database/queries/storage';
 import {
+  getTalentOwnedPhotos,
+  getTalentOwnedPhotosCount,
   getTalentPurchasedEventsCount,
-  getTalentPurchasedPhotos,
-  getTalentPurchasedPhotosCount,
 } from '@/database/queries/talent-library';
 import { createClient } from '@/database/server';
 
@@ -34,7 +34,7 @@ export interface ProfileData {
     photographer_id: string;
     photographer_username: string | null;
     photographer_display_name: string | null;
-    order_id: string;
+    order_id: string | null;
   }>;
 }
 
@@ -48,16 +48,16 @@ export async function getProfileData(): Promise<ProfileData> {
     throw new Error('User not authenticated');
   }
 
-  // Fetch data in parallel
-  const [profile, purchasedPhotosCount, eventsCount, purchasedPhotos] = await Promise.all([
+  // Fetch data in parallel — "owned" photos are purchased ∪ claimed-free.
+  const [profile, purchasedPhotosCount, eventsCount, ownedPhotos] = await Promise.all([
     getProfile(supabase, user.id),
-    getTalentPurchasedPhotosCount(supabase, user.id),
+    getTalentOwnedPhotosCount(supabase, user.id),
     getTalentPurchasedEventsCount(supabase, user.id),
-    getTalentPurchasedPhotos(supabase, user.id, { limit: 500 }),
+    getTalentOwnedPhotos(supabase, user.id, { limit: 500 }),
   ]);
 
   // Generate signed URLs for previews (1 hour expiry)
-  const photoPaths = purchasedPhotos
+  const photoPaths = ownedPhotos
     .map((p) => p.original_url)
     .filter((url): url is string => url !== null);
 
@@ -77,7 +77,7 @@ export async function getProfileData(): Promise<ProfileData> {
   }
 
   // Map photos with URLs
-  const photosWithUrls = purchasedPhotos.map((photo) => ({
+  const photosWithUrls = ownedPhotos.map((photo) => ({
     photo_id: photo.photo_id,
     preview_url: photo.original_url ? (signedUrlsMap[photo.original_url] ?? null) : null,
     download_url: photo.original_url, // Store path for download action
@@ -114,7 +114,8 @@ export async function getProfileData(): Promise<ProfileData> {
 }
 
 /**
- * Generate a download URL for a purchased photo (no watermark, high-res)
+ * Generate a download URL for an owned photo (no watermark, high-res) — a
+ * photo the talent has purchased OR claimed into their profile.
  */
 export async function getPhotoDownloadUrl(photoPath: string): Promise<string | null> {
   const supabase = await createClient();
@@ -126,7 +127,7 @@ export async function getPhotoDownloadUrl(photoPath: string): Promise<string | n
     throw new Error('User not authenticated');
   }
 
-  // Verify the user has purchased this photo
+  // Owned via a completed purchase?
   const { data: orderItems } = await supabase
     .from('order_items')
     .select(
@@ -146,7 +147,20 @@ export async function getPhotoDownloadUrl(photoPath: string): Promise<string | n
     .eq('photos.original_url', photoPath)
     .limit(1);
 
-  if (!orderItems || orderItems.length === 0) {
+  let allowed = Boolean(orderItems && orderItems.length > 0);
+
+  // Or owned via a profile claim (a free photo). RLS scopes this to the user.
+  if (!allowed) {
+    const { data: claimed } = await supabase
+      .from('talent_claimed_photos')
+      .select('id, photos!inner(original_url)')
+      .eq('talent_user_id', user.id)
+      .eq('photos.original_url', photoPath)
+      .limit(1);
+    allowed = Boolean(claimed && claimed.length > 0);
+  }
+
+  if (!allowed) {
     throw new Error('Photo not found or not purchased');
   }
 

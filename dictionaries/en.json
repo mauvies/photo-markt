@@ -133,9 +133,10 @@
     "shareCopied": "Photo link copied",
     "downloadFailed": "Could not download the photo.",
     "downloadNotPurchased": "Purchase this photo to download it.",
-    "saveToProfile": "Add to my profile",
-    "saveToPhotos": "Add to my photos",
-    "removeFromLibrary": "Remove from my photos",
+    "addToFavorites": "Add to favorites",
+    "removeFromFavorites": "Remove from favorites",
+    "addToProfile": "Add to my profile",
+    "addedToProfile": "Added to profile",
     "addToCartMenuItem": "Add to cart",
     "removeFromCartMenuItem": "Remove from cart",
     "uploadedByMenuLabel": "Uploaded by {name}",
@@ -1015,6 +1016,8 @@
     "removedFromCart": "Removed from cart",
     "failedAddPhotos": "Failed to add photo to your library",
     "failedRemovePhotos": "Failed to remove photo from your library",
+    "photoAddedToProfile": "Photo added to your profile",
+    "failedAddProfile": "Failed to add photo to your profile",
     "failedAddCart": "Failed to add photo to cart",
     "failedRemoveCart": "Failed to remove photo from cart"
   },
@@ -1229,7 +1232,9 @@
       "noMatchesTitle": "We couldn't find you",
       "noMatchesBody": "This can happen if you're wearing a helmet/glasses or facing away in the photos.",
       "tryAgain": "Try a different selfie",
-      "partialIndexingNotice": "Some photos are still being processed. Try again later if you don't find yourself here."
+      "partialIndexingNotice": "Some photos are still being processed. Try again later if you don't find yourself here.",
+      "foundCountOne": "We found 1 photo of you",
+      "foundCountMany": "We found {n} photos of you"
     }
   },
   "privacy": {

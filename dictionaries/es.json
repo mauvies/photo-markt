@@ -133,9 +133,10 @@
     "shareCopied": "Enlace de la foto copiado",
     "downloadFailed": "No se pudo descargar la foto.",
     "downloadNotPurchased": "Compra esta foto para descargarla.",
-    "saveToProfile": "Añadir a mi perfil",
-    "saveToPhotos": "Añadir a mis fotos",
-    "removeFromLibrary": "Quitar de mis fotos",
+    "addToFavorites": "Añadir a favoritos",
+    "removeFromFavorites": "Quitar de favoritos",
+    "addToProfile": "Añadir a mi perfil",
+    "addedToProfile": "Añadida a tu perfil",
     "addToCartMenuItem": "Añadir al carrito",
     "removeFromCartMenuItem": "Quitar del carrito",
     "uploadedByMenuLabel": "Subida por {name}",
@@ -1015,6 +1016,8 @@
     "removedFromCart": "Eliminado del carrito",
     "failedAddPhotos": "No se pudo añadir la foto a tu colección",
     "failedRemovePhotos": "No se pudo eliminar la foto de tu colección",
+    "photoAddedToProfile": "Foto añadida a tu perfil",
+    "failedAddProfile": "No se pudo añadir la foto a tu perfil",
     "failedAddCart": "No se pudo añadir la foto al carrito",
     "failedRemoveCart": "No se pudo eliminar la foto del carrito"
   },
@@ -1229,7 +1232,9 @@
       "noMatchesTitle": "No te encontramos",
       "noMatchesBody": "Esto puede pasar si llevas casco/gafas o estás de espaldas en las fotos.",
       "tryAgain": "Prueba con otra selfie",
-      "partialIndexingNotice": "Algunas fotos siguen procesándose. Inténtalo más tarde si no te encuentras aquí."
+      "partialIndexingNotice": "Algunas fotos siguen procesándose. Inténtalo más tarde si no te encuentras aquí.",
+      "foundCountOne": "Encontramos 1 foto tuya",
+      "foundCountMany": "Encontramos {n} fotos tuyas"
     }
   },
   "privacy": {

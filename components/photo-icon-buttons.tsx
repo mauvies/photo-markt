@@ -25,10 +25,14 @@ export interface PhotoMoreMenuConfig {
   onDownload: (photoId: string) => void;
   /** Per-photo predicate — when it returns true the Download item is disabled. */
   isDownloadDisabled?: (photoId: string) => boolean;
-  /** Talent "save to my library" toggle — moves the standalone heart into the menu. */
-  onSaveToggle?: (photoId: string) => void;
-  savedIds?: Set<string>;
-  saveLabelVariant?: 'profile' | 'photos';
+  /** Favorites toggle (bookmarks) — moves the standalone heart into the menu. */
+  onFavoriteToggle?: (photoId: string) => void;
+  favoritedIds?: Set<string>;
+  /** Profile claim — acquire a free photo into the owned collection. */
+  onClaimToProfile?: (photoId: string) => void;
+  claimedIds?: Set<string>;
+  /** Per-photo predicate — when true the claim item shows (free photos only). */
+  canClaimToProfile?: (photoId: string) => boolean;
   /** Cart toggle — moves the standalone cart icon into the menu. */
   onCartToggle?: (photoId: string) => void;
   /** Per-photo predicate — when true the cart item shows (paid && not purchased). */
@@ -230,9 +234,11 @@ export function PhotoIconButtons({
                 onDelete={moreMenu.onDelete}
                 onTagPeople={moreMenu.onTagPeople}
                 onShare={moreMenu.onShare}
-                onSaveToggle={moreMenu.onSaveToggle}
-                isSaved={moreMenu.savedIds?.has(photoId) ?? false}
-                saveLabelVariant={moreMenu.saveLabelVariant}
+                onFavoriteToggle={moreMenu.onFavoriteToggle}
+                isFavorited={moreMenu.favoritedIds?.has(photoId) ?? false}
+                onClaimToProfile={moreMenu.onClaimToProfile}
+                canClaimToProfile={moreMenu.canClaimToProfile?.(photoId) ?? false}
+                isClaimed={moreMenu.claimedIds?.has(photoId) ?? false}
                 onCartToggle={moreMenu.showCartFor?.(photoId) ? moreMenu.onCartToggle : undefined}
                 isInCart={inCart}
                 uploaderName={moreMenu.showUploaderRow ? uploader?.name : undefined}
@@ -300,7 +306,7 @@ export function PhotoIconButtons({
                 />
               </div>
             )}
-            {showAddToPhotos && !moreMenu?.onSaveToggle && (
+            {showAddToPhotos && !moreMenu?.onFavoriteToggle && (
               <div className={cn(ICON_WRAP, (inMyPhotos || hasAnyOpen) && 'md:opacity-100')}>
                 <PhotoActionIcon
                   icon="save"

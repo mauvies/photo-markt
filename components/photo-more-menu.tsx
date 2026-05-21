@@ -9,6 +9,7 @@ import {
   ShoppingCart,
   Trash2,
   UserPlus,
+  UserRoundPlus,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -28,10 +29,12 @@ export interface PhotoMoreMenuLabels {
   delete?: string;
   tagPeople?: string;
   share?: string;
-  /** Save-to-library — `saveToProfile` on free photos, `saveToPhotos` on paid. */
-  saveToProfile?: string;
-  saveToPhotos?: string;
-  removeFromLibrary?: string;
+  /** Favorites toggle (bookmarks). */
+  addToFavorites?: string;
+  removeFromFavorites?: string;
+  /** Profile claim — `addToProfile` when claimable, `addedToProfile` once claimed. */
+  addToProfile?: string;
+  addedToProfile?: string;
   addToCart?: string;
   removeFromCart?: string;
   /** "Uploaded by {name}" template — `{name}` is substituted. */
@@ -50,11 +53,13 @@ interface PhotoMoreMenuProps {
   onDelete?: (photoId: string) => void;
   onTagPeople?: (photoId: string) => void;
   onShare?: (photoId: string) => void;
-  /** Talent "save to my library" toggle — renders only when provided. */
-  onSaveToggle?: (photoId: string) => void;
-  isSaved?: boolean;
-  /** Picks the add label when not saved: "Add to my profile" vs "Add to my photos". */
-  saveLabelVariant?: 'profile' | 'photos';
+  /** Favorites toggle (bookmarks) — renders only when provided. */
+  onFavoriteToggle?: (photoId: string) => void;
+  isFavorited?: boolean;
+  /** Profile claim (acquire a free photo) — renders only when `canClaimToProfile`. */
+  onClaimToProfile?: (photoId: string) => void;
+  canClaimToProfile?: boolean;
+  isClaimed?: boolean;
   /** Cart toggle — renders only when provided. */
   onCartToggle?: (photoId: string) => void;
   isInCart?: boolean;
@@ -67,9 +72,11 @@ interface PhotoMoreMenuProps {
  * PhotoActionIcon pattern (dark pill, white icon). The trigger stops event
  * propagation so opening the menu never toggles selection or the lightbox.
  *
- * Items are à la carte — each renders only when its handler/field is passed,
- * so the photographer (Delete/Tag/Share) and the talent/public viewer
- * (Save/Cart/Uploaded-by) configs share one component. Download always renders.
+ * Items are à la carte — each renders only when its handler/field is passed.
+ * Favorites (a bookmark toggle) and "Add to my profile" (claiming a free
+ * photo into the owned collection) are independent items: favorites is a
+ * toggle for any photo; the claim item shows only on free photos and, once
+ * claimed, becomes a disabled "Added to profile". Download always renders.
  */
 export function PhotoMoreMenu({
   photoId,
@@ -81,18 +88,17 @@ export function PhotoMoreMenu({
   onDelete,
   onTagPeople,
   onShare,
-  onSaveToggle,
-  isSaved = false,
-  saveLabelVariant = 'photos',
+  onFavoriteToggle,
+  isFavorited = false,
+  onClaimToProfile,
+  canClaimToProfile = false,
+  isClaimed = false,
   onCartToggle,
   isInCart = false,
   uploaderName,
 }: PhotoMoreMenuProps) {
-  const saveLabel = isSaved
-    ? labels.removeFromLibrary
-    : saveLabelVariant === 'profile'
-      ? labels.saveToProfile
-      : labels.saveToPhotos;
+  const favoriteLabel = isFavorited ? labels.removeFromFavorites : labels.addToFavorites;
+  const claimLabel = isClaimed ? labels.addedToProfile : labels.addToProfile;
   const cartLabel = isInCart ? labels.removeFromCart : labels.addToCart;
 
   return (
@@ -107,10 +113,20 @@ export function PhotoMoreMenu({
         <MoreVertical className="size-3" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={6}>
-        {onSaveToggle && saveLabel ? (
-          <DropdownMenuItem className="cursor-pointer" onSelect={() => onSaveToggle(photoId)}>
-            <Heart className={cn('mr-2 h-4 w-4', isSaved && 'fill-current')} />
-            {saveLabel}
+        {onFavoriteToggle && favoriteLabel ? (
+          <DropdownMenuItem className="cursor-pointer" onSelect={() => onFavoriteToggle(photoId)}>
+            <Heart className={cn('mr-2 h-4 w-4', isFavorited && 'fill-current')} />
+            {favoriteLabel}
+          </DropdownMenuItem>
+        ) : null}
+        {onClaimToProfile && canClaimToProfile && claimLabel ? (
+          <DropdownMenuItem
+            className="cursor-pointer"
+            disabled={isClaimed}
+            onSelect={() => onClaimToProfile(photoId)}
+          >
+            <UserRoundPlus className="mr-2 h-4 w-4" />
+            {claimLabel}
           </DropdownMenuItem>
         ) : null}
         {onCartToggle && cartLabel ? (

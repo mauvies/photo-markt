@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, Loader2 } from 'lucide-react';
+import { ArrowLeft, Download, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -9,9 +9,11 @@ import {
   removePhotoFromCartAction,
 } from '@/app/[lang]/dashboard/talent/cart/actions';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { useFaceSearch } from '@/components/event-gallery-with-face-search';
 import { type EventPhotoFilter, EventPhotoFilterTabs } from '@/components/event-photo-filter-tabs';
+import { FaceSearchResults } from '@/components/face-search-results';
 import { useGuestCart } from '@/components/guest-cart-provider';
-import PhotoAlbumViewer from '@/components/photo-album-viewer';
+import PhotoAlbumViewer, { type PhotoAlbumItem } from '@/components/photo-album-viewer';
 import type { PhotoIconTooltips, PhotoMoreMenuConfig } from '@/components/photo-icon-buttons';
 import {
   type BulkDownloadLabels,
@@ -24,6 +26,7 @@ import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart
 import { usePhotoSelection } from '@/hooks/use-photo-selection';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import { deleteContributorPhotoAction, getEventPhotoDownloadUrlAction } from './actions';
+import { buildBuckets, type FaceSearchResultsLabels } from './face-search-shared';
 import { readGuestUploads, removeGuestUpload } from './guest-uploads-storage';
 import { useOptionalUploadProgress } from './upload-progress-provider';
 
@@ -93,6 +96,8 @@ interface PublicEventPhotoViewerProps {
     /** "Uploaded by {name}" template. */
     uploadedBy: string;
   };
+  /** Labels for the AI face-search results view. */
+  resultsLabels: FaceSearchResultsLabels;
   /** Photo IDs the viewer has purchased — gates bulk download on paid events. */
   purchasedPhotoIds?: Set<string>;
   /** Localized copy for the selection toolbar + bulk download. */
@@ -121,6 +126,7 @@ export function PublicEventPhotoViewer({
   cartToastLabels,
   filterLabels,
   menuLabels,
+  resultsLabels,
   purchasedPhotoIds = new Set(),
   bulkDownload,
   imageUnavailableLabel,
@@ -304,6 +310,18 @@ export function PublicEventPhotoViewer({
     bulkDownload,
   });
 
+  // ── AI face-search results ─────────────────────────────────────────────
+  const faceSearch = useFaceSearch();
+  const bucketed = useMemo(
+    () => buildBuckets<PhotoAlbumItem>(faceSearch.matches, photos),
+    [faceSearch.matches, photos],
+  );
+  // A new search (or returning to the full gallery) starts a clean selection.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-runs intentionally when the search state changes
+  useEffect(() => {
+    selection.clear();
+  }, [faceSearch.matches, selection.clear]);
+
   // ── "All photos / My photos" filter ────────────────────────────────────
   const [filter, setFilter] = useState<EventPhotoFilter>('all');
   const handleFilterChange = useCallback(
@@ -311,7 +329,7 @@ export function PublicEventPhotoViewer({
       setFilter(value);
       selection.clear();
     },
-    [selection],
+    [selection.clear],
   );
   const visiblePhotos = useMemo(
     () => (filter === 'mine' ? photos.filter((p) => myPhotoIds.has(p.id)) : photos),
@@ -393,6 +411,45 @@ export function PublicEventPhotoViewer({
     ],
   );
 
+  const renderGrid = (gridItems: PhotoAlbumItem[]) => (
+    <PhotoAlbumViewer
+      items={gridItems}
+      selectionMode={canBulkDownload && selection.isSelecting}
+      selectedIds={canBulkDownload ? selection.selectedIds : undefined}
+      onToggleSelect={canBulkDownload ? selection.toggle : undefined}
+      showAddToCart={showAddToCart}
+      photosInCart={photosInCart}
+      onAddToCart={handleAddToCart}
+      onRemoveFromCart={handleRemoveFromCart}
+      iconTooltips={iconTooltips}
+      deletableIds={deletableIds}
+      onDeleteOwn={handleDeleteRequest}
+      deleteTooltip={deleteLabels?.tooltip}
+      uploaderLabels={uploaderLabels}
+      moreMenu={moreMenu}
+      showDownload={canBulkDownload}
+      onDownload={handleDownloadPhoto}
+      imageUnavailableLabel={imageUnavailableLabel}
+    />
+  );
+
+  const downloadButton = (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={() => downloadSelected(selection.selectedIds)}
+      disabled={selection.selectedIds.length === 0 || isDownloading}
+    >
+      {isDownloading ? (
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+      ) : (
+        <Download className="mr-2 h-4 w-4" />
+      )}
+      {isDownloading ? bulkDownload.preparing : bulkDownload.download}
+    </Button>
+  );
+
   return (
     <div className="relative">
       {photos.length === 0 ? (
@@ -403,6 +460,36 @@ export function PublicEventPhotoViewer({
               : (emptyText ?? 'No photos available yet.')}
           </p>
         </div>
+      ) : faceSearch.matches !== null ? (
+        <FaceSearchResults
+          bucketed={bucketed}
+          matchCount={faceSearch.matches.length}
+          eventIndexingComplete={faceSearch.eventIndexingComplete}
+          resultsLabels={resultsLabels}
+          renderGrid={renderGrid}
+          onTryAgain={faceSearch.openSearch}
+          onViewAll={faceSearch.clearMatches}
+          toolbar={
+            <PhotoSelectionToolbar
+              className="sticky top-[var(--header-height)] -mx-4 px-4"
+              leading={
+                <Button type="button" variant="outline" size="sm" onClick={faceSearch.clearMatches}>
+                  <ArrowLeft className="mr-1.5 h-4 w-4" />
+                  {resultsLabels.viewAllPhotos}
+                </Button>
+              }
+              selectable={canBulkDownload}
+              isSelecting={selection.isSelecting}
+              countLabel={countLabel}
+              selectLabel={bulkDownload.select}
+              clearLabel={bulkDownload.clear}
+              onStartSelecting={selection.startSelecting}
+              onClear={selection.clear}
+            >
+              {downloadButton}
+            </PhotoSelectionToolbar>
+          }
+        />
       ) : (
         <div className="space-y-3">
           {(isCollaborative || canBulkDownload) && (
@@ -426,20 +513,7 @@ export function PublicEventPhotoViewer({
               onStartSelecting={selection.startSelecting}
               onClear={selection.clear}
             >
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => downloadSelected(selection.selectedIds)}
-                disabled={selection.selectedIds.length === 0 || isDownloading}
-              >
-                {isDownloading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="mr-2 h-4 w-4" />
-                )}
-                {isDownloading ? bulkDownload.preparing : bulkDownload.download}
-              </Button>
+              {downloadButton}
             </PhotoSelectionToolbar>
           )}
           {visiblePhotos.length === 0 ? (
@@ -447,25 +521,7 @@ export function PublicEventPhotoViewer({
               <p className="text-muted-foreground">{filterLabels.empty}</p>
             </div>
           ) : (
-            <PhotoAlbumViewer
-              items={visiblePhotos}
-              selectionMode={canBulkDownload && selection.isSelecting}
-              selectedIds={canBulkDownload ? selection.selectedIds : undefined}
-              onToggleSelect={canBulkDownload ? selection.toggle : undefined}
-              showAddToCart={showAddToCart}
-              photosInCart={photosInCart}
-              onAddToCart={handleAddToCart}
-              onRemoveFromCart={handleRemoveFromCart}
-              iconTooltips={iconTooltips}
-              deletableIds={deletableIds}
-              onDeleteOwn={handleDeleteRequest}
-              deleteTooltip={deleteLabels?.tooltip}
-              uploaderLabels={uploaderLabels}
-              moreMenu={moreMenu}
-              showDownload={canBulkDownload}
-              onDownload={handleDownloadPhoto}
-              imageUnavailableLabel={imageUnavailableLabel}
-            />
+            renderGrid(visiblePhotos)
           )}
         </div>
       )}

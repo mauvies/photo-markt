@@ -355,8 +355,6 @@ export default async function EventPage({
     }
   }
 
-  const isFreeEvent = !isForSale;
-  const canBulkDownload = isFreeEvent || !!user;
   const bulkDownloadLabels = {
     select: dict.events.selectButton,
     clear: dict.events.clearButton,
@@ -547,26 +545,11 @@ export default async function EventPage({
             </div>
           ) : (
             <EventGalleryWithFaceSearch
-              photos={photoItems}
               shareCode={event.share_code ?? event.id}
-              eventId={event.id}
-              isFreeEvent={isFreeEvent}
-              purchasedPhotoIds={purchasedPhotoIds}
-              canBulkDownload={canBulkDownload}
-              bulkDownload={bulkDownloadLabels}
               aiSearchEligible={aiSearchEligible}
               aiState={aiBannerState}
               bannerLabels={dict.aiSearch.banner}
               modalLabels={dict.aiSearch.modal}
-              resultsLabels={dict.aiSearch.results}
-              iconTooltips={dict.photoIconButtons}
-              imageUnavailableLabel={dict.eventCard.imageUnavailable}
-              uploaderLabels={{
-                tooltip: dict.collaborativeEvent.uploaderTooltip,
-                popoverHeading: dict.collaborativeEvent.uploaderPopoverHeading,
-                guestLabel: dict.collaborativeEvent.uploaderGuestLabel,
-                authenticatedLabel: dict.collaborativeEvent.uploaderAuthenticatedLabel,
-              }}
               fullGallery={
                 <Suspense
                   fallback={
@@ -629,6 +612,7 @@ export default async function EventPage({
                       removeFromCart: dict.events.removeFromCartMenuItem,
                       uploadedBy: dict.events.uploadedByMenuLabel,
                     }}
+                    resultsLabels={dict.aiSearch.results}
                     imageUnavailableLabel={dict.eventCard.imageUnavailable}
                   />
                 </Suspense>
