@@ -15,6 +15,7 @@ import { supabaseAdmin } from '@/database/supabase-admin';
 import { redirectToLogin } from '@/lib/auth/redirect-to-login';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
+import { localizedPath } from '@/lib/i18n/localized-path';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
@@ -233,6 +234,80 @@ export default async function EventDetailPage({
   // out by the queries above.
   const visibleCount = albumItems.length;
 
+  // The three sections above the gallery — "Event details", the live AI
+  // indexing status and "Share event". AI and Share are conditional (`null`
+  // when they don't apply); "Event details" is always present.
+  const detailsCard = (
+    <EventDetailsCard
+      t={dict.eventDetails}
+      type={event.type}
+      isCollaborative={event.is_collaborative}
+      activityLabel={
+        dict.activities[event.activity as keyof typeof dict.activities] ?? event.activity
+      }
+      date={new Date(event.date).toDateString().split(' ').slice(1).join(' ')}
+      location={[event.city[0]?.toUpperCase() + event.city.slice(1), event.country]
+        .filter(Boolean)
+        .join(', ')}
+      pricePerPhoto={event.price_per_photo}
+      isPublic={event.is_public}
+      watermarkEnabled={event.watermark_enabled}
+      aiMatchingEnabled={aiMatchingEnabled}
+      containsMinors={containsMinors}
+      requireUploadApproval={event.require_upload_approval}
+      allowGuestUpload={event.allow_guest_upload}
+      editHref={localizedPath(lang, `/dashboard/photographer/events/${id}/edit`)}
+    />
+  );
+
+  const aiStatusCard =
+    aiMatchingEnabled && aiProgress ? (
+      <AiStatusCard
+        eventId={id}
+        status={aiMatchingStatus}
+        totalApplicable={aiProgress.totalApplicable}
+        indexed={aiProgress.indexed}
+        pending={aiProgress.pending}
+        failed={aiProgress.failed}
+        lastIndexedAt={aiProgress.lastIndexedAt}
+        labels={{
+          title: dict.rekognition.cardTitle,
+          statusIdle: dict.rekognition.statusIdle,
+          statusIndexing: dict.rekognition.statusIndexing,
+          statusReady: dict.rekognition.statusReady,
+          statusFailed: dict.rekognition.statusFailed,
+          indexedCount: dict.rekognition.statusIndexedCount,
+          lastIndexed: dict.rekognition.lastIndexed,
+          reindex: dict.rekognition.actionsReindex,
+          reindexConfirmTitle: dict.rekognition.actionsReindexConfirmTitle,
+          reindexConfirmBody: dict.rekognition.actionsReindexConfirmBody,
+          cancel: dict.rekognition.cancel,
+          confirm: dict.rekognition.confirm,
+          reindexFailed: dict.rekognition.errorsAiEnableFailed,
+          pollUpdating: dict.rekognition.pollUpdating,
+          pollError: dict.rekognition.pollError,
+          indexingComplete: dict.rekognition.indexingComplete,
+          failedPhotosWarning: dict.rekognition.failedPhotosWarning,
+          failedPhotosRetry: dict.rekognition.failedPhotosRetry,
+        }}
+      />
+    ) : null;
+
+  const shareCard = event.share_code ? (
+    <EventShareCode
+      shareCode={event.share_code}
+      eventName={event.name}
+      t={dict.shareEvent}
+      label={event.is_collaborative ? dict.collaborativeEvent.shareLinkLabel : undefined}
+    />
+  ) : null;
+
+  // 1, 2 or 3 cards depending on which sections apply — the grid column count
+  // matches so the present cards share one equal-height row on desktop.
+  const sectionCount = 1 + (aiStatusCard ? 1 : 0) + (shareCard ? 1 : 0);
+  const sectionsGridClass =
+    sectionCount === 3 ? 'md:grid-cols-3' : sectionCount === 2 ? 'md:grid-cols-2' : '';
+
   return (
     <div>
       {uploadedParam ? (
@@ -244,90 +319,14 @@ export default async function EventDetailPage({
           <EventActionsMenu eventId={id} t={dict.events} />
         </div>
       </div>
-      <div className="mt-2 text-sm leading-relaxed text-muted-foreground">
-        {new Date(event.date).toDateString().split(' ').slice(1).join(' ')} •{' '}
-        {event.city[0]?.toUpperCase() + event.city.slice(1)}
-        {event.price_per_photo !== null && (
-          <>
-            {' '}
-            • ${event.price_per_photo.toFixed(2)} {dict.photographerDashboard.perPhoto}
-          </>
-        )}
+      {/* Event details, live AI indexing status and "Share event" — one
+          equal-height row on desktop (the grid stretches the cards to match),
+          stacked full-width on mobile. AI and Share are conditional. */}
+      <div className={cn('mt-4 grid gap-4', sectionsGridClass)}>
+        {detailsCard}
+        {aiStatusCard}
+        {shareCard}
       </div>
-
-      {/* Event details — full-width summary of every configuration field. */}
-      <div className="mt-4">
-        <EventDetailsCard
-          t={dict.eventDetails}
-          type={event.type}
-          isCollaborative={event.is_collaborative}
-          activityLabel={
-            dict.activities[event.activity as keyof typeof dict.activities] ?? event.activity
-          }
-          date={new Date(event.date).toDateString().split(' ').slice(1).join(' ')}
-          location={[event.city[0]?.toUpperCase() + event.city.slice(1), event.country]
-            .filter(Boolean)
-            .join(', ')}
-          pricePerPhoto={event.price_per_photo}
-          isPublic={event.is_public}
-          watermarkEnabled={event.watermark_enabled}
-          aiMatchingEnabled={aiMatchingEnabled}
-          containsMinors={containsMinors}
-          requireUploadApproval={event.require_upload_approval}
-          allowGuestUpload={event.allow_guest_upload}
-        />
-      </div>
-
-      {/* Share + AI face matching — side by side on desktop when both are
-          present; a section shown alone spans the full width. Stacked on mobile. */}
-      {(Boolean(event.share_code) || (aiMatchingEnabled && aiProgress)) && (
-        <div
-          className={cn(
-            'mt-4 grid items-start gap-4',
-            event.share_code && aiMatchingEnabled && aiProgress ? 'md:grid-cols-2' : '',
-          )}
-        >
-          {event.share_code && (
-            <EventShareCode
-              shareCode={event.share_code}
-              eventName={event.name}
-              t={dict.shareEvent}
-              label={event.is_collaborative ? dict.collaborativeEvent.shareLinkLabel : undefined}
-            />
-          )}
-          {aiMatchingEnabled && aiProgress && (
-            <AiStatusCard
-              eventId={id}
-              status={aiMatchingStatus}
-              totalApplicable={aiProgress.totalApplicable}
-              indexed={aiProgress.indexed}
-              pending={aiProgress.pending}
-              failed={aiProgress.failed}
-              lastIndexedAt={aiProgress.lastIndexedAt}
-              labels={{
-                title: dict.rekognition.cardTitle,
-                statusIdle: dict.rekognition.statusIdle,
-                statusIndexing: dict.rekognition.statusIndexing,
-                statusReady: dict.rekognition.statusReady,
-                statusFailed: dict.rekognition.statusFailed,
-                indexedCount: dict.rekognition.statusIndexedCount,
-                lastIndexed: dict.rekognition.lastIndexed,
-                reindex: dict.rekognition.actionsReindex,
-                reindexConfirmTitle: dict.rekognition.actionsReindexConfirmTitle,
-                reindexConfirmBody: dict.rekognition.actionsReindexConfirmBody,
-                cancel: dict.rekognition.cancel,
-                confirm: dict.rekognition.confirm,
-                reindexFailed: dict.rekognition.errorsAiEnableFailed,
-                pollUpdating: dict.rekognition.pollUpdating,
-                pollError: dict.rekognition.pollError,
-                indexingComplete: dict.rekognition.indexingComplete,
-                failedPhotosWarning: dict.rekognition.failedPhotosWarning,
-                failedPhotosRetry: dict.rekognition.failedPhotosRetry,
-              }}
-            />
-          )}
-        </div>
-      )}
       {event.type === 'organizer' && (
         <div className="mt-4">
           <TranslationsProvider translations={dict.organizerEvent}>

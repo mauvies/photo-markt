@@ -1155,7 +1155,10 @@
     "enabled": "Activado",
     "disabled": "Desactivado",
     "yes": "Sí",
-    "no": "No"
+    "no": "No",
+    "showMore": "Mostrar más detalles",
+    "showLess": "Mostrar menos",
+    "edit": "Editar"
   },
   "shareEvent": {
     "heading": "Código para compartir",

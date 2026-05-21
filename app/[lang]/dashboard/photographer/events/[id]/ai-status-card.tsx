@@ -210,7 +210,7 @@ export function AiStatusCard({
   };
 
   return (
-    <section className="rounded-lg border bg-card p-4 sm:p-5">
+    <section className="rounded-lg border bg-card p-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <h2 className="text-sm font-semibold">{labels.title}</h2>

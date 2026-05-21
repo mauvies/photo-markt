@@ -1,6 +1,12 @@
-import type { ReactNode } from 'react';
-import { Badge } from '@/components/ui/badge';
+'use client';
+
+import { ChevronDown, Pencil } from 'lucide-react';
+import Link from 'next/link';
+import { type ReactNode, useState } from 'react';
+import { buttonVariants } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
+import { cn } from '@/lib/utils';
 
 type EventDetailsT = Dictionary['eventDetails'];
 
@@ -19,12 +25,18 @@ interface EventDetailsCardProps {
   containsMinors: boolean;
   requireUploadApproval: boolean;
   allowGuestUpload: boolean;
+  /** Link to the event's edit page. */
+  editHref: string;
 }
 
+type Field = { label: string; value: string };
+
 /**
- * Full-width summary of every configuration field set when the event was
- * created — surfaces settings the rest of the page never showed. Read-only;
- * all values come from the `event` row already fetched by the page.
+ * "Event details" section. The essentials (date, location, type) stay always
+ * visible; the rest of the static configuration sits behind a "Show more
+ * details" expander. Every field renders identically — an uppercase
+ * micro-label above a plain-text value — so the column reads as one uniform
+ * list. An "Edit" link in the header opens the event's edit page.
  */
 export function EventDetailsCard({
   t,
@@ -40,7 +52,10 @@ export function EventDetailsCard({
   containsMinors,
   requireUploadApproval,
   allowGuestUpload,
+  editHref,
 }: EventDetailsCardProps) {
+  const [showMore, setShowMore] = useState(false);
+
   const typeLabel =
     type === 'collaborative'
       ? t.typeCollaborative
@@ -48,43 +63,72 @@ export function EventDetailsCard({
         ? t.typeOrganizer
         : t.typeSolo;
 
-  // Booleans render as a badge — never raw true/false. Filled badge = "on".
-  const boolBadge = (on: boolean, onLabel: string, offLabel: string): ReactNode => (
-    <Badge variant={on ? 'secondary' : 'outline'} className="font-normal">
-      {on ? onLabel : offLabel}
-    </Badge>
-  );
+  const yesNo = (on: boolean): string => (on ? t.yes : t.no);
 
-  const rows: Array<{ label: string; value: ReactNode }> = [
-    { label: t.eventType, value: typeLabel },
-    { label: t.activity, value: activityLabel },
+  // Always visible — the essentials a photographer scans first.
+  const primaryFields: Field[] = [
     { label: t.date, value: date },
     { label: t.location, value: location },
+    { label: t.eventType, value: typeLabel },
+  ];
+
+  // Behind the "Show more details" expander. Every value is plain text — no
+  // mix of badges and text — so the whole column stays visually uniform.
+  const moreFields: Field[] = [
+    { label: t.activity, value: activityLabel },
     {
       label: t.pricePerPhoto,
       value: pricePerPhoto !== null ? `$${pricePerPhoto.toFixed(2)}` : t.free,
     },
     { label: t.visibility, value: isPublic ? t.public : t.private },
-    { label: t.watermark, value: boolBadge(watermarkEnabled, t.enabled, t.disabled) },
-    { label: t.aiMatching, value: boolBadge(aiMatchingEnabled, t.enabled, t.disabled) },
-    { label: t.containsMinors, value: boolBadge(containsMinors, t.yes, t.no) },
-    { label: t.uploadApproval, value: boolBadge(requireUploadApproval, t.yes, t.no) },
-    ...(isCollaborative
-      ? [{ label: t.guestUpload, value: boolBadge(allowGuestUpload, t.yes, t.no) }]
-      : []),
+    { label: t.watermark, value: yesNo(watermarkEnabled) },
+    { label: t.aiMatching, value: yesNo(aiMatchingEnabled) },
+    { label: t.containsMinors, value: yesNo(containsMinors) },
+    { label: t.uploadApproval, value: yesNo(requireUploadApproval) },
+    ...(isCollaborative ? [{ label: t.guestUpload, value: yesNo(allowGuestUpload) }] : []),
   ];
 
+  const renderFields = (fields: Field[]): ReactNode => (
+    <dl className="space-y-3">
+      {fields.map((field) => (
+        <div key={field.label} className="space-y-0.5">
+          <dt className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            {field.label}
+          </dt>
+          <dd className="text-sm font-medium text-foreground">{field.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+
   return (
-    <section className="rounded-lg border bg-card p-4 sm:p-5">
-      <h2 className="text-sm font-semibold">{t.title}</h2>
-      <dl className="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-2">
-        {rows.map((row) => (
-          <div key={row.label} className="flex items-center justify-between gap-3">
-            <dt className="text-sm text-muted-foreground">{row.label}</dt>
-            <dd className="text-right text-sm font-medium text-foreground">{row.value}</dd>
-          </div>
-        ))}
-      </dl>
+    <section className="rounded-lg border bg-card p-4">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">{t.title}</h2>
+        <Link
+          href={editHref}
+          className={cn(
+            buttonVariants({ variant: 'ghost', size: 'sm' }),
+            '-mr-2 text-muted-foreground',
+          )}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          {t.edit}
+        </Link>
+      </div>
+
+      <div className="mt-4">{renderFields(primaryFields)}</div>
+
+      <Collapsible open={showMore} onOpenChange={setShowMore} className="mt-4 border-t pt-3">
+        <CollapsibleTrigger
+          type="button"
+          className="flex w-full items-center justify-between gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          {showMore ? t.showLess : t.showMore}
+          <ChevronDown className={cn('h-4 w-4 transition-transform', showMore && 'rotate-180')} />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="mt-3">{renderFields(moreFields)}</CollapsibleContent>
+      </Collapsible>
     </section>
   );
 }
