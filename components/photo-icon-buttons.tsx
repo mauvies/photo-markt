@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { PhotoMoreMenu, type PhotoMoreMenuLabels } from '@/components/photo-more-menu';
 import { PhotoTagsIndicator } from '@/components/photo-tags-indicator';
 import {
@@ -102,6 +102,12 @@ interface PhotoIconButtonsProps {
   onRemoveFromPhotos?: (photoId: string) => void;
   /** When set, renders the 3-dot menu and hides the standalone tag/delete icons. */
   moreMenu?: PhotoMoreMenuConfig;
+  /**
+   * Controlled open-state for the 3-dot menu. Lifted to the grid so only one
+   * photo's menu can be open at a time.
+   */
+  moreMenuOpen?: boolean;
+  onMoreMenuOpenChange?: (open: boolean) => void;
   className?: string;
   tooltips?: Partial<PhotoIconTooltips>;
 }
@@ -132,13 +138,12 @@ export function PhotoIconButtons({
   onAddToPhotos,
   onRemoveFromPhotos,
   moreMenu,
+  moreMenuOpen = false,
+  onMoreMenuOpenChange = () => {},
   className,
   tooltips,
 }: PhotoIconButtonsProps) {
   const tt: PhotoIconTooltips = { ...DEFAULT_TOOLTIPS, ...tooltips };
-  // The 3-dot menu keeps its own open state — separate from the shared
-  // uploader/tags popover channel so the two never collide.
-  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const hasAnyOpen = isPopoverOpen || moreMenuOpen;
   const inCart = photosInCart.has(photoId);
   const inMyPhotos = photosInMyPhotos.has(photoId);
@@ -228,7 +233,7 @@ export function PhotoIconButtons({
                 photoId={photoId}
                 labels={moreMenu.labels}
                 open={moreMenuOpen}
-                onOpenChange={setMoreMenuOpen}
+                onOpenChange={onMoreMenuOpenChange}
                 onDownload={moreMenu.onDownload}
                 downloadDisabled={moreMenu.isDownloadDisabled?.(photoId) ?? false}
                 onDelete={moreMenu.onDelete}

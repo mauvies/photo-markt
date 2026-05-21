@@ -1018,6 +1018,11 @@
     "failedRemovePhotos": "Failed to remove photo from your library",
     "photoAddedToProfile": "Photo added to your profile",
     "failedAddProfile": "Failed to add photo to your profile",
+    "bulkFavorited": "{n} photos added to favorites",
+    "bulkClaimed": "{n} photos added to your profile",
+    "bulkClaimedSkipped": "{n} photos added to your profile, {m} skipped",
+    "failedBulkFavorite": "Failed to add photos to favorites",
+    "failedBulkClaim": "Failed to add photos to your profile",
     "failedAddCart": "Failed to add photo to cart",
     "failedRemoveCart": "Failed to remove photo from cart"
   },

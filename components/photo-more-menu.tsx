@@ -112,7 +112,14 @@ export function PhotoMoreMenu({
       >
         <MoreVertical className="size-3" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" sideOffset={6}>
+      <DropdownMenuContent
+        align="end"
+        sideOffset={6}
+        // The menu content is portaled, but React events still bubble through
+        // the component tree — without this a click on any item would also
+        // reach the photo card's onClick (opening the lightbox behind it).
+        onClick={(e) => e.stopPropagation()}
+      >
         {onFavoriteToggle && favoriteLabel ? (
           <DropdownMenuItem className="cursor-pointer" onSelect={() => onFavoriteToggle(photoId)}>
             <Heart className={cn('mr-2 h-4 w-4', isFavorited && 'fill-current')} />
