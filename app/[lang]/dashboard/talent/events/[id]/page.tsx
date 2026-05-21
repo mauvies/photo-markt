@@ -280,6 +280,7 @@ export default async function ExploreEventDetailPage({
   const bulkDownloadLabels = {
     select: dict.events.selectButton,
     clear: dict.events.clearButton,
+    exitSelection: dict.events.exitSelection,
     countNone: dict.events.noPhotosSelected,
     countOne: dict.events.onePhotoSelected,
     countMany: dict.events.nPhotosSelected,

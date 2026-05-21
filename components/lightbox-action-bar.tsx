@@ -4,19 +4,20 @@ import type { LucideIcon } from 'lucide-react';
 import { Download, Heart, ShoppingCart, Trash2, UserPlus, UserRoundPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-/** Localized copy for the lightbox bottom action bar. */
+/** Localized copy for the lightbox bottom action bar. Every field is optional —
+ * a viewer only supplies the labels for the actions it actually enables. */
 export interface LightboxActionLabels {
-  download: string;
-  addToFavorites: string;
-  removeFromFavorites: string;
-  addToProfile: string;
-  addedToProfile: string;
-  addToCart: string;
-  removeFromCart: string;
-  remove: string;
-  tagPeople: string;
+  download?: string;
+  addToFavorites?: string;
+  removeFromFavorites?: string;
+  addToProfile?: string;
+  addedToProfile?: string;
+  addToCart?: string;
+  removeFromCart?: string;
+  remove?: string;
+  tagPeople?: string;
   /** "Uploaded by {name}" template — `{name}` is substituted. */
-  uploadedBy: string;
+  uploadedBy?: string;
 }
 
 interface LightboxActionBarProps {
@@ -97,6 +98,10 @@ export function LightboxActionBar({
   showTag = false,
   onTag,
 }: LightboxActionBarProps) {
+  const favoriteLabel = isFavorited ? labels.removeFromFavorites : labels.addToFavorites;
+  const claimLabel = isClaimed ? labels.addedToProfile : labels.addToProfile;
+  const cartLabel = isInCart ? labels.removeFromCart : labels.addToCart;
+
   return (
     <div
       className={cn(
@@ -106,43 +111,43 @@ export function LightboxActionBar({
     >
       <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/60 via-black/25 to-transparent" />
       <div className="relative z-10 flex flex-col gap-1 px-4 pt-8 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
-        {uploaderName ? (
+        {uploaderName && labels.uploadedBy ? (
           <p className="truncate text-xs text-white/80">
             {labels.uploadedBy.replace('{name}', uploaderName)}
           </p>
         ) : null}
         <div className="flex items-center justify-around gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {showDownload && onDownload ? (
+          {showDownload && onDownload && labels.download ? (
             <ActionButton icon={Download} label={labels.download} onClick={onDownload} />
           ) : null}
-          {showFavorite && onFavorite ? (
+          {showFavorite && onFavorite && favoriteLabel ? (
             <ActionButton
               icon={Heart}
-              label={isFavorited ? labels.removeFromFavorites : labels.addToFavorites}
+              label={favoriteLabel}
               filled={isFavorited}
               onClick={onFavorite}
             />
           ) : null}
-          {showClaim && onClaim ? (
+          {showClaim && onClaim && claimLabel ? (
             <ActionButton
               icon={UserRoundPlus}
-              label={isClaimed ? labels.addedToProfile : labels.addToProfile}
+              label={claimLabel}
               disabled={isClaimed}
               onClick={onClaim}
             />
           ) : null}
-          {showCart && onCart ? (
+          {showCart && onCart && cartLabel ? (
             <ActionButton
               icon={ShoppingCart}
-              label={isInCart ? labels.removeFromCart : labels.addToCart}
+              label={cartLabel}
               filled={isInCart}
               onClick={onCart}
             />
           ) : null}
-          {showRemove && onRemove ? (
+          {showRemove && onRemove && labels.remove ? (
             <ActionButton icon={Trash2} label={labels.remove} onClick={onRemove} />
           ) : null}
-          {showTag && onTag ? (
+          {showTag && onTag && labels.tagPeople ? (
             <ActionButton icon={UserPlus} label={labels.tagPeople} onClick={onTag} />
           ) : null}
         </div>

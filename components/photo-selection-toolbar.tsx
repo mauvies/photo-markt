@@ -18,6 +18,8 @@ export type BulkDownloadLabels = {
   /** Template with `{n}` (downloaded) and `{m}` (skipped). */
   skipped: string;
   nonePurchased: string;
+  /** aria-label for the mobile selection bar's exit (X) button. */
+  exitSelection: string;
 };
 
 interface PhotoSelectionToolbarProps {

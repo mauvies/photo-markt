@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Download, Heart, Loader2, UserRoundPlus } from 'lucide-react';
+import { ArrowLeft, Download, Heart, UserRoundPlus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -15,16 +15,17 @@ import {
 import { useFaceSearch } from '@/components/event-gallery-with-face-search';
 import { type EventPhotoFilter, EventPhotoFilterTabs } from '@/components/event-photo-filter-tabs';
 import { FaceSearchResults } from '@/components/face-search-results';
-import PhotoAlbumViewer, { type PhotoAlbumItem } from '@/components/photo-album-viewer';
-import type { PhotoIconTooltips, PhotoMoreMenuConfig } from '@/components/photo-icon-buttons';
 import {
-  type BulkDownloadLabels,
-  PhotoSelectionToolbar,
-} from '@/components/photo-selection-toolbar';
+  type PhotoAlbumItem,
+  PhotoGallery,
+  type PhotoGalleryBulkAction,
+  type PhotoGallerySection,
+} from '@/components/photo-gallery';
+import type { PhotoIconTooltips, PhotoMoreMenuConfig } from '@/components/photo-icon-buttons';
+import type { BulkDownloadLabels } from '@/components/photo-selection-toolbar';
 import { Button } from '@/components/ui/button';
 import { useBulkPhotoDownload } from '@/hooks/use-bulk-photo-download';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
-import { usePhotoSelection } from '@/hooks/use-photo-selection';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
   addPhotosToMyPhotosAction,
@@ -218,52 +219,55 @@ export function EventPhotoViewer({
     [claimedPhotos, t],
   );
 
-  // ── Selection + bulk download ──────────────────────────────────────────
-  const selection = usePhotoSelection();
+  // ── Bulk download / favorite / claim ───────────────────────────────────
   const { isDownloading, downloadSelected } = useBulkPhotoDownload({
     eventId,
     isFreeEvent,
     purchasedPhotoIds,
     bulkDownload,
   });
-
-  // ── Bulk selection-bar actions: favorites + profile claim ──────────────
   const [isBulkFavoriting, setIsBulkFavoriting] = useState(false);
   const [isBulkClaiming, setIsBulkClaiming] = useState(false);
 
-  const handleBulkFavorite = useCallback(async () => {
-    const ids = selection.selectedIds;
-    if (ids.length === 0 || isBulkFavoriting) return;
-    setIsBulkFavoriting(true);
-    try {
-      await addPhotosToMyPhotosAction(ids);
-      setMyPhotos((prev) => new Set([...prev, ...ids]));
-      toast.success(t('bulkFavorited').replace('{n}', String(ids.length)));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('failedBulkFavorite'));
-    } finally {
-      setIsBulkFavoriting(false);
-    }
-  }, [selection.selectedIds, isBulkFavoriting, t]);
+  const handleBulkFavorite = useCallback(
+    async (ids: string[]) => {
+      if (ids.length === 0 || isBulkFavoriting) return;
+      setIsBulkFavoriting(true);
+      try {
+        await addPhotosToMyPhotosAction(ids);
+        setMyPhotos((prev) => new Set([...prev, ...ids]));
+        toast.success(t('bulkFavorited').replace('{n}', String(ids.length)));
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : t('failedBulkFavorite'));
+      } finally {
+        setIsBulkFavoriting(false);
+      }
+    },
+    [isBulkFavoriting, t],
+  );
 
-  const handleBulkClaim = useCallback(async () => {
-    const ids = selection.selectedIds;
-    if (ids.length === 0 || isBulkClaiming) return;
-    setIsBulkClaiming(true);
-    try {
-      const { claimed, skipped } = await addPhotosToProfileAction(ids);
-      setClaimedPhotos((prev) => new Set([...prev, ...ids]));
-      toast.success(
-        skipped > 0
-          ? t('bulkClaimedSkipped').replace('{n}', String(claimed)).replace('{m}', String(skipped))
-          : t('bulkClaimed').replace('{n}', String(claimed)),
-      );
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('failedBulkClaim'));
-    } finally {
-      setIsBulkClaiming(false);
-    }
-  }, [selection.selectedIds, isBulkClaiming, t]);
+  const handleBulkClaim = useCallback(
+    async (ids: string[]) => {
+      if (ids.length === 0 || isBulkClaiming) return;
+      setIsBulkClaiming(true);
+      try {
+        const { claimed, skipped } = await addPhotosToProfileAction(ids);
+        setClaimedPhotos((prev) => new Set([...prev, ...ids]));
+        toast.success(
+          skipped > 0
+            ? t('bulkClaimedSkipped')
+                .replace('{n}', String(claimed))
+                .replace('{m}', String(skipped))
+            : t('bulkClaimed').replace('{n}', String(claimed)),
+        );
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : t('failedBulkClaim'));
+      } finally {
+        setIsBulkClaiming(false);
+      }
+    },
+    [isBulkClaiming, t],
+  );
 
   // ── AI face-search results ─────────────────────────────────────────────
   const faceSearch = useFaceSearch();
@@ -271,33 +275,15 @@ export function EventPhotoViewer({
     () => buildBuckets(faceSearch.matches, items),
     [faceSearch.matches, items],
   );
-  // A new search (or returning to the full gallery) starts a clean selection.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-runs intentionally when the search state changes
-  useEffect(() => {
-    selection.clear();
-  }, [faceSearch.matches, selection.clear]);
 
   // ── "All photos / My photos" filter ────────────────────────────────────
   const [filter, setFilter] = useState<EventPhotoFilter>('all');
-  const handleFilterChange = useCallback(
-    (value: EventPhotoFilter) => {
-      setFilter(value);
-      selection.clear();
-    },
-    [selection.clear],
-  );
   const visiblePhotos = useMemo(
     () => (filter === 'mine' ? items.filter((i) => uploadedPhotoIds.has(i.id)) : items),
     [filter, items, uploadedPhotoIds],
   );
 
-  const countLabel = useMemo(() => {
-    if (selection.selectedIds.length === 0) return bulkDownload.countNone;
-    if (selection.selectedIds.length === 1) return bulkDownload.countOne;
-    return bulkDownload.countMany.replace('{n}', String(selection.selectedIds.length));
-  }, [selection.selectedIds.length, bulkDownload]);
-
-  // ── Per-photo download (dropdown) ──────────────────────────────────────
+  // ── Per-photo download (lightbox) ──────────────────────────────────────
   const isPhotoDownloadable = useCallback(
     (photoId: string) => isFreeEvent || purchasedPhotoIds.has(photoId),
     [isFreeEvent, purchasedPhotoIds],
@@ -373,82 +359,108 @@ export function EventPhotoViewer({
     ],
   );
 
-  const renderGrid = (gridItems: PhotoAlbumItem[]) => (
-    <PhotoAlbumViewer
-      items={gridItems}
-      selectionMode={selection.isSelecting}
-      selectedIds={selection.selectedIds}
-      onToggleSelect={selection.toggle}
-      showAddToCart={showAddToCart}
-      photosInCart={photosInCart}
-      onAddToCart={handleAddToCart}
-      onRemoveFromCart={handleRemoveFromCart}
-      showAddToPhotos={true}
-      photosInMyPhotos={myPhotos}
-      onAddToPhotos={handleAddToPhotos}
-      onRemoveFromPhotos={handleRemoveFromPhotos}
-      showDownload={true}
-      onDownload={handleDownloadPhoto}
-      moreMenu={moreMenu}
-      iconTooltips={iconTooltips}
-      imageUnavailableLabel={imageUnavailableLabel}
-    />
+  // ── PhotoGallery config ────────────────────────────────────────────────
+  const galleryProps = useMemo(
+    () => ({
+      showAddToCart,
+      photosInCart,
+      onAddToCart: handleAddToCart,
+      onRemoveFromCart: handleRemoveFromCart,
+      showAddToPhotos: true,
+      photosInMyPhotos: myPhotos,
+      onAddToPhotos: handleAddToPhotos,
+      onRemoveFromPhotos: handleRemoveFromPhotos,
+      showDownload: true,
+      onDownload: handleDownloadPhoto,
+      moreMenu,
+      onClaimToProfile: handleClaimToProfile,
+      claimedIds: claimedPhotos,
+      canClaimToProfile: () => isFreeEvent,
+      iconTooltips,
+      imageUnavailableLabel,
+      lightboxActionBar: 'bottom' as const,
+      actionBarLabels: {
+        download: menuLabels.download,
+        addToFavorites: menuLabels.addToFavorites,
+        removeFromFavorites: menuLabels.removeFromFavorites,
+        addToProfile: menuLabels.addToProfile,
+        addedToProfile: menuLabels.addedToProfile,
+        addToCart: menuLabels.addToCart,
+        removeFromCart: menuLabels.removeFromCart,
+        uploadedBy: menuLabels.uploadedBy,
+      },
+    }),
+    [
+      showAddToCart,
+      photosInCart,
+      handleAddToCart,
+      handleRemoveFromCart,
+      myPhotos,
+      handleAddToPhotos,
+      handleRemoveFromPhotos,
+      handleDownloadPhoto,
+      moreMenu,
+      handleClaimToProfile,
+      claimedPhotos,
+      isFreeEvent,
+      iconTooltips,
+      imageUnavailableLabel,
+      menuLabels,
+    ],
   );
 
-  const downloadButton = (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      onClick={() => downloadSelected(selection.selectedIds)}
-      disabled={selection.selectedIds.length === 0 || isDownloading}
-    >
-      {isDownloading ? (
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-      ) : (
-        <Download className="mr-2 h-4 w-4" />
-      )}
-      {isDownloading ? bulkDownload.preparing : bulkDownload.download}
-    </Button>
+  const bulkActions = useMemo<PhotoGalleryBulkAction[]>(
+    () => [
+      {
+        key: 'download',
+        label: bulkDownload.download,
+        icon: Download,
+        onRun: (ids) => downloadSelected(ids),
+        isPending: isDownloading,
+      },
+      {
+        key: 'favorite',
+        label: menuLabels.addToFavorites,
+        icon: Heart,
+        onRun: handleBulkFavorite,
+        isPending: isBulkFavoriting,
+      },
+      {
+        key: 'profile',
+        label: menuLabels.addToProfile,
+        icon: UserRoundPlus,
+        onRun: handleBulkClaim,
+        isPending: isBulkClaiming,
+        visible: isFreeEvent,
+      },
+    ],
+    [
+      bulkDownload.download,
+      downloadSelected,
+      isDownloading,
+      menuLabels,
+      handleBulkFavorite,
+      isBulkFavoriting,
+      handleBulkClaim,
+      isBulkClaiming,
+      isFreeEvent,
+    ],
   );
 
-  // The selection action bar — favorites/profile claim are talent-only, and
-  // this viewer is always rendered for an authenticated talent.
-  const selectionActions = (
-    <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={handleBulkFavorite}
-        disabled={selection.selectedIds.length === 0 || isBulkFavoriting}
-      >
-        {isBulkFavoriting ? (
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        ) : (
-          <Heart className="mr-2 h-4 w-4" />
-        )}
-        {menuLabels.addToFavorites}
-      </Button>
-      {isFreeEvent && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleBulkClaim}
-          disabled={selection.selectedIds.length === 0 || isBulkClaiming}
-        >
-          {isBulkClaiming ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <UserRoundPlus className="mr-2 h-4 w-4" />
-          )}
-          {menuLabels.addToProfile}
-        </Button>
-      )}
-      {downloadButton}
-    </>
+  const selectionLabels = useMemo(
+    () => ({
+      select: bulkDownload.select,
+      clear: bulkDownload.clear,
+      countNone: bulkDownload.countNone,
+      countOne: bulkDownload.countOne,
+      countMany: bulkDownload.countMany,
+      exitSelection: bulkDownload.exitSelection,
+    }),
+    [bulkDownload],
   );
+
+  const toolbarClassName = 'sticky top-[var(--header-height)] -mx-4 px-4 md:-mx-6 md:px-6';
+  const selectionResetKey = `${filter}:${faceSearch.matches === null ? 'all' : 'search'}`;
 
   // ── AI face-search results view ────────────────────────────────────────
   if (faceSearch.matches !== null) {
@@ -459,28 +471,24 @@ export function EventPhotoViewer({
           matchCount={faceSearch.matches.length}
           eventIndexingComplete={faceSearch.eventIndexingComplete}
           resultsLabels={resultsLabels}
-          renderGrid={renderGrid}
           onTryAgain={faceSearch.openSearch}
           onViewAll={faceSearch.clearMatches}
-          toolbar={
-            <PhotoSelectionToolbar
-              className="sticky top-[var(--header-height)] -mx-4 px-4 md:-mx-6 md:px-6"
-              leading={
+          renderGallery={(sections: PhotoGallerySection[]) => (
+            <PhotoGallery
+              sections={sections}
+              galleryProps={galleryProps}
+              bulkActions={bulkActions}
+              labels={selectionLabels}
+              selectionResetKey={selectionResetKey}
+              toolbarClassName={toolbarClassName}
+              toolbarLeading={
                 <Button type="button" variant="outline" size="sm" onClick={faceSearch.clearMatches}>
                   <ArrowLeft className="mr-1.5 h-4 w-4" />
                   {resultsLabels.viewAllPhotos}
                 </Button>
               }
-              isSelecting={selection.isSelecting}
-              countLabel={countLabel}
-              selectLabel={bulkDownload.select}
-              clearLabel={bulkDownload.clear}
-              onStartSelecting={selection.startSelecting}
-              onClear={selection.clear}
-            >
-              {selectionActions}
-            </PhotoSelectionToolbar>
-          }
+            />
+          )}
         />
       </div>
     );
@@ -488,37 +496,30 @@ export function EventPhotoViewer({
 
   // ── Full gallery ───────────────────────────────────────────────────────
   return (
-    <div className="space-y-3">
-      {items.length > 0 && (
-        <PhotoSelectionToolbar
-          className="sticky top-[var(--header-height)] -mx-4 px-4 md:-mx-6 md:px-6"
-          leading={
-            isCollaborative && !selection.isSelecting ? (
-              <EventPhotoFilterTabs
-                value={filter}
-                onValueChange={handleFilterChange}
-                allLabel={filterLabels.all}
-                mineLabel={filterLabels.mine}
-              />
-            ) : undefined
-          }
-          isSelecting={selection.isSelecting}
-          countLabel={countLabel}
-          selectLabel={bulkDownload.select}
-          clearLabel={bulkDownload.clear}
-          onStartSelecting={selection.startSelecting}
-          onClear={selection.clear}
-        >
-          {selectionActions}
-        </PhotoSelectionToolbar>
-      )}
-      {visiblePhotos.length === 0 && filter === 'mine' ? (
-        <div className="py-12 text-center">
-          <p className="text-muted-foreground">{filterLabels.empty}</p>
-        </div>
-      ) : (
-        renderGrid(visiblePhotos)
-      )}
-    </div>
+    <PhotoGallery
+      items={visiblePhotos}
+      galleryProps={galleryProps}
+      bulkActions={bulkActions}
+      labels={selectionLabels}
+      selectionResetKey={selectionResetKey}
+      toolbarClassName={toolbarClassName}
+      toolbarLeading={
+        isCollaborative ? (
+          <EventPhotoFilterTabs
+            value={filter}
+            onValueChange={setFilter}
+            allLabel={filterLabels.all}
+            mineLabel={filterLabels.mine}
+          />
+        ) : undefined
+      }
+      emptyState={
+        filter === 'mine' ? (
+          <div className="py-12 text-center">
+            <p className="text-muted-foreground">{filterLabels.empty}</p>
+          </div>
+        ) : undefined
+      }
+    />
   );
 }

@@ -6,7 +6,7 @@ import type {
   BucketedMatches,
   FaceSearchResultsLabels,
 } from '@/app/[lang]/events/[shareCode]/face-search-shared';
-import type { PhotoAlbumItem } from '@/components/photo-album-viewer';
+import type { PhotoAlbumItem, PhotoGallerySection } from '@/components/photo-gallery';
 import { Button } from '@/components/ui/button';
 
 interface FaceSearchResultsProps {
@@ -15,32 +15,30 @@ interface FaceSearchResultsProps {
   matchCount: number;
   eventIndexingComplete: boolean;
   resultsLabels: FaceSearchResultsLabels;
-  /** Renders one grid of photos with the viewer's full per-photo action layer. */
-  renderGrid: (items: PhotoAlbumItem[]) => ReactNode;
-  /** The selection toolbar row — back button in its `leading` slot + Select. */
-  toolbar: ReactNode;
   /** Re-opens the search modal (no-matches "try again"). */
   onTryAgain: () => void;
   /** Returns to the full gallery. */
   onViewAll: () => void;
+  /** Renders the bucketed photos — a `<PhotoGallery sections>` from the host
+   * viewer, so the bucket tiles get the same action layer as the full grid. */
+  renderGallery: (sections: PhotoGallerySection[]) => ReactNode;
 }
 
 /**
- * The AI face-search results view: a "we found N photos" message, the
- * selection toolbar row, then the confidence-bucketed photo sections — or the
- * no-matches empty state. The photo grids are produced by the caller's
- * `renderGrid` so the bucket tiles get the exact same per-photo action layer
- * (selection, 3-dot dropdown, …) as the normal gallery.
+ * The AI face-search results view: a "we found N photos" message above the
+ * confidence-bucketed gallery, or the no-matches empty state. The gallery
+ * itself is produced by the host viewer's `renderGallery` (a `PhotoGallery`
+ * with `sections`) so selection, the lightbox and the per-photo actions are
+ * identical to the normal gallery.
  */
 export function FaceSearchResults({
   bucketed,
   matchCount,
   eventIndexingComplete,
   resultsLabels,
-  renderGrid,
-  toolbar,
   onTryAgain,
   onViewAll,
+  renderGallery,
 }: FaceSearchResultsProps) {
   if (matchCount === 0) {
     return (
@@ -67,7 +65,7 @@ export function FaceSearchResults({
       ? resultsLabels.foundCountOne
       : resultsLabels.foundCountMany.replace('{n}', String(matchCount));
 
-  const sections = [
+  const sections: PhotoGallerySection[] = [
     {
       key: 'very-likely',
       title: resultsLabels.veryLikelyTitle,
@@ -86,23 +84,12 @@ export function FaceSearchResults({
       subtitle: resultsLabels.possiblySubtitle,
       items: bucketed.possibly,
     },
-  ];
+  ].filter((section) => section.items.length > 0);
 
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm font-medium">{foundMessage}</p>
-      {toolbar}
-      {sections.map((section) =>
-        section.items.length > 0 ? (
-          <section key={section.key} className="flex flex-col gap-2">
-            <header>
-              <h3 className="text-sm font-semibold">{section.title}</h3>
-              <p className="text-xs text-muted-foreground">{section.subtitle}</p>
-            </header>
-            {renderGrid(section.items)}
-          </section>
-        ) : null,
-      )}
+      {renderGallery(sections)}
       {!eventIndexingComplete ? (
         <p className="text-xs text-muted-foreground">{resultsLabels.partialIndexingNotice}</p>
       ) : null}

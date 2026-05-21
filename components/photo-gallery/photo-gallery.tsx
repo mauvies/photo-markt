@@ -140,7 +140,7 @@ export function PhotoGallery({
       {showInlineToolbar && allItems.length > 0 ? (
         <PhotoSelectionToolbar
           className={toolbarClassName}
-          leading={toolbarLeading}
+          leading={selection.isSelecting ? undefined : toolbarLeading}
           selectable={selectable}
           isSelecting={selection.isSelecting}
           countLabel={countLabel}
