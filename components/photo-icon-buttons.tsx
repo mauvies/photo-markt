@@ -18,10 +18,13 @@ import { cn } from '@/lib/utils';
  */
 export interface PhotoMoreMenuConfig {
   labels: PhotoMoreMenuLabels;
-  onDelete: (photoId: string) => void;
-  onTagPeople: (photoId: string) => void;
-  onShare: (photoId: string) => void;
+  /** Each item appears only when its handler is set. Download always appears. */
+  onDelete?: (photoId: string) => void;
+  onTagPeople?: (photoId: string) => void;
+  onShare?: (photoId: string) => void;
   onDownload: (photoId: string) => void;
+  /** Per-photo predicate — when it returns true the Download item is disabled. */
+  isDownloadDisabled?: (photoId: string) => boolean;
 }
 
 export interface PhotoIconTooltips {
@@ -233,6 +236,7 @@ export function PhotoIconButtons({
                 onTagPeople={moreMenu.onTagPeople}
                 onShare={moreMenu.onShare}
                 onDownload={moreMenu.onDownload}
+                downloadDisabled={moreMenu.isDownloadDisabled?.(photoId) ?? false}
               />
             </div>
           )}
@@ -244,7 +248,7 @@ export function PhotoIconButtons({
         <div className="relative z-10 mt-auto flex w-full items-end justify-between">
           {/* Tag button */}
           <div className="pointer-events-auto">
-            {onTagPhoto && !hasTags && !moreMenu && (
+            {onTagPhoto && !hasTags && !moreMenu?.onTagPeople && (
               <div className={cn(ICON_WRAP, hasAnyOpen && 'md:opacity-100')}>
                 <PhotoActionIcon
                   icon="tag"
@@ -289,7 +293,7 @@ export function PhotoIconButtons({
                 />
               </div>
             )}
-            {canDelete && onDelete && !moreMenu && (
+            {canDelete && onDelete && !moreMenu?.onDelete && (
               <div className={cn(ICON_WRAP, hasAnyOpen && 'md:opacity-100')}>
                 <PhotoActionIcon
                   icon="delete"
