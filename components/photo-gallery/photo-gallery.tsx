@@ -43,10 +43,20 @@ interface PhotoGalleryProps {
   /** Slot on the desktop toolbar — the filter tabs. */
   toolbarLeading?: ReactNode;
   toolbarClassName?: string;
-  labels: PhotoGallerySelectionLabels;
+  /** Selection-bar copy — only needed when `selectable` (the default). */
+  labels?: PhotoGallerySelectionLabels;
   /** Rendered when there are no photos. */
   emptyState?: ReactNode;
 }
+
+const EMPTY_SELECTION_LABELS: PhotoGallerySelectionLabels = {
+  select: '',
+  clear: '',
+  countNone: '',
+  countOne: '',
+  countMany: '',
+  exitSelection: '',
+};
 
 /**
  * The event photo gallery: a clean grid, tap → lightbox, long-press → selection
@@ -64,7 +74,7 @@ export function PhotoGallery({
   selectionResetKey,
   toolbarLeading,
   toolbarClassName,
-  labels,
+  labels = EMPTY_SELECTION_LABELS,
   emptyState,
 }: PhotoGalleryProps) {
   const selection = usePhotoSelection();
@@ -114,14 +124,15 @@ export function PhotoGallery({
   const grids = sections ? (
     sections.map((section) => (
       <section key={section.key} className="flex flex-col gap-2">
-        {section.title ? (
-          <header>
-            <h3 className="text-sm font-semibold">{section.title}</h3>
-            {section.subtitle ? (
-              <p className="text-xs text-muted-foreground">{section.subtitle}</p>
-            ) : null}
-          </header>
-        ) : null}
+        {section.header ??
+          (section.title ? (
+            <header>
+              <h3 className="text-sm font-semibold">{section.title}</h3>
+              {section.subtitle ? (
+                <p className="text-xs text-muted-foreground">{section.subtitle}</p>
+              ) : null}
+            </header>
+          ) : null)}
         <PhotoAlbumViewer items={section.items} {...albumSelectionProps} {...galleryProps} />
       </section>
     ))
@@ -131,8 +142,10 @@ export function PhotoGallery({
 
   // Desktop: the inline toolbar always. Touch: the inline toolbar while NOT
   // selecting (it holds the Select button + filter tabs); the floating bars
-  // replace it while selecting.
-  const showInlineToolbar = !(coarsePointer && selection.isSelecting);
+  // replace it while selecting. Skip the toolbar entirely when it would be
+  // empty (no Select button, no filter slot, not selecting).
+  const hasToolbarContent = selection.isSelecting || selectable || toolbarLeading != null;
+  const showInlineToolbar = hasToolbarContent && !(coarsePointer && selection.isSelecting);
   const showMobileBars = coarsePointer && selection.isSelecting;
 
   return (
