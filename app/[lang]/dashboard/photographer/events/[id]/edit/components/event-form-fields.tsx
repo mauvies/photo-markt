@@ -183,7 +183,7 @@ export function EventFormFields({
                         field.handleBlur();
                         setDatePopoverOpen(false);
                       }}
-                      initialFocus
+                      autoFocus
                     />
                   </PopoverContent>
                 </Popover>
