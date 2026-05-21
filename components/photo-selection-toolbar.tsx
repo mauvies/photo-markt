@@ -30,6 +30,10 @@ interface PhotoSelectionToolbarProps {
   onClear: () => void;
   /** View-specific bulk actions (Download, Delete, …) rendered while selecting. */
   children?: ReactNode;
+  /** Optional left-aligned content on the same row — e.g. the photo filter tabs. */
+  leading?: ReactNode;
+  /** When false, the Select/selection UI is hidden and only `leading` shows. */
+  selectable?: boolean;
   /** Positioning — each view passes its own sticky offset / negative margins. */
   className?: string;
 }
@@ -38,7 +42,8 @@ interface PhotoSelectionToolbarProps {
  * Shared sticky bar above an event photo grid: a "Select" toggle, and — while
  * selecting — the selected-count, a "Clear" button, and the view's bulk
  * actions. Used by the photographer, talent and public event-detail views so
- * the selection UI stays identical across all three.
+ * the selection UI stays identical across all three. An optional `leading`
+ * slot (the photo filter tabs) sits on the same row, to the left.
  */
 export function PhotoSelectionToolbar({
   isSelecting,
@@ -48,6 +53,8 @@ export function PhotoSelectionToolbar({
   onStartSelecting,
   onClear,
   children,
+  leading,
+  selectable = true,
   className,
 }: PhotoSelectionToolbarProps) {
   return (
@@ -58,7 +65,8 @@ export function PhotoSelectionToolbar({
       )}
     >
       <div className="flex items-center gap-3 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {isSelecting ? (
+        {leading}
+        {!selectable ? null : isSelecting ? (
           <>
             <div className="shrink-0 whitespace-nowrap text-sm font-medium">{countLabel}</div>
             <div className="ml-auto flex shrink-0 items-center gap-2">

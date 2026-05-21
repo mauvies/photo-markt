@@ -9,6 +9,7 @@ import {
   removePhotoFromCartAction,
 } from '@/app/[lang]/dashboard/talent/cart/actions';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { type EventPhotoFilter, EventPhotoFilterTabs } from '@/components/event-photo-filter-tabs';
 import { useGuestCart } from '@/components/guest-cart-provider';
 import PhotoAlbumViewer from '@/components/photo-album-viewer';
 import type { PhotoIconTooltips, PhotoMoreMenuConfig } from '@/components/photo-icon-buttons';
@@ -18,7 +19,6 @@ import {
 } from '@/components/photo-selection-toolbar';
 import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
 import { downloadEventPhotosZip } from '@/lib/download-zip';
 import type { GuestCartItem } from '@/lib/guest-cart';
@@ -305,10 +305,10 @@ export function PublicEventPhotoViewer({
   }, []);
 
   // ── "All photos / My photos" filter ────────────────────────────────────
-  const [filter, setFilter] = useState<'all' | 'mine'>('all');
+  const [filter, setFilter] = useState<EventPhotoFilter>('all');
   const handleFilterChange = useCallback(
-    (value: string) => {
-      setFilter(value === 'mine' ? 'mine' : 'all');
+    (value: EventPhotoFilter) => {
+      setFilter(value);
       clearSelection();
     },
     [clearSelection],
@@ -406,66 +406,67 @@ export function PublicEventPhotoViewer({
         </div>
       ) : (
         <div className="space-y-3">
-          {isCollaborative && (
-            <Tabs value={filter} onValueChange={handleFilterChange}>
-              <TabsList>
-                <TabsTrigger value="all">{filterLabels.all}</TabsTrigger>
-                <TabsTrigger value="mine">{filterLabels.mine}</TabsTrigger>
-              </TabsList>
-            </Tabs>
+          {(isCollaborative || canBulkDownload) && (
+            <PhotoSelectionToolbar
+              className="sticky top-[var(--header-height)] -mx-4 px-4"
+              leading={
+                isCollaborative ? (
+                  <EventPhotoFilterTabs
+                    value={filter}
+                    onValueChange={handleFilterChange}
+                    allLabel={filterLabels.all}
+                    mineLabel={filterLabels.mine}
+                  />
+                ) : undefined
+              }
+              selectable={canBulkDownload}
+              isSelecting={isSelecting}
+              countLabel={countLabel}
+              selectLabel={bulkDownload.select}
+              clearLabel={bulkDownload.clear}
+              onStartSelecting={() => setIsSelecting(true)}
+              onClear={clearSelection}
+            >
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadSelected}
+                disabled={selectedIds.length === 0 || isDownloading}
+              >
+                {isDownloading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="mr-2 h-4 w-4" />
+                )}
+                {isDownloading ? bulkDownload.preparing : bulkDownload.download}
+              </Button>
+            </PhotoSelectionToolbar>
           )}
           {visiblePhotos.length === 0 ? (
             <div className="py-12 text-center">
               <p className="text-muted-foreground">{filterLabels.empty}</p>
             </div>
           ) : (
-            <>
-              {canBulkDownload && (
-                <PhotoSelectionToolbar
-                  className="sticky top-[var(--header-height)] -mx-4 px-4"
-                  isSelecting={isSelecting}
-                  countLabel={countLabel}
-                  selectLabel={bulkDownload.select}
-                  clearLabel={bulkDownload.clear}
-                  onStartSelecting={() => setIsSelecting(true)}
-                  onClear={clearSelection}
-                >
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleDownloadSelected}
-                    disabled={selectedIds.length === 0 || isDownloading}
-                  >
-                    {isDownloading ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Download className="mr-2 h-4 w-4" />
-                    )}
-                    {isDownloading ? bulkDownload.preparing : bulkDownload.download}
-                  </Button>
-                </PhotoSelectionToolbar>
-              )}
-              <PhotoAlbumViewer
-                items={visiblePhotos}
-                selectionMode={canBulkDownload && isSelecting}
-                selectedIds={canBulkDownload ? selectedIds : undefined}
-                onToggleSelect={canBulkDownload ? handleToggleSelect : undefined}
-                showAddToCart={showAddToCart}
-                photosInCart={photosInCart}
-                onAddToCart={handleAddToCart}
-                onRemoveFromCart={handleRemoveFromCart}
-                iconTooltips={iconTooltips}
-                deletableIds={deletableIds}
-                onDeleteOwn={handleDeleteRequest}
-                deleteTooltip={deleteLabels?.tooltip}
-                uploaderLabels={uploaderLabels}
-                moreMenu={moreMenu}
-                showDownload={canBulkDownload}
-                onDownload={handleDownloadPhoto}
-                imageUnavailableLabel={imageUnavailableLabel}
-              />
-            </>
+            <PhotoAlbumViewer
+              items={visiblePhotos}
+              selectionMode={canBulkDownload && isSelecting}
+              selectedIds={canBulkDownload ? selectedIds : undefined}
+              onToggleSelect={canBulkDownload ? handleToggleSelect : undefined}
+              showAddToCart={showAddToCart}
+              photosInCart={photosInCart}
+              onAddToCart={handleAddToCart}
+              onRemoveFromCart={handleRemoveFromCart}
+              iconTooltips={iconTooltips}
+              deletableIds={deletableIds}
+              onDeleteOwn={handleDeleteRequest}
+              deleteTooltip={deleteLabels?.tooltip}
+              uploaderLabels={uploaderLabels}
+              moreMenu={moreMenu}
+              showDownload={canBulkDownload}
+              onDownload={handleDownloadPhoto}
+              imageUnavailableLabel={imageUnavailableLabel}
+            />
           )}
         </div>
       )}
