@@ -110,6 +110,9 @@ export default function PhotoAlbumViewer({
   // photo lands, and keep action icons / overlays hidden in the meantime.
   const [loadStates, setLoadStates] = useState<Record<string, 'loading' | 'loaded' | 'error'>>({});
   const [openPopovers, setOpenPopovers] = useState<Set<string>>(new Set());
+  // Only one photo's 3-dot menu may be open at a time — opening another (or
+  // an outside click) closes the previous one.
+  const [openMenuPhotoId, setOpenMenuPhotoId] = useState<string | null>(null);
   const selectedSet = useMemo(() => new Set(selectedIds ?? []), [selectedIds]);
   const canSelect = Boolean(onToggleSelect);
   const selectionActive = selectionMode || selectedSet.size > 0;
@@ -258,6 +261,8 @@ export default function PhotoAlbumViewer({
           onAddToPhotos={onAddToPhotos}
           onRemoveFromPhotos={onRemoveFromPhotos}
           moreMenu={moreMenu}
+          moreMenuOpen={openMenuPhotoId === photoId}
+          onMoreMenuOpenChange={(open) => setOpenMenuPhotoId(open ? photoId : null)}
           tooltips={iconTooltips}
         />
       );
@@ -288,6 +293,7 @@ export default function PhotoAlbumViewer({
       deleteTooltip,
       uploaderLabels,
       moreMenu,
+      openMenuPhotoId,
     ],
   );
 

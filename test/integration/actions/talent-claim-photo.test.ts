@@ -55,7 +55,11 @@ vi.mock('next/headers', () => ({
   })),
 }));
 
-import { addPhotoToProfileAction } from '@/app/[lang]/dashboard/talent/events/[id]/actions';
+import {
+  addPhotosToMyPhotosAction,
+  addPhotosToProfileAction,
+  addPhotoToProfileAction,
+} from '@/app/[lang]/dashboard/talent/events/[id]/actions';
 import {
   createServiceClient,
   createTestEvent,
@@ -135,5 +139,95 @@ describe('addPhotoToProfileAction', () => {
     await expect(addPhotoToProfileAction('00000000-0000-0000-0000-000000000000')).rejects.toThrow(
       /not found/i,
     );
+  });
+});
+
+async function tagCount(talentId: string): Promise<number> {
+  const sb = createServiceClient();
+  const { count } = await sb
+    .from('talent_photo_tags')
+    .select('*', { count: 'exact', head: true })
+    .eq('talent_user_id', talentId);
+  return count ?? 0;
+}
+
+describe('addPhotosToMyPhotosAction (bulk favorites)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    mockSession.userId = null;
+    mockSession.activeRole = 'talent';
+  });
+
+  it('rejects a non-talent caller', async () => {
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(photographer.id, { price_per_photo: null });
+    const photo = await createTestPhoto(event.id);
+    mockSession.userId = photographer.id;
+    mockSession.activeRole = 'photographer';
+    await expect(addPhotosToMyPhotosAction([photo.id])).rejects.toThrow(/talent/i);
+  });
+
+  it('tags every selected photo for the talent', async () => {
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(photographer.id, { price_per_photo: 5 });
+    const p1 = await createTestPhoto(event.id);
+    const p2 = await createTestPhoto(event.id);
+    const talent = await createTestUser('TALENT');
+    mockSession.userId = talent.id;
+
+    await addPhotosToMyPhotosAction([p1.id, p2.id]);
+    expect(await tagCount(talent.id)).toBe(2);
+  });
+
+  it('is a no-op for an empty selection', async () => {
+    await expect(addPhotosToMyPhotosAction([])).resolves.toBeUndefined();
+  });
+});
+
+describe('addPhotosToProfileAction (bulk profile claim)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    mockSession.userId = null;
+    mockSession.activeRole = 'talent';
+  });
+
+  it('rejects a non-talent caller', async () => {
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    mockSession.userId = photographer.id;
+    mockSession.activeRole = 'photographer';
+    await expect(addPhotosToProfileAction(['any-id'])).rejects.toThrow(/talent/i);
+  });
+
+  it('claims every free photo and reports the count', async () => {
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(photographer.id, { price_per_photo: null });
+    const p1 = await createTestPhoto(event.id);
+    const p2 = await createTestPhoto(event.id);
+    const talent = await createTestUser('TALENT');
+    mockSession.userId = talent.id;
+
+    const result = await addPhotosToProfileAction([p1.id, p2.id]);
+    expect(result).toEqual({ claimed: 2, skipped: 0 });
+    expect(await claimCount(p1.id, talent.id)).toBe(1);
+    expect(await claimCount(p2.id, talent.id)).toBe(1);
+  });
+
+  it('skips paid photos in a mixed selection (security)', async () => {
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    const freeEvent = await createTestEvent(photographer.id, { price_per_photo: null });
+    const paidEvent = await createTestEvent(photographer.id, { price_per_photo: 5 });
+    const freePhoto = await createTestPhoto(freeEvent.id);
+    const paidPhoto = await createTestPhoto(paidEvent.id);
+    const talent = await createTestUser('TALENT');
+    mockSession.userId = talent.id;
+
+    const result = await addPhotosToProfileAction([freePhoto.id, paidPhoto.id]);
+    expect(result).toEqual({ claimed: 1, skipped: 1 });
+    expect(await claimCount(freePhoto.id, talent.id)).toBe(1);
+    expect(await claimCount(paidPhoto.id, talent.id)).toBe(0);
+  });
+
+  it('is a no-op for an empty selection', async () => {
+    expect(await addPhotosToProfileAction([])).toEqual({ claimed: 0, skipped: 0 });
   });
 });

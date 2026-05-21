@@ -1018,6 +1018,11 @@
     "failedRemovePhotos": "No se pudo eliminar la foto de tu colección",
     "photoAddedToProfile": "Foto añadida a tu perfil",
     "failedAddProfile": "No se pudo añadir la foto a tu perfil",
+    "bulkFavorited": "{n} fotos añadidas a favoritos",
+    "bulkClaimed": "{n} fotos añadidas a tu perfil",
+    "bulkClaimedSkipped": "{n} fotos añadidas a tu perfil, {m} omitidas",
+    "failedBulkFavorite": "No se pudieron añadir las fotos a favoritos",
+    "failedBulkClaim": "No se pudieron añadir las fotos a tu perfil",
     "failedAddCart": "No se pudo añadir la foto al carrito",
     "failedRemoveCart": "No se pudo eliminar la foto del carrito"
   },

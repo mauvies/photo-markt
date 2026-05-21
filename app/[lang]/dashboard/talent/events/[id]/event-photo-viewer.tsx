@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Download, Loader2 } from 'lucide-react';
+import { ArrowLeft, Download, Heart, Loader2, UserRoundPlus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -27,6 +27,8 @@ import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart
 import { usePhotoSelection } from '@/hooks/use-photo-selection';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
+  addPhotosToMyPhotosAction,
+  addPhotosToProfileAction,
   addPhotoToMyPhotosAction,
   addPhotoToProfileAction,
   removePhotoFromMyPhotosAction,
@@ -104,6 +106,11 @@ export function EventPhotoViewer({
     failedRemoveCart: string;
     photoAddedToProfile: string;
     failedAddProfile: string;
+    bulkFavorited: string;
+    bulkClaimed: string;
+    bulkClaimedSkipped: string;
+    failedBulkFavorite: string;
+    failedBulkClaim: string;
   }>();
 
   // Favorites — optimistic, seeded from the server prop.
@@ -219,6 +226,44 @@ export function EventPhotoViewer({
     purchasedPhotoIds,
     bulkDownload,
   });
+
+  // ── Bulk selection-bar actions: favorites + profile claim ──────────────
+  const [isBulkFavoriting, setIsBulkFavoriting] = useState(false);
+  const [isBulkClaiming, setIsBulkClaiming] = useState(false);
+
+  const handleBulkFavorite = useCallback(async () => {
+    const ids = selection.selectedIds;
+    if (ids.length === 0 || isBulkFavoriting) return;
+    setIsBulkFavoriting(true);
+    try {
+      await addPhotosToMyPhotosAction(ids);
+      setMyPhotos((prev) => new Set([...prev, ...ids]));
+      toast.success(t('bulkFavorited').replace('{n}', String(ids.length)));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('failedBulkFavorite'));
+    } finally {
+      setIsBulkFavoriting(false);
+    }
+  }, [selection.selectedIds, isBulkFavoriting, t]);
+
+  const handleBulkClaim = useCallback(async () => {
+    const ids = selection.selectedIds;
+    if (ids.length === 0 || isBulkClaiming) return;
+    setIsBulkClaiming(true);
+    try {
+      const { claimed, skipped } = await addPhotosToProfileAction(ids);
+      setClaimedPhotos((prev) => new Set([...prev, ...ids]));
+      toast.success(
+        skipped > 0
+          ? t('bulkClaimedSkipped').replace('{n}', String(claimed)).replace('{m}', String(skipped))
+          : t('bulkClaimed').replace('{n}', String(claimed)),
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('failedBulkClaim'));
+    } finally {
+      setIsBulkClaiming(false);
+    }
+  }, [selection.selectedIds, isBulkClaiming, t]);
 
   // ── AI face-search results ─────────────────────────────────────────────
   const faceSearch = useFaceSearch();
@@ -367,6 +412,44 @@ export function EventPhotoViewer({
     </Button>
   );
 
+  // The selection action bar — favorites/profile claim are talent-only, and
+  // this viewer is always rendered for an authenticated talent.
+  const selectionActions = (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={handleBulkFavorite}
+        disabled={selection.selectedIds.length === 0 || isBulkFavoriting}
+      >
+        {isBulkFavoriting ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          <Heart className="mr-2 h-4 w-4" />
+        )}
+        {menuLabels.addToFavorites}
+      </Button>
+      {isFreeEvent && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleBulkClaim}
+          disabled={selection.selectedIds.length === 0 || isBulkClaiming}
+        >
+          {isBulkClaiming ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <UserRoundPlus className="mr-2 h-4 w-4" />
+          )}
+          {menuLabels.addToProfile}
+        </Button>
+      )}
+      {downloadButton}
+    </>
+  );
+
   // ── AI face-search results view ────────────────────────────────────────
   if (faceSearch.matches !== null) {
     return (
@@ -395,7 +478,7 @@ export function EventPhotoViewer({
               onStartSelecting={selection.startSelecting}
               onClear={selection.clear}
             >
-              {downloadButton}
+              {selectionActions}
             </PhotoSelectionToolbar>
           }
         />
@@ -426,7 +509,7 @@ export function EventPhotoViewer({
           onStartSelecting={selection.startSelecting}
           onClear={selection.clear}
         >
-          {downloadButton}
+          {selectionActions}
         </PhotoSelectionToolbar>
       )}
       {visiblePhotos.length === 0 && filter === 'mine' ? (
