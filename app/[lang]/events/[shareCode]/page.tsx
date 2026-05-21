@@ -11,7 +11,6 @@ import {
   getEventByShareCode,
   getEventBySlug,
   getEventPhotosPublic,
-  getPhotoIdsInCart,
   type SupabaseServerClient,
 } from '@/database/queries';
 import { getPurchasedPhotoIdsForEvent } from '@/database/queries/orders';
@@ -286,6 +285,21 @@ export default async function EventPage({
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Authenticated talents belong on their dashboard's event view — send them
+  // there server-side (before any markup) so they get the talent experience.
+  // Photographers and guests stay on this public page.
+  let activeRole: 'photographer' | 'talent' | null = null;
+  if (user) {
+    try {
+      activeRole = (await getActiveRole()).activeRole;
+    } catch {
+      // getActiveRole throws if the session is somehow gone — treat as no role.
+    }
+    if (activeRole === 'talent') {
+      localizedRedirect(lang, `/dashboard/talent/events/${param}`);
+    }
+  }
+
   const eventStatus = getEventStatus(event.date);
   // AI face search eligibility — computed server-side. We hide the banner
   // entirely for events that can't surface useful results: AI disabled,
@@ -321,24 +335,10 @@ export default async function EventPage({
     event.is_collaborative && event.allow_guest_upload && Boolean(event.share_code);
   const showContribute = isCollaborativeShareable && uploadOpen;
   const showContributeLockedNotice = isCollaborativeShareable && !uploadOpen;
+  // Authenticated talents are redirected to their dashboard above, so the
+  // public page's audience is photographers + guests — the talent cart never
+  // applies here. Guests use the localStorage guest cart inside the viewer.
   const photosInCart: string[] = [];
-
-  try {
-    if (showCartUi && user && eventStatus !== 'upcoming') {
-      const { activeRole } = await getActiveRole();
-      if (activeRole === 'talent') {
-        const photoIds = photos.map((p) => p.id);
-        const cartIds = await getPhotoIdsInCart(
-          supabase as unknown as SupabaseServerClient,
-          user.id,
-          photoIds,
-        );
-        for (const id of cartIds) photosInCart.push(id);
-      }
-    }
-  } catch {
-    // ignore — photosInCart stays empty
-  }
 
   // Purchased photos — only needed to gate bulk download on a paid event for a
   // signed-in viewer. Free events download for anyone; guests get an empty set.
@@ -354,6 +354,21 @@ export default async function EventPage({
       // best-effort — leave the set empty
     }
   }
+
+  const isFreeEvent = !isForSale;
+  const canBulkDownload = isFreeEvent || !!user;
+  const bulkDownloadLabels = {
+    select: dict.events.selectButton,
+    clear: dict.events.clearButton,
+    countNone: dict.events.noPhotosSelected,
+    countOne: dict.events.onePhotoSelected,
+    countMany: dict.events.nPhotosSelected,
+    download: dict.events.download,
+    preparing: dict.events.preparingDownload,
+    failed: dict.events.downloadFailed,
+    skipped: dict.events.downloadSkipped,
+    nonePurchased: dict.events.downloadNonePurchased,
+  };
 
   const activityLabel =
     activityOptions.find((o) => o.value === event.activity)?.label ?? event.activity;
@@ -534,6 +549,11 @@ export default async function EventPage({
             <EventGalleryWithFaceSearch
               photos={photoItems}
               shareCode={event.share_code ?? event.id}
+              eventId={event.id}
+              isFreeEvent={isFreeEvent}
+              purchasedPhotoIds={purchasedPhotoIds}
+              canBulkDownload={canBulkDownload}
+              bulkDownload={bulkDownloadLabels}
               aiSearchEligible={aiSearchEligible}
               aiState={aiBannerState}
               bannerLabels={dict.aiSearch.banner}
@@ -594,28 +614,20 @@ export default async function EventPage({
                       failedRemove: dict.eventPhotoViewer.failedRemoveCart,
                     }}
                     purchasedPhotoIds={purchasedPhotoIds}
-                    bulkDownload={{
-                      select: dict.events.selectButton,
-                      clear: dict.events.clearButton,
-                      countNone: dict.events.noPhotosSelected,
-                      countOne: dict.events.onePhotoSelected,
-                      countMany: dict.events.nPhotosSelected,
-                      download: dict.events.download,
-                      preparing: dict.events.preparingDownload,
-                      failed: dict.events.downloadFailed,
-                      skipped: dict.events.downloadSkipped,
-                      nonePurchased: dict.events.downloadNonePurchased,
-                    }}
+                    bulkDownload={bulkDownloadLabels}
                     filterLabels={{
                       all: dict.collaborativeEvent.myPhotosAll,
                       mine: dict.collaborativeEvent.myPhotosMine,
                       empty: dict.collaborativeEvent.myPhotosEmpty,
                     }}
-                    downloadLabels={{
+                    menuLabels={{
                       trigger: dict.events.moreOptions,
                       download: dict.events.download,
                       failed: dict.events.downloadFailed,
                       notPurchased: dict.events.downloadNotPurchased,
+                      addToCart: dict.events.addToCartMenuItem,
+                      removeFromCart: dict.events.removeFromCartMenuItem,
+                      uploadedBy: dict.events.uploadedByMenuLabel,
                     }}
                     imageUnavailableLabel={dict.eventCard.imageUnavailable}
                   />

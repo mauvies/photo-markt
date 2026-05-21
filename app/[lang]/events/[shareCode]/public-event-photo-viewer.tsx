@@ -19,8 +19,9 @@ import {
 } from '@/components/photo-selection-toolbar';
 import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
 import { Button } from '@/components/ui/button';
+import { useBulkPhotoDownload } from '@/hooks/use-bulk-photo-download';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
-import { downloadEventPhotosZip } from '@/lib/download-zip';
+import { usePhotoSelection } from '@/hooks/use-photo-selection';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import { deleteContributorPhotoAction, getEventPhotoDownloadUrlAction } from './actions';
 import { readGuestUploads, removeGuestUpload } from './guest-uploads-storage';
@@ -81,8 +82,17 @@ interface PublicEventPhotoViewerProps {
   cartToastLabels: { failedAdd: string; failedRemove: string };
   /** Labels for the "All photos / My photos" filter (collaborative events). */
   filterLabels: { all: string; mine: string; empty: string };
-  /** Labels for the per-photo "more options" menu + download. */
-  downloadLabels: { trigger: string; download: string; failed: string; notPurchased: string };
+  /** Labels for the per-photo "more options" dropdown. */
+  menuLabels: {
+    trigger: string;
+    download: string;
+    failed: string;
+    notPurchased: string;
+    addToCart: string;
+    removeFromCart: string;
+    /** "Uploaded by {name}" template. */
+    uploadedBy: string;
+  };
   /** Photo IDs the viewer has purchased — gates bulk download on paid events. */
   purchasedPhotoIds?: Set<string>;
   /** Localized copy for the selection toolbar + bulk download. */
@@ -110,7 +120,7 @@ export function PublicEventPhotoViewer({
   deleteLabels,
   cartToastLabels,
   filterLabels,
-  downloadLabels,
+  menuLabels,
   purchasedPhotoIds = new Set(),
   bulkDownload,
   imageUnavailableLabel,
@@ -286,32 +296,22 @@ export function PublicEventPhotoViewer({
   const isFreeEvent = pricePerPhoto === null;
   const isOwner = currentUserId != null && currentUserId === photographerId;
   const canBulkDownload = isFreeEvent || isAuthenticated;
-  const [isSelecting, setIsSelecting] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [isDownloading, setIsDownloading] = useState(false);
-
-  const handleToggleSelect = useCallback((photoId: string) => {
-    setSelectedIds((current) => {
-      const exists = current.includes(photoId);
-      const next = exists ? current.filter((id) => id !== photoId) : [...current, photoId];
-      setIsSelecting(next.length > 0);
-      return next;
-    });
-  }, []);
-
-  const clearSelection = useCallback(() => {
-    setSelectedIds([]);
-    setIsSelecting(false);
-  }, []);
+  const selection = usePhotoSelection();
+  const { isDownloading, downloadSelected } = useBulkPhotoDownload({
+    eventId,
+    isFreeEvent,
+    purchasedPhotoIds,
+    bulkDownload,
+  });
 
   // ── "All photos / My photos" filter ────────────────────────────────────
   const [filter, setFilter] = useState<EventPhotoFilter>('all');
   const handleFilterChange = useCallback(
     (value: EventPhotoFilter) => {
       setFilter(value);
-      clearSelection();
+      selection.clear();
     },
-    [clearSelection],
+    [selection],
   );
   const visiblePhotos = useMemo(
     () => (filter === 'mine' ? photos.filter((p) => myPhotoIds.has(p.id)) : photos),
@@ -319,37 +319,10 @@ export function PublicEventPhotoViewer({
   );
 
   const countLabel = useMemo(() => {
-    if (selectedIds.length === 0) return bulkDownload.countNone;
-    if (selectedIds.length === 1) return bulkDownload.countOne;
-    return bulkDownload.countMany.replace('{n}', String(selectedIds.length));
-  }, [selectedIds.length, bulkDownload]);
-
-  const handleDownloadSelected = useCallback(async () => {
-    if (selectedIds.length === 0 || isDownloading) return;
-    const downloadable = isFreeEvent
-      ? selectedIds
-      : selectedIds.filter((id) => purchasedPhotoIds.has(id));
-    const skipped = selectedIds.length - downloadable.length;
-    if (downloadable.length === 0) {
-      toast.error(bulkDownload.nonePurchased);
-      return;
-    }
-    setIsDownloading(true);
-    try {
-      await downloadEventPhotosZip(eventId, downloadable);
-      if (skipped > 0) {
-        toast.success(
-          bulkDownload.skipped
-            .replace('{n}', String(downloadable.length))
-            .replace('{m}', String(skipped)),
-        );
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : bulkDownload.failed);
-    } finally {
-      setIsDownloading(false);
-    }
-  }, [selectedIds, isDownloading, isFreeEvent, purchasedPhotoIds, eventId, bulkDownload]);
+    if (selection.selectedIds.length === 0) return bulkDownload.countNone;
+    if (selection.selectedIds.length === 1) return bulkDownload.countOne;
+    return bulkDownload.countMany.replace('{n}', String(selection.selectedIds.length));
+  }, [selection.selectedIds.length, bulkDownload]);
 
   // ── Single-photo download (3-dot menu + lightbox) ──────────────────────
   // Free events / the owner can grab any photo; on a paid event only photos
@@ -362,7 +335,7 @@ export function PublicEventPhotoViewer({
   const handleDownloadPhoto = useCallback(
     async (photoId: string) => {
       if (!isPhotoDownloadable(photoId)) {
-        toast.error(downloadLabels.notPurchased);
+        toast.error(menuLabels.notPurchased);
         return;
       }
       try {
@@ -374,24 +347,50 @@ export function PublicEventPhotoViewer({
         link.rel = 'noopener';
         link.click();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : downloadLabels.failed);
+        toast.error(error instanceof Error ? error.message : menuLabels.failed);
       }
     },
-    [isPhotoDownloadable, eventId, downloadLabels],
+    [isPhotoDownloadable, eventId, menuLabels],
   );
 
-  // The 3-dot menu (Download only, for now) — shown wherever downloading is
-  // possible at all. Paid-event guests get no menu.
-  const moreMenu = useMemo<PhotoMoreMenuConfig | undefined>(
-    () =>
-      canBulkDownload
-        ? {
-            labels: { trigger: downloadLabels.trigger, download: downloadLabels.download },
-            onDownload: handleDownloadPhoto,
-            isDownloadDisabled: (id: string) => !isPhotoDownloadable(id),
-          }
-        : undefined,
-    [canBulkDownload, downloadLabels, handleDownloadPhoto, isPhotoDownloadable],
+  const handleCartToggle = useCallback(
+    (photoId: string) => {
+      if (photosInCart.has(photoId)) {
+        handleRemoveFromCart(photoId);
+      } else {
+        handleAddToCart(photoId);
+      }
+    },
+    [photosInCart, handleAddToCart, handleRemoveFromCart],
+  );
+
+  // The 3-dot menu — always present. Download is always an item (disabled for
+  // a paid photo the viewer hasn't bought); the cart item shows only on a
+  // paid, unpurchased photo; the uploader row only on collaborative events.
+  const moreMenu = useMemo<PhotoMoreMenuConfig>(
+    () => ({
+      labels: {
+        trigger: menuLabels.trigger,
+        download: menuLabels.download,
+        addToCart: menuLabels.addToCart,
+        removeFromCart: menuLabels.removeFromCart,
+        uploadedBy: menuLabels.uploadedBy,
+      },
+      onDownload: handleDownloadPhoto,
+      isDownloadDisabled: (id: string) => !isPhotoDownloadable(id),
+      onCartToggle: handleCartToggle,
+      showCartFor: (id: string) => !isFreeEvent && !purchasedPhotoIds.has(id),
+      showUploaderRow: isCollaborative,
+    }),
+    [
+      menuLabels,
+      handleDownloadPhoto,
+      isPhotoDownloadable,
+      handleCartToggle,
+      isFreeEvent,
+      purchasedPhotoIds,
+      isCollaborative,
+    ],
   );
 
   return (
@@ -410,7 +409,7 @@ export function PublicEventPhotoViewer({
             <PhotoSelectionToolbar
               className="sticky top-[var(--header-height)] -mx-4 px-4"
               leading={
-                isCollaborative ? (
+                isCollaborative && !(canBulkDownload && selection.isSelecting) ? (
                   <EventPhotoFilterTabs
                     value={filter}
                     onValueChange={handleFilterChange}
@@ -420,19 +419,19 @@ export function PublicEventPhotoViewer({
                 ) : undefined
               }
               selectable={canBulkDownload}
-              isSelecting={isSelecting}
+              isSelecting={selection.isSelecting}
               countLabel={countLabel}
               selectLabel={bulkDownload.select}
               clearLabel={bulkDownload.clear}
-              onStartSelecting={() => setIsSelecting(true)}
-              onClear={clearSelection}
+              onStartSelecting={selection.startSelecting}
+              onClear={selection.clear}
             >
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={handleDownloadSelected}
-                disabled={selectedIds.length === 0 || isDownloading}
+                onClick={() => downloadSelected(selection.selectedIds)}
+                disabled={selection.selectedIds.length === 0 || isDownloading}
               >
                 {isDownloading ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -450,9 +449,9 @@ export function PublicEventPhotoViewer({
           ) : (
             <PhotoAlbumViewer
               items={visiblePhotos}
-              selectionMode={canBulkDownload && isSelecting}
-              selectedIds={canBulkDownload ? selectedIds : undefined}
-              onToggleSelect={canBulkDownload ? handleToggleSelect : undefined}
+              selectionMode={canBulkDownload && selection.isSelecting}
+              selectedIds={canBulkDownload ? selection.selectedIds : undefined}
+              onToggleSelect={canBulkDownload ? selection.toggle : undefined}
               showAddToCart={showAddToCart}
               photosInCart={photosInCart}
               onAddToCart={handleAddToCart}

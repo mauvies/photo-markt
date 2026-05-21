@@ -25,6 +25,16 @@ export interface PhotoMoreMenuConfig {
   onDownload: (photoId: string) => void;
   /** Per-photo predicate — when it returns true the Download item is disabled. */
   isDownloadDisabled?: (photoId: string) => boolean;
+  /** Talent "save to my library" toggle — moves the standalone heart into the menu. */
+  onSaveToggle?: (photoId: string) => void;
+  savedIds?: Set<string>;
+  saveLabelVariant?: 'profile' | 'photos';
+  /** Cart toggle — moves the standalone cart icon into the menu. */
+  onCartToggle?: (photoId: string) => void;
+  /** Per-photo predicate — when true the cart item shows (paid && not purchased). */
+  showCartFor?: (photoId: string) => boolean;
+  /** When true, the uploader attribution moves into the menu as an info row. */
+  showUploaderRow?: boolean;
 }
 
 export interface PhotoIconTooltips {
@@ -198,7 +208,7 @@ export function PhotoIconButtons({
 
         {/* Right side: cart button and the 3-dot "more options" menu. */}
         <div className="ml-auto flex items-start gap-1.5">
-          {showAddToCart && !selectionActive && (
+          {showAddToCart && !selectionActive && !moreMenu?.onCartToggle && (
             <div className={cn(ICON_WRAP, (inCart || hasAnyOpen) && 'md:opacity-100')}>
               <PhotoActionIcon
                 icon="cart"
@@ -215,11 +225,17 @@ export function PhotoIconButtons({
                 labels={moreMenu.labels}
                 open={moreMenuOpen}
                 onOpenChange={setMoreMenuOpen}
+                onDownload={moreMenu.onDownload}
+                downloadDisabled={moreMenu.isDownloadDisabled?.(photoId) ?? false}
                 onDelete={moreMenu.onDelete}
                 onTagPeople={moreMenu.onTagPeople}
                 onShare={moreMenu.onShare}
-                onDownload={moreMenu.onDownload}
-                downloadDisabled={moreMenu.isDownloadDisabled?.(photoId) ?? false}
+                onSaveToggle={moreMenu.onSaveToggle}
+                isSaved={moreMenu.savedIds?.has(photoId) ?? false}
+                saveLabelVariant={moreMenu.saveLabelVariant}
+                onCartToggle={moreMenu.showCartFor?.(photoId) ? moreMenu.onCartToggle : undefined}
+                isInCart={inCart}
+                uploaderName={moreMenu.showUploaderRow ? uploader?.name : undefined}
               />
             </div>
           )}
@@ -266,7 +282,7 @@ export function PhotoIconButtons({
 
           {/* Right cluster: uploader badge, Heart / Save and contributor Delete */}
           <div className="flex items-end gap-1.5">
-            {uploader && (
+            {uploader && !moreMenu?.showUploaderRow && (
               <div
                 className={cn(
                   'pointer-events-auto transition-opacity duration-150',
@@ -284,7 +300,7 @@ export function PhotoIconButtons({
                 />
               </div>
             )}
-            {showAddToPhotos && (
+            {showAddToPhotos && !moreMenu?.onSaveToggle && (
               <div className={cn(ICON_WRAP, (inMyPhotos || hasAnyOpen) && 'md:opacity-100')}>
                 <PhotoActionIcon
                   icon="save"
