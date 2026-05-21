@@ -142,12 +142,16 @@ async function getCachedEventData(
 
   // Resolve display names for authenticated contributors so the public
   // uploader badge can render their name without an extra round-trip.
+  // The event owner is included so a collaborative event's photographer-
+  // uploaded photos (which carry no `uploaded_by`/`guest_name`) can still be
+  // attributed to them.
   const uploaderUserIds = Array.from(
-    new Set(
-      photos
+    new Set([
+      event.user_id,
+      ...photos
         .map((p) => (p as { uploaded_by?: string | null }).uploaded_by)
         .filter((v): v is string => Boolean(v)),
-    ),
+    ]),
   );
   const uploaderProfiles: Record<string, { display_name: string | null; username: string }> = {};
   if (uploaderUserIds.length > 0) {
@@ -368,6 +372,13 @@ export default async function EventPage({
         if (name) uploader = { name, isAuthenticated: true };
       } else if (guestName) {
         uploader = { name: guestName, isAuthenticated: false };
+      } else if (event.is_collaborative) {
+        // No contributor/guest attribution on a collaborative event means the
+        // photo is the event photographer's own upload — attribute it to them
+        // so every photo on a collaborative event shows who uploaded it.
+        const ownerProfile = uploaderProfiles[event.user_id];
+        const name = ownerProfile?.display_name ?? ownerProfile?.username ?? '';
+        if (name) uploader = { name, isAuthenticated: true };
       }
       return {
         id: p.id,
@@ -530,6 +541,12 @@ export default async function EventPage({
               resultsLabels={dict.aiSearch.results}
               iconTooltips={dict.photoIconButtons}
               imageUnavailableLabel={dict.eventCard.imageUnavailable}
+              uploaderLabels={{
+                tooltip: dict.collaborativeEvent.uploaderTooltip,
+                popoverHeading: dict.collaborativeEvent.uploaderPopoverHeading,
+                guestLabel: dict.collaborativeEvent.uploaderGuestLabel,
+                authenticatedLabel: dict.collaborativeEvent.uploaderAuthenticatedLabel,
+              }}
               fullGallery={
                 <Suspense
                   fallback={
@@ -551,6 +568,7 @@ export default async function EventPage({
                     isAuthenticated={!!user}
                     currentUserId={user?.id ?? null}
                     shareCode={event.share_code ?? null}
+                    isCollaborative={event.is_collaborative}
                     initialPhotosInCart={photosInCart}
                     iconTooltips={dict.photoIconButtons}
                     showAddToCart={showCartUi}
@@ -587,6 +605,17 @@ export default async function EventPage({
                       failed: dict.events.downloadFailed,
                       skipped: dict.events.downloadSkipped,
                       nonePurchased: dict.events.downloadNonePurchased,
+                    }}
+                    filterLabels={{
+                      all: dict.collaborativeEvent.myPhotosAll,
+                      mine: dict.collaborativeEvent.myPhotosMine,
+                      empty: dict.collaborativeEvent.myPhotosEmpty,
+                    }}
+                    downloadLabels={{
+                      trigger: dict.events.moreOptions,
+                      download: dict.events.download,
+                      failed: dict.events.downloadFailed,
+                      notPurchased: dict.events.downloadNotPurchased,
                     }}
                     imageUnavailableLabel={dict.eventCard.imageUnavailable}
                   />

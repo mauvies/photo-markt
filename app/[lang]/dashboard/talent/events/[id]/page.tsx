@@ -225,6 +225,16 @@ export default async function ExploreEventDetailPage({
       } => item !== null,
     );
 
+  // Photo IDs the current talent uploaded — backs the "My photos" filter on
+  // collaborative events.
+  const myUploadedPhotoIds = new Set<string>(
+    user
+      ? photos
+          .filter((p) => (p as { uploaded_by?: string | null }).uploaded_by === user.id)
+          .map((p) => p.id)
+      : [],
+  );
+
   // Render the page body. We wrap in <UploadProgressProvider> ONLY when
   // contribute is relevant — non-collaborative events don't need the
   // in-flight upload modal infrastructure. The provider supplies labels +
@@ -304,6 +314,13 @@ export default async function ExploreEventDetailPage({
                   eventId={event.id}
                   isFreeEvent={event.price_per_photo === null}
                   purchasedPhotoIds={purchasedPhotoIds}
+                  isCollaborative={event.is_collaborative}
+                  uploadedPhotoIds={myUploadedPhotoIds}
+                  filterLabels={{
+                    all: dict.collaborativeEvent.myPhotosAll,
+                    mine: dict.collaborativeEvent.myPhotosMine,
+                    empty: dict.collaborativeEvent.myPhotosEmpty,
+                  }}
                   bulkDownload={{
                     select: dict.events.selectButton,
                     clear: dict.events.clearButton,

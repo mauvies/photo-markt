@@ -18,10 +18,13 @@ import { cn } from '@/lib/utils';
  */
 export interface PhotoMoreMenuConfig {
   labels: PhotoMoreMenuLabels;
-  onDelete: (photoId: string) => void;
-  onTagPeople: (photoId: string) => void;
-  onShare: (photoId: string) => void;
+  /** Each item appears only when its handler is set. Download always appears. */
+  onDelete?: (photoId: string) => void;
+  onTagPeople?: (photoId: string) => void;
+  onShare?: (photoId: string) => void;
   onDownload: (photoId: string) => void;
+  /** Per-photo predicate — when it returns true the Download item is disabled. */
+  isDownloadDisabled?: (photoId: string) => boolean;
 }
 
 export interface PhotoIconTooltips {
@@ -193,25 +196,8 @@ export function PhotoIconButtons({
           </div>
         )}
 
-        {/* Right side: uploader badge (always visible when present, like the
-            tags badge) and cart button (visible on hover). */}
+        {/* Right side: cart button and the 3-dot "more options" menu. */}
         <div className="ml-auto flex items-start gap-1.5">
-          {uploader && !selectionActive && (
-            <div
-              className={cn(
-                'pointer-events-auto transition-opacity duration-150',
-                hasAnyOpen ? 'opacity-100' : 'opacity-100 md:opacity-0 md:group-hover:opacity-100',
-              )}
-            >
-              <PhotoUploaderIndicator
-                uploader={uploader}
-                tooltip={uploaderLabels?.tooltip}
-                popoverHeading={uploaderLabels?.popoverHeading}
-                isPopoverOpen={isPopoverOpen}
-                onPopoverOpenChange={onPopoverOpenChange}
-              />
-            </div>
-          )}
           {showAddToCart && !selectionActive && (
             <div className={cn(ICON_WRAP, (inCart || hasAnyOpen) && 'md:opacity-100')}>
               <PhotoActionIcon
@@ -233,6 +219,7 @@ export function PhotoIconButtons({
                 onTagPeople={moreMenu.onTagPeople}
                 onShare={moreMenu.onShare}
                 onDownload={moreMenu.onDownload}
+                downloadDisabled={moreMenu.isDownloadDisabled?.(photoId) ?? false}
               />
             </div>
           )}
@@ -244,7 +231,7 @@ export function PhotoIconButtons({
         <div className="relative z-10 mt-auto flex w-full items-end justify-between">
           {/* Tag button */}
           <div className="pointer-events-auto">
-            {onTagPhoto && !hasTags && !moreMenu && (
+            {onTagPhoto && !hasTags && !moreMenu?.onTagPeople && (
               <div className={cn(ICON_WRAP, hasAnyOpen && 'md:opacity-100')}>
                 <PhotoActionIcon
                   icon="tag"
@@ -277,8 +264,26 @@ export function PhotoIconButtons({
             )}
           </div>
 
-          {/* Right cluster: Heart / Save and contributor Delete */}
+          {/* Right cluster: uploader badge, Heart / Save and contributor Delete */}
           <div className="flex items-end gap-1.5">
+            {uploader && (
+              <div
+                className={cn(
+                  'pointer-events-auto transition-opacity duration-150',
+                  hasAnyOpen
+                    ? 'opacity-100'
+                    : 'opacity-100 md:opacity-0 md:group-hover:opacity-100',
+                )}
+              >
+                <PhotoUploaderIndicator
+                  uploader={uploader}
+                  tooltip={uploaderLabels?.tooltip}
+                  popoverHeading={uploaderLabels?.popoverHeading}
+                  isPopoverOpen={isPopoverOpen}
+                  onPopoverOpenChange={onPopoverOpenChange}
+                />
+              </div>
+            )}
             {showAddToPhotos && (
               <div className={cn(ICON_WRAP, (inMyPhotos || hasAnyOpen) && 'md:opacity-100')}>
                 <PhotoActionIcon
@@ -289,7 +294,7 @@ export function PhotoIconButtons({
                 />
               </div>
             )}
-            {canDelete && onDelete && !moreMenu && (
+            {canDelete && onDelete && !moreMenu?.onDelete && (
               <div className={cn(ICON_WRAP, hasAnyOpen && 'md:opacity-100')}>
                 <PhotoActionIcon
                   icon="delete"

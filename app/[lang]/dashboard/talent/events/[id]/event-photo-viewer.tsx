@@ -7,6 +7,7 @@ import {
   addPhotoToCartAction,
   removePhotoFromCartAction,
 } from '@/app/[lang]/dashboard/talent/cart/actions';
+import { type EventPhotoFilter, EventPhotoFilterTabs } from '@/components/event-photo-filter-tabs';
 import PhotoAlbumViewer, { type PhotoAlbumItem } from '@/components/photo-album-viewer';
 import type { PhotoIconTooltips } from '@/components/photo-icon-buttons';
 import {
@@ -24,6 +25,12 @@ type EventPhotoViewerProps = {
   eventId: string;
   /** Free events let anyone download; paid events restrict to purchased photos. */
   isFreeEvent: boolean;
+  /** Collaborative events get the "All photos / My photos" filter. */
+  isCollaborative?: boolean;
+  /** Photo IDs the current talent uploaded — backs the "My photos" filter. */
+  uploadedPhotoIds?: Set<string>;
+  /** Labels for the "All photos / My photos" filter (collaborative events). */
+  filterLabels: { all: string; mine: string; empty: string };
   purchasedPhotoIds?: Set<string>;
   bulkDownload: BulkDownloadLabels;
   showAddToCart?: boolean;
@@ -37,6 +44,9 @@ export function EventPhotoViewer({
   items,
   eventId,
   isFreeEvent,
+  isCollaborative = false,
+  uploadedPhotoIds = new Set(),
+  filterLabels,
   purchasedPhotoIds = new Set(),
   bulkDownload,
   showAddToCart = false,
@@ -139,6 +149,20 @@ export function EventPhotoViewer({
     setIsSelecting(false);
   }, []);
 
+  // ── "All photos / My photos" filter ────────────────────────────────────
+  const [filter, setFilter] = useState<EventPhotoFilter>('all');
+  const handleFilterChange = useCallback(
+    (value: EventPhotoFilter) => {
+      setFilter(value);
+      clearSelection();
+    },
+    [clearSelection],
+  );
+  const visiblePhotos = useMemo(
+    () => (filter === 'mine' ? items.filter((i) => uploadedPhotoIds.has(i.id)) : items),
+    [filter, items, uploadedPhotoIds],
+  );
+
   const countLabel = useMemo(() => {
     if (selectedIds.length === 0) return bulkDownload.countNone;
     if (selectedIds.length === 1) return bulkDownload.countOne;
@@ -179,6 +203,16 @@ export function EventPhotoViewer({
       {items.length > 0 && (
         <PhotoSelectionToolbar
           className="sticky top-[var(--header-height)] -mx-4 px-4 md:-mx-6 md:px-6"
+          leading={
+            isCollaborative ? (
+              <EventPhotoFilterTabs
+                value={filter}
+                onValueChange={handleFilterChange}
+                allLabel={filterLabels.all}
+                mineLabel={filterLabels.mine}
+              />
+            ) : undefined
+          }
           isSelecting={isSelecting}
           countLabel={countLabel}
           selectLabel={bulkDownload.select}
@@ -202,22 +236,28 @@ export function EventPhotoViewer({
           </Button>
         </PhotoSelectionToolbar>
       )}
-      <PhotoAlbumViewer
-        items={items}
-        selectionMode={isSelecting}
-        selectedIds={selectedIds}
-        onToggleSelect={handleToggleSelect}
-        showAddToCart={showAddToCart}
-        photosInCart={photosInCart}
-        onAddToCart={handleAddToCart}
-        onRemoveFromCart={handleRemoveFromCart}
-        showAddToPhotos={true}
-        photosInMyPhotos={myPhotos}
-        onAddToPhotos={handleAddToPhotos}
-        onRemoveFromPhotos={handleRemoveFromPhotos}
-        iconTooltips={iconTooltips}
-        imageUnavailableLabel={imageUnavailableLabel}
-      />
+      {visiblePhotos.length === 0 && filter === 'mine' ? (
+        <div className="py-12 text-center">
+          <p className="text-muted-foreground">{filterLabels.empty}</p>
+        </div>
+      ) : (
+        <PhotoAlbumViewer
+          items={visiblePhotos}
+          selectionMode={isSelecting}
+          selectedIds={selectedIds}
+          onToggleSelect={handleToggleSelect}
+          showAddToCart={showAddToCart}
+          photosInCart={photosInCart}
+          onAddToCart={handleAddToCart}
+          onRemoveFromCart={handleRemoveFromCart}
+          showAddToPhotos={true}
+          photosInMyPhotos={myPhotos}
+          onAddToPhotos={handleAddToPhotos}
+          onRemoveFromPhotos={handleRemoveFromPhotos}
+          iconTooltips={iconTooltips}
+          imageUnavailableLabel={imageUnavailableLabel}
+        />
+      )}
     </div>
   );
 }

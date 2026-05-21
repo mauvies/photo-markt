@@ -50,6 +50,13 @@ interface EventGalleryWithFaceSearchProps {
   /** Pass-through props for the matches-view `<PhotoAlbumViewer>` instances. */
   iconTooltips?: Partial<PhotoIconTooltips>;
   imageUnavailableLabel: string;
+  /** Labels for the "Uploaded by" badge on the match-result tiles. */
+  uploaderLabels?: {
+    tooltip: string;
+    popoverHeading: string;
+    guestLabel: string;
+    authenticatedLabel: string;
+  };
   /**
    * Rendered when `searchMatches === null`. The parent passes its existing
    * full-gallery component (`<PublicEventPhotoViewer>` / `<EventPhotoViewer>`)
@@ -93,6 +100,7 @@ export function EventGalleryWithFaceSearch({
   resultsLabels,
   iconTooltips,
   imageUnavailableLabel,
+  uploaderLabels,
   fullGallery,
 }: EventGalleryWithFaceSearchProps) {
   const [modalOpen, setModalOpen] = useState(false);
@@ -192,6 +200,7 @@ export function EventGalleryWithFaceSearch({
                   items={bucketed.veryLikely}
                   iconTooltips={iconTooltips}
                   imageUnavailableLabel={imageUnavailableLabel}
+                  uploaderLabels={uploaderLabels}
                 />
               ) : null}
               {bucketed.likely.length > 0 ? (
@@ -201,6 +210,7 @@ export function EventGalleryWithFaceSearch({
                   items={bucketed.likely}
                   iconTooltips={iconTooltips}
                   imageUnavailableLabel={imageUnavailableLabel}
+                  uploaderLabels={uploaderLabels}
                 />
               ) : null}
               {bucketed.possibly.length > 0 ? (
@@ -210,6 +220,7 @@ export function EventGalleryWithFaceSearch({
                   items={bucketed.possibly}
                   iconTooltips={iconTooltips}
                   imageUnavailableLabel={imageUnavailableLabel}
+                  uploaderLabels={uploaderLabels}
                 />
               ) : null}
               {!eventIndexingComplete ? (
@@ -264,6 +275,12 @@ interface BucketSectionProps {
   items: PhotoAlbumItem[];
   iconTooltips?: Partial<PhotoIconTooltips>;
   imageUnavailableLabel: string;
+  uploaderLabels?: {
+    tooltip: string;
+    popoverHeading: string;
+    guestLabel: string;
+    authenticatedLabel: string;
+  };
 }
 
 function BucketSection({
@@ -272,6 +289,7 @@ function BucketSection({
   items,
   iconTooltips,
   imageUnavailableLabel,
+  uploaderLabels,
 }: BucketSectionProps) {
   return (
     <section className="flex flex-col gap-2">
@@ -283,6 +301,7 @@ function BucketSection({
         items={items}
         iconTooltips={iconTooltips}
         imageUnavailableLabel={imageUnavailableLabel}
+        uploaderLabels={uploaderLabels}
       />
     </section>
   );

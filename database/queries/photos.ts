@@ -451,6 +451,55 @@ export async function getPhotoForContributorDelete(
 }
 
 /**
+ * Photo file + its event's owner and pricing — backs the single-photo
+ * download permission check on the public event page. Returns null when the
+ * photo isn't an approved photo of the given (non-deleted) event.
+ */
+export async function getPhotoForDownload(
+  supabase: SupabaseServerClient,
+  photoId: string,
+  eventId: string,
+): Promise<{
+  id: string;
+  original_url: string | null;
+  original_filename: string | null;
+  event_owner_id: string;
+  price_per_photo: number | null;
+} | null> {
+  const { data, error } = await supabase
+    .from('photos')
+    .select(
+      'id, original_url, original_filename, events!inner(user_id, price_per_photo, deleted_at)',
+    )
+    .eq('id', photoId)
+    .eq('event_id', eventId)
+    .eq('upload_status', 'approved')
+    .is('events.deleted_at', null)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  // Supabase typing for joined rows is loose; the inner join returns events
+  // as a related object (or array) — handle both shapes.
+  const eventsField = (data as { events: unknown }).events;
+  const event = Array.isArray(eventsField)
+    ? (eventsField[0] as { user_id?: string; price_per_photo?: number | null } | undefined)
+    : (eventsField as { user_id?: string; price_per_photo?: number | null } | null);
+
+  if (!event?.user_id) return null;
+
+  return {
+    id: data.id as string,
+    original_url: (data.original_url as string | null) ?? null,
+    original_filename: (data.original_filename as string | null) ?? null,
+    event_owner_id: event.user_id,
+    price_per_photo: event.price_per_photo ?? null,
+  };
+}
+
+/**
  * Update a photo's upload_status (owner-only via RLS user_id = auth.uid()).
  * Currently the only legitimate transition is pending -> approved; reject is
  * a hard delete handled separately.

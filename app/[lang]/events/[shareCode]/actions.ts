@@ -8,8 +8,10 @@ import {
   getEventByShareCode,
   getEventPhotosPublic,
   getPhotoForContributorDelete,
+  getPhotoForDownload,
   type SupabaseServerClient,
 } from '@/database/queries';
+import { getPurchasedPhotoIdsForEvent } from '@/database/queries/orders';
 import {
   getEventAiIndexingProgress,
   getEventRekognitionState,
@@ -311,4 +313,72 @@ export async function searchFacesInEvent(
     totalSearched: progress.totalApplicable,
     eventIndexingComplete: progress.pending === 0,
   };
+}
+
+// ─── Single-photo download ────────────────────────────────────────────────────
+
+/**
+ * Returns a short-lived signed URL for downloading one event photo's ORIGINAL
+ * file from the public event page. Permission is enforced here, server-side,
+ * and never trusted from the client:
+ *   - the event owner may download any photo of their event;
+ *   - on a free event (`price_per_photo === null`) anyone with the link may
+ *     download — collaborative free photos are free by design;
+ *   - on a paid event, only a signed-in viewer who purchased that photo.
+ * The signed URL carries `Content-Disposition: attachment` so the browser
+ * saves the original file (never the watermarked preview).
+ */
+export async function getEventPhotoDownloadUrlAction(
+  photoId: string,
+  eventId: string,
+): Promise<string> {
+  if (!photoId || !eventId) {
+    throw new Error('Missing photo or event reference.');
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Rate-limit by viewer (user id, else client IP) — mirrors the bulk route.
+  const ip = getClientIp(await headers());
+  const rl = await rateLimit({
+    key: `photo-download:${user?.id ?? ip}`,
+    limit: 60,
+    windowSec: 3600,
+  });
+  if (!rl.ok) {
+    throw new Error('Too many download requests. Please try again later.');
+  }
+
+  const adminClient = supabaseAdmin as unknown as SupabaseServerClient;
+  const photo = await getPhotoForDownload(adminClient, photoId, eventId);
+  if (!photo || !photo.original_url) {
+    throw new Error('Photo not found.');
+  }
+
+  // ── Permission (authoritative) ─────────────────────────────────────────
+  const isOwner = Boolean(user && user.id === photo.event_owner_id);
+  const isFree = photo.price_per_photo === null;
+  let allowed = isOwner || isFree;
+  if (!allowed && user) {
+    const purchased = await getPurchasedPhotoIdsForEvent(adminClient, user.id, eventId);
+    allowed = purchased.has(photoId);
+  }
+  if (!allowed) {
+    throw new Error('You do not have permission to download this photo.');
+  }
+
+  // Sign the ORIGINAL path with a filename so the browser saves it as an
+  // attachment. Fall back to the storage-path basename when the user-supplied
+  // filename is absent (older rows pre-date the `original_filename` column).
+  const filename = photo.original_filename ?? photo.original_url.split('/').pop() ?? 'photo.jpg';
+  const { data, error } = await supabaseAdmin.storage
+    .from('photos')
+    .createSignedUrl(photo.original_url, 300, { download: filename });
+  if (error || !data?.signedUrl) {
+    throw new Error('Could not prepare the download.');
+  }
+  return data.signedUrl;
 }

@@ -132,6 +132,7 @@
     "downloadNonePurchased": "Ninguna de las fotos seleccionadas se puede descargar.",
     "shareCopied": "Enlace de la foto copiado",
     "downloadFailed": "No se pudo descargar la foto.",
+    "downloadNotPurchased": "Compra esta foto para descargarla.",
     "editEvent": "Editar evento",
     "deleteEvent": "Eliminar evento",
     "eventActionsMenuLabel": "Más opciones",
@@ -969,6 +970,9 @@
     "uploaderPopoverHeading": "Subida por",
     "uploaderGuestLabel": "Aportante invitado",
     "uploaderAuthenticatedLabel": "Aportante autenticado",
+    "myPhotosAll": "Todas las fotos",
+    "myPhotosMine": "Mis fotos",
+    "myPhotosEmpty": "Aún no has subido ninguna foto a este evento.",
     "shareLinkLabel": "Comparte para invitar a contribuir"
   },
   "photographerProfile": {
