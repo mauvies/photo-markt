@@ -1,8 +1,9 @@
 'use client';
 
 import { ImageOff } from 'lucide-react';
-import { type KeyboardEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type Photo, type RenderPhotoContext, RowsPhotoAlbum } from 'react-photo-album';
+import type { LightboxActionLabels } from '@/components/lightbox-action-bar';
 import {
   PhotoIconButtons,
   type PhotoIconTooltips,
@@ -11,6 +12,8 @@ import {
 import { PhotoLightbox, type PhotoLightboxItem } from '@/components/photo-lightbox';
 import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useCoarsePointer } from '@/hooks/use-coarse-pointer';
+import { useLongPress } from '@/hooks/use-long-press';
 import { usePhotoLightboxUrl } from '@/hooks/use-photo-lightbox-url';
 import { cn } from '@/lib/utils';
 import 'react-photo-album/rows.css';
@@ -71,6 +74,17 @@ type PhotoAlbumViewerProps = {
   imageUnavailableLabel?: string;
   /** When set, each tile shows a 3-dot "more options" menu (collaborative photographer view). */
   moreMenu?: PhotoMoreMenuConfig;
+  /** Long-press on a tile (touch only) — used to enter selection mode. */
+  onLongPress?: (photoId: string) => void;
+  /** When true, the per-photo overlay is hidden on coarse-pointer (touch)
+   * devices — the clean mobile gallery. Desktop hover is unaffected. */
+  cleanOnCoarsePointer?: boolean;
+  /** Lightbox: 'bottom' moves the per-photo actions into a bottom action bar. */
+  lightboxActionBar?: 'top' | 'bottom';
+  onClaimToProfile?: (photoId: string) => void;
+  claimedIds?: Set<string>;
+  canClaimToProfile?: (photoId: string) => boolean;
+  actionBarLabels?: LightboxActionLabels;
 };
 
 export default function PhotoAlbumViewer({
@@ -101,6 +115,13 @@ export default function PhotoAlbumViewer({
   uploaderLabels,
   imageUnavailableLabel = 'Image unavailable',
   moreMenu,
+  onLongPress,
+  cleanOnCoarsePointer = false,
+  lightboxActionBar = 'top',
+  onClaimToProfile,
+  claimedIds,
+  canClaimToProfile,
+  actionBarLabels,
 }: PhotoAlbumViewerProps) {
   const { index, openAt, switchTo, close } = usePhotoLightboxUrl(items);
   const [dimensions, setDimensions] = useState<Record<string, { width: number; height: number }>>(
@@ -116,6 +137,20 @@ export default function PhotoAlbumViewer({
   const selectedSet = useMemo(() => new Set(selectedIds ?? []), [selectedIds]);
   const canSelect = Boolean(onToggleSelect);
   const selectionActive = selectionMode || selectedSet.size > 0;
+
+  // Clean mobile gallery — the per-photo overlay is hidden on touch devices
+  // (except the selection checkmark while selecting). Long-press enters
+  // selection mode; it never arms on a fine pointer (desktop).
+  const coarsePointer = useCoarsePointer();
+  const cleanGrid = cleanOnCoarsePointer && coarsePointer;
+  const pressedPhotoIdRef = useRef<string | null>(null);
+  const longPress = useLongPress({
+    enabled: coarsePointer && Boolean(onLongPress),
+    onLongPress: () => {
+      const id = pressedPhotoIdRef.current;
+      if (id) onLongPress?.(id);
+    },
+  });
 
   const extractPhotoId = useCallback((photo: Photo & { id?: string }) => {
     if (typeof photo.id === 'string' && photo.id.length > 0) return photo.id;
@@ -180,6 +215,7 @@ export default function PhotoAlbumViewer({
         width: dimensions[item.id]?.width ?? item.width,
         height: dimensions[item.id]?.height ?? item.height,
         tags: item.tags,
+        uploader: item.uploader,
       })),
     [items, dimensions],
   );
@@ -210,6 +246,11 @@ export default function PhotoAlbumViewer({
             <span className="text-xs">{imageUnavailableLabel}</span>
           </div>
         );
+      }
+
+      // Clean mobile gallery: no overlay unless the user is selecting.
+      if (cleanGrid && !selectionActive) {
+        return null;
       }
 
       const isSelected = selectedSet.has(photoId);
@@ -294,6 +335,7 @@ export default function PhotoAlbumViewer({
       uploaderLabels,
       moreMenu,
       openMenuPhotoId,
+      cleanGrid,
     ],
   );
 
@@ -322,6 +364,13 @@ export default function PhotoAlbumViewer({
                         }
                       : undefined
                   }
+                  onTouchStart={(e) => {
+                    pressedPhotoIdRef.current = photoId;
+                    longPress.onTouchStart(e);
+                  }}
+                  onTouchMove={longPress.onTouchMove}
+                  onTouchEnd={longPress.onTouchEnd}
+                  onTouchCancel={longPress.onTouchCancel}
                   tabIndex={0}
                   role="button"
                   data-selected={isSelected ? '' : undefined}
@@ -355,6 +404,13 @@ export default function PhotoAlbumViewer({
                         }
                       : undefined
                   }
+                  onTouchStart={(e) => {
+                    pressedPhotoIdRef.current = photoId;
+                    longPress.onTouchStart(e);
+                  }}
+                  onTouchMove={longPress.onTouchMove}
+                  onTouchEnd={longPress.onTouchEnd}
+                  onTouchCancel={longPress.onTouchCancel}
                   tabIndex={0}
                   role="link"
                   data-selected={isSelected ? '' : undefined}
@@ -397,6 +453,8 @@ export default function PhotoAlbumViewer({
             },
           }}
           onClick={({ photo }) => {
+            // A long-press already handled this tile — swallow the trailing tap.
+            if (longPress.consumedClick()) return;
             const photoId = extractPhotoId(photo as Photo & { id?: string });
             if (canSelect && selectionActive) {
               handleToggleSelect(photoId);
@@ -427,6 +485,11 @@ export default function PhotoAlbumViewer({
         onUntag={onUntag}
         photosInMyPhotos={photosInMyPhotos}
         photosInCart={photosInCart}
+        actionBar={lightboxActionBar}
+        onClaimToProfile={onClaimToProfile}
+        claimedIds={claimedIds}
+        canClaimToProfile={canClaimToProfile}
+        actionBarLabels={actionBarLabels}
       />
     </>
   );
