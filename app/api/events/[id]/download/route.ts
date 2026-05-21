@@ -89,14 +89,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .maybeSingle();
   if (!event) return jsonError('Event not found', 404);
 
-  const { data: photoRows } = await supabaseAdmin
+  const { data: photoRows, error: photosError } = await supabaseAdmin
     .from('photos')
     .select('id, original_url, original_filename')
     .eq('event_id', eventId)
-    .in('id', photoIds)
-    .is('deleted_at', null);
+    .in('id', photoIds);
+  if (photosError) {
+    console.error('[event-download] failed to load photos', photosError);
+    return jsonError('Could not load the selected photos', 500);
+  }
   // Only photos that genuinely belong to this event survive; a client-supplied
-  // id for another event's photo is silently dropped here.
+  // id for another event's photo is silently dropped here. (`photos` rows are
+  // hard-deleted — the table has no `deleted_at` column — so nothing to filter.)
   const photos: DownloadablePhoto[] = ((photoRows ?? []) as PhotoRow[]).filter(
     (p): p is DownloadablePhoto => typeof p.original_url === 'string' && p.original_url.length > 0,
   );
