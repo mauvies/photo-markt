@@ -58,12 +58,7 @@ export function PhotoSelectionToolbar({
   className,
 }: PhotoSelectionToolbarProps) {
   return (
-    <div
-      className={cn(
-        'z-30 border-b border-border bg-background/95 py-3 backdrop-blur-sm',
-        className,
-      )}
-    >
+    <div className={cn('z-30 bg-background/95 py-3 backdrop-blur-sm', className)}>
       <div className="flex items-center gap-3 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {leading}
         {!selectable ? null : isSelecting ? (
