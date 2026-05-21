@@ -531,7 +531,7 @@ export function EventSearchBar({
                               root: 'w-full',
                               months: 'flex flex-col gap-4 relative w-full',
                               month: 'flex flex-col w-full gap-4',
-                              table: 'w-full',
+                              month_grid: 'w-full',
                               weekdays: 'flex w-full',
                               week: 'flex w-full mt-2',
                             }}

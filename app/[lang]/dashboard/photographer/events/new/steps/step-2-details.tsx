@@ -191,7 +191,7 @@ export function Step2Details({ form, submitAttempted }: Step2DetailsProps) {
                         field.handleBlur();
                         setDatePopoverOpen(false);
                       }}
-                      initialFocus
+                      autoFocus
                     />
                   </PopoverContent>
                 </Popover>

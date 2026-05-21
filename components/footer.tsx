@@ -1,6 +1,6 @@
-import { Facebook, Instagram, Twitter } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { FacebookIcon, InstagramIcon, XIcon } from '@/components/brand-icons';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { localizedPath } from '@/lib/i18n/localized-path';
@@ -60,9 +60,9 @@ export function Footer({ dict, lang }: { dict: Dictionary; lang: string }) {
   ];
 
   const socials = [
-    { key: 'instagram', label: 'Instagram', Icon: Instagram, href: SOCIAL_LINKS.instagram },
-    { key: 'twitter', label: 'X (Twitter)', Icon: Twitter, href: SOCIAL_LINKS.twitter },
-    { key: 'facebook', label: 'Facebook', Icon: Facebook, href: SOCIAL_LINKS.facebook },
+    { key: 'instagram', label: 'Instagram', Icon: InstagramIcon, href: SOCIAL_LINKS.instagram },
+    { key: 'twitter', label: 'X (Twitter)', Icon: XIcon, href: SOCIAL_LINKS.twitter },
+    { key: 'facebook', label: 'Facebook', Icon: FacebookIcon, href: SOCIAL_LINKS.facebook },
   ];
 
   return (
