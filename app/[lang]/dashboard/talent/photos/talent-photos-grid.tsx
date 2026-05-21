@@ -2,7 +2,7 @@
 
 import { format } from 'date-fns';
 import { enUS, es } from 'date-fns/locale';
-import { Loader2, ShoppingCart } from 'lucide-react';
+import { Loader2, ShoppingCart, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useMemo, useState, useTransition } from 'react';
@@ -11,7 +11,12 @@ import {
   addPhotoToCartAction,
   removePhotoFromCartAction,
 } from '@/app/[lang]/dashboard/talent/cart/actions';
-import PhotoAlbumViewer, { type PhotoAlbumItem } from '@/components/photo-album-viewer';
+import {
+  type PhotoAlbumItem,
+  PhotoGallery,
+  type PhotoGalleryBulkAction,
+  type PhotoGallerySection,
+} from '@/components/photo-gallery';
 import type { PhotoIconTooltips } from '@/components/photo-icon-buttons';
 import {
   AlertDialog,
@@ -59,9 +64,10 @@ export function TalentPhotosGrid({
   );
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [isLoading, startTransition] = useTransition();
-  const [isSelecting, setIsSelecting] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  // Photo ids the open remove-confirmation dialog acts on.
+  const [pendingRemoveIds, setPendingRemoveIds] = useState<string[]>([]);
+  // Bumped to make PhotoGallery clear its selection after a bulk action.
+  const [selectionResetKey, setSelectionResetKey] = useState(0);
   // Seed only once — the hook owns subsequent transitions.
   const seedPhotosInCart = useMemo(() => new Set(initialPhotosInCart), [initialPhotosInCart]);
   const { photosInCart, addToCart, removeFromCart } = useOptimisticPhotosInCart({
@@ -71,38 +77,22 @@ export function TalentPhotosGrid({
     toastLabels: { failedAdd: t('failedAddCart'), failedRemove: t('failedRemoveCart') },
   });
 
-  const handleToggleSelect = useCallback((photoId: string) => {
-    setSelectedIds((current) => {
-      const exists = current.includes(photoId);
-      const next = exists ? current.filter((id) => id !== photoId) : [...current, photoId];
-      setIsSelecting(next.length > 0);
-      return next;
-    });
-  }, []);
-
-  const clearSelection = useCallback(() => {
-    setSelectedIds([]);
-    setIsSelecting(false);
-  }, []);
-
-  const handleAddSelectedToCart = useCallback(() => {
-    if (selectedIds.length === 0) return;
-    // Dispatch one optimistic transition per photo — the hook handles the
-    // icon flip + badge bump + server action; the bulk button only owns
-    // the single aggregated success toast.
-    for (const photoId of selectedIds) {
-      addToCart(photoId);
-    }
-    toast.success(
-      `Added ${selectedIds.length} photo${selectedIds.length === 1 ? '' : 's'} to cart`,
-    );
-    setSelectedIds([]);
-    setIsSelecting(false);
-  }, [selectedIds, addToCart]);
+  const handleAddSelectedToCart = useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) return;
+      // One optimistic transition per photo — the hook handles the icon flip +
+      // badge bump; the bulk button owns only the aggregated success toast.
+      for (const photoId of ids) {
+        addToCart(photoId);
+      }
+      toast.success(`Added ${ids.length} photo${ids.length === 1 ? '' : 's'} to cart`);
+      setSelectionResetKey((k) => k + 1);
+    },
+    [addToCart],
+  );
 
   // Per-photo handlers fire the success toast alongside the optimistic flip
-  // (the hook itself only emits on failure). Bulk above uses the raw
-  // `addToCart` so we don't spam one toast per photo.
+  // (the hook itself only emits on failure).
   const handleAddToCart = useCallback(
     (photoId: string) => {
       addToCart(photoId);
@@ -120,11 +110,11 @@ export function TalentPhotosGrid({
   );
 
   const handleConfirmRemove = useCallback(() => {
-    const idsToRemove = [...selectedIds];
+    const idsToRemove = [...pendingRemoveIds];
     startTransition(async () => {
       try {
         await removePhotosFromMyPhotosAction(idsToRemove);
-        // Optimistically remove photos from local state
+        // Optimistically remove photos from local state.
         setGroups((prev) =>
           prev
             .map((group) => ({
@@ -138,8 +128,7 @@ export function TalentPhotosGrid({
             }))
             .filter((g) => g.dates.length > 0),
         );
-        setSelectedIds([]);
-        setIsSelecting(false);
+        setSelectionResetKey((k) => k + 1);
         toast.success(
           `Removed ${idsToRemove.length} photo${idsToRemove.length === 1 ? '' : 's'} from My Photos`,
         );
@@ -148,15 +137,9 @@ export function TalentPhotosGrid({
         toast.error(message);
       }
     });
-  }, [selectedIds]);
+  }, [pendingRemoveIds]);
 
-  const selectedCountLabel = useMemo(() => {
-    if (selectedIds.length === 0) return t('noPhotosSelected');
-    if (selectedIds.length === 1) return t('photoSelected');
-    return t('photosSelected').replace('{n}', String(selectedIds.length));
-  }, [selectedIds.length, t]);
-
-  // Restructure: Group by date first, then by event
+  // Restructure: group by date first, then by event.
   const dateGroups = useMemo(() => {
     const dateMap = new Map<
       string,
@@ -177,7 +160,6 @@ export function TalentPhotosGrid({
       }>
     >();
 
-    // Flatten and regroup by date first
     for (const group of groups) {
       for (const dateGroup of group.dates) {
         const dateKey = dateGroup.date;
@@ -206,34 +188,127 @@ export function TalentPhotosGrid({
       }
     }
 
-    // Sort dates (newest first)
-    const sortedDates = Array.from(dateMap.entries()).sort((a, b) => {
+    // Sort dates (newest first); 'unknown' sinks to the bottom.
+    return Array.from(dateMap.entries()).sort((a, b) => {
       if (a[0] === 'unknown') return 1;
       if (b[0] === 'unknown') return -1;
       return b[0].localeCompare(a[0]);
     });
-
-    return sortedDates;
   }, [groups]);
 
-  // Convert all photos to flat PhotoAlbumItem array
-  const photoItems = useMemo(() => {
-    const items: PhotoAlbumItem[] = [];
-    for (const [, events] of dateGroups) {
-      for (const event of events) {
-        for (const photo of event.photos) {
-          if (photo.signed_url) {
-            items.push({
-              id: photo.photo_id,
-              url: photo.signed_url,
-              alt: `Photo from ${event.event_name || 'event'}`,
-            });
-          }
-        }
-      }
+  // One PhotoGallery section per event; the first event of each date carries
+  // the sticky date header, so a single gallery spans every date/event with
+  // one shared selection set + one toolbar.
+  const sections = useMemo<PhotoGallerySection[]>(() => {
+    const result: PhotoGallerySection[] = [];
+    for (const [dateKey, events] of dateGroups) {
+      const formattedDate =
+        dateKey === 'unknown'
+          ? t('unknownDate')
+          : (() => {
+              const formatted = format(new Date(dateKey), 'EEEE, MMMM d, yyyy', {
+                locale: dateLocale,
+              });
+              return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+            })();
+
+      events.forEach((event, eventIndex) => {
+        const items: PhotoAlbumItem[] = event.photos
+          .filter((p) => p.signed_url)
+          .map((p) => ({
+            id: p.photo_id,
+            url: p.signed_url as string,
+            alt: `Photo from ${event.event_name || 'event'}`,
+          }));
+        if (items.length === 0) return;
+
+        result.push({
+          key: `${dateKey}:${event.event_id ?? 'no-event'}:${eventIndex}`,
+          header: (
+            <div className="space-y-2">
+              {eventIndex === 0 ? (
+                <div className="sticky top-0 z-10 border-b border-border/50 bg-background/95 py-2 pt-4 backdrop-blur-sm">
+                  <h2 className="text-xl font-semibold text-foreground">{formattedDate}</h2>
+                </div>
+              ) : null}
+              <div className="flex flex-wrap items-baseline gap-1.5">
+                {event.event_id ? (
+                  <Link
+                    href={`/dashboard/talent/events/${event.event_id}`}
+                    className="text-sm font-semibold text-foreground hover:underline"
+                  >
+                    {event.event_name ?? t('uncategorized')}
+                  </Link>
+                ) : (
+                  <span className="text-sm font-semibold text-foreground">
+                    {event.event_name ?? t('uncategorized')}
+                  </span>
+                )}
+                {event.event_city && event.event_country && (
+                  <>
+                    <span className="text-muted-foreground">•</span>
+                    <span className="text-sm text-muted-foreground">
+                      {event.event_city}, {event.event_country}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          ),
+          items,
+        });
+      });
     }
-    return items;
-  }, [dateGroups]);
+    return result;
+  }, [dateGroups, dateLocale, t]);
+
+  const galleryProps = useMemo(
+    () => ({
+      showAddToCart: true,
+      photosInCart,
+      onAddToCart: handleAddToCart,
+      onRemoveFromCart: handleRemoveFromCart,
+      iconTooltips,
+      imageUnavailableLabel,
+      lightboxActionBar: 'bottom' as const,
+      actionBarLabels: {
+        addToCart: t('addToCart'),
+        removeFromCart: t('removeFromCart'),
+      },
+    }),
+    [photosInCart, handleAddToCart, handleRemoveFromCart, iconTooltips, imageUnavailableLabel, t],
+  );
+
+  const bulkActions = useMemo<PhotoGalleryBulkAction[]>(
+    () => [
+      {
+        key: 'remove',
+        label: t('remove'),
+        icon: Trash2,
+        onRun: (ids) => setPendingRemoveIds(ids),
+      },
+      {
+        key: 'addToCart',
+        label: t('addToCart'),
+        icon: ShoppingCart,
+        onRun: handleAddSelectedToCart,
+        isPending: isLoading,
+      },
+    ],
+    [t, handleAddSelectedToCart, isLoading],
+  );
+
+  const selectionLabels = useMemo(
+    () => ({
+      select: t('select'),
+      clear: t('clear'),
+      countNone: t('noPhotosSelected'),
+      countOne: t('photoSelected'),
+      countMany: t('photosSelected'),
+      exitSelection: t('exitSelection'),
+    }),
+    [t],
+  );
 
   const handleLoadMore = () => {
     startTransition(async () => {
@@ -265,148 +340,43 @@ export function TalentPhotosGrid({
 
   return (
     <div className="mt-2">
-      {/* Sticky toolbar — sits below the talent dashboard header
-          (h = --header-height) so it stays reachable while scrolling. The
-          negative horizontal margin matches the layout's px-4 md:px-6 so
-          the backdrop runs edge-to-edge. */}
-      <div className="sticky top-[var(--header-height)] z-30 -mx-4 mt-4 border-b border-border bg-background/95 px-4 py-3 backdrop-blur-sm md:-mx-6 md:px-6">
-        <div className="flex items-center gap-3 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {isSelecting ? (
-            <>
-              <div className="shrink-0 whitespace-nowrap text-sm font-medium text-muted-foreground">
-                {selectedCountLabel}
-              </div>
-              <div className="ml-auto flex shrink-0 items-center gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={clearSelection}>
-                  {t('clear')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowRemoveConfirm(true)}
-                  disabled={selectedIds.length === 0 || isLoading}
-                >
-                  {t('remove')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="default"
-                  size="sm"
-                  onClick={handleAddSelectedToCart}
-                  disabled={selectedIds.length === 0 || isLoading}
-                >
-                  <ShoppingCart className="mr-2 h-4 w-4" />
-                  {t('addToCart')}
-                </Button>
-              </div>
-            </>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsSelecting(true)}
-              className="ml-auto shrink-0"
-            >
-              {t('select')}
-            </Button>
-          )}
+      <PhotoGallery
+        sections={sections}
+        galleryProps={galleryProps}
+        bulkActions={bulkActions}
+        labels={selectionLabels}
+        selectionResetKey={selectionResetKey}
+        toolbarClassName="sticky top-[var(--header-height)] z-30 -mx-4 px-4 md:-mx-6 md:px-6"
+      />
+
+      {hasMore && (
+        <div className="flex justify-center pt-8">
+          <Button onClick={handleLoadMore} disabled={isLoading} variant="outline">
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {t('loading')}
+              </>
+            ) : (
+              t('loadMore')
+            )}
+          </Button>
         </div>
-      </div>
+      )}
 
-      <div className="space-y-6">
-        {/* Grouped by date, then event */}
-        {dateGroups.map(([dateKey, events]) => (
-          <div key={dateKey} className="space-y-2">
-            {/* Date Header */}
-            <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm py-2 pt-4 border-b border-border/50">
-              <h2 className="text-xl font-semibold text-foreground">
-                {dateKey === 'unknown'
-                  ? t('unknownDate')
-                  : (() => {
-                      const formatted = format(new Date(dateKey), 'EEEE, MMMM d, yyyy', {
-                        locale: dateLocale,
-                      });
-                      return formatted.charAt(0).toUpperCase() + formatted.slice(1);
-                    })()}
-              </h2>
-            </div>
-
-            {/* Events within this date */}
-            {events.map((event) => (
-              <div key={event.event_id ?? `no-event-${dateKey}`} className="space-y-3">
-                {/* Event Info */}
-                <div className="flex flex-wrap items-baseline gap-1.5">
-                  {event.event_id ? (
-                    <Link
-                      href={`/dashboard/talent/events/${event.event_id}`}
-                      className="text-sm font-semibold text-foreground hover:underline"
-                    >
-                      {event.event_name ?? t('uncategorized')}
-                    </Link>
-                  ) : (
-                    <span className="text-sm font-semibold text-foreground">
-                      {event.event_name ?? t('uncategorized')}
-                    </span>
-                  )}
-                  {event.event_city && event.event_country && (
-                    <>
-                      <span className="text-muted-foreground">•</span>
-                      <span className="text-sm text-muted-foreground">
-                        {event.event_city}, {event.event_country}
-                      </span>
-                    </>
-                  )}
-                </div>
-
-                {/* Photos for this event */}
-                <div className="max-w-full">
-                  <PhotoAlbumViewer
-                    items={photoItems.filter((item) =>
-                      event.photos.some((p) => p.photo_id === item.id),
-                    )}
-                    selectionMode={isSelecting}
-                    selectedIds={selectedIds}
-                    onToggleSelect={handleToggleSelect}
-                    showAddToCart={true}
-                    photosInCart={photosInCart}
-                    onAddToCart={handleAddToCart}
-                    onRemoveFromCart={handleRemoveFromCart}
-                    iconTooltips={iconTooltips}
-                    imageUnavailableLabel={imageUnavailableLabel}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        ))}
-
-        {/* Load More Button */}
-        {hasMore && (
-          <div className="flex justify-center pt-8">
-            <Button onClick={handleLoadMore} disabled={isLoading} variant="outline">
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {t('loading')}
-                </>
-              ) : (
-                t('loadMore')
-              )}
-            </Button>
-          </div>
-        )}
-      </div>
-
-      <AlertDialog open={showRemoveConfirm} onOpenChange={setShowRemoveConfirm}>
+      <AlertDialog
+        open={pendingRemoveIds.length > 0}
+        onOpenChange={(open) => {
+          if (!open) setPendingRemoveIds([]);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t('removeFromMyPhotosTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              {selectedIds.length === 1
+              {pendingRemoveIds.length === 1
                 ? t('removeConfirmSingle')
-                : t('removeConfirmMultiple').replace('{n}', String(selectedIds.length))}
+                : t('removeConfirmMultiple').replace('{n}', String(pendingRemoveIds.length))}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
