@@ -18,6 +18,7 @@ import {
   getEventAiIndexingProgress,
   getEventRekognitionState,
 } from '@/database/queries/rekognition';
+import { getClaimedPhotoIdsForTalent } from '@/database/queries/talent-library';
 import type { SupabaseServerClient } from '@/database/queries/types';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
@@ -183,21 +184,24 @@ export default async function ExploreEventDetailPage({
   // into one query each instead of looping isPhotoInCart per photo.
   const photosInCart: string[] = [];
   const photosInMyPhotos: string[] = [];
+  const photosClaimedToProfile: string[] = [];
   // Photos this talent has purchased — gates the bulk download on paid events.
   let purchasedPhotoIds = new Set<string>();
   if (user && eventStatus !== 'upcoming' && activeRole === 'talent') {
     const photoIds = photos.map((p) => p.id);
     if (photoIds.length > 0) {
-      const [cartIds, tagsResult] = await Promise.all([
+      const [cartIds, tagsResult, claimedIds] = await Promise.all([
         getPhotoIdsInCart(supabase, user.id, photoIds),
         supabase
           .from('talent_photo_tags')
           .select('photo_id')
           .eq('talent_user_id', user.id)
           .in('photo_id', photoIds),
+        getClaimedPhotoIdsForTalent(supabase, user.id, photoIds),
       ]);
       for (const id of cartIds) photosInCart.push(id);
       for (const tag of tagsResult.data ?? []) photosInMyPhotos.push(tag.photo_id);
+      for (const id of claimedIds) photosClaimedToProfile.push(id);
       // Free events are downloadable by anyone — only paid events need this.
       if (event.price_per_photo !== null) {
         purchasedPhotoIds = await getPurchasedPhotoIdsForEvent(supabase, user.id, event.id);
@@ -273,7 +277,6 @@ export default async function ExploreEventDetailPage({
   );
 
   const isFreeEvent = event.price_per_photo === null;
-  const canBulkDownload = isFreeEvent || user !== null;
   const bulkDownloadLabels = {
     select: dict.events.selectButton,
     clear: dict.events.clearButton,
@@ -350,20 +353,11 @@ export default async function ExploreEventDetailPage({
       ) : (
         <div className="w-full space-y-3">
           <EventGalleryWithFaceSearch
-            photos={photoItems}
             shareCode={event.share_code ?? event.id}
-            eventId={event.id}
-            isFreeEvent={isFreeEvent}
-            purchasedPhotoIds={purchasedPhotoIds}
-            canBulkDownload={canBulkDownload}
-            bulkDownload={bulkDownloadLabels}
             aiSearchEligible={aiSearchEligible}
             aiState={aiBannerState}
             bannerLabels={dict.aiSearch.banner}
             modalLabels={dict.aiSearch.modal}
-            resultsLabels={dict.aiSearch.results}
-            iconTooltips={dict.photoIconButtons}
-            imageUnavailableLabel={dict.eventCard.imageUnavailable}
             fullGallery={
               <TranslationsProvider translations={dict.eventPhotoViewer}>
                 <EventPhotoViewer
@@ -381,19 +375,22 @@ export default async function ExploreEventDetailPage({
                   menuLabels={{
                     trigger: dict.events.moreOptions,
                     download: dict.events.download,
-                    saveToProfile: dict.events.saveToProfile,
-                    saveToPhotos: dict.events.saveToPhotos,
-                    removeFromLibrary: dict.events.removeFromLibrary,
+                    addToFavorites: dict.events.addToFavorites,
+                    removeFromFavorites: dict.events.removeFromFavorites,
+                    addToProfile: dict.events.addToProfile,
+                    addedToProfile: dict.events.addedToProfile,
                     addToCart: dict.events.addToCartMenuItem,
                     removeFromCart: dict.events.removeFromCartMenuItem,
                     uploadedBy: dict.events.uploadedByMenuLabel,
                     downloadFailed: dict.events.downloadFailed,
                     downloadNotPurchased: dict.events.downloadNotPurchased,
                   }}
+                  resultsLabels={dict.aiSearch.results}
                   bulkDownload={bulkDownloadLabels}
                   showAddToCart={!isFreeEvent}
                   photosInCart={new Set(photosInCart)}
                   photosInMyPhotos={new Set(photosInMyPhotos)}
+                  photosClaimedToProfile={new Set(photosClaimedToProfile)}
                   iconTooltips={dict.photoIconButtons}
                   imageUnavailableLabel={dict.eventCard.imageUnavailable}
                 />

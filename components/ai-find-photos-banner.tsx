@@ -33,6 +33,7 @@ interface AIFindPhotosBannerProps {
  */
 export function AIFindPhotosBanner({ state, labels, onOpenSearch }: AIFindPhotosBannerProps) {
   const isIndexing = state === 'indexing';
+
   return (
     <div className="sm:mb-4 flex flex-col gap-3 rounded-lg border border-input bg-card p-4 sm:flex-row sm:items-center sm:justify-between md:p-6">
       <div className="space-y-1">

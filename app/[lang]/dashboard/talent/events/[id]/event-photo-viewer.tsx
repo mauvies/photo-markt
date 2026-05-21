@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, Loader2 } from 'lucide-react';
+import { ArrowLeft, Download, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -8,7 +8,13 @@ import {
   removePhotoFromCartAction,
 } from '@/app/[lang]/dashboard/talent/cart/actions';
 import { getEventPhotoDownloadUrlAction } from '@/app/[lang]/events/[shareCode]/actions';
+import {
+  buildBuckets,
+  type FaceSearchResultsLabels,
+} from '@/app/[lang]/events/[shareCode]/face-search-shared';
+import { useFaceSearch } from '@/components/event-gallery-with-face-search';
 import { type EventPhotoFilter, EventPhotoFilterTabs } from '@/components/event-photo-filter-tabs';
+import { FaceSearchResults } from '@/components/face-search-results';
 import PhotoAlbumViewer, { type PhotoAlbumItem } from '@/components/photo-album-viewer';
 import type { PhotoIconTooltips, PhotoMoreMenuConfig } from '@/components/photo-icon-buttons';
 import {
@@ -20,15 +26,20 @@ import { useBulkPhotoDownload } from '@/hooks/use-bulk-photo-download';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
 import { usePhotoSelection } from '@/hooks/use-photo-selection';
 import { useTranslations } from '@/lib/i18n/translations-provider';
-import { addPhotoToMyPhotosAction, removePhotoFromMyPhotosAction } from './actions';
+import {
+  addPhotoToMyPhotosAction,
+  addPhotoToProfileAction,
+  removePhotoFromMyPhotosAction,
+} from './actions';
 
 /** Localized copy for the per-photo "more options" dropdown. */
 export type PhotoMenuLabels = {
   trigger: string;
   download: string;
-  saveToProfile: string;
-  saveToPhotos: string;
-  removeFromLibrary: string;
+  addToFavorites: string;
+  removeFromFavorites: string;
+  addToProfile: string;
+  addedToProfile: string;
   addToCart: string;
   removeFromCart: string;
   /** "Uploaded by {name}" template. */
@@ -50,11 +61,16 @@ type EventPhotoViewerProps = {
   filterLabels: { all: string; mine: string; empty: string };
   /** Labels for the per-photo "more options" dropdown. */
   menuLabels: PhotoMenuLabels;
+  /** Labels for the AI face-search results view. */
+  resultsLabels: FaceSearchResultsLabels;
   purchasedPhotoIds?: Set<string>;
   bulkDownload: BulkDownloadLabels;
   showAddToCart?: boolean;
   photosInCart?: Set<string>;
+  /** Photo IDs in the talent's Favorites (talent_photo_tags). */
   photosInMyPhotos?: Set<string>;
+  /** Photo IDs the talent has claimed into their profile (talent_claimed_photos). */
+  photosClaimedToProfile?: Set<string>;
   iconTooltips?: Partial<PhotoIconTooltips>;
   imageUnavailableLabel: string;
 };
@@ -67,11 +83,13 @@ export function EventPhotoViewer({
   uploadedPhotoIds = new Set(),
   filterLabels,
   menuLabels,
+  resultsLabels,
   purchasedPhotoIds = new Set(),
   bulkDownload,
   showAddToCart = false,
   photosInCart: initialPhotosInCart = new Set(),
   photosInMyPhotos: initialPhotosInMyPhotos = new Set(),
+  photosClaimedToProfile: initialClaimedPhotos = new Set(),
   iconTooltips,
   imageUnavailableLabel,
 }: EventPhotoViewerProps) {
@@ -84,15 +102,21 @@ export function EventPhotoViewer({
     failedRemovePhotos: string;
     failedAddCart: string;
     failedRemoveCart: string;
+    photoAddedToProfile: string;
+    failedAddProfile: string;
   }>();
 
-  // Optimistic state for "my photos" — initialized from server prop, updates instantly on click
+  // Favorites — optimistic, seeded from the server prop.
   const [myPhotos, setMyPhotos] = useState<Set<string>>(initialPhotosInMyPhotos);
-
-  // Sync when server refreshes props (e.g. after router.refresh)
   useEffect(() => {
     setMyPhotos(initialPhotosInMyPhotos);
   }, [initialPhotosInMyPhotos]);
+
+  // Claimed-to-profile — optimistic, seeded from the server prop. Add-only.
+  const [claimedPhotos, setClaimedPhotos] = useState<Set<string>>(initialClaimedPhotos);
+  useEffect(() => {
+    setClaimedPhotos(initialClaimedPhotos);
+  }, [initialClaimedPhotos]);
 
   // Optimistic cart state — the hook handles instant icon flip + badge sync.
   const { photosInCart, addToCart, removeFromCart } = useOptimisticPhotosInCart({
@@ -156,6 +180,37 @@ export function EventPhotoViewer({
     [t],
   );
 
+  const handleFavoriteToggle = useCallback(
+    (photoId: string) => {
+      if (myPhotos.has(photoId)) {
+        void handleRemoveFromPhotos(photoId).catch(() => {});
+      } else {
+        void handleAddToPhotos(photoId).catch(() => {});
+      }
+    },
+    [myPhotos, handleAddToPhotos, handleRemoveFromPhotos],
+  );
+
+  // Claim a free photo into the profile (owned collection). Add-only.
+  const handleClaimToProfile = useCallback(
+    async (photoId: string) => {
+      if (claimedPhotos.has(photoId)) return;
+      setClaimedPhotos((prev) => new Set([...prev, photoId]));
+      try {
+        await addPhotoToProfileAction(photoId);
+        toast.success(t('photoAddedToProfile'));
+      } catch (error) {
+        setClaimedPhotos((prev) => {
+          const next = new Set(prev);
+          next.delete(photoId);
+          return next;
+        });
+        toast.error(error instanceof Error ? error.message : t('failedAddProfile'));
+      }
+    },
+    [claimedPhotos, t],
+  );
+
   // ── Selection + bulk download ──────────────────────────────────────────
   const selection = usePhotoSelection();
   const { isDownloading, downloadSelected } = useBulkPhotoDownload({
@@ -165,6 +220,18 @@ export function EventPhotoViewer({
     bulkDownload,
   });
 
+  // ── AI face-search results ─────────────────────────────────────────────
+  const faceSearch = useFaceSearch();
+  const bucketed = useMemo(
+    () => buildBuckets(faceSearch.matches, items),
+    [faceSearch.matches, items],
+  );
+  // A new search (or returning to the full gallery) starts a clean selection.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-runs intentionally when the search state changes
+  useEffect(() => {
+    selection.clear();
+  }, [faceSearch.matches, selection.clear]);
+
   // ── "All photos / My photos" filter ────────────────────────────────────
   const [filter, setFilter] = useState<EventPhotoFilter>('all');
   const handleFilterChange = useCallback(
@@ -172,7 +239,7 @@ export function EventPhotoViewer({
       setFilter(value);
       selection.clear();
     },
-    [selection],
+    [selection.clear],
   );
   const visiblePhotos = useMemo(
     () => (filter === 'mine' ? items.filter((i) => uploadedPhotoIds.has(i.id)) : items),
@@ -185,7 +252,7 @@ export function EventPhotoViewer({
     return bulkDownload.countMany.replace('{n}', String(selection.selectedIds.length));
   }, [selection.selectedIds.length, bulkDownload]);
 
-  // ── Per-photo "more options" dropdown ──────────────────────────────────
+  // ── Per-photo download (dropdown) ──────────────────────────────────────
   const isPhotoDownloadable = useCallback(
     (photoId: string) => isFreeEvent || purchasedPhotoIds.has(photoId),
     [isFreeEvent, purchasedPhotoIds],
@@ -199,7 +266,6 @@ export function EventPhotoViewer({
       }
       try {
         const url = await getEventPhotoDownloadUrlAction(photoId, eventId);
-        // The signed URL carries Content-Disposition: attachment.
         const link = document.createElement('a');
         link.href = url;
         link.rel = 'noopener';
@@ -209,17 +275,6 @@ export function EventPhotoViewer({
       }
     },
     [isPhotoDownloadable, eventId, menuLabels],
-  );
-
-  const handleSaveToggle = useCallback(
-    (photoId: string) => {
-      if (myPhotos.has(photoId)) {
-        void handleRemoveFromPhotos(photoId).catch(() => {});
-      } else {
-        void handleAddToPhotos(photoId).catch(() => {});
-      }
-    },
-    [myPhotos, handleAddToPhotos, handleRemoveFromPhotos],
   );
 
   const handleCartToggle = useCallback(
@@ -238,18 +293,22 @@ export function EventPhotoViewer({
       labels: {
         trigger: menuLabels.trigger,
         download: menuLabels.download,
-        saveToProfile: menuLabels.saveToProfile,
-        saveToPhotos: menuLabels.saveToPhotos,
-        removeFromLibrary: menuLabels.removeFromLibrary,
+        addToFavorites: menuLabels.addToFavorites,
+        removeFromFavorites: menuLabels.removeFromFavorites,
+        addToProfile: menuLabels.addToProfile,
+        addedToProfile: menuLabels.addedToProfile,
         addToCart: menuLabels.addToCart,
         removeFromCart: menuLabels.removeFromCart,
         uploadedBy: menuLabels.uploadedBy,
       },
       onDownload: handleDownloadPhoto,
       isDownloadDisabled: (id) => !isPhotoDownloadable(id),
-      onSaveToggle: handleSaveToggle,
-      savedIds: myPhotos,
-      saveLabelVariant: isFreeEvent ? 'profile' : 'photos',
+      onFavoriteToggle: handleFavoriteToggle,
+      favoritedIds: myPhotos,
+      onClaimToProfile: handleClaimToProfile,
+      claimedIds: claimedPhotos,
+      // Claiming a photo into the profile is only for free photos.
+      canClaimToProfile: () => isFreeEvent,
       onCartToggle: handleCartToggle,
       showCartFor: (id) => !isFreeEvent && !purchasedPhotoIds.has(id),
       showUploaderRow: isCollaborative,
@@ -258,8 +317,10 @@ export function EventPhotoViewer({
       menuLabels,
       handleDownloadPhoto,
       isPhotoDownloadable,
-      handleSaveToggle,
+      handleFavoriteToggle,
       myPhotos,
+      handleClaimToProfile,
+      claimedPhotos,
       isFreeEvent,
       handleCartToggle,
       purchasedPhotoIds,
@@ -267,6 +328,82 @@ export function EventPhotoViewer({
     ],
   );
 
+  const renderGrid = (gridItems: PhotoAlbumItem[]) => (
+    <PhotoAlbumViewer
+      items={gridItems}
+      selectionMode={selection.isSelecting}
+      selectedIds={selection.selectedIds}
+      onToggleSelect={selection.toggle}
+      showAddToCart={showAddToCart}
+      photosInCart={photosInCart}
+      onAddToCart={handleAddToCart}
+      onRemoveFromCart={handleRemoveFromCart}
+      showAddToPhotos={true}
+      photosInMyPhotos={myPhotos}
+      onAddToPhotos={handleAddToPhotos}
+      onRemoveFromPhotos={handleRemoveFromPhotos}
+      showDownload={true}
+      onDownload={handleDownloadPhoto}
+      moreMenu={moreMenu}
+      iconTooltips={iconTooltips}
+      imageUnavailableLabel={imageUnavailableLabel}
+    />
+  );
+
+  const downloadButton = (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={() => downloadSelected(selection.selectedIds)}
+      disabled={selection.selectedIds.length === 0 || isDownloading}
+    >
+      {isDownloading ? (
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+      ) : (
+        <Download className="mr-2 h-4 w-4" />
+      )}
+      {isDownloading ? bulkDownload.preparing : bulkDownload.download}
+    </Button>
+  );
+
+  // ── AI face-search results view ────────────────────────────────────────
+  if (faceSearch.matches !== null) {
+    return (
+      <div className="space-y-3">
+        <FaceSearchResults
+          bucketed={bucketed}
+          matchCount={faceSearch.matches.length}
+          eventIndexingComplete={faceSearch.eventIndexingComplete}
+          resultsLabels={resultsLabels}
+          renderGrid={renderGrid}
+          onTryAgain={faceSearch.openSearch}
+          onViewAll={faceSearch.clearMatches}
+          toolbar={
+            <PhotoSelectionToolbar
+              className="sticky top-[var(--header-height)] -mx-4 px-4 md:-mx-6 md:px-6"
+              leading={
+                <Button type="button" variant="outline" size="sm" onClick={faceSearch.clearMatches}>
+                  <ArrowLeft className="mr-1.5 h-4 w-4" />
+                  {resultsLabels.viewAllPhotos}
+                </Button>
+              }
+              isSelecting={selection.isSelecting}
+              countLabel={countLabel}
+              selectLabel={bulkDownload.select}
+              clearLabel={bulkDownload.clear}
+              onStartSelecting={selection.startSelecting}
+              onClear={selection.clear}
+            >
+              {downloadButton}
+            </PhotoSelectionToolbar>
+          }
+        />
+      </div>
+    );
+  }
+
+  // ── Full gallery ───────────────────────────────────────────────────────
   return (
     <div className="space-y-3">
       {items.length > 0 && (
@@ -289,20 +426,7 @@ export function EventPhotoViewer({
           onStartSelecting={selection.startSelecting}
           onClear={selection.clear}
         >
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => downloadSelected(selection.selectedIds)}
-            disabled={selection.selectedIds.length === 0 || isDownloading}
-          >
-            {isDownloading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="mr-2 h-4 w-4" />
-            )}
-            {isDownloading ? bulkDownload.preparing : bulkDownload.download}
-          </Button>
+          {downloadButton}
         </PhotoSelectionToolbar>
       )}
       {visiblePhotos.length === 0 && filter === 'mine' ? (
@@ -310,25 +434,7 @@ export function EventPhotoViewer({
           <p className="text-muted-foreground">{filterLabels.empty}</p>
         </div>
       ) : (
-        <PhotoAlbumViewer
-          items={visiblePhotos}
-          selectionMode={selection.isSelecting}
-          selectedIds={selection.selectedIds}
-          onToggleSelect={selection.toggle}
-          showAddToCart={showAddToCart}
-          photosInCart={photosInCart}
-          onAddToCart={handleAddToCart}
-          onRemoveFromCart={handleRemoveFromCart}
-          showAddToPhotos={true}
-          photosInMyPhotos={myPhotos}
-          onAddToPhotos={handleAddToPhotos}
-          onRemoveFromPhotos={handleRemoveFromPhotos}
-          showDownload={true}
-          onDownload={handleDownloadPhoto}
-          moreMenu={moreMenu}
-          iconTooltips={iconTooltips}
-          imageUnavailableLabel={imageUnavailableLabel}
-        />
+        renderGrid(visiblePhotos)
       )}
     </div>
   );
