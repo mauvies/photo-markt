@@ -31,12 +31,15 @@ interface EventDetailsCardProps {
   aiStatus?: ReactNode;
 }
 
-type Row = { label: string; value: ReactNode };
+type Stat = { label: string; value: ReactNode };
 
 /**
  * "Event details" section. The at-a-glance essentials (date, location, type)
  * and the live AI indexing status stay always visible; the rest of the static
  * event configuration is tucked behind a "Show more details" expander.
+ *
+ * Each field is a stacked label/value pair — label above, value below — so the
+ * two read as one unit instead of drifting to opposite edges of a wide row.
  */
 export function EventDetailsCard({
   t,
@@ -71,14 +74,14 @@ export function EventDetailsCard({
   );
 
   // Always visible — the essentials a photographer scans first.
-  const primaryRows: Row[] = [
+  const primaryStats: Stat[] = [
     { label: t.date, value: date },
     { label: t.location, value: location },
     { label: t.eventType, value: typeLabel },
   ];
 
   // Behind the "Show more details" expander — the rest of the static config.
-  const moreRows: Row[] = [
+  const moreStats: Stat[] = [
     { label: t.activity, value: activityLabel },
     {
       label: t.pricePerPhoto,
@@ -94,12 +97,14 @@ export function EventDetailsCard({
       : []),
   ];
 
-  const renderRows = (rows: Row[], gridClass: string): ReactNode => (
-    <dl className={cn('grid gap-x-6 gap-y-3', gridClass)}>
-      {rows.map((row) => (
-        <div key={row.label} className="flex items-center justify-between gap-3">
-          <dt className="text-sm text-muted-foreground">{row.label}</dt>
-          <dd className="text-right text-sm font-medium text-foreground">{row.value}</dd>
+  const renderStats = (stats: Stat[], valueClass: string): ReactNode => (
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
+      {stats.map((stat) => (
+        <div key={stat.label} className="space-y-1">
+          <dt className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            {stat.label}
+          </dt>
+          <dd className={cn('text-sm text-foreground', valueClass)}>{stat.value}</dd>
         </div>
       ))}
     </dl>
@@ -109,20 +114,20 @@ export function EventDetailsCard({
     <section className="rounded-lg border bg-card p-4">
       <h2 className="text-sm font-semibold">{t.title}</h2>
 
-      <div className="mt-3">{renderRows(primaryRows, 'sm:grid-cols-3')}</div>
+      <div className="mt-4">{renderStats(primaryStats, 'font-semibold')}</div>
 
-      {aiStatus ? <div className="mt-4">{aiStatus}</div> : null}
+      {aiStatus ? <div className="mt-5">{aiStatus}</div> : null}
 
-      <Collapsible open={showMore} onOpenChange={setShowMore} className="mt-4 border-t pt-3">
+      <Collapsible open={showMore} onOpenChange={setShowMore} className="mt-5 border-t pt-3">
         <CollapsibleTrigger
           type="button"
-          className="flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          className="flex w-full items-center justify-between gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           {showMore ? t.showLess : t.showMore}
           <ChevronDown className={cn('h-4 w-4 transition-transform', showMore && 'rotate-180')} />
         </CollapsibleTrigger>
-        <CollapsibleContent className="mt-3">
-          {renderRows(moreRows, 'sm:grid-cols-2')}
+        <CollapsibleContent className="mt-4">
+          {renderStats(moreStats, 'font-medium')}
         </CollapsibleContent>
       </Collapsible>
     </section>
