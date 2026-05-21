@@ -1,6 +1,11 @@
-import type { ReactNode } from 'react';
+'use client';
+
+import { ChevronDown } from 'lucide-react';
+import { type ReactNode, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
+import { cn } from '@/lib/utils';
 
 type EventDetailsT = Dictionary['eventDetails'];
 
@@ -19,12 +24,19 @@ interface EventDetailsCardProps {
   containsMinors: boolean;
   requireUploadApproval: boolean;
   allowGuestUpload: boolean;
+  /**
+   * Live AI indexing-status block. Rendered in the always-visible area — the
+   * photographer wants the indexing progress at a glance.
+   */
+  aiStatus?: ReactNode;
 }
 
+type Row = { label: string; value: ReactNode };
+
 /**
- * Full-width summary of every configuration field set when the event was
- * created — surfaces settings the rest of the page never showed. Read-only;
- * all values come from the `event` row already fetched by the page.
+ * "Event details" section. The at-a-glance essentials (date, location, type)
+ * and the live AI indexing status stay always visible; the rest of the static
+ * event configuration is tucked behind a "Show more details" expander.
  */
 export function EventDetailsCard({
   t,
@@ -40,7 +52,10 @@ export function EventDetailsCard({
   containsMinors,
   requireUploadApproval,
   allowGuestUpload,
+  aiStatus,
 }: EventDetailsCardProps) {
+  const [showMore, setShowMore] = useState(false);
+
   const typeLabel =
     type === 'collaborative'
       ? t.typeCollaborative
@@ -55,11 +70,16 @@ export function EventDetailsCard({
     </Badge>
   );
 
-  const rows: Array<{ label: string; value: ReactNode }> = [
-    { label: t.eventType, value: typeLabel },
-    { label: t.activity, value: activityLabel },
+  // Always visible — the essentials a photographer scans first.
+  const primaryRows: Row[] = [
     { label: t.date, value: date },
     { label: t.location, value: location },
+    { label: t.eventType, value: typeLabel },
+  ];
+
+  // Behind the "Show more details" expander — the rest of the static config.
+  const moreRows: Row[] = [
+    { label: t.activity, value: activityLabel },
     {
       label: t.pricePerPhoto,
       value: pricePerPhoto !== null ? `$${pricePerPhoto.toFixed(2)}` : t.free,
@@ -74,17 +94,37 @@ export function EventDetailsCard({
       : []),
   ];
 
+  const renderRows = (rows: Row[], gridClass: string): ReactNode => (
+    <dl className={cn('grid gap-x-6 gap-y-3', gridClass)}>
+      {rows.map((row) => (
+        <div key={row.label} className="flex items-center justify-between gap-3">
+          <dt className="text-sm text-muted-foreground">{row.label}</dt>
+          <dd className="text-right text-sm font-medium text-foreground">{row.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+
   return (
-    <section className="rounded-lg border bg-card p-4 sm:p-5">
+    <section className="rounded-lg border bg-card p-4">
       <h2 className="text-sm font-semibold">{t.title}</h2>
-      <dl className="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-2">
-        {rows.map((row) => (
-          <div key={row.label} className="flex items-center justify-between gap-3">
-            <dt className="text-sm text-muted-foreground">{row.label}</dt>
-            <dd className="text-right text-sm font-medium text-foreground">{row.value}</dd>
-          </div>
-        ))}
-      </dl>
+
+      <div className="mt-3">{renderRows(primaryRows, 'sm:grid-cols-3')}</div>
+
+      {aiStatus ? <div className="mt-4">{aiStatus}</div> : null}
+
+      <Collapsible open={showMore} onOpenChange={setShowMore} className="mt-4 border-t pt-3">
+        <CollapsibleTrigger
+          type="button"
+          className="flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          {showMore ? t.showLess : t.showMore}
+          <ChevronDown className={cn('h-4 w-4 transition-transform', showMore && 'rotate-180')} />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="mt-3">
+          {renderRows(moreRows, 'sm:grid-cols-2')}
+        </CollapsibleContent>
+      </Collapsible>
     </section>
   );
 }

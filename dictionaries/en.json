@@ -1155,7 +1155,9 @@
     "enabled": "Enabled",
     "disabled": "Disabled",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "showMore": "Show more details",
+    "showLess": "Show less"
   },
   "shareEvent": {
     "heading": "Share code",
