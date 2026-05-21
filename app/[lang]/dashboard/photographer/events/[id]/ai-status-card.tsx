@@ -210,12 +210,10 @@ export function AiStatusCard({
   };
 
   return (
-    // Operational sub-block inside the "Event details" card — a muted panel so
-    // the live indexing status reads as distinct from the static config above.
-    <div className="rounded-md border bg-muted/40 p-3 sm:p-4">
+    <section className="rounded-lg border bg-card p-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <h3 className="text-sm font-semibold">{labels.title}</h3>
+          <h2 className="text-sm font-semibold">{labels.title}</h2>
           <Badge variant={state.status === 'failed' ? 'destructive' : 'secondary'}>
             {statusLabel}
           </Badge>
@@ -294,6 +292,6 @@ export function AiStatusCard({
           {labels.pollError}
         </p>
       ) : null}
-    </div>
+    </section>
   );
 }

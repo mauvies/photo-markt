@@ -1157,7 +1157,8 @@
     "yes": "Sí",
     "no": "No",
     "showMore": "Mostrar más detalles",
-    "showLess": "Mostrar menos"
+    "showLess": "Mostrar menos",
+    "edit": "Editar"
   },
   "shareEvent": {
     "heading": "Código para compartir",

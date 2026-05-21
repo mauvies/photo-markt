@@ -15,8 +15,10 @@ import { supabaseAdmin } from '@/database/supabase-admin';
 import { redirectToLogin } from '@/lib/auth/redirect-to-login';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
+import { localizedPath } from '@/lib/i18n/localized-path';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
+import { cn } from '@/lib/utils';
 import { getPhotoTags } from './actions';
 import { AiStatusCard } from './ai-status-card';
 import { EventActionsMenu } from './event-actions-menu';
@@ -232,9 +234,33 @@ export default async function EventDetailPage({
   // out by the queries above.
   const visibleCount = albumItems.length;
 
-  // Live AI indexing status — rendered inside the "Event details" card's
-  // always-visible area. Owner-only; absent when AI matching is off.
-  const aiStatus =
+  // The three sections above the gallery — "Event details", the live AI
+  // indexing status and "Share event". AI and Share are conditional (`null`
+  // when they don't apply); "Event details" is always present.
+  const detailsCard = (
+    <EventDetailsCard
+      t={dict.eventDetails}
+      type={event.type}
+      isCollaborative={event.is_collaborative}
+      activityLabel={
+        dict.activities[event.activity as keyof typeof dict.activities] ?? event.activity
+      }
+      date={new Date(event.date).toDateString().split(' ').slice(1).join(' ')}
+      location={[event.city[0]?.toUpperCase() + event.city.slice(1), event.country]
+        .filter(Boolean)
+        .join(', ')}
+      pricePerPhoto={event.price_per_photo}
+      isPublic={event.is_public}
+      watermarkEnabled={event.watermark_enabled}
+      aiMatchingEnabled={aiMatchingEnabled}
+      containsMinors={containsMinors}
+      requireUploadApproval={event.require_upload_approval}
+      allowGuestUpload={event.allow_guest_upload}
+      editHref={localizedPath(lang, `/dashboard/photographer/events/${id}/edit`)}
+    />
+  );
+
+  const aiStatusCard =
     aiMatchingEnabled && aiProgress ? (
       <AiStatusCard
         eventId={id}
@@ -265,32 +291,22 @@ export default async function EventDetailPage({
           failedPhotosRetry: dict.rekognition.failedPhotosRetry,
         }}
       />
-    ) : undefined;
+    ) : null;
 
-  // "Event details" — built once, placed in either the two-column grid (with
-  // a "Share event" card) or full-width when the event has no share code.
-  const detailsCard = (
-    <EventDetailsCard
-      t={dict.eventDetails}
-      type={event.type}
-      isCollaborative={event.is_collaborative}
-      activityLabel={
-        dict.activities[event.activity as keyof typeof dict.activities] ?? event.activity
-      }
-      date={new Date(event.date).toDateString().split(' ').slice(1).join(' ')}
-      location={[event.city[0]?.toUpperCase() + event.city.slice(1), event.country]
-        .filter(Boolean)
-        .join(', ')}
-      pricePerPhoto={event.price_per_photo}
-      isPublic={event.is_public}
-      watermarkEnabled={event.watermark_enabled}
-      aiMatchingEnabled={aiMatchingEnabled}
-      containsMinors={containsMinors}
-      requireUploadApproval={event.require_upload_approval}
-      allowGuestUpload={event.allow_guest_upload}
-      aiStatus={aiStatus}
+  const shareCard = event.share_code ? (
+    <EventShareCode
+      shareCode={event.share_code}
+      eventName={event.name}
+      t={dict.shareEvent}
+      label={event.is_collaborative ? dict.collaborativeEvent.shareLinkLabel : undefined}
     />
-  );
+  ) : null;
+
+  // 1, 2 or 3 cards depending on which sections apply — the grid column count
+  // matches so the present cards share one equal-height row on desktop.
+  const sectionCount = 1 + (aiStatusCard ? 1 : 0) + (shareCard ? 1 : 0);
+  const sectionsGridClass =
+    sectionCount === 3 ? 'md:grid-cols-3' : sectionCount === 2 ? 'md:grid-cols-2' : '';
 
   return (
     <div>
@@ -303,25 +319,14 @@ export default async function EventDetailPage({
           <EventActionsMenu eventId={id} t={dict.events} />
         </div>
       </div>
-      {/* "Event details" (with the live AI indexing status inside its
-          always-visible area) and "Share event". Side by side on desktop —
-          details 2/3, share 1/3 — stacked on mobile. Details spans the full
-          width when the event has no share code. */}
-      {event.share_code ? (
-        <div className="mt-4 grid items-start gap-4 md:grid-cols-3">
-          <div className="md:col-span-2">{detailsCard}</div>
-          <div className="md:col-span-1">
-            <EventShareCode
-              shareCode={event.share_code}
-              eventName={event.name}
-              t={dict.shareEvent}
-              label={event.is_collaborative ? dict.collaborativeEvent.shareLinkLabel : undefined}
-            />
-          </div>
-        </div>
-      ) : (
-        <div className="mt-4">{detailsCard}</div>
-      )}
+      {/* Event details, live AI indexing status and "Share event" — one
+          equal-height row on desktop (the grid stretches the cards to match),
+          stacked full-width on mobile. AI and Share are conditional. */}
+      <div className={cn('mt-4 grid gap-4', sectionsGridClass)}>
+        {detailsCard}
+        {aiStatusCard}
+        {shareCard}
+      </div>
       {event.type === 'organizer' && (
         <div className="mt-4">
           <TranslationsProvider translations={dict.organizerEvent}>
