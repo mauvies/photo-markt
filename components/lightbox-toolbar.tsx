@@ -78,6 +78,9 @@ type LightboxToolbarProps = {
   onTagTalent: () => void;
   onUntag?: () => void;
   onFullscreen: () => void;
+  /** When 'bottom', the per-photo actions move to the lightbox bottom bar —
+   * the toolbar then keeps only Close / counter / Share / Fullscreen. */
+  actionBar?: 'top' | 'bottom';
 };
 
 export function LightboxToolbar({
@@ -102,6 +105,7 @@ export function LightboxToolbar({
   onTagTalent,
   onUntag,
   onFullscreen,
+  actionBar = 'top',
 }: LightboxToolbarProps) {
   const params = useParams();
   const lang = (params?.lang as string) ?? 'es';
@@ -184,7 +188,7 @@ export function LightboxToolbar({
         </Tooltip>
 
         {/* Download */}
-        {showDownload && (
+        {actionBar !== 'bottom' && showDownload && (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -207,7 +211,7 @@ export function LightboxToolbar({
         )}
 
         {/* Add to Photos */}
-        {showAddToPhotos && (
+        {actionBar !== 'bottom' && showAddToPhotos && (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -234,7 +238,7 @@ export function LightboxToolbar({
         )}
 
         {/* Add to Cart */}
-        {showAddToCart && (
+        {actionBar !== 'bottom' && showAddToCart && (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -261,7 +265,7 @@ export function LightboxToolbar({
         )}
 
         {/* Remove */}
-        {showRemove && (
+        {actionBar !== 'bottom' && showRemove && (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -284,7 +288,8 @@ export function LightboxToolbar({
         )}
 
         {/* Tag Talent */}
-        {showTagTalent &&
+        {actionBar !== 'bottom' &&
+          showTagTalent &&
           (hasTags ? (
             <Popover open={isTagPopoverOpen} onOpenChange={setIsTagPopoverOpen}>
               <PopoverTrigger asChild>
