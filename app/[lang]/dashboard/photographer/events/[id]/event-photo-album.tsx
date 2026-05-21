@@ -1,15 +1,14 @@
 'use client';
 
-import { Download, Loader2, Trash2, UserPlus } from 'lucide-react';
+import { Download, Trash2, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
-import PhotoAlbumViewer, { type PhotoAlbumItem } from '@/components/photo-album-viewer';
+import type { PhotoAlbumItem } from '@/components/photo-album-viewer';
+import { PhotoGallery, type PhotoGalleryBulkAction } from '@/components/photo-gallery';
 import type { PhotoIconTooltips, PhotoMoreMenuConfig } from '@/components/photo-icon-buttons';
-import { PhotoSelectionToolbar } from '@/components/photo-selection-toolbar';
 import { TagTalentDialog } from '@/components/tag-talent-dialog';
-import { Button } from '@/components/ui/button';
 import { downloadEventPhotosZip } from '@/lib/download-zip';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
@@ -54,50 +53,33 @@ export function EventPhotoAlbum({
     setItems(initialItems);
   }, [initialItems]);
 
-  const [isSelecting, setIsSelecting] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  // The photo ids the currently-open dialog acts on (a bulk selection or a
+  // single photo from the 3-dot menu).
+  const [pendingIds, setPendingIds] = useState<string[]>([]);
   const [isDownloading, setIsDownloading] = useState(false);
-
-  const handleToggleSelect = useCallback((photoId: string) => {
-    setSelectedIds((current) => {
-      const exists = current.includes(photoId);
-      const next = exists ? current.filter((id) => id !== photoId) : [...current, photoId];
-      setIsSelecting(next.length > 0);
-      return next;
-    });
-  }, []);
-
-  const clearSelection = useCallback(() => {
-    setSelectedIds([]);
-    setIsSelecting(false);
-  }, []);
-
-  const handleTagSuccess = useCallback(() => {
-    setSelectedIds([]);
-    setIsSelecting(false);
-    router.refresh();
-  }, [router]);
+  // Bumped to make PhotoGallery clear its selection after a tag/delete.
+  const [selectionResetKey, setSelectionResetKey] = useState(0);
 
   const handleUntag = useCallback(() => {
     router.refresh();
   }, [router]);
 
+  const handleTagSuccess = useCallback(() => {
+    setSelectionResetKey((k) => k + 1);
+    router.refresh();
+  }, [router]);
+
   const handleTagSinglePhoto = useCallback((photoId: string) => {
-    setSelectedIds([photoId]);
+    setPendingIds([photoId]);
     setTagDialogOpen(true);
   }, []);
 
   const handleDeleteSinglePhoto = useCallback((photoId: string) => {
-    setSelectedIds([photoId]);
+    setPendingIds([photoId]);
     setDeleteDialogOpen(true);
   }, []);
-
-  const handleDeleteSelected = useCallback(() => {
-    if (selectedIds.length === 0) return;
-    setDeleteDialogOpen(true);
-  }, [selectedIds.length]);
 
   const handleSharePhoto = useCallback(
     async (photoId: string) => {
@@ -130,21 +112,24 @@ export function EventPhotoAlbum({
     [eventId, t],
   );
 
-  const handleDownloadSelected = useCallback(async () => {
-    if (selectedIds.length === 0 || isDownloading) return;
-    setIsDownloading(true);
-    try {
-      // The photographer owns the event — the route allows every photo.
-      await downloadEventPhotosZip(eventId, selectedIds);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('downloadFailed'));
-    } finally {
-      setIsDownloading(false);
-    }
-  }, [selectedIds, isDownloading, eventId, t]);
+  const handleDownloadSelected = useCallback(
+    async (ids: string[]) => {
+      if (ids.length === 0 || isDownloading) return;
+      setIsDownloading(true);
+      try {
+        // The photographer owns the event — the route allows every photo.
+        await downloadEventPhotosZip(eventId, ids);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : t('downloadFailed'));
+      } finally {
+        setIsDownloading(false);
+      }
+    },
+    [isDownloading, eventId, t],
+  );
 
   const confirmDelete = useCallback(async () => {
-    const ids = [...selectedIds];
+    const ids = [...pendingIds];
     if (ids.length === 0) return;
     try {
       await Promise.all(ids.map((photoId) => deletePhotoAction(photoId, eventId)));
@@ -159,16 +144,9 @@ export function EventPhotoAlbum({
         .replace('{n}', String(ids.length))
         .replace('{noun}', ids.length === 1 ? t('photo') : t('photos')),
     );
-    setSelectedIds([]);
-    setIsSelecting(false);
+    setSelectionResetKey((k) => k + 1);
     router.refresh();
-  }, [selectedIds, eventId, router, t]);
-
-  const selectedCountLabel = useMemo(() => {
-    if (selectedIds.length === 0) return t('noPhotosSelected');
-    if (selectedIds.length === 1) return t('onePhotoSelected');
-    return t('nPhotosSelected').replace('{n}', String(selectedIds.length));
-  }, [selectedIds.length, t]);
+  }, [pendingIds, eventId, router, t]);
 
   // Collaborative events only — the 3-dot menu replaces the standalone
   // tag/delete icons on each tile.
@@ -199,76 +177,94 @@ export function EventPhotoAlbum({
     ],
   );
 
-  const hasItems = items.length > 0;
+  const actionBarLabels = useMemo(
+    () => ({
+      download: t('download'),
+      addToFavorites: t('addToFavorites'),
+      removeFromFavorites: t('removeFromFavorites'),
+      addToProfile: t('addToProfile'),
+      addedToProfile: t('addedToProfile'),
+      addToCart: t('addToCartMenuItem'),
+      removeFromCart: t('removeFromCartMenuItem'),
+      remove: t('deletePhoto'),
+      tagPeople: t('tagPeople'),
+      uploadedBy: t('uploadedByMenuLabel'),
+    }),
+    [t],
+  );
+
+  const bulkActions = useMemo<PhotoGalleryBulkAction[]>(
+    () => [
+      {
+        key: 'download',
+        label: t('download'),
+        icon: Download,
+        onRun: handleDownloadSelected,
+        isPending: isDownloading,
+      },
+      {
+        key: 'delete',
+        label: t('removeButton'),
+        icon: Trash2,
+        onRun: (ids) => {
+          setPendingIds(ids);
+          setDeleteDialogOpen(true);
+        },
+      },
+      {
+        key: 'tag',
+        label: t('tagTalentButton'),
+        icon: UserPlus,
+        onRun: (ids) => {
+          setPendingIds(ids);
+          setTagDialogOpen(true);
+        },
+      },
+    ],
+    [t, handleDownloadSelected, isDownloading],
+  );
+
+  const selectionLabels = useMemo(
+    () => ({
+      select: t('selectButton'),
+      clear: t('clearButton'),
+      countNone: t('noPhotosSelected'),
+      countOne: t('onePhotoSelected'),
+      countMany: t('nPhotosSelected'),
+      exitSelection: t('exitSelection'),
+    }),
+    [t],
+  );
 
   return (
     <div className="space-y-3">
-      {(hasItems || isSelecting) && (
-        <PhotoSelectionToolbar
-          className="sticky top-0 -mx-4 px-4"
-          isSelecting={isSelecting}
-          countLabel={selectedCountLabel}
-          selectLabel={t('selectButton')}
-          clearLabel={t('clearButton')}
-          onStartSelecting={() => setIsSelecting(true)}
-          onClear={clearSelection}
-        >
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleDownloadSelected}
-            disabled={selectedIds.length === 0 || isDownloading}
-          >
-            {isDownloading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="mr-2 h-4 w-4" />
-            )}
-            {isDownloading ? t('preparingDownload') : t('download')}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleDeleteSelected}
-            disabled={selectedIds.length === 0}
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            {t('removeButton')}
-          </Button>
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            onClick={() => setTagDialogOpen(true)}
-            disabled={selectedIds.length === 0}
-          >
-            <UserPlus className="mr-2 h-4 w-4" />
-            {t('tagTalentButton')}
-          </Button>
-        </PhotoSelectionToolbar>
-      )}
-      <PhotoAlbumViewer
+      <PhotoGallery
         items={items}
-        selectionMode={isSelecting}
-        selectedIds={selectedIds}
-        onToggleSelect={handleToggleSelect}
-        onTagPhoto={handleTagSinglePhoto}
-        onUntag={handleUntag}
-        showRemove={true}
-        showTagTalent={true}
-        onRemove={handleDeleteSinglePhoto}
-        onTagTalent={handleTagSinglePhoto}
-        moreMenu={moreMenu}
-        uploaderLabels={uploaderLabels}
-        iconTooltips={iconTooltips}
-        imageUnavailableLabel={imageUnavailableLabel}
+        selectionResetKey={selectionResetKey}
+        bulkActions={bulkActions}
+        labels={selectionLabels}
+        toolbarClassName="sticky top-0 -mx-4 px-4"
+        galleryProps={{
+          onTagPhoto: handleTagSinglePhoto,
+          onUntag: handleUntag,
+          showRemove: true,
+          showTagTalent: true,
+          onRemove: handleDeleteSinglePhoto,
+          onTagTalent: handleTagSinglePhoto,
+          showDownload: true,
+          onDownload: handleDownloadPhoto,
+          moreMenu,
+          uploaderLabels,
+          iconTooltips,
+          imageUnavailableLabel,
+          lightboxActionBar: 'bottom',
+          actionBarLabels,
+        }}
       />
       <TagTalentDialog
         open={tagDialogOpen}
         onOpenChange={setTagDialogOpen}
-        photoIds={selectedIds}
+        photoIds={pendingIds}
         onSuccess={handleTagSuccess}
       />
       <ConfirmDialog
@@ -276,8 +272,8 @@ export function EventPhotoAlbum({
         onOpenChange={setDeleteDialogOpen}
         title={t('deletePhotosTitle')}
         description={t('deletePhotosDesc')
-          .replace('{n}', String(selectedIds.length))
-          .replace('{noun}', selectedIds.length === 1 ? t('photo') : t('photos'))}
+          .replace('{n}', String(pendingIds.length))
+          .replace('{noun}', pendingIds.length === 1 ? t('photo') : t('photos'))}
         confirmText={t('confirmButton')}
         cancelText={t('cancelButton')}
         pendingText={t('deletingLabel')}
