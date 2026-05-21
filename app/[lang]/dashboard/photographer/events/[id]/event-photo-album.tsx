@@ -1,14 +1,16 @@
 'use client';
 
-import { Trash2, UserPlus } from 'lucide-react';
+import { Download, Loader2, Trash2, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import PhotoAlbumViewer, { type PhotoAlbumItem } from '@/components/photo-album-viewer';
 import type { PhotoIconTooltips, PhotoMoreMenuConfig } from '@/components/photo-icon-buttons';
+import { PhotoSelectionToolbar } from '@/components/photo-selection-toolbar';
 import { TagTalentDialog } from '@/components/tag-talent-dialog';
 import { Button } from '@/components/ui/button';
+import { downloadEventPhotosZip } from '@/lib/download-zip';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { getPhotoDownloadUrlAction } from './actions';
@@ -56,6 +58,7 @@ export function EventPhotoAlbum({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const handleToggleSelect = useCallback((photoId: string) => {
     setSelectedIds((current) => {
@@ -127,6 +130,19 @@ export function EventPhotoAlbum({
     [eventId, t],
   );
 
+  const handleDownloadSelected = useCallback(async () => {
+    if (selectedIds.length === 0 || isDownloading) return;
+    setIsDownloading(true);
+    try {
+      // The photographer owns the event — the route allows every photo.
+      await downloadEventPhotosZip(eventId, selectedIds);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('downloadFailed'));
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [selectedIds, isDownloading, eventId, t]);
+
   const confirmDelete = useCallback(async () => {
     const ids = [...selectedIds];
     if (ids.length === 0) return;
@@ -188,53 +204,50 @@ export function EventPhotoAlbum({
   return (
     <div className="space-y-3">
       {(hasItems || isSelecting) && (
-        // Sticky toolbar — stays accessible while scrolling long galleries.
-        <div className="sticky top-0 z-30 -mx-4 border-b border-border bg-background/95 px-4 py-3 backdrop-blur-sm">
-          <div className="flex items-center gap-3 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {isSelecting ? (
-              <>
-                <div className="shrink-0 whitespace-nowrap text-sm font-medium">
-                  {selectedCountLabel}
-                </div>
-                <div className="ml-auto flex shrink-0 items-center gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={clearSelection}>
-                    {t('clearButton')}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleDeleteSelected}
-                    disabled={selectedIds.length === 0}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    {t('removeButton')}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="default"
-                    size="sm"
-                    onClick={() => setTagDialogOpen(true)}
-                    disabled={selectedIds.length === 0}
-                  >
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    {t('tagTalentButton')}
-                  </Button>
-                </div>
-              </>
+        <PhotoSelectionToolbar
+          className="sticky top-0 -mx-4 px-4"
+          isSelecting={isSelecting}
+          countLabel={selectedCountLabel}
+          selectLabel={t('selectButton')}
+          clearLabel={t('clearButton')}
+          onStartSelecting={() => setIsSelecting(true)}
+          onClear={clearSelection}
+        >
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadSelected}
+            disabled={selectedIds.length === 0 || isDownloading}
+          >
+            {isDownloading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setIsSelecting(true)}
-                className="ml-auto shrink-0"
-              >
-                {t('selectButton')}
-              </Button>
+              <Download className="mr-2 h-4 w-4" />
             )}
-          </div>
-        </div>
+            {isDownloading ? t('preparingDownload') : t('download')}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleDeleteSelected}
+            disabled={selectedIds.length === 0}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            {t('removeButton')}
+          </Button>
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            onClick={() => setTagDialogOpen(true)}
+            disabled={selectedIds.length === 0}
+          >
+            <UserPlus className="mr-2 h-4 w-4" />
+            {t('tagTalentButton')}
+          </Button>
+        </PhotoSelectionToolbar>
       )}
       <PhotoAlbumViewer
         items={items}

@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader2 } from 'lucide-react';
+import { Download, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -12,8 +12,14 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useGuestCart } from '@/components/guest-cart-provider';
 import PhotoAlbumViewer from '@/components/photo-album-viewer';
 import type { PhotoIconTooltips } from '@/components/photo-icon-buttons';
+import {
+  type BulkDownloadLabels,
+  PhotoSelectionToolbar,
+} from '@/components/photo-selection-toolbar';
 import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
+import { Button } from '@/components/ui/button';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
+import { downloadEventPhotosZip } from '@/lib/download-zip';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import { deleteContributorPhotoAction } from './actions';
 import { readGuestUploads, removeGuestUpload } from './guest-uploads-storage';
@@ -70,6 +76,10 @@ interface PublicEventPhotoViewerProps {
   };
   /** Translated error toasts for the cart icon. */
   cartToastLabels: { failedAdd: string; failedRemove: string };
+  /** Photo IDs the viewer has purchased — gates bulk download on paid events. */
+  purchasedPhotoIds?: Set<string>;
+  /** Localized copy for the selection toolbar + bulk download. */
+  bulkDownload: BulkDownloadLabels;
   imageUnavailableLabel: string;
 }
 
@@ -91,6 +101,8 @@ export function PublicEventPhotoViewer({
   uploaderLabels,
   deleteLabels,
   cartToastLabels,
+  purchasedPhotoIds = new Set(),
+  bulkDownload,
   imageUnavailableLabel,
 }: PublicEventPhotoViewerProps) {
   const router = useRouter();
@@ -252,6 +264,62 @@ export function PublicEventPhotoViewer({
     });
   }, [pendingDeletePhotoId, shareCode, deleteLabels, router]);
 
+  // ── Selection + bulk download ──────────────────────────────────────────
+  // Free events download for anyone (incl. logged-out guests); paid events
+  // need an authenticated buyer, so the toolbar is hidden for paid-event guests.
+  const isFreeEvent = pricePerPhoto === null;
+  const canBulkDownload = isFreeEvent || isAuthenticated;
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const handleToggleSelect = useCallback((photoId: string) => {
+    setSelectedIds((current) => {
+      const exists = current.includes(photoId);
+      const next = exists ? current.filter((id) => id !== photoId) : [...current, photoId];
+      setIsSelecting(next.length > 0);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds([]);
+    setIsSelecting(false);
+  }, []);
+
+  const countLabel = useMemo(() => {
+    if (selectedIds.length === 0) return bulkDownload.countNone;
+    if (selectedIds.length === 1) return bulkDownload.countOne;
+    return bulkDownload.countMany.replace('{n}', String(selectedIds.length));
+  }, [selectedIds.length, bulkDownload]);
+
+  const handleDownloadSelected = useCallback(async () => {
+    if (selectedIds.length === 0 || isDownloading) return;
+    const downloadable = isFreeEvent
+      ? selectedIds
+      : selectedIds.filter((id) => purchasedPhotoIds.has(id));
+    const skipped = selectedIds.length - downloadable.length;
+    if (downloadable.length === 0) {
+      toast.error(bulkDownload.nonePurchased);
+      return;
+    }
+    setIsDownloading(true);
+    try {
+      await downloadEventPhotosZip(eventId, downloadable);
+      if (skipped > 0) {
+        toast.success(
+          bulkDownload.skipped
+            .replace('{n}', String(downloadable.length))
+            .replace('{m}', String(skipped)),
+        );
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : bulkDownload.failed);
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [selectedIds, isDownloading, isFreeEvent, purchasedPhotoIds, eventId, bulkDownload]);
+
   return (
     <div className="relative">
       {photos.length === 0 ? (
@@ -263,19 +331,50 @@ export function PublicEventPhotoViewer({
           </p>
         </div>
       ) : (
-        <PhotoAlbumViewer
-          items={photos}
-          showAddToCart={showAddToCart}
-          photosInCart={photosInCart}
-          onAddToCart={handleAddToCart}
-          onRemoveFromCart={handleRemoveFromCart}
-          iconTooltips={iconTooltips}
-          deletableIds={deletableIds}
-          onDeleteOwn={handleDeleteRequest}
-          deleteTooltip={deleteLabels?.tooltip}
-          uploaderLabels={uploaderLabels}
-          imageUnavailableLabel={imageUnavailableLabel}
-        />
+        <div className="space-y-3">
+          {canBulkDownload && (
+            <PhotoSelectionToolbar
+              className="sticky top-[var(--header-height)] -mx-4 px-4"
+              isSelecting={isSelecting}
+              countLabel={countLabel}
+              selectLabel={bulkDownload.select}
+              clearLabel={bulkDownload.clear}
+              onStartSelecting={() => setIsSelecting(true)}
+              onClear={clearSelection}
+            >
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadSelected}
+                disabled={selectedIds.length === 0 || isDownloading}
+              >
+                {isDownloading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="mr-2 h-4 w-4" />
+                )}
+                {isDownloading ? bulkDownload.preparing : bulkDownload.download}
+              </Button>
+            </PhotoSelectionToolbar>
+          )}
+          <PhotoAlbumViewer
+            items={photos}
+            selectionMode={canBulkDownload && isSelecting}
+            selectedIds={canBulkDownload ? selectedIds : undefined}
+            onToggleSelect={canBulkDownload ? handleToggleSelect : undefined}
+            showAddToCart={showAddToCart}
+            photosInCart={photosInCart}
+            onAddToCart={handleAddToCart}
+            onRemoveFromCart={handleRemoveFromCart}
+            iconTooltips={iconTooltips}
+            deletableIds={deletableIds}
+            onDeleteOwn={handleDeleteRequest}
+            deleteTooltip={deleteLabels?.tooltip}
+            uploaderLabels={uploaderLabels}
+            imageUnavailableLabel={imageUnavailableLabel}
+          />
+        </div>
       )}
       {isUploading && photos.length > 0 ? (
         <div
