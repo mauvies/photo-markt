@@ -4,7 +4,9 @@ import { ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { LightboxActionBar, type LightboxActionLabels } from '@/components/lightbox-action-bar';
 import { LightboxToolbar } from '@/components/lightbox-toolbar';
+import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
 
 export type PhotoLightboxItem = {
   id: string;
@@ -19,6 +21,8 @@ export type PhotoLightboxItem = {
     talent_display_name: string | null;
     tagged_at: string;
   }>;
+  /** Contributor info — drives the "Uploaded by" caption on the bottom bar. */
+  uploader?: PhotoUploaderInfo;
 };
 
 type PhotoLightboxProps = {
@@ -49,6 +53,14 @@ type PhotoLightboxProps = {
   // Track which photos are in "my photos" and cart
   photosInMyPhotos?: Set<string>;
   photosInCart?: Set<string>;
+  /** When 'bottom', per-photo actions render in a bottom bar (event galleries). */
+  actionBar?: 'top' | 'bottom';
+  /** "Add to my profile" claim — free photos only. */
+  onClaimToProfile?: (photoId: string) => void;
+  claimedIds?: Set<string>;
+  canClaimToProfile?: (photoId: string) => boolean;
+  /** Required when `actionBar === 'bottom'`. */
+  actionBarLabels?: LightboxActionLabels;
 };
 
 export function PhotoLightbox({
@@ -73,6 +85,11 @@ export function PhotoLightbox({
   onUntag,
   photosInMyPhotos = new Set(),
   photosInCart = new Set(),
+  actionBar = 'top',
+  onClaimToProfile,
+  claimedIds,
+  canClaimToProfile,
+  actionBarLabels,
 }: PhotoLightboxProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -110,6 +127,17 @@ export function PhotoLightbox({
     () => Boolean(currentPhoto && photosInCart.has(currentPhoto.id)),
     [currentPhoto, photosInCart],
   );
+
+  const isClaimed = useMemo(
+    () => Boolean(currentPhoto && claimedIds?.has(currentPhoto.id)),
+    [currentPhoto, claimedIds],
+  );
+  const canClaim = Boolean(currentPhoto && canClaimToProfile?.(currentPhoto.id));
+
+  const handleClaim = useCallback(() => {
+    if (!currentPhoto || !onClaimToProfile) return;
+    onClaimToProfile(currentPhoto.id);
+  }, [currentPhoto, onClaimToProfile]);
 
   const handleTagTalent = useCallback(() => {
     if (!currentPhoto || !onTagTalent) return;
@@ -363,6 +391,7 @@ export function PhotoLightbox({
         onTagTalent={handleTagTalent}
         onUntag={onUntag}
         onFullscreen={handleFullscreen}
+        actionBar={actionBar}
       />
 
       {/* Image Container */}
@@ -430,6 +459,29 @@ export function PhotoLightbox({
           </button>
         )}
       </div>
+
+      {actionBar === 'bottom' && actionBarLabels ? (
+        <LightboxActionBar
+          visible={controlsVisible}
+          labels={actionBarLabels}
+          uploaderName={currentPhoto.uploader?.name}
+          showDownload={showDownload}
+          onDownload={handleDownload}
+          showFavorite={showAddToPhotos}
+          isFavorited={Boolean(isInMyPhotos)}
+          onFavorite={handleAddToPhotos}
+          showClaim={canClaim}
+          isClaimed={isClaimed}
+          onClaim={handleClaim}
+          showCart={showAddToCart}
+          isInCart={isInCart}
+          onCart={handleAddToCart}
+          showRemove={showRemove}
+          onRemove={handleRemove}
+          showTag={showTagTalent}
+          onTag={handleTagTalent}
+        />
+      ) : null}
     </div>,
     document.body,
   );
