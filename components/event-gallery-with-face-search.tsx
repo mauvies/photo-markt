@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Camera, Frown } from 'lucide-react';
+import { ArrowLeft, Camera, Download, Frown, Loader2 } from 'lucide-react';
 import { Fragment, type ReactNode, useMemo, useState } from 'react';
 import type {
   SearchFacesInEventResult,
@@ -13,7 +13,13 @@ import {
 import { FaceSearchModal, type FaceSearchModalLabels } from '@/components/face-search-modal';
 import PhotoAlbumViewer, { type PhotoAlbumItem } from '@/components/photo-album-viewer';
 import type { PhotoIconTooltips } from '@/components/photo-icon-buttons';
+import {
+  type BulkDownloadLabels,
+  PhotoSelectionToolbar,
+} from '@/components/photo-selection-toolbar';
 import { Button } from '@/components/ui/button';
+import { useBulkPhotoDownload } from '@/hooks/use-bulk-photo-download';
+import { usePhotoSelection } from '@/hooks/use-photo-selection';
 
 export interface FaceSearchResultsLabels {
   veryLikelyTitle: string;
@@ -37,6 +43,16 @@ interface EventGalleryWithFaceSearchProps {
    */
   photos: PhotoAlbumItem[];
   shareCode: string;
+  /** Event id — used by the face-search results bulk download. */
+  eventId: string;
+  /** Free events let anyone download; paid events restrict to purchased. */
+  isFreeEvent: boolean;
+  /** Photo IDs the viewer purchased — gates the matches-view bulk download. */
+  purchasedPhotoIds?: Set<string>;
+  /** Free OR authenticated — gates the matches-view Select affordance. */
+  canBulkDownload: boolean;
+  /** Localized copy for the matches-view selection toolbar + bulk download. */
+  bulkDownload: BulkDownloadLabels;
   /**
    * Whether the AI-search banner should render at all. Computed server-side
    * from `event.ai_matching_enabled` + indexing progress.
@@ -77,22 +93,20 @@ interface ClientSearchMatch {
  *   - Renders `<AIFindPhotosBanner>` above when eligible.
  *   - Owns the search-modal open state and the search-results client state.
  *   - When matches exist: replaces the full gallery with bucketed sections
- *     (one `<PhotoAlbumViewer>` per non-empty bucket). The "View all photos"
- *     button resets state and brings the full gallery back.
+ *     (one `<PhotoAlbumViewer>` per non-empty bucket) plus a shared selection
+ *     toolbar — the talent can select matched photos across buckets and
+ *     bulk-download them, exactly as in the normal gallery.
  *   - When matches is an empty array: shows the "no matches" empty state.
- *   - When matches is null (no search performed yet): renders `fullGallery`
- *     as-is.
- *
- * This wrapper deliberately doesn't pass cart/lightbox props to the
- * matched-photos `<PhotoAlbumViewer>` instances — `PhotoAlbumItem` already
- * carries the click affordances the album viewer needs (lightbox is built
- * into the viewer). Cart icons inside the lightbox aren't required for v0
- * matches view — talents return to the full gallery via "View all photos"
- * to add matched photos to cart.
+ *   - When matches is null (no search performed yet): renders `fullGallery`.
  */
 export function EventGalleryWithFaceSearch({
   photos,
   shareCode,
+  eventId,
+  isFreeEvent,
+  purchasedPhotoIds = new Set(),
+  canBulkDownload,
+  bulkDownload,
   aiSearchEligible,
   aiState,
   bannerLabels,
@@ -107,6 +121,16 @@ export function EventGalleryWithFaceSearch({
   const [searchMatches, setSearchMatches] = useState<ClientSearchMatch[] | null>(null);
   const [eventIndexingComplete, setEventIndexingComplete] = useState(true);
 
+  // One selection set shared across all three buckets, and one bulk-download
+  // handler — the same hooks the normal gallery viewers use.
+  const selection = usePhotoSelection();
+  const { isDownloading, downloadSelected } = useBulkPhotoDownload({
+    eventId,
+    isFreeEvent,
+    purchasedPhotoIds,
+    bulkDownload,
+  });
+
   const onSearchResult = (result: SearchFacesInEventResult) => {
     if (result.reason === 'collection-missing') {
       // The event lost AI support mid-flight. Don't render a matches view —
@@ -115,8 +139,15 @@ export function EventGalleryWithFaceSearch({
       setSearchMatches(null);
       return;
     }
+    selection.clear();
     setSearchMatches(result.matches);
     setEventIndexingComplete(result.eventIndexingComplete);
+  };
+
+  // Leaving the matches view resets selection so the full gallery starts clean.
+  const handleViewAllPhotos = () => {
+    selection.clear();
+    setSearchMatches(null);
   };
 
   const photoLookup = useMemo(() => {
@@ -159,6 +190,13 @@ export function EventGalleryWithFaceSearch({
   const showMatchesView = searchMatches !== null;
   const hasAnyMatch = searchMatches !== null && searchMatches.length > 0;
 
+  const selectionCountLabel =
+    selection.selectedIds.length === 0
+      ? bulkDownload.countNone
+      : selection.selectedIds.length === 1
+        ? bulkDownload.countOne
+        : bulkDownload.countMany.replace('{n}', String(selection.selectedIds.length));
+
   return (
     // React reconciles the children of this outer <div> as a positional
     // array. The "gallery" slot can swap between two distinct element types
@@ -180,12 +218,7 @@ export function EventGalleryWithFaceSearch({
       {showMatchesView ? (
         <div key="ai-search-matches" className="flex flex-col gap-4">
           <div className="flex items-center justify-between gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setSearchMatches(null)}
-            >
+            <Button type="button" variant="outline" size="sm" onClick={handleViewAllPhotos}>
               <ArrowLeft className="mr-1.5 h-4 w-4" />
               {resultsLabels.viewAllPhotos}
             </Button>
@@ -193,6 +226,32 @@ export function EventGalleryWithFaceSearch({
 
           {hasAnyMatch ? (
             <>
+              {canBulkDownload ? (
+                <PhotoSelectionToolbar
+                  isSelecting={selection.isSelecting}
+                  countLabel={selectionCountLabel}
+                  selectLabel={bulkDownload.select}
+                  clearLabel={bulkDownload.clear}
+                  onStartSelecting={selection.startSelecting}
+                  onClear={selection.clear}
+                >
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => downloadSelected(selection.selectedIds)}
+                    disabled={selection.selectedIds.length === 0 || isDownloading}
+                  >
+                    {isDownloading ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="mr-2 h-4 w-4" />
+                    )}
+                    {isDownloading ? bulkDownload.preparing : bulkDownload.download}
+                  </Button>
+                </PhotoSelectionToolbar>
+              ) : null}
+
               {bucketed.veryLikely.length > 0 ? (
                 <BucketSection
                   title={resultsLabels.veryLikelyTitle}
@@ -201,6 +260,9 @@ export function EventGalleryWithFaceSearch({
                   iconTooltips={iconTooltips}
                   imageUnavailableLabel={imageUnavailableLabel}
                   uploaderLabels={uploaderLabels}
+                  selectionMode={canBulkDownload && selection.isSelecting}
+                  selectedIds={canBulkDownload ? selection.selectedIds : undefined}
+                  onToggleSelect={canBulkDownload ? selection.toggle : undefined}
                 />
               ) : null}
               {bucketed.likely.length > 0 ? (
@@ -211,6 +273,9 @@ export function EventGalleryWithFaceSearch({
                   iconTooltips={iconTooltips}
                   imageUnavailableLabel={imageUnavailableLabel}
                   uploaderLabels={uploaderLabels}
+                  selectionMode={canBulkDownload && selection.isSelecting}
+                  selectedIds={canBulkDownload ? selection.selectedIds : undefined}
+                  onToggleSelect={canBulkDownload ? selection.toggle : undefined}
                 />
               ) : null}
               {bucketed.possibly.length > 0 ? (
@@ -221,6 +286,9 @@ export function EventGalleryWithFaceSearch({
                   iconTooltips={iconTooltips}
                   imageUnavailableLabel={imageUnavailableLabel}
                   uploaderLabels={uploaderLabels}
+                  selectionMode={canBulkDownload && selection.isSelecting}
+                  selectedIds={canBulkDownload ? selection.selectedIds : undefined}
+                  onToggleSelect={canBulkDownload ? selection.toggle : undefined}
                 />
               ) : null}
               {!eventIndexingComplete ? (
@@ -241,12 +309,7 @@ export function EventGalleryWithFaceSearch({
                   <Camera className="mr-1.5 h-4 w-4" />
                   {resultsLabels.tryAgain}
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSearchMatches(null)}
-                >
+                <Button type="button" variant="outline" size="sm" onClick={handleViewAllPhotos}>
                   {resultsLabels.viewAllPhotos}
                 </Button>
               </div>
@@ -281,6 +344,9 @@ interface BucketSectionProps {
     guestLabel: string;
     authenticatedLabel: string;
   };
+  selectionMode?: boolean;
+  selectedIds?: string[];
+  onToggleSelect?: (photoId: string) => void;
 }
 
 function BucketSection({
@@ -290,6 +356,9 @@ function BucketSection({
   iconTooltips,
   imageUnavailableLabel,
   uploaderLabels,
+  selectionMode,
+  selectedIds,
+  onToggleSelect,
 }: BucketSectionProps) {
   return (
     <section className="flex flex-col gap-2">
@@ -302,6 +371,9 @@ function BucketSection({
         iconTooltips={iconTooltips}
         imageUnavailableLabel={imageUnavailableLabel}
         uploaderLabels={uploaderLabels}
+        selectionMode={selectionMode}
+        selectedIds={selectedIds}
+        onToggleSelect={onToggleSelect}
       />
     </section>
   );

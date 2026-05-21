@@ -205,25 +205,62 @@ export default async function ExploreEventDetailPage({
     }
   }
 
+  // Resolve display names for collaborative-event uploader attribution so the
+  // per-photo "Uploaded by" menu row shows the same names as the public page.
+  const uploaderProfiles: Record<string, { display_name: string | null; username: string }> = {};
+  if (event.is_collaborative) {
+    const uploaderUserIds = Array.from(
+      new Set([
+        event.user_id,
+        ...photos
+          .map((p) => (p as { uploaded_by?: string | null }).uploaded_by)
+          .filter((v): v is string => Boolean(v)),
+      ]),
+    );
+    if (uploaderUserIds.length > 0) {
+      const { data: profilesData } = await supabaseAdmin
+        .from('profiles')
+        .select('id, display_name, username')
+        .in('id', uploaderUserIds);
+      for (const row of profilesData ?? []) {
+        uploaderProfiles[row.id as string] = {
+          display_name: (row.display_name as string | null) ?? null,
+          username: row.username as string,
+        };
+      }
+    }
+  }
+
   const photoItems = photos
     .map((p) => {
       const url = p.original_url ? signed[p.original_url] : null;
       if (!url) return null;
+      const uploadedBy = (p as { uploaded_by?: string | null }).uploaded_by ?? null;
+      const guestName = (p as { guest_name?: string | null }).guest_name ?? null;
+      let uploader: { name: string; isAuthenticated: boolean } | undefined;
+      if (event.is_collaborative) {
+        if (uploadedBy) {
+          const profile = uploaderProfiles[uploadedBy];
+          const name = profile?.display_name ?? profile?.username ?? guestName ?? '';
+          if (name) uploader = { name, isAuthenticated: true };
+        } else if (guestName) {
+          uploader = { name: guestName, isAuthenticated: false };
+        } else {
+          // No contributor/guest attribution on a collaborative event means
+          // the photo is the event photographer's own upload.
+          const ownerProfile = uploaderProfiles[event.user_id];
+          const name = ownerProfile?.display_name ?? ownerProfile?.username ?? '';
+          if (name) uploader = { name, isAuthenticated: true };
+        }
+      }
       return {
         id: p.id,
         url,
         alt: p.original_url || `Photo from ${event.name}`,
+        uploader,
       };
     })
-    .filter(
-      (
-        item,
-      ): item is {
-        id: string;
-        url: string;
-        alt: string;
-      } => item !== null,
-    );
+    .filter((item): item is NonNullable<typeof item> => item !== null);
 
   // Photo IDs the current talent uploaded — backs the "My photos" filter on
   // collaborative events.
@@ -234,6 +271,21 @@ export default async function ExploreEventDetailPage({
           .map((p) => p.id)
       : [],
   );
+
+  const isFreeEvent = event.price_per_photo === null;
+  const canBulkDownload = isFreeEvent || user !== null;
+  const bulkDownloadLabels = {
+    select: dict.events.selectButton,
+    clear: dict.events.clearButton,
+    countNone: dict.events.noPhotosSelected,
+    countOne: dict.events.onePhotoSelected,
+    countMany: dict.events.nPhotosSelected,
+    download: dict.events.download,
+    preparing: dict.events.preparingDownload,
+    failed: dict.events.downloadFailed,
+    skipped: dict.events.downloadSkipped,
+    nonePurchased: dict.events.downloadNonePurchased,
+  };
 
   // Render the page body. We wrap in <UploadProgressProvider> ONLY when
   // contribute is relevant — non-collaborative events don't need the
@@ -300,6 +352,11 @@ export default async function ExploreEventDetailPage({
           <EventGalleryWithFaceSearch
             photos={photoItems}
             shareCode={event.share_code ?? event.id}
+            eventId={event.id}
+            isFreeEvent={isFreeEvent}
+            purchasedPhotoIds={purchasedPhotoIds}
+            canBulkDownload={canBulkDownload}
+            bulkDownload={bulkDownloadLabels}
             aiSearchEligible={aiSearchEligible}
             aiState={aiBannerState}
             bannerLabels={dict.aiSearch.banner}
@@ -312,7 +369,7 @@ export default async function ExploreEventDetailPage({
                 <EventPhotoViewer
                   items={photoItems}
                   eventId={event.id}
-                  isFreeEvent={event.price_per_photo === null}
+                  isFreeEvent={isFreeEvent}
                   purchasedPhotoIds={purchasedPhotoIds}
                   isCollaborative={event.is_collaborative}
                   uploadedPhotoIds={myUploadedPhotoIds}
@@ -321,19 +378,20 @@ export default async function ExploreEventDetailPage({
                     mine: dict.collaborativeEvent.myPhotosMine,
                     empty: dict.collaborativeEvent.myPhotosEmpty,
                   }}
-                  bulkDownload={{
-                    select: dict.events.selectButton,
-                    clear: dict.events.clearButton,
-                    countNone: dict.events.noPhotosSelected,
-                    countOne: dict.events.onePhotoSelected,
-                    countMany: dict.events.nPhotosSelected,
+                  menuLabels={{
+                    trigger: dict.events.moreOptions,
                     download: dict.events.download,
-                    preparing: dict.events.preparingDownload,
-                    failed: dict.events.downloadFailed,
-                    skipped: dict.events.downloadSkipped,
-                    nonePurchased: dict.events.downloadNonePurchased,
+                    saveToProfile: dict.events.saveToProfile,
+                    saveToPhotos: dict.events.saveToPhotos,
+                    removeFromLibrary: dict.events.removeFromLibrary,
+                    addToCart: dict.events.addToCartMenuItem,
+                    removeFromCart: dict.events.removeFromCartMenuItem,
+                    uploadedBy: dict.events.uploadedByMenuLabel,
+                    downloadFailed: dict.events.downloadFailed,
+                    downloadNotPurchased: dict.events.downloadNotPurchased,
                   }}
-                  showAddToCart={user !== null}
+                  bulkDownload={bulkDownloadLabels}
+                  showAddToCart={!isFreeEvent}
                   photosInCart={new Set(photosInCart)}
                   photosInMyPhotos={new Set(photosInMyPhotos)}
                   iconTooltips={dict.photoIconButtons}
