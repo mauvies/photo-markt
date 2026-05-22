@@ -47,7 +47,7 @@ interface PhotoMoreMenuProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDownload: (photoId: string) => void;
-  /** Disables the Download item — e.g. a paid photo the viewer hasn't bought. */
+  /** Hides the Download item entirely — e.g. a paid photo the viewer hasn't bought. */
   downloadDisabled?: boolean;
   /** Photographer items — render only when their handler is provided. */
   onDelete?: (photoId: string) => void;
@@ -76,7 +76,8 @@ interface PhotoMoreMenuProps {
  * Favorites (a bookmark toggle) and "Add to my profile" (claiming a free
  * photo into the owned collection) are independent items: favorites is a
  * toggle for any photo; the claim item shows only on free photos and, once
- * claimed, becomes a disabled "Added to profile". Download always renders.
+ * claimed, becomes a disabled "Added to profile". Download renders unless
+ * `downloadDisabled` — an unavailable download is hidden, never shown greyed.
  */
 export function PhotoMoreMenu({
   photoId,
@@ -160,14 +161,12 @@ export function PhotoMoreMenu({
             {labels.share}
           </DropdownMenuItem>
         ) : null}
-        <DropdownMenuItem
-          className="cursor-pointer"
-          disabled={downloadDisabled}
-          onSelect={() => onDownload(photoId)}
-        >
-          <Download className="mr-2 h-4 w-4" />
-          {labels.download}
-        </DropdownMenuItem>
+        {downloadDisabled ? null : (
+          <DropdownMenuItem className="cursor-pointer" onSelect={() => onDownload(photoId)}>
+            <Download className="mr-2 h-4 w-4" />
+            {labels.download}
+          </DropdownMenuItem>
+        )}
         {uploaderName && labels.uploadedBy ? (
           <>
             <DropdownMenuSeparator />

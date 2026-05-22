@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Download, Loader2 } from 'lucide-react';
+import { ArrowLeft, Download, Loader2, ShoppingCart } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -38,6 +38,9 @@ interface PhotoItem {
   originalPath: string | null;
   uploadedBy?: string | null;
   uploader?: PhotoUploaderInfo;
+  /** Displayed pixel dimensions — drives the gallery's reserved-space layout. */
+  width?: number;
+  height?: number;
 }
 
 interface PublicEventPhotoViewerProps {
@@ -194,21 +197,19 @@ export function PublicEventPhotoViewer({
     return new Set(photos.filter((p) => guestCart.hasItem(p.id)).map((p) => p.id));
   }, [isAuthenticated, authCartPhotos, photos, guestCart]);
 
-  const handleAddToCart = useCallback(
-    (photoId: string) => {
-      const photo = photos.find((p) => p.id === photoId);
-      if (!photo) return;
+  // Where the "View cart" toast action navigates — the authenticated cart for
+  // signed-in viewers, the guest cart route for everyone else.
+  const cartHref = isAuthenticated ? '/dashboard/talent/cart' : '/cart';
 
+  // Adds one photo to the active cart (optimistic auth cart or guest cart)
+  // without any UI feedback. Returns false when the id isn't in the current
+  // list. The toast is the caller's job, so a bulk add can emit one summary.
+  const addPhotoToCart = useCallback(
+    (photoId: string): boolean => {
+      const photo = photos.find((p) => p.id === photoId);
+      if (!photo) return false;
       if (isAuthenticated) {
         addAuthCart(photoId);
-        toast.success('Added to cart', {
-          action: {
-            label: 'View cart',
-            onClick: () => {
-              window.location.href = '/dashboard/talent/cart';
-            },
-          },
-        });
       } else {
         const item: GuestCartItem = {
           photoId,
@@ -220,15 +221,8 @@ export function PublicEventPhotoViewer({
           previewUrl: photo.url,
         };
         guestCart.addItem(item);
-        toast.success('Added to cart', {
-          action: {
-            label: 'View cart',
-            onClick: () => {
-              window.location.href = '/cart';
-            },
-          },
-        });
       }
+      return true;
     },
     [
       isAuthenticated,
@@ -241,6 +235,52 @@ export function PublicEventPhotoViewer({
       guestCart,
       addAuthCart,
     ],
+  );
+
+  const handleAddToCart = useCallback(
+    (photoId: string) => {
+      if (!addPhotoToCart(photoId)) return;
+      toast.success('Added to cart', {
+        action: {
+          label: 'View cart',
+          onClick: () => {
+            window.location.href = cartHref;
+          },
+        },
+      });
+    },
+    [addPhotoToCart, cartHref],
+  );
+
+  // Bulk "Add to cart" — adds every selected photo that isn't already in the
+  // cart and isn't already purchased, then emits a single summary toast.
+  const handleBulkAddToCart = useCallback(
+    (ids: string[]) => {
+      const toAdd = ids.filter((id) => !photosInCart.has(id) && !purchasedPhotoIds.has(id));
+      if (toAdd.length === 0) {
+        toast.info(bulkDownload.alreadyInCart);
+        return;
+      }
+      let added = 0;
+      for (const id of toAdd) {
+        if (addPhotoToCart(id)) added += 1;
+      }
+      if (added === 0) return;
+      toast.success(
+        added === 1
+          ? bulkDownload.addedToCartOne
+          : bulkDownload.addedToCartMany.replace('{n}', String(added)),
+        {
+          action: {
+            label: bulkDownload.viewCart,
+            onClick: () => {
+              window.location.href = cartHref;
+            },
+          },
+        },
+      );
+    },
+    [photosInCart, purchasedPhotoIds, addPhotoToCart, bulkDownload, cartHref],
   );
 
   const handleRemoveFromCart = useCallback(
@@ -296,6 +336,11 @@ export function PublicEventPhotoViewer({
   const isFreeEvent = pricePerPhoto === null;
   const isOwner = currentUserId != null && currentUserId === photographerId;
   const canBulkDownload = isFreeEvent || isAuthenticated;
+  // Paid events expose a bulk "Add to cart" action — guests use the guest
+  // cart, signed-in viewers the optimistic auth cart. Free events have no
+  // cart. The Select button shows when either bulk action is reachable.
+  const canBulkAddToCart = showAddToCart && !isFreeEvent;
+  const canSelect = canBulkDownload || canBulkAddToCart;
   const { isDownloading, downloadSelected } = useBulkPhotoDownload({
     eventId,
     isFreeEvent,
@@ -393,6 +438,7 @@ export function PublicEventPhotoViewer({
       uploaderLabels,
       moreMenu,
       showDownload: canBulkDownload,
+      isPhotoDownloadable,
       onDownload: handleDownloadPhoto,
       imageUnavailableLabel,
       lightboxActionBar: 'bottom' as const,
@@ -415,27 +461,44 @@ export function PublicEventPhotoViewer({
       uploaderLabels,
       moreMenu,
       canBulkDownload,
+      isPhotoDownloadable,
       handleDownloadPhoto,
       imageUnavailableLabel,
       menuLabels,
     ],
   );
 
-  const bulkActions = useMemo<PhotoGalleryBulkAction[]>(
-    () =>
-      canBulkDownload
-        ? [
-            {
-              key: 'download',
-              label: bulkDownload.download,
-              icon: Download,
-              onRun: (ids) => downloadSelected(ids),
-              isPending: isDownloading,
-            },
-          ]
-        : [],
-    [canBulkDownload, bulkDownload.download, downloadSelected, isDownloading],
-  );
+  // Bulk actions for the selection bars. "Add to cart" leads on a paid event
+  // (the primary action for a buyer); "Download" follows when available.
+  const bulkActions = useMemo<PhotoGalleryBulkAction[]>(() => {
+    const actions: PhotoGalleryBulkAction[] = [];
+    if (canBulkAddToCart) {
+      actions.push({
+        key: 'add-to-cart',
+        label: bulkDownload.addToCart,
+        icon: ShoppingCart,
+        onRun: (ids) => handleBulkAddToCart(ids),
+      });
+    }
+    if (canBulkDownload) {
+      actions.push({
+        key: 'download',
+        label: bulkDownload.download,
+        icon: Download,
+        onRun: (ids) => downloadSelected(ids),
+        isPending: isDownloading,
+      });
+    }
+    return actions;
+  }, [
+    canBulkAddToCart,
+    canBulkDownload,
+    bulkDownload.addToCart,
+    bulkDownload.download,
+    handleBulkAddToCart,
+    downloadSelected,
+    isDownloading,
+  ]);
 
   const selectionLabels = useMemo(
     () => ({
@@ -474,7 +537,7 @@ export function PublicEventPhotoViewer({
               sections={sections}
               galleryProps={galleryProps}
               bulkActions={bulkActions}
-              selectable={canBulkDownload}
+              selectable={canSelect}
               labels={selectionLabels}
               selectionResetKey={selectionResetKey}
               toolbarClassName="sticky top-[var(--header-height)] -mx-4 px-4"
@@ -492,7 +555,7 @@ export function PublicEventPhotoViewer({
           items={visiblePhotos}
           galleryProps={galleryProps}
           bulkActions={bulkActions}
-          selectable={canBulkDownload}
+          selectable={canSelect}
           labels={selectionLabels}
           selectionResetKey={selectionResetKey}
           toolbarClassName="sticky top-[var(--header-height)] -mx-4 px-4"

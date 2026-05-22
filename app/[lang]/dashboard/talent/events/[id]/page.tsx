@@ -262,6 +262,8 @@ export default async function ExploreEventDetailPage({
         url,
         alt: p.original_url || `Photo from ${event.name}`,
         uploader,
+        width: p.width ?? undefined,
+        height: p.height ?? undefined,
       };
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
@@ -289,6 +291,11 @@ export default async function ExploreEventDetailPage({
     failed: dict.events.downloadFailed,
     skipped: dict.events.downloadSkipped,
     nonePurchased: dict.events.downloadNonePurchased,
+    addToCart: dict.events.addToCartMenuItem,
+    addedToCartOne: dict.events.bulkAddedToCartOne,
+    addedToCartMany: dict.events.bulkAddedToCartMany,
+    alreadyInCart: dict.events.bulkAlreadyInCart,
+    viewCart: dict.events.viewCart,
   };
 
   // Render the page body. We wrap in <UploadProgressProvider> ONLY when

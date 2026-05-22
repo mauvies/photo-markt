@@ -158,6 +158,9 @@ export function ProfilePhotoViewer({ items, photoMetadata }: ProfilePhotoViewerP
     () => ({
       moreMenu,
       showDownload: true,
+      // Hide the lightbox Download for photos without a ready download URL —
+      // consistent with the 3-dot menu's `isDownloadDisabled`.
+      isPhotoDownloadable: (id: string) => Boolean(photoMetadata[id]?.download_url),
       onDownload: (id: string) => {
         void handleDownload(id);
       },
@@ -173,7 +176,7 @@ export function ProfilePhotoViewer({ items, photoMetadata }: ProfilePhotoViewerP
         remove: t('deleteTooltip'),
       },
     }),
-    [moreMenu, handleDownload, handleShare, t],
+    [moreMenu, handleDownload, handleShare, photoMetadata, t],
   );
 
   return (

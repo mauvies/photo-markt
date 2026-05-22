@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Download, Heart, UserRoundPlus } from 'lucide-react';
+import { ArrowLeft, Download, Heart, ShoppingCart, UserRoundPlus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -269,6 +269,25 @@ export function EventPhotoViewer({
     [isBulkClaiming, t],
   );
 
+  // Bulk "Add to cart" — adds every selected photo not already in the cart and
+  // not already purchased, then emits a single summary toast.
+  const handleBulkAddToCart = useCallback(
+    (ids: string[]) => {
+      const toAdd = ids.filter((id) => !photosInCart.has(id) && !purchasedPhotoIds.has(id));
+      if (toAdd.length === 0) {
+        toast.info(bulkDownload.alreadyInCart);
+        return;
+      }
+      for (const id of toAdd) addToCart(id);
+      toast.success(
+        toAdd.length === 1
+          ? bulkDownload.addedToCartOne
+          : bulkDownload.addedToCartMany.replace('{n}', String(toAdd.length)),
+      );
+    },
+    [photosInCart, purchasedPhotoIds, addToCart, bulkDownload],
+  );
+
   // ── AI face-search results ─────────────────────────────────────────────
   const faceSearch = useFaceSearch();
   const bucketed = useMemo(
@@ -371,6 +390,7 @@ export function EventPhotoViewer({
       onAddToPhotos: handleAddToPhotos,
       onRemoveFromPhotos: handleRemoveFromPhotos,
       showDownload: true,
+      isPhotoDownloadable,
       onDownload: handleDownloadPhoto,
       moreMenu,
       onClaimToProfile: handleClaimToProfile,
@@ -398,6 +418,7 @@ export function EventPhotoViewer({
       myPhotos,
       handleAddToPhotos,
       handleRemoveFromPhotos,
+      isPhotoDownloadable,
       handleDownloadPhoto,
       moreMenu,
       handleClaimToProfile,
@@ -411,6 +432,14 @@ export function EventPhotoViewer({
 
   const bulkActions = useMemo<PhotoGalleryBulkAction[]>(
     () => [
+      {
+        key: 'cart',
+        label: bulkDownload.addToCart,
+        icon: ShoppingCart,
+        onRun: handleBulkAddToCart,
+        // Paid events only — free events have no cart.
+        visible: !isFreeEvent && showAddToCart,
+      },
       {
         key: 'download',
         label: bulkDownload.download,
@@ -435,7 +464,10 @@ export function EventPhotoViewer({
       },
     ],
     [
+      bulkDownload.addToCart,
       bulkDownload.download,
+      handleBulkAddToCart,
+      showAddToCart,
       downloadSelected,
       isDownloading,
       menuLabels,

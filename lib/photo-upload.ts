@@ -44,11 +44,16 @@ export type ValidatedUpload = {
   buffer: Buffer;
   contentType: string;
   extension: string;
+  /** Displayed pixel dimensions, EXIF-orientation-corrected. `null` when
+   * Sharp can't determine them. */
+  width: number | null;
+  height: number | null;
 };
 
 /**
  * Low-level validator. Inspects magic bytes via Sharp and returns the
- * inferred content-type + canonical extension. Throws on:
+ * inferred content-type + canonical extension + displayed dimensions.
+ * Throws on:
  *   - buffer larger than `MAX_PHOTO_BYTES`
  *   - Sharp can't parse the buffer (not an image)
  *   - detected format is not in `ALLOWED_FORMATS`
@@ -58,22 +63,31 @@ export async function validatePhotoBuffer(buffer: Buffer): Promise<ValidatedUplo
     throw new Error('File is too large. Maximum size is 50 MB per photo.');
   }
 
-  let format: string | undefined;
+  let metadata: sharp.Metadata;
   try {
-    const metadata = await sharp(buffer).metadata();
-    format = metadata.format;
+    metadata = await sharp(buffer).metadata();
   } catch {
     throw new Error('File is not a valid image.');
   }
 
+  const format = metadata.format;
   if (!format || !ALLOWED_FORMATS.has(format)) {
     throw new Error('Unsupported image format.');
   }
+
+  // EXIF orientation 5-8 rotates the image a quarter turn — the displayed
+  // dimensions are the stored ones swapped. Store the displayed dimensions
+  // so the gallery reserves the correct aspect ratio.
+  const swapAxes = (metadata.orientation ?? 1) >= 5;
+  const rawWidth = metadata.width ?? null;
+  const rawHeight = metadata.height ?? null;
 
   return {
     buffer,
     contentType: FORMAT_TO_CONTENT_TYPE[format],
     extension: FORMAT_TO_EXTENSION[format],
+    width: swapAxes ? rawHeight : rawWidth,
+    height: swapAxes ? rawWidth : rawHeight,
   };
 }
 

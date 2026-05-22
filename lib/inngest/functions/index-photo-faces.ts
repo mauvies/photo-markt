@@ -39,6 +39,7 @@
  */
 
 import { revalidateTag } from 'next/cache';
+import { updatePhotoDimensions } from '@/database/queries/photos';
 import {
   addPhotoFace,
   countEventPhotosInFlight,
@@ -359,16 +360,32 @@ export async function runIndexPhotoFacesFlow(
       await markRejected(photoId, storagePath);
       return finalize({ outcome: 'rejected' as const, reason: 'size-mismatch' });
     }
+    let dimensions: { width: number | null; height: number | null };
     try {
       // safeCall sanitizes any Sharp/validation error before it can reach
       // the catch — defensive only, since we already convert to a string
       // reason here. The wrapper is in place so a future caller can't
-      // accidentally let a bloated error escape.
-      await safeCall('validate-buffer', () => validatePhotoBuffer(buffer));
+      // accidentally let a bloated error escape. Only the dimensions cross
+      // the step boundary — never the validated Buffer.
+      dimensions = await safeCall('validate-buffer', async () => {
+        const validated = await validatePhotoBuffer(buffer);
+        return { width: validated.width, height: validated.height };
+      });
     } catch (err) {
       const reason = err instanceof Error ? err.message : 'validation-failed';
       await markRejected(photoId, storagePath);
       return finalize({ outcome: 'rejected' as const, reason });
+    }
+
+    // Persist the displayed dimensions so the gallery reserves space and
+    // lays out without a shift. Layout polish only — a write failure here
+    // is logged but never rejects an otherwise-valid photo.
+    if (dimensions.width !== null && dimensions.height !== null) {
+      try {
+        await updatePhotoDimensions(adminClient, photoId, dimensions.width, dimensions.height);
+      } catch (err) {
+        console.error(`Failed to persist dimensions for photo ${photoId}:`, err);
+      }
     }
 
     // 2c. AI matching disabled, event flagged as containing minors, or no

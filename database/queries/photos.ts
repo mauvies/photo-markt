@@ -43,6 +43,10 @@ export interface PhotoDetail {
   guest_name?: string | null;
   guest_email?: string | null;
   upload_status?: UploadStatus;
+  /** Displayed pixel dimensions — `null` for legacy rows uploaded before
+   * dimensions were captured. Drives the gallery's reserved-space layout. */
+  width: number | null;
+  height: number | null;
 }
 
 /**
@@ -209,7 +213,7 @@ export async function getEventPhotos(
   let query = supabase
     .from('photos')
     .select(
-      'id, original_url, taken_at, city, country, uploaded_by, guest_name, guest_email, upload_status',
+      'id, original_url, taken_at, city, country, uploaded_by, guest_name, guest_email, upload_status, width, height',
     )
     .eq('event_id', eventId);
 
@@ -247,7 +251,7 @@ export async function getEventPhotosPublic(
 ): Promise<PhotoDetail[]> {
   const { data, error } = await supabase
     .from('photos')
-    .select('id, original_url, taken_at, city, country, uploaded_by, guest_name')
+    .select('id, original_url, taken_at, city, country, uploaded_by, guest_name, width, height')
     .eq('event_id', eventId)
     .eq('upload_status', 'approved')
     .order('taken_at', { ascending: true });
@@ -396,6 +400,25 @@ export async function uploadGuestPhoto(
     id: data.id as string,
     delete_token: (data.delete_token as string | null) ?? null,
   };
+}
+
+/**
+ * Persist a photo's displayed pixel dimensions. Called by the Inngest worker
+ * after it downloads and validates the uploaded bytes — the direct-upload
+ * flow never has the bytes inside a Server Action, so dimensions are filled
+ * in here rather than at `createPhoto`/`uploadGuestPhoto` time.
+ */
+export async function updatePhotoDimensions(
+  supabase: SupabaseServerClient,
+  photoId: string,
+  width: number,
+  height: number,
+): Promise<void> {
+  const { error } = await supabase.from('photos').update({ width, height }).eq('id', photoId);
+
+  if (error) {
+    throw new Error(`Failed to update photo dimensions: ${getErrorMessage(error)}`);
+  }
 }
 
 /**

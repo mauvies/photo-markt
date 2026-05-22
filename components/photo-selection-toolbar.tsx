@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-/** Localized copy for the selection toolbar + bulk-download action. */
+/** Localized copy for the selection toolbar + bulk-download / bulk-cart actions. */
 export type BulkDownloadLabels = {
   select: string;
   clear: string;
@@ -20,6 +20,16 @@ export type BulkDownloadLabels = {
   nonePurchased: string;
   /** aria-label for the mobile selection bar's exit (X) button. */
   exitSelection: string;
+  /** Bulk "Add to cart" action button label. */
+  addToCart: string;
+  /** Toast — exactly one photo added to the cart. */
+  addedToCartOne: string;
+  /** Toast — `{n}` photos added to the cart. */
+  addedToCartMany: string;
+  /** Toast — every selected photo was already in the cart. */
+  alreadyInCart: string;
+  /** "View cart" action label on the add-to-cart toast. */
+  viewCart: string;
 };
 
 interface PhotoSelectionToolbarProps {
