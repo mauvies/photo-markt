@@ -16,9 +16,19 @@ export function CloseButton({ className = '' }: { className?: string }) {
       return;
     }
 
-    // Return to the page the user came from. `useLoginHref` / `useSignupHref`
-    // capture it as a (locale-stripped) `?next=` param when sending the user
-    // here; `safeNext` rejects open-redirect targets. Pushing this known
+    // On login / signup the `?next=` target may be an auth-gated page — a
+    // forced logout, or an unauthenticated visit to a protected route, lands
+    // the user here with `?next=` pointing at a page they can't access.
+    // Returning there bounces straight back to login (an infinite loop), so
+    // the cancel ("X") destination must not require auth: always go home.
+    if (pathname?.endsWith('/login') || pathname?.endsWith('/signup')) {
+      router.push(lp('/'));
+      return;
+    }
+
+    // Other pages: return to the page the user came from. `useLoginHref` /
+    // `useSignupHref` capture it as a (locale-stripped) `?next=` param;
+    // `safeNext` rejects open-redirect targets. Pushing this known
     // destination is deterministic — unlike `router.back()`, which depends on
     // an unpredictable history stack and can re-fetch an unexpected route.
     const next = safeNext(searchParams.get('next'));
