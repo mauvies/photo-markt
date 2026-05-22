@@ -142,15 +142,18 @@ export function PhotoGallery({
 
   // Desktop: the inline toolbar always. Touch: the inline toolbar while NOT
   // selecting (it holds the Select button + filter tabs); the floating bars
-  // replace it while selecting. Skip the toolbar entirely when it would be
-  // empty (no Select button, no filter slot, not selecting).
-  const hasToolbarContent = selection.isSelecting || selectable || toolbarLeading != null;
+  // replace it while selecting. The toolbar stays mounted whenever there's a
+  // filter slot (`toolbarLeading`) — so the tabs never disappear, even when
+  // the active tab is empty — or there are photos to select, or selection is
+  // active. It's skipped only for a bare, photo-less, tab-less gallery.
+  const hasToolbarContent =
+    selection.isSelecting || toolbarLeading != null || (selectable && allItems.length > 0);
   const showInlineToolbar = hasToolbarContent && !(coarsePointer && selection.isSelecting);
   const showMobileBars = coarsePointer && selection.isSelecting;
 
   return (
     <div className="space-y-3">
-      {showInlineToolbar && allItems.length > 0 ? (
+      {showInlineToolbar ? (
         <PhotoSelectionToolbar
           className={toolbarClassName}
           leading={selection.isSelecting ? undefined : toolbarLeading}
