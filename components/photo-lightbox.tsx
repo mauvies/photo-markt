@@ -36,6 +36,12 @@ type PhotoLightboxProps = {
   onIndexChange?: (photoId: string) => void;
   // Button visibility
   showDownload?: boolean;
+  /**
+   * Per-photo override for Download. When provided and it returns false for
+   * the current photo, the Download action is hidden even if `showDownload`
+   * is true — an unavailable download is never shown. Defaults to allowed.
+   */
+  canDownloadPhoto?: (photoId: string) => boolean;
   showAddToPhotos?: boolean;
   showAddToCart?: boolean;
   showRemove?: boolean;
@@ -70,6 +76,7 @@ export function PhotoLightbox({
   onClose,
   onIndexChange,
   showDownload = false,
+  canDownloadPhoto,
   showAddToPhotos = false,
   showAddToCart = false,
   showRemove = false,
@@ -133,6 +140,15 @@ export function PhotoLightbox({
     [currentPhoto, claimedIds],
   );
   const canClaim = Boolean(currentPhoto && canClaimToProfile?.(currentPhoto.id));
+
+  // Download visibility, per-photo: hidden when `canDownloadPhoto` rejects the
+  // current photo (e.g. a paid photo the viewer hasn't bought) — never shown
+  // greyed-out.
+  const downloadAllowed = useMemo(
+    () =>
+      showDownload && Boolean(currentPhoto) && (canDownloadPhoto?.(currentPhoto?.id ?? '') ?? true),
+    [showDownload, currentPhoto, canDownloadPhoto],
+  );
 
   const handleClaim = useCallback(() => {
     if (!currentPhoto || !onClaimToProfile) return;
@@ -377,7 +393,7 @@ export function PhotoLightbox({
         isFullscreen={isFullscreen}
         isInMyPhotos={isInMyPhotos}
         isInCart={isInCart}
-        showDownload={showDownload}
+        showDownload={downloadAllowed}
         showAddToPhotos={showAddToPhotos}
         showAddToCart={showAddToCart}
         showRemove={showRemove}
@@ -465,7 +481,7 @@ export function PhotoLightbox({
           visible={controlsVisible}
           labels={actionBarLabels}
           uploaderName={currentPhoto.uploader?.name}
-          showDownload={showDownload}
+          showDownload={downloadAllowed}
           onDownload={handleDownload}
           showFavorite={showAddToPhotos}
           isFavorited={Boolean(isInMyPhotos)}

@@ -197,6 +197,8 @@ export default async function EventDetailPage({
         ...(p.original_url && { alt: p.original_url }),
         tags: photoTags[p.id] || [],
         uploader: buildUploader(p),
+        width: p.width ?? undefined,
+        height: p.height ?? undefined,
       };
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);

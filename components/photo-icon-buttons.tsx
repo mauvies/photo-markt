@@ -18,12 +18,12 @@ import { cn } from '@/lib/utils';
  */
 export interface PhotoMoreMenuConfig {
   labels: PhotoMoreMenuLabels;
-  /** Each item appears only when its handler is set. Download always appears. */
+  /** Each item appears only when its handler is set. */
   onDelete?: (photoId: string) => void;
   onTagPeople?: (photoId: string) => void;
   onShare?: (photoId: string) => void;
   onDownload: (photoId: string) => void;
-  /** Per-photo predicate — when it returns true the Download item is disabled. */
+  /** Per-photo predicate — when it returns true the Download item is hidden. */
   isDownloadDisabled?: (photoId: string) => boolean;
   /** Favorites toggle (bookmarks) — moves the standalone heart into the menu. */
   onFavoriteToggle?: (photoId: string) => void;

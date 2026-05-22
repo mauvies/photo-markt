@@ -80,4 +80,29 @@ describe('validatePhotoBuffer', () => {
     const big = Buffer.alloc(51 * 1024 * 1024);
     await expect(validatePhotoBuffer(big)).rejects.toThrow(/too large/i);
   });
+
+  it('returns the displayed pixel dimensions', async () => {
+    const jpeg = await sharp({
+      create: { width: 800, height: 600, channels: 3, background: '#102030' },
+    })
+      .jpeg()
+      .toBuffer();
+    const result = await validatePhotoBuffer(jpeg);
+    expect(result.width).toBe(800);
+    expect(result.height).toBe(600);
+  });
+
+  it('swaps width/height for an EXIF orientation that rotates a quarter turn', async () => {
+    // A 800×600 landscape image tagged orientation 6 (rotate 90°) displays as
+    // 600×800 portrait — the returned dimensions must reflect the display.
+    const rotated = await sharp({
+      create: { width: 800, height: 600, channels: 3, background: '#abcdef' },
+    })
+      .withMetadata({ orientation: 6 })
+      .jpeg()
+      .toBuffer();
+    const result = await validatePhotoBuffer(rotated);
+    expect(result.width).toBe(600);
+    expect(result.height).toBe(800);
+  });
 });

@@ -54,6 +54,9 @@ type PhotoAlbumViewerProps = {
   onTagTalent?: (photoId: string) => void;
   // Button visibility controls
   showDownload?: boolean;
+  /** Per-photo predicate gating the lightbox Download action — when it returns
+   *  false the Download button is hidden for that photo. Defaults to allowed. */
+  isPhotoDownloadable?: (photoId: string) => boolean;
   showAddToPhotos?: boolean;
   showRemove?: boolean;
   showTagTalent?: boolean;
@@ -104,6 +107,7 @@ export default function PhotoAlbumViewer({
   onRemove,
   onTagTalent,
   showDownload = false,
+  isPhotoDownloadable,
   showAddToPhotos = false,
   showRemove = false,
   showTagTalent = false,
@@ -445,6 +449,7 @@ export default function PhotoAlbumViewer({
         onClose={close}
         onIndexChange={switchTo}
         showDownload={showDownload}
+        canDownloadPhoto={isPhotoDownloadable}
         showAddToPhotos={showAddToPhotos}
         showAddToCart={showAddToCart}
         showRemove={showRemove}

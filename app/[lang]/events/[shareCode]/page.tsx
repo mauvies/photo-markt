@@ -367,6 +367,11 @@ export default async function EventPage({
     failed: dict.events.downloadFailed,
     skipped: dict.events.downloadSkipped,
     nonePurchased: dict.events.downloadNonePurchased,
+    addToCart: dict.events.addToCartMenuItem,
+    addedToCartOne: dict.events.bulkAddedToCartOne,
+    addedToCartMany: dict.events.bulkAddedToCartMany,
+    alreadyInCart: dict.events.bulkAlreadyInCart,
+    viewCart: dict.events.viewCart,
   };
 
   const activityLabel =
@@ -401,6 +406,8 @@ export default async function EventPage({
         originalPath: p.original_url,
         uploadedBy,
         uploader,
+        width: p.width ?? undefined,
+        height: p.height ?? undefined,
       };
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
