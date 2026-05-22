@@ -7,9 +7,8 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   test: {
-    // Default env for unit + integration tests. Component tests will need
-    // `jsdom` — we'll add a separate config or per-file override when those
-    // arrive (see `// @vitest-environment jsdom`).
+    // Default env for unit + integration tests. Component tests opt into a DOM
+    // per file via the `@vitest-environment happy-dom` docblock.
     environment: 'node',
     globals: false,
     // Populate env-var defaults before any test file imports `env.mjs` — see
@@ -28,7 +27,14 @@ export default defineConfig({
       reportsDirectory: './coverage',
       // Files measured for coverage. Exclude obvious noise so the percentage
       // reflects code that's worth testing.
-      include: ['app/**/*.{ts,tsx}', 'lib/**/*.{ts,tsx}', 'database/queries/**/*.ts'],
+      include: [
+        'app/**/*.{ts,tsx}',
+        'lib/**/*.{ts,tsx}',
+        'database/queries/**/*.ts',
+        'components/photo-gallery/**/*.{ts,tsx}',
+        'components/lightbox-action-bar.tsx',
+        'hooks/use-long-press.ts',
+      ],
       exclude: [
         '**/*.d.ts',
         '**/*.test.{ts,tsx}',
