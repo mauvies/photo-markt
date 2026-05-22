@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { LightboxActionBar, type LightboxActionLabels } from '@/components/lightbox-action-bar';
+import type { LightboxActionLabels } from '@/components/lightbox-action-bar';
 import { LightboxToolbar } from '@/components/lightbox-toolbar';
 import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
 
@@ -59,13 +59,14 @@ type PhotoLightboxProps = {
   // Track which photos are in "my photos" and cart
   photosInMyPhotos?: Set<string>;
   photosInCart?: Set<string>;
-  /** When 'bottom', per-photo actions render in a bottom bar (event galleries). */
+  /** Accepted for API compatibility; the lightbox always renders the actions
+   * in the top toolbar. */
   actionBar?: 'top' | 'bottom';
   /** "Add to my profile" claim — free photos only. */
   onClaimToProfile?: (photoId: string) => void;
   claimedIds?: Set<string>;
   canClaimToProfile?: (photoId: string) => boolean;
-  /** Required when `actionBar === 'bottom'`. */
+  /** Localized copy for the claim tooltip + the "Uploaded by" caption. */
   actionBarLabels?: LightboxActionLabels;
 };
 
@@ -92,7 +93,6 @@ export function PhotoLightbox({
   onUntag,
   photosInMyPhotos = new Set(),
   photosInCart = new Set(),
-  actionBar = 'top',
   onClaimToProfile,
   claimedIds,
   canClaimToProfile,
@@ -377,8 +377,8 @@ export function PhotoLightbox({
   // page's layout. The `z-[100]` keeps it above app chrome that uses `z-50`.
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex flex-col bg-black"
-      style={{ height: '100vh', width: '100vw' }}
+      className="fixed top-0 left-0 right-0 z-[100] flex flex-col bg-black"
+      style={{ height: '100dvh', width: '100vw' }}
       onClick={handleBackdropClick}
       onKeyDown={handleBackdropKeyDown}
       role="dialog"
@@ -407,14 +407,17 @@ export function PhotoLightbox({
         onTagTalent={handleTagTalent}
         onUntag={onUntag}
         onFullscreen={handleFullscreen}
-        actionBar={actionBar}
+        showClaim={canClaim}
+        isClaimed={isClaimed}
+        onClaim={handleClaim}
+        actionLabels={actionBarLabels}
       />
 
       {/* Image Container */}
       <div
         className="relative flex items-center justify-center overflow-hidden"
         style={{
-          height: '100vh',
+          height: '100dvh',
           marginTop: 0,
           paddingTop: isFullscreen ? '4.5rem' : '0',
           paddingBottom: isFullscreen ? '0.5rem' : '0',
@@ -476,27 +479,19 @@ export function PhotoLightbox({
         )}
       </div>
 
-      {actionBar === 'bottom' && actionBarLabels ? (
-        <LightboxActionBar
-          visible={controlsVisible}
-          labels={actionBarLabels}
-          uploaderName={currentPhoto.uploader?.name}
-          showDownload={downloadAllowed}
-          onDownload={handleDownload}
-          showFavorite={showAddToPhotos}
-          isFavorited={Boolean(isInMyPhotos)}
-          onFavorite={handleAddToPhotos}
-          showClaim={canClaim}
-          isClaimed={isClaimed}
-          onClaim={handleClaim}
-          showCart={showAddToCart}
-          isInCart={isInCart}
-          onCart={handleAddToCart}
-          showRemove={showRemove}
-          onRemove={handleRemove}
-          showTag={showTagTalent}
-          onTag={handleTagTalent}
-        />
+      {/* "Uploaded by" caption — info only (no tap targets), so the mobile
+          browser's bottom chrome can't occlude anything actionable. */}
+      {currentPhoto.uploader?.name && actionBarLabels?.uploadedBy ? (
+        <div
+          className={`pointer-events-none absolute bottom-0 left-0 right-0 z-20 px-4 pt-8 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] transition-opacity duration-200 ${
+            controlsVisible ? 'opacity-100' : 'opacity-0'
+          }`}
+        >
+          <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/50 via-black/20 to-transparent" />
+          <p className="relative truncate text-xs text-white/80">
+            {actionBarLabels.uploadedBy.replace('{name}', currentPhoto.uploader.name)}
+          </p>
+        </div>
       ) : null}
     </div>,
     document.body,
