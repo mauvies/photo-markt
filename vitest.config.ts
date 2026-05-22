@@ -33,7 +33,6 @@ export default defineConfig({
         'database/queries/**/*.ts',
         'components/photo-gallery/**/*.{ts,tsx}',
         'components/lightbox-action-bar.tsx',
-        'hooks/use-long-press.ts',
       ],
       exclude: [
         '**/*.d.ts',

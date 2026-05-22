@@ -13,16 +13,11 @@ import type {
   PhotoGallerySelectionLabels,
 } from './types';
 
-/** The per-photo action config forwarded to the underlying grid. Selection,
- * long-press and the clean-mobile toggle are owned by `PhotoGallery`. */
+/** The per-photo action config forwarded to the underlying grid. Selection
+ * and the clean-mobile toggle are owned by `PhotoGallery`. */
 type AlbumConfig = Omit<
   ComponentProps<typeof PhotoAlbumViewer>,
-  | 'items'
-  | 'selectionMode'
-  | 'selectedIds'
-  | 'onToggleSelect'
-  | 'onLongPress'
-  | 'cleanOnCoarsePointer'
+  'items' | 'selectionMode' | 'selectedIds' | 'onToggleSelect' | 'cleanOnCoarsePointer'
 >;
 
 interface PhotoGalleryProps {
@@ -33,7 +28,7 @@ interface PhotoGalleryProps {
   sections?: PhotoGallerySection[];
   /** Per-photo / lightbox action config forwarded to the grid. */
   galleryProps: AlbumConfig;
-  /** When false, no Select button, no long-press, no selection mode. */
+  /** When false, no Select button and no selection mode. */
   selectable?: boolean;
   /** Bulk actions for the selection bars (desktop toolbar + mobile bottom bar). */
   bulkActions?: PhotoGalleryBulkAction[];
@@ -59,11 +54,11 @@ const EMPTY_SELECTION_LABELS: PhotoGallerySelectionLabels = {
 };
 
 /**
- * The event photo gallery: a clean grid, tap → lightbox, long-press → selection
- * (touch), hover actions (desktop), and the selection bars. On a touch device
- * the per-photo overlay is hidden and selection mode shows floating top/bottom
- * bars; on desktop the inline `PhotoSelectionToolbar` is used. Owns selection
- * state; the host supplies the per-photo + bulk action handlers.
+ * The event photo gallery: a clean grid, tap → lightbox, hover actions
+ * (desktop), and the selection bars. Selection mode is entered via the
+ * "Select" button — on a touch device it shows floating top/bottom bars, on
+ * desktop the inline `PhotoSelectionToolbar`. Owns selection state; the host
+ * supplies the per-photo + bulk action handlers.
  */
 export function PhotoGallery({
   items,
@@ -117,7 +112,6 @@ export function PhotoGallery({
     selectionMode: selection.isSelecting,
     selectedIds: selection.selectedIds,
     onToggleSelect: selectable ? selection.toggle : undefined,
-    onLongPress: selectable ? selection.toggle : undefined,
     cleanOnCoarsePointer: true,
   } as const;
 
