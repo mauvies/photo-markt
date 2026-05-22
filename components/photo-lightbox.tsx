@@ -1,12 +1,18 @@
 'use client';
 
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { LightboxActionLabels } from '@/components/lightbox-action-bar';
 import { LightboxToolbar } from '@/components/lightbox-toolbar';
+import { getLightboxWindow } from '@/components/photo-lightbox-window';
 import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
+
+// Radius of the preload window around the current photo — the current image
+// plus this many neighbours on each side are kept mounted so next/prev
+// navigation reveals an already-decoded image.
+const PRELOAD_RADIUS = 2;
 
 export type PhotoLightboxItem = {
   id: string;
@@ -101,6 +107,8 @@ export function PhotoLightbox({
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [addedPhotos, setAddedPhotos] = useState<Set<string>>(new Set());
+  // Photo ids whose <Image> has finished loading — drives the loading spinner.
+  const [loadedIds, setLoadedIds] = useState<Set<string>>(new Set());
   // Cart state is now owned by the parent via `useOptimisticPhotosInCart`,
   // which flips `photosInCart` optimistically. We just read from it.
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -110,6 +118,16 @@ export function PhotoLightbox({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const currentPhoto = useMemo(() => items[currentIndex], [items, currentIndex]);
+  // The current photo plus its ±PRELOAD_RADIUS neighbours — all kept mounted
+  // and eagerly loaded so navigating within the window is instant.
+  const windowIndices = useMemo(
+    () => getLightboxWindow(currentIndex, items.length, PRELOAD_RADIUS),
+    [currentIndex, items.length],
+  );
+
+  const markLoaded = useCallback((id: string) => {
+    setLoadedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+  }, []);
 
   // NOTE: We intentionally do NOT mirror `currentIndex` → URL via a
   // useEffect. An effect with `items` in its deps would fire on every
@@ -372,6 +390,8 @@ export function PhotoLightbox({
 
   if (!open || !currentPhoto || !mounted) return null;
 
+  const isCurrentLoaded = loadedIds.has(currentPhoto.id);
+
   // Render through a portal at `document.body` so the lightbox escapes any
   // stacking context (mobile bottom nav, sticky headers) created by the
   // page's layout. The `z-[100]` keeps it above app chrome that uses `z-50`.
@@ -445,20 +465,39 @@ export function PhotoLightbox({
           </button>
         )}
 
-        {/* Image */}
+        {/* Image stack — the current photo plus its ±PRELOAD_RADIUS window,
+            all kept mounted. Neighbours render at opacity-0 so the browser
+            fetches the exact same optimized variant ahead of navigation;
+            switching photos is then just an opacity change. */}
         <div className="relative w-full h-full" style={{ minHeight: 0 }}>
-          <Image
-            src={currentPhoto.url}
-            alt={currentPhoto.alt || 'Photo'}
-            fill
-            className="object-contain pointer-events-none"
-            priority
-            sizes="100vw"
-            draggable={false}
-            unoptimized={
-              currentPhoto.url.includes('/api/') || currentPhoto.url.includes('localhost')
-            }
-          />
+          {windowIndices.map((i) => {
+            const item = items[i];
+            if (!item) return null;
+            const isCurrent = i === currentIndex;
+            return (
+              <Image
+                key={item.id}
+                src={item.url}
+                alt={item.alt || 'Photo'}
+                fill
+                className={`object-contain pointer-events-none transition-opacity duration-150 ${
+                  isCurrent ? 'opacity-100' : 'opacity-0'
+                }`}
+                loading="eager"
+                sizes="100vw"
+                draggable={false}
+                onLoad={() => markLoaded(item.id)}
+                unoptimized={item.url.includes('/api/') || item.url.includes('localhost')}
+              />
+            );
+          })}
+          {/* Spinner for an unavoidable load — first open, or a jump beyond
+              the preload window. In-window navigation is already decoded. */}
+          {isCurrentLoaded ? null : (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-white/70" aria-hidden />
+            </div>
+          )}
         </div>
 
         {/* Next button */}

@@ -1,19 +1,15 @@
 import { ArrowRight, Camera, Download, Sparkles } from 'lucide-react';
 import { cacheLife, cacheTag } from 'next/cache';
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { EventCard } from '@/components/event-card';
 import { EventSearchBar } from '@/components/event-search-bar';
 import { HomeAuthRedirect } from '@/components/home-auth-redirect';
 import { PricingSection } from '@/components/pricing-section';
 import { Button } from '@/components/ui/button';
-import { getLoginHref, getSignupHref } from '@/lib/auth/login-href';
-import type { EventStatus } from '@/lib/event-status';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedPath } from '@/lib/i18n/localized-path';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
-import { EventStatusToggle } from './event-status-toggle';
+import { FeaturedEvents } from './featured-events';
 import { getCachedTopEvents } from './top-events-actions';
 
 async function getCachedDictionary(lang: string) {
@@ -23,32 +19,15 @@ async function getCachedDictionary(lang: string) {
   return getDictionary(lang as Locale);
 }
 
-export default async function Home({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ lang: string }>;
-  searchParams: Promise<Record<string, string>>;
-}) {
+export default async function Home({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = await params;
-  const sp = await searchParams;
 
-  // Supabase may redirect back here instead of /auth/callback when the callback
-  // URL isn't in the allowed redirect list. Forward to the real handler.
-  if (sp.code) {
-    const qs = new URLSearchParams(sp).toString();
-    redirect(`/auth/callback?${qs}`);
-  }
-
-  const validStatus: EventStatus | undefined =
-    sp.status === 'upcoming' || sp.status === 'completed' ? sp.status : undefined;
-
-  const [dict, topEvents, signupHref, loginHref] = await Promise.all([
-    getCachedDictionary(lang),
-    getCachedTopEvents(validStatus),
-    getSignupHref(),
-    getLoginHref(),
-  ]);
+  // No `headers()` / `searchParams` here — the home page is statically
+  // prerendered per locale. The `?code=` OAuth fallback is handled in
+  // `proxy.ts`; the featured-events status filter runs client-side.
+  const [dict, topEvents] = await Promise.all([getCachedDictionary(lang), getCachedTopEvents()]);
+  const signupHref = localizedPath(lang, '/signup');
+  const loginHref = localizedPath(lang, '/login');
   const isAuthenticated = false;
 
   return (
@@ -80,87 +59,26 @@ export default async function Home({
         </div>
       </section>
 
-      {/* Top Events */}
-      {topEvents.length > 0 && (
-        <section className="bg-background py-16 sm:py-20">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
-                {dict.home.featuredEventsTitle}
-              </h2>
-              <div className="flex items-center gap-6">
-                <EventStatusToggle
-                  current={validStatus}
-                  basePath={localizedPath(lang, '/')}
-                  t={{
-                    all: dict.home.statusAll,
-                    upcoming: dict.home.statusUpcoming,
-                    completed: dict.home.statusCompleted,
-                  }}
-                />
-                <Link href={localizedPath(lang, '/events')}>
-                  <Button variant="ghost" size="sm" className="hidden gap-1 xl:flex">
-                    {dict.home.exploreAllEvents}
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
-              </div>
-            </div>
-
-            {/* `touch-pan-x touch-pan-y`: the browser handles horizontal panning
-                of this carousel AND vertical panning (page scroll) natively.
-                `touch-pan-x` alone blocks vertical scroll for touches that
-                start on a carousel item. */}
-            <div className="flex gap-4 overflow-x-auto overscroll-x-contain touch-pan-x touch-pan-y scroll-smooth snap-x snap-mandatory pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:grid xl:grid-cols-4 xl:overflow-visible xl:pb-0">
-              {topEvents.map((event, index) => (
-                <div
-                  key={event.id}
-                  className="w-[80vw] shrink-0 snap-start sm:w-[45vw] xl:w-auto xl:shrink"
-                >
-                  <EventCard
-                    id={event.id}
-                    hrefParam={event.slug ?? event.id}
-                    name={event.name}
-                    date={event.date}
-                    city={event.city}
-                    country={event.country}
-                    activity={event.activity}
-                    activityLabel={
-                      dict.activities[event.activity as keyof typeof dict.activities] ??
-                      event.activity
-                    }
-                    photoCount={event.photoCount}
-                    coverUrl={event.coverUrl}
-                    priority={index < 4}
-                    photographer={{
-                      username: event.photographerUsername,
-                      displayName: event.photographerDisplayName,
-                    }}
-                    status={event.status}
-                    linkPrefix={localizedPath(lang, '/events')}
-                    t={{
-                      photo: dict.eventCard.photo,
-                      photos: dict.eventCard.photos,
-                      noPhotosYet: dict.eventCard.noPhotosYet,
-                      comingSoon: dict.events.comingSoon,
-                      imageUnavailable: dict.eventCard.imageUnavailable,
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-6 flex justify-center xl:hidden">
-              <Link href={localizedPath(lang, '/events')}>
-                <Button variant="outline" size="sm">
-                  {dict.home.exploreAllEvents}
-                  <ArrowRight className="ml-1 h-4 w-4" />
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </section>
-      )}
+      {/* Top Events — status filter runs client-side, see FeaturedEvents */}
+      <FeaturedEvents
+        events={topEvents}
+        lang={lang}
+        activities={dict.activities}
+        t={{
+          title: dict.home.featuredEventsTitle,
+          exploreAllEvents: dict.home.exploreAllEvents,
+          statusAll: dict.home.statusAll,
+          statusUpcoming: dict.home.statusUpcoming,
+          statusCompleted: dict.home.statusCompleted,
+          card: {
+            photo: dict.eventCard.photo,
+            photos: dict.eventCard.photos,
+            noPhotosYet: dict.eventCard.noPhotosYet,
+            comingSoon: dict.events.comingSoon,
+            imageUnavailable: dict.eventCard.imageUnavailable,
+          },
+        }}
+      />
 
       {/* Pricing */}
       <div id="pricing" className="scroll-mt-20">

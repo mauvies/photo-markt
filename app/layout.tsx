@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import { Geist_Mono, Inter, Inter_Tight, Syne } from 'next/font/google';
-import { headers } from 'next/headers';
 import './globals.css';
 import { getSiteUrl } from '@/lib/get-site-url';
+import { defaultLocale } from '@/lib/i18n/config';
 
 const inter = Inter({
   variable: '--font-inter',
@@ -59,16 +59,17 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const lang = (await headers()).get('x-lang') ?? 'es';
-
+  // `lang` is a static default. Reading the real locale from headers() here
+  // would opt every page in the app into dynamic rendering; instead the
+  // [lang] layout applies the correct value client-side via <HtmlLangSync>.
   return (
     <html
-      lang={lang}
+      lang={defaultLocale}
       className={`${inter.variable} ${geistMono.variable} ${interTight.variable} ${syne.variable}`}
     >
       <body className="antialiased">{children}</body>

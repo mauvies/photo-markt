@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { enUS, es } from 'date-fns/locale';
 import { motion } from 'framer-motion';
 import { Clock, Search, SlidersHorizontal, X } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
@@ -14,7 +15,6 @@ import {
   searchSuggestionsAction,
 } from '@/app/[lang]/dashboard/talent/events/actions';
 import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
 import {
   Dialog,
   DialogClose,
@@ -44,6 +44,11 @@ import {
 } from './EventSearchBar.utils';
 import { MOBILE_CALENDAR_COMPONENTS } from './MobileCalendarComponents';
 import { WhereSuggestionsDropdown } from './WhereSuggestionsDropdown';
+
+// The calendar pulls in `react-day-picker`; it only ever renders inside the
+// search/filter dialogs, so code-split it out of the initial home bundle and
+// load it on first dialog open.
+const Calendar = dynamic(() => import('@/components/ui/calendar').then((m) => m.Calendar));
 
 export function EventSearchBar({
   variant = 'hero',
