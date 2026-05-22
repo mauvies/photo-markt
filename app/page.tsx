@@ -1,14 +1,8 @@
 import { redirect } from 'next/navigation';
 
-export default async function RootPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string>>;
-}) {
-  const params = await searchParams;
-  if (params.code) {
-    const qs = new URLSearchParams(params).toString();
-    redirect(`/auth/callback?${qs}`);
-  }
+// Non-localized root. In practice `proxy.ts` redirects `/` to a locale (and
+// forwards any OAuth `?code=` to /auth/callback) before this ever renders —
+// this is just a static fallback.
+export default function RootPage() {
   redirect('/es');
 }

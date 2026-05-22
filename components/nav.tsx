@@ -1,24 +1,28 @@
 'use client';
 
-import type { User } from '@supabase/supabase-js';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { CartLinkButton } from '@/components/cart-link-button';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useAuthUser } from '@/hooks/use-auth-user';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { useLoginHref, useSignupHref } from '@/hooks/use-login-href';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { UserAvatar } from './user-avatar';
 
-export function Nav({ user }: { user: User | null }) {
+export function Nav() {
   const pathname = usePathname();
   const lp = useLocalizedPath();
   const buildLoginHref = useLoginHref();
   const buildSignupHref = useSignupHref();
   const { t } = useTranslations<Dictionary['nav']>();
+  // Auth is resolved client-side so the layout around this header can be
+  // statically prerendered. `user` is `undefined` until the first resolution.
+  const { user } = useAuthUser();
 
   if (
     pathname?.includes('/signup') ||
@@ -56,7 +60,10 @@ export function Nav({ user }: { user: User | null }) {
           <div className="sm:-mr-2">
             <LanguageSwitcher />
           </div>
-          {user ? (
+          {user === undefined ? (
+            // Auth not yet resolved — reserve space, no logged-out flash.
+            <Skeleton className="h-10 w-10 rounded-full" />
+          ) : user ? (
             <UserAvatar user={user} />
           ) : (
             <>

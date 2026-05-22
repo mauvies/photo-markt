@@ -3,7 +3,9 @@ import { createSignedUrl, getPhotosForEvents, getTopEvents } from '@/database/qu
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { type EventStatus, getEventStatus } from '@/lib/event-status';
 
-const DISPLAY_LIMIT = 4;
+// Up to 4 of each status are returned so the client can filter the
+// All / Upcoming / Completed views without a server round-trip.
+const PER_STATUS_LIMIT = 4;
 const CANDIDATE_LIMIT = 50;
 
 export type TopEventItem = {
@@ -22,7 +24,7 @@ export type TopEventItem = {
   status: EventStatus;
 };
 
-export async function getCachedTopEvents(status?: EventStatus): Promise<TopEventItem[]> {
+export async function getCachedTopEvents(): Promise<TopEventItem[]> {
   'use cache';
   cacheTag('top-events');
   // 55 min TTL — safely under the 60-min signed URL expiry
@@ -61,28 +63,22 @@ export async function getCachedTopEvents(status?: EventStatus): Promise<TopEvent
     })
     .sort((a, b) => b.score - a.score);
 
-  let top4: typeof scored;
-  if (status) {
-    top4 = scored.filter((e) => e.status === status).slice(0, DISPLAY_LIMIT);
-  } else {
-    // Default: up to 2 upcoming first, then fill with completed
-    const upcoming = scored.filter((e) => e.status === 'upcoming').slice(0, 2);
-    const completed = scored
-      .filter((e) => e.status === 'completed')
-      .slice(0, DISPLAY_LIMIT - upcoming.length);
-    top4 = [...upcoming, ...completed];
-  }
+  // Up to 4 upcoming + 4 completed, scored order within each group. The
+  // client filters this set for the All / Upcoming / Completed views.
+  const upcoming = scored.filter((e) => e.status === 'upcoming').slice(0, PER_STATUS_LIMIT);
+  const completed = scored.filter((e) => e.status === 'completed').slice(0, PER_STATUS_LIMIT);
+  const selected = [...upcoming, ...completed];
 
   const coverUrls = new Map<string, string>();
   await Promise.all(
-    top4.map(async (e) => {
+    selected.map(async (e) => {
       if (!e.coverPath) return;
       const url = await createSignedUrl(supabaseAdmin, 'photos', e.coverPath, 60 * 60);
       if (url) coverUrls.set(e.id, url);
     }),
   );
 
-  const userIds = [...new Set(top4.map((e) => e.user_id))];
+  const userIds = [...new Set(selected.map((e) => e.user_id))];
   const { data: profiles } = await supabaseAdmin
     .from('profiles')
     .select('id, username, display_name')
@@ -93,7 +89,7 @@ export async function getCachedTopEvents(status?: EventStatus): Promise<TopEvent
     ),
   );
 
-  return top4.map((e) => ({
+  return selected.map((e) => ({
     id: e.id,
     name: e.name,
     date: e.date,

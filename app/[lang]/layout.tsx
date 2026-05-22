@@ -1,10 +1,12 @@
+import { Suspense } from 'react';
 import { ConditionalFooter } from '@/components/conditional-footer';
 import { ConditionalHeader } from '@/components/conditional-header';
 import { Footer } from '@/components/footer';
 import { GuestCartMerge } from '@/components/guest-cart-merge';
 import { GuestCartProvider } from '@/components/guest-cart-provider';
-import Header from '@/components/header';
+import { HtmlLangSync } from '@/components/html-lang-sync';
 import { Main } from '@/components/main';
+import { Nav } from '@/components/nav';
 import { QueryProvider } from '@/components/query-provider';
 import { ScrollToTop } from '@/components/scroll-to-top';
 import { Toaster } from '@/components/ui/sonner';
@@ -28,12 +30,23 @@ export default async function LangLayout({
 
   return (
     <QueryProvider>
+      <HtmlLangSync lang={lang} />
       <ScrollToTop />
       <GuestCartProvider>
         <GuestCartMerge cartRestoredMessage={dict.cart.cartRestored} />
         <ConditionalHeader>
           <TranslationsProvider translations={dict.nav}>
-            <Header />
+            {/* Nav reads `useSearchParams()` (login-href + language switcher);
+                the Suspense boundary keeps the surrounding page statically
+                prerenderable. The fallback reserves the header height so the
+                client-rendered nav doesn't shift the page. */}
+            <Suspense
+              fallback={
+                <div className="sticky top-0 z-50 h-(--header-height) w-full border-b bg-background/80 backdrop-blur" />
+              }
+            >
+              <Nav />
+            </Suspense>
           </TranslationsProvider>
         </ConditionalHeader>
         <Main>{children}</Main>

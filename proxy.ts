@@ -9,6 +9,22 @@ const LOCALES = ['es', 'en'] as const;
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
+  // ── OAuth fallback ───────────────────────────────────────────────────────
+  // Supabase occasionally lands the `?code=` on the site root instead of
+  // /auth/callback. Forward it to the real handler so the home page itself
+  // never needs to read searchParams (which would force dynamic rendering).
+  if (request.nextUrl.searchParams.has('code')) {
+    const segments = pathname.split('/').filter(Boolean);
+    const isHome =
+      segments.length === 0 ||
+      (segments.length === 1 && (LOCALES as readonly string[]).includes(segments[0]));
+    if (isHome) {
+      const callback = new URL('/auth/callback', request.url);
+      callback.search = search;
+      return NextResponse.redirect(callback);
+    }
+  }
+
   // ── Locale detection & redirect ─────────────────────────────────────────
   const firstSegment = pathname.split('/')[1];
   const hasLocale = (LOCALES as readonly string[]).includes(firstSegment);
@@ -36,42 +52,51 @@ export async function proxy(request: NextRequest) {
   });
 
   // ── Supabase session refresh ─────────────────────────────────────────────
-  const supabase = createServerClient(
-    env.NEXT_PUBLIC_SUPABASE_URL,
-    env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            request.cookies.set(name, value);
-            response.cookies.set(name, value, options);
-          });
+  // Only refresh when the request actually carries a Supabase auth cookie.
+  // Anonymous visitors (the common case for marketing pages) have no session
+  // to refresh — skip the Supabase round-trip entirely.
+  const hasSupabaseAuthCookie = request.cookies
+    .getAll()
+    .some((cookie) => cookie.name.startsWith('sb-'));
+
+  if (hasSupabaseAuthCookie) {
+    const supabase = createServerClient(
+      env.NEXT_PUBLIC_SUPABASE_URL,
+      env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              request.cookies.set(name, value);
+              response.cookies.set(name, value, options);
+            });
+          },
         },
       },
-    },
-  );
+    );
 
-  // Refresh session if expired - this prevents race conditions
-  // by centralizing token refresh in proxy
-  // This ensures tokens are refreshed before server components/API routes access them
-  try {
-    await supabase.auth.getUser();
-  } catch (error) {
-    // If it's a refresh token error, the session is invalid
-    // Let individual routes handle authentication errors
-    // This prevents proxy from blocking all requests
-    if (
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      error.code === 'refresh_token_already_used'
-    ) {
-      // Token was already used - clear cookies to force re-auth
-      response.cookies.delete('sb-access-token');
-      response.cookies.delete('sb-refresh-token');
+    // Refresh session if expired - this prevents race conditions
+    // by centralizing token refresh in proxy
+    // This ensures tokens are refreshed before server components/API routes access them
+    try {
+      await supabase.auth.getUser();
+    } catch (error) {
+      // If it's a refresh token error, the session is invalid
+      // Let individual routes handle authentication errors
+      // This prevents proxy from blocking all requests
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        error.code === 'refresh_token_already_used'
+      ) {
+        // Token was already used - clear cookies to force re-auth
+        response.cookies.delete('sb-access-token');
+        response.cookies.delete('sb-refresh-token');
+      }
     }
   }
 
