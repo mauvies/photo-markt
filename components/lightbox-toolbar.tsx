@@ -9,6 +9,7 @@ import {
   ShoppingCart,
   Trash2,
   UserPlus,
+  UserRoundPlus,
   Users,
   X,
 } from 'lucide-react';
@@ -19,6 +20,7 @@ import { untagPhotoForTalentAction } from '@/app/[lang]/dashboard/photographer/e
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import type { LightboxActionLabels } from './lightbox-action-bar';
 import type { PhotoLightboxItem } from './photo-lightbox';
 
 const TOOLBAR_TRANSLATIONS: Record<
@@ -78,9 +80,12 @@ type LightboxToolbarProps = {
   onTagTalent: () => void;
   onUntag?: () => void;
   onFullscreen: () => void;
-  /** When 'bottom', the per-photo actions move to the lightbox bottom bar —
-   * the toolbar then keeps only Close / counter / Share / Fullscreen. */
-  actionBar?: 'top' | 'bottom';
+  /** "Add to my profile" claim — shown for free, unclaimed photos. */
+  showClaim: boolean;
+  isClaimed: boolean;
+  onClaim: () => void;
+  /** Localized copy — supplies the claim action's tooltip. */
+  actionLabels?: LightboxActionLabels;
 };
 
 export function LightboxToolbar({
@@ -105,7 +110,10 @@ export function LightboxToolbar({
   onTagTalent,
   onUntag,
   onFullscreen,
-  actionBar = 'top',
+  showClaim,
+  isClaimed,
+  onClaim,
+  actionLabels,
 }: LightboxToolbarProps) {
   const params = useParams();
   const lang = (params?.lang as string) ?? 'es';
@@ -131,7 +139,7 @@ export function LightboxToolbar({
 
   return (
     <div
-      className={`absolute top-0 left-0 right-0 z-30 flex h-16 items-center px-4 transition-opacity duration-200 ${
+      className={`absolute top-0 left-0 right-0 z-30 flex h-[calc(4rem+env(safe-area-inset-top))] items-center px-4 pt-[env(safe-area-inset-top)] transition-opacity duration-200 ${
         visible ? 'opacity-100' : 'opacity-0 pointer-events-none'
       }`}
       style={{ justifyContent: isFullscreen ? 'flex-end' : 'space-between' }}
@@ -188,7 +196,7 @@ export function LightboxToolbar({
         </Tooltip>
 
         {/* Download */}
-        {actionBar !== 'bottom' && showDownload && (
+        {showDownload && (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -211,7 +219,7 @@ export function LightboxToolbar({
         )}
 
         {/* Add to Photos */}
-        {actionBar !== 'bottom' && showAddToPhotos && (
+        {showAddToPhotos && (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -237,8 +245,32 @@ export function LightboxToolbar({
           </Tooltip>
         )}
 
+        {/* Add to my profile (claim) */}
+        {showClaim && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={isClaimed}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClaim();
+                }}
+                className="h-9 w-9 text-white hover:bg-white/15"
+                aria-label={isClaimed ? actionLabels?.addedToProfile : actionLabels?.addToProfile}
+              >
+                <UserRoundPlus className="h-5 w-5" strokeWidth={1.5} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{isClaimed ? actionLabels?.addedToProfile : actionLabels?.addToProfile}</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+
         {/* Add to Cart */}
-        {actionBar !== 'bottom' && showAddToCart && (
+        {showAddToCart && (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -265,7 +297,7 @@ export function LightboxToolbar({
         )}
 
         {/* Remove */}
-        {actionBar !== 'bottom' && showRemove && (
+        {showRemove && (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -288,8 +320,7 @@ export function LightboxToolbar({
         )}
 
         {/* Tag Talent */}
-        {actionBar !== 'bottom' &&
-          showTagTalent &&
+        {showTagTalent &&
           (hasTags ? (
             <Popover open={isTagPopoverOpen} onOpenChange={setIsTagPopoverOpen}>
               <PopoverTrigger asChild>
