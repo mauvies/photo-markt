@@ -52,14 +52,10 @@ export function Nav({ user }: { user: User | null }) {
         </Link>
 
         <div className="flex items-center gap-2 md:gap-5">
+          {showCart && <CartLinkButton guest={!user} />}
           <div className="sm:-mr-2">
             <LanguageSwitcher />
           </div>
-          {showCart && (
-            <div>
-              <CartLinkButton guest={!user} />
-            </div>
-          )}
           {user ? (
             <UserAvatar user={user} />
           ) : (

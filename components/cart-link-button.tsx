@@ -31,6 +31,10 @@ function GuestCartLinkButton() {
 }
 
 function CartIconButton({ href, count }: { href: string; count: number }) {
+  // The cart icon appears only when the cart holds at least one item — an
+  // empty cart shows nothing (applies to both the auth and guest carts).
+  if (count <= 0) return null;
+
   return (
     <Link href={href}>
       <Button
