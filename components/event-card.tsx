@@ -44,6 +44,8 @@ type EventCardProps = {
   activityLabel: string;
   photoCount: number;
   coverUrl?: string | null;
+  /** /api/thumb/.../small.webp — used instead of coverUrl when available. */
+  coverThumbUrl?: string | null;
   status?: EventStatus;
   // Explore mode: render the photographer's name/handle below the location.
   // Owner mode (where the viewer IS the photographer) leaves this undefined.
@@ -197,6 +199,7 @@ export function EventCard({
   activityLabel,
   photoCount,
   coverUrl,
+  coverThumbUrl,
   status,
   photographer,
   ownerStats,
@@ -225,14 +228,14 @@ export function EventCard({
     <div className="group relative">
       <Link href={`${linkPrefix}/${hrefParam ?? id}`} className="block">
         <div className="relative mb-2 aspect-square w-full overflow-hidden rounded-xl bg-muted">
-          {coverUrl ? (
+          {(coverThumbUrl ?? coverUrl) ? (
             <>
               {/* Image always renders so `onLoad`/`onError` fire. We fade it
                   in once loaded so the swap from skeleton to photo doesn't
                   pop. Badges and the gradient overlay only mount after the
                   image is in to avoid "floating icons over empty space". */}
               <Image
-                src={coverUrl}
+                src={(coverThumbUrl ?? coverUrl) as string}
                 alt={`${name} cover`}
                 fill
                 sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"

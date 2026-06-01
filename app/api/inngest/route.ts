@@ -17,12 +17,14 @@ import { cleanupOnEventDelete } from '@/lib/inngest/functions/cleanup-on-event-d
 import { cleanupOrphanedStorageFiles } from '@/lib/inngest/functions/cleanup-orphaned-storage';
 import { cleanupOrphanedStorageFromMigration } from '@/lib/inngest/functions/cleanup-orphaned-storage-from-migration';
 import { disableEventIndexing } from '@/lib/inngest/functions/disable-event-indexing';
+import { generatePhotoThumbnails } from '@/lib/inngest/functions/generate-photo-thumbnails';
 import { indexPhotoFaces } from '@/lib/inngest/functions/index-photo-faces';
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
   functions: [
     indexPhotoFaces,
+    generatePhotoThumbnails,
     backfillEventIndexing,
     disableEventIndexing,
     cleanupOnEventDelete,

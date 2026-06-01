@@ -19,7 +19,12 @@ import 'react-photo-album/rows.css';
 
 export type PhotoAlbumItem = {
   id: string;
+  /** Fallback URL — watermark route or signed original. Always present. */
   url: string;
+  /** /api/thumb/.../small.webp — only set when thumbnail_status='ready'. */
+  thumbSmall?: string;
+  /** /api/thumb/.../medium.webp — only set when thumbnail_status='ready'. */
+  thumbMedium?: string;
   alt?: string;
   width?: number;
   height?: number;
@@ -188,13 +193,26 @@ export default function PhotoAlbumViewer({
     () =>
       items.map((p) => {
         const dims = dimensions[p.id];
+        const width = dims?.width ?? p.width ?? 1600;
+        const height = dims?.height ?? p.height ?? 1066;
         return {
           id: p.id,
           key: p.id,
-          src: p.url,
+          // When thumbnails are ready, srcSet lets the browser pick the right
+          // variant for the rendered size (small for grid tiles, medium for
+          // wider layouts). Falls back to the full url when absent.
+          src: p.thumbMedium ?? p.url,
+          srcSet:
+            p.thumbSmall && p.thumbMedium
+              ? [
+                  { src: p.thumbSmall, width: 400, height: Math.round((400 / width) * height) },
+                  { src: p.thumbMedium, width: 800, height: Math.round((800 / width) * height) },
+                ]
+              : undefined,
+          sizes: '(max-width: 768px) 50vw, 250px',
           alt: p.alt ?? 'photo',
-          width: dims?.width ?? p.width ?? 1600,
-          height: dims?.height ?? p.height ?? 1066,
+          width,
+          height,
         };
       }),
     [items, dimensions],
@@ -205,6 +223,7 @@ export default function PhotoAlbumViewer({
       items.map((item) => ({
         id: item.id,
         url: item.url,
+        thumbMedium: item.thumbMedium,
         alt: item.alt,
         width: dimensions[item.id]?.width ?? item.width,
         height: dimensions[item.id]?.height ?? item.height,

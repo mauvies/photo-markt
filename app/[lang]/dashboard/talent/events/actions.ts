@@ -9,6 +9,7 @@ import {
   searchPublicEvents,
 } from '@/database/queries';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { thumbRelativeUrl } from '@/lib/thumbnails';
 
 export type { PhotographerSearchResult } from '@/database/queries';
 
@@ -30,6 +31,11 @@ export async function searchEventsAction(filters: {
   lng?: number;
   radiusKm?: number;
 }) {
+  'use cache';
+  // Cache search results for 2 minutes. Invalidated on any public event mutation
+  // via the 'events-public' tag (same tag the mutation actions already revalidate).
+  cacheTag('search-results', 'events-public');
+  cacheLife({ revalidate: 2 * 60, expire: 2 * 60 });
   const result = await searchPublicEvents(supabaseAdmin, filters).catch(async (err: unknown) => {
     // Graceful fallback: if the lat/lng columns don't exist yet (migration pending),
     // retry without the radius params so the search still works.
@@ -54,15 +60,21 @@ export async function searchEventsAction(filters: {
     {
       count: number;
       coverPath: string | null;
+      coverThumbReady: boolean;
     }
   >();
 
   for (const row of photoRows ?? []) {
     if (!row.event_id) continue;
-    const current = stats.get(row.event_id) ?? { count: 0, coverPath: null };
+    const current = stats.get(row.event_id) ?? {
+      count: 0,
+      coverPath: null,
+      coverThumbReady: false,
+    };
     current.count += 1;
     if (!current.coverPath && row.original_url) {
       current.coverPath = row.original_url;
+      current.coverThumbReady = row.thumbnail_status === 'ready';
     }
     stats.set(row.event_id, current);
   }
@@ -96,6 +108,10 @@ export async function searchEventsAction(filters: {
         ...event,
         photoCount: stats.get(event.id)?.count ?? 0,
         coverUrl: coverUrls.get(event.id) ?? null,
+        coverThumbUrl: (() => {
+          const s = stats.get(event.id);
+          return s?.coverThumbReady && s.coverPath ? thumbRelativeUrl(s.coverPath, 'small') : null;
+        })(),
         photographerUsername: profile?.username ?? null,
         photographerDisplayName: profile?.display_name ?? null,
       };

@@ -6,6 +6,7 @@ import type { SupabaseServerClient } from './types';
 import { getErrorMessage } from './types';
 
 export type UploadStatus = 'approved' | 'pending' | 'rejected';
+export type ThumbnailStatus = 'pending' | 'ready' | 'failed';
 
 export interface Photo {
   id: string;
@@ -23,6 +24,7 @@ export interface Photo {
   size_bytes?: number | null;
   original_filename?: string | null;
   created_at?: string;
+  thumbnail_status?: ThumbnailStatus;
 }
 
 export interface PhotoSummary {
@@ -30,6 +32,7 @@ export interface PhotoSummary {
   original_url: string | null;
   taken_at: string | null;
   upload_status?: UploadStatus;
+  thumbnail_status?: ThumbnailStatus;
 }
 
 export interface PhotoDetail {
@@ -47,6 +50,7 @@ export interface PhotoDetail {
    * dimensions were captured. Drives the gallery's reserved-space layout. */
   width: number | null;
   height: number | null;
+  thumbnail_status?: ThumbnailStatus;
 }
 
 /**
@@ -180,7 +184,7 @@ export async function getPhotosForEvents(
 
   const { data, error } = await supabase
     .from('photos')
-    .select('event_id, original_url, taken_at')
+    .select('event_id, original_url, taken_at, thumbnail_status')
     .in('event_id', eventIds)
     .eq('upload_status', 'approved')
     .order('taken_at', { ascending: true })
@@ -213,7 +217,7 @@ export async function getEventPhotos(
   let query = supabase
     .from('photos')
     .select(
-      'id, original_url, taken_at, city, country, uploaded_by, guest_name, guest_email, upload_status, width, height',
+      'id, original_url, taken_at, city, country, uploaded_by, guest_name, guest_email, upload_status, width, height, thumbnail_status',
     )
     .eq('event_id', eventId);
 
@@ -251,7 +255,9 @@ export async function getEventPhotosPublic(
 ): Promise<PhotoDetail[]> {
   const { data, error } = await supabase
     .from('photos')
-    .select('id, original_url, taken_at, city, country, uploaded_by, guest_name, width, height')
+    .select(
+      'id, original_url, taken_at, city, country, uploaded_by, guest_name, width, height, thumbnail_status',
+    )
     .eq('event_id', eventId)
     .eq('upload_status', 'approved')
     .order('taken_at', { ascending: true });
@@ -418,6 +424,21 @@ export async function updatePhotoDimensions(
 
   if (error) {
     throw new Error(`Failed to update photo dimensions: ${getErrorMessage(error)}`);
+  }
+}
+
+export async function updatePhotoThumbnailStatus(
+  supabase: SupabaseServerClient,
+  photoId: string,
+  status: ThumbnailStatus,
+): Promise<void> {
+  const { error } = await supabase
+    .from('photos')
+    .update({ thumbnail_status: status })
+    .eq('id', photoId);
+
+  if (error) {
+    throw new Error(`Failed to update photo thumbnail_status: ${getErrorMessage(error)}`);
   }
 }
 

@@ -93,6 +93,7 @@ export function FeaturedEvents({ events, lang, activities, t }: FeaturedEventsPr
                 }
                 photoCount={event.photoCount}
                 coverUrl={event.coverUrl}
+                coverThumbUrl={event.coverThumbUrl}
                 priority={index < DISPLAY_LIMIT}
                 photographer={{
                   username: event.photographerUsername,
