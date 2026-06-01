@@ -6,6 +6,8 @@ import { ContributeDialog } from '@/app/[lang]/events/[shareCode]/contribute-dia
 import { UploadProgressProvider } from '@/app/[lang]/events/[shareCode]/upload-progress-provider';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { EventGalleryWithFaceSearch } from '@/components/event-gallery-with-face-search';
+import { EventSaveButton } from '@/components/event-save-button';
+import { MarkEventSeen } from '@/components/mark-event-seen';
 import {
   createPhotoUrls,
   getEventByShareCode,
@@ -304,8 +306,12 @@ export default async function ExploreEventDetailPage({
   // owns the progress dialog that `ContributeDialog` triggers indirectly.
   const body = (
     <div className="space-y-4">
+      <MarkEventSeen eventId={event.id} />
       <div>
-        <DashboardHeader title={event.name} />
+        <DashboardHeader
+          title={event.name}
+          actions={<EventSaveButton eventId={event.id} variant="button" />}
+        />
         <div className="mt-2 text-sm leading-relaxed text-muted-foreground">
           {new Date(event.date).toDateString().split(' ').slice(1).join(' ')} •{' '}
           {event.city[0]?.toUpperCase() + event.city.slice(1)}

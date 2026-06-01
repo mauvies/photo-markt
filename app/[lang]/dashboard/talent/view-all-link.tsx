@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 export function ViewAllLink() {
   return (
     <Link
-      href="/dashboard/talent/photos"
+      href="/dashboard/talent/favorites"
       className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'text-xs sm:text-sm')}
     >
       View all

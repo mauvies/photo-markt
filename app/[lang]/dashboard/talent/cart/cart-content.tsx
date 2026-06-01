@@ -198,7 +198,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
           <Button onClick={() => router.push(lp('/dashboard/talent/events'))} variant="default">
             {t('browseEvents')}
           </Button>
-          <Button onClick={() => router.push(lp('/dashboard/talent/photos'))} variant="outline">
+          <Button onClick={() => router.push(lp('/dashboard/talent/favorites'))} variant="outline">
             {t('viewMyPhotos')}
           </Button>
         </div>

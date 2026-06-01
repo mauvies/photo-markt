@@ -18,6 +18,7 @@
     "goToDashboard": "Ir al panel",
     "explore": "Explorar",
     "myPhotos": "Mis fotos",
+    "favorites": "Favoritos",
     "orders": "Pedidos",
     "profile": "Perfil",
     "privacy": "Privacidad",
@@ -30,6 +31,18 @@
     "sales": "Ventas",
     "earnings": "Ganancias",
     "revenue": "Ganancias"
+  },
+  "savedEvents": {
+    "save": "Guardar evento",
+    "saved": "Guardado",
+    "savedToast": "Evento guardado",
+    "removedToast": "Evento eliminado",
+    "failedSave": "No se pudo guardar el evento",
+    "failedRemove": "No se pudo eliminar el evento",
+    "emptyTitle": "Aún no has guardado eventos",
+    "emptyBody": "Guarda un evento para encontrarlo aquí más tarde.",
+    "loadMore": "Cargar más",
+    "loading": "Cargando…"
   },
   "home": {
     "heroHeadline1": "Tus Mejores Fotos",
@@ -282,6 +295,10 @@
   "talentDashboard": {
     "myPhotos": "Mis fotos",
     "myPhotosSubtitle": "Fotos que has seleccionado o etiquetado.",
+    "favorites": "Favoritos",
+    "favoritesSubtitle": "Fotos y eventos que has guardado para más tarde.",
+    "favoritesTabPhotos": "Fotos",
+    "favoritesTabEvents": "Eventos",
     "shoppingCart": "Carrito de compras",
     "reviewPhotos": "Revisa tus fotos seleccionadas antes de pagar.",
     "orders": "Pedidos",

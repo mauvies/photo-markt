@@ -520,7 +520,7 @@ export default async function EventPage({
           </div>
 
           {showContribute && event.share_code ? (
-            <div className="mb-6">
+            <div className="mb-4">
               {/* The Dropzone inside the modal reads its labels ("Upload",
                 "Or drag files here") from the newEvent namespace via
                 useTranslations. */}

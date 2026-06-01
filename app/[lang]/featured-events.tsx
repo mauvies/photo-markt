@@ -4,6 +4,7 @@ import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { EventCard, type EventCardLabels } from '@/components/event-card';
+import { EventSaveButton } from '@/components/event-save-button';
 import { Button } from '@/components/ui/button';
 import type { EventStatus } from '@/lib/event-status';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
@@ -100,6 +101,7 @@ export function FeaturedEvents({ events, lang, activities, t }: FeaturedEventsPr
                 }}
                 status={event.status}
                 linkPrefix={eventsHref}
+                saveSlot={<EventSaveButton eventId={event.id} />}
                 t={t.card}
               />
             </div>

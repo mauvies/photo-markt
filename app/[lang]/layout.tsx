@@ -8,6 +8,7 @@ import { HtmlLangSync } from '@/components/html-lang-sync';
 import { Main } from '@/components/main';
 import { Nav } from '@/components/nav';
 import { QueryProvider } from '@/components/query-provider';
+import { SavedEventsLabelsProvider } from '@/components/saved-events-labels-provider';
 import { ScrollToTop } from '@/components/scroll-to-top';
 import { Toaster } from '@/components/ui/sonner';
 import { type Locale, locales } from '@/lib/i18n/config';
@@ -30,31 +31,33 @@ export default async function LangLayout({
 
   return (
     <QueryProvider>
-      <HtmlLangSync lang={lang} />
-      <ScrollToTop />
-      <GuestCartProvider>
-        <GuestCartMerge cartRestoredMessage={dict.cart.cartRestored} />
-        <ConditionalHeader>
-          <TranslationsProvider translations={dict.nav}>
-            {/* Nav reads `useSearchParams()` (login-href + language switcher);
+      <SavedEventsLabelsProvider labels={dict.savedEvents}>
+        <HtmlLangSync lang={lang} />
+        <ScrollToTop />
+        <GuestCartProvider>
+          <GuestCartMerge cartRestoredMessage={dict.cart.cartRestored} />
+          <ConditionalHeader>
+            <TranslationsProvider translations={dict.nav}>
+              {/* Nav reads `useSearchParams()` (login-href + language switcher);
                 the Suspense boundary keeps the surrounding page statically
                 prerenderable. The fallback reserves the header height so the
                 client-rendered nav doesn't shift the page. */}
-            <Suspense
-              fallback={
-                <div className="sticky top-0 z-50 h-(--header-height) w-full border-b bg-background/80 backdrop-blur" />
-              }
-            >
-              <Nav />
-            </Suspense>
-          </TranslationsProvider>
-        </ConditionalHeader>
-        <Main>{children}</Main>
-        <ConditionalFooter>
-          <Footer dict={dict} lang={lang} />
-        </ConditionalFooter>
-        <Toaster />
-      </GuestCartProvider>
+              <Suspense
+                fallback={
+                  <div className="sticky top-0 z-50 h-(--header-height) w-full border-b bg-background/80 backdrop-blur" />
+                }
+              >
+                <Nav />
+              </Suspense>
+            </TranslationsProvider>
+          </ConditionalHeader>
+          <Main>{children}</Main>
+          <ConditionalFooter>
+            <Footer dict={dict} lang={lang} />
+          </ConditionalFooter>
+          <Toaster />
+        </GuestCartProvider>
+      </SavedEventsLabelsProvider>
     </QueryProvider>
   );
 }

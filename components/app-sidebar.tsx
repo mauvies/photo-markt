@@ -62,7 +62,7 @@ export function AppSidebar({
 
   const talentNav = [
     { title: navLabels.overview, url: '/dashboard/talent', icon: Home },
-    { title: navLabels.myPhotos, url: '/dashboard/talent/photos', icon: Images },
+    { title: navLabels.myPhotos, url: '/dashboard/talent/favorites', icon: Images },
     { title: navLabels.profile, url: '/dashboard/talent/profile', icon: User },
     { title: navLabels.explore, url: '/dashboard/talent/events', icon: Compass },
     { title: navLabels.orders, url: '/dashboard/talent/orders', icon: Package },

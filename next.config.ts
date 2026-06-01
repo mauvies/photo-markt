@@ -26,6 +26,18 @@ const nextConfig: NextConfig = {
       static: 180,
     },
   },
+  async redirects() {
+    return [
+      {
+        // The talent "My photos" page became the tabbed "Favorites" page.
+        // Keep old links/bookmarks working. `:lang` covers /es and /en (the
+        // locale middleware prefixes bare paths before this runs).
+        source: '/:lang/dashboard/talent/photos',
+        destination: '/:lang/dashboard/talent/favorites',
+        permanent: false,
+      },
+    ];
+  },
   async headers() {
     return [
       {

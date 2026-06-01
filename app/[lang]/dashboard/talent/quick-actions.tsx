@@ -25,7 +25,7 @@ export function QuickActions({ cartItemCount }: QuickActionsProps) {
           Explore Events
         </Link>
         <Link
-          href="/dashboard/talent/photos"
+          href="/dashboard/talent/favorites"
           className={cn(
             buttonVariants({ variant: 'outline', size: 'lg' }),
             'w-full justify-start text-sm sm:text-base',

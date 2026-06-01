@@ -57,7 +57,7 @@ vi.mock('next/headers', () => ({
 import {
   listMyTaggedPhotos,
   removePhotosFromMyPhotosAction,
-} from '@/app/[lang]/dashboard/talent/photos/actions';
+} from '@/app/[lang]/dashboard/talent/favorites/actions';
 import {
   createServiceClient,
   createTestEvent,
