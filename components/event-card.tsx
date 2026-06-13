@@ -62,6 +62,11 @@ type EventCardProps = {
   // Floating top-left slot (e.g. dropdown trigger with edit/delete options).
   // Only rendered for owner mode.
   actions?: ReactNode;
+  // Floating bottom-right slot (e.g. the talent save/bookmark button). Sits in
+  // the corner left free in explore/talent mode (the VisibilityBadge there is
+  // owner-only). The slotted control is responsible for swallowing its own
+  // click so it doesn't navigate the card's link.
+  saveSlot?: ReactNode;
   // Set on the first row of an above-the-fold grid so Next preloads the
   // cover and skips lazy-loading. Defaults to false — too many priority
   // images would defeat the preload budget.
@@ -201,6 +206,7 @@ export function EventCard({
   photographer,
   ownerStats,
   actions,
+  saveSlot,
   priority = false,
   t = DEFAULT_LABELS,
 }: EventCardProps) {
@@ -271,6 +277,7 @@ export function EventCard({
                       privateLabel={ownerStats.privateLabel}
                     />
                   )}
+                  {saveSlot && <div className="absolute bottom-2 right-2 z-10">{saveSlot}</div>}
                 </>
               )}
             </>
@@ -292,6 +299,7 @@ export function EventCard({
                   privateLabel={ownerStats.privateLabel}
                 />
               )}
+              {saveSlot && <div className="absolute bottom-2 right-2 z-10">{saveSlot}</div>}
             </div>
           )}
         </div>

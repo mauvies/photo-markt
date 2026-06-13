@@ -18,6 +18,7 @@
     "goToDashboard": "Go to dashboard",
     "explore": "Explore",
     "myPhotos": "My photos",
+    "favorites": "Favorites",
     "orders": "Orders",
     "profile": "Profile",
     "privacy": "Privacy",
@@ -30,6 +31,18 @@
     "sales": "Sales",
     "earnings": "Earnings",
     "revenue": "Earnings"
+  },
+  "savedEvents": {
+    "save": "Save event",
+    "saved": "Saved",
+    "savedToast": "Event saved",
+    "removedToast": "Event removed",
+    "failedSave": "Failed to save event",
+    "failedRemove": "Failed to remove event",
+    "emptyTitle": "No saved events yet",
+    "emptyBody": "Save an event to find it again here.",
+    "loadMore": "Load more",
+    "loading": "Loading…"
   },
   "home": {
     "heroHeadline1": "Your Best Shots",
@@ -282,6 +295,10 @@
   "talentDashboard": {
     "myPhotos": "My Photos",
     "myPhotosSubtitle": "Photos you have selected or tagged.",
+    "favorites": "Favorites",
+    "favoritesSubtitle": "Photos and events you've saved for later.",
+    "favoritesTabPhotos": "Photos",
+    "favoritesTabEvents": "Events",
     "shoppingCart": "Shopping Cart",
     "reviewPhotos": "Review your selected photos before checkout.",
     "orders": "Orders",

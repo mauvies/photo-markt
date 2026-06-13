@@ -35,6 +35,8 @@ export * from './profiles';
 export * from './rekognition';
 // Re-export sales queries
 export * from './sales';
+// Re-export saved-events (talent event bookmark) queries
+export * from './saved-events';
 // Re-export storage queries
 export * from './storage';
 // Re-export subscription queries

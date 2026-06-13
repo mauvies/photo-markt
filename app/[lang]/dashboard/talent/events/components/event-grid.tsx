@@ -2,6 +2,7 @@
 
 import { Filter, Loader2, Search } from 'lucide-react';
 import { EventCard } from '@/components/event-card';
+import { EventSaveButton } from '@/components/event-save-button';
 import { Button } from '@/components/ui/button';
 import type { EventWithStats } from '@/hooks/use-event-search';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
@@ -117,6 +118,7 @@ export function EventGrid({
             status={event.status}
             linkPrefix={eventLinkPrefix}
             priority={index < 4}
+            saveSlot={<EventSaveButton eventId={event.id} />}
             t={{
               photo: t('photo'),
               photos: t('photos'),

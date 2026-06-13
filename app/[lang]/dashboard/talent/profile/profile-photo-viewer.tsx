@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { removePhotosFromMyPhotosAction } from '@/app/[lang]/dashboard/talent/photos/actions';
+import { removePhotosFromMyPhotosAction } from '@/app/[lang]/dashboard/talent/favorites/actions';
 import { type PhotoAlbumItem, PhotoGallery } from '@/components/photo-gallery';
 import type { PhotoMoreMenuConfig } from '@/components/photo-icon-buttons';
 import {

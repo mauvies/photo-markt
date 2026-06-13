@@ -34,8 +34,8 @@ export async function addPhotoToMyPhotosAction(photoId: string): Promise<void> {
   await tagPhotoForTalent(supabase, photoId, user.id, user.id);
   revalidatePath('/es/dashboard/talent/events/[id]', 'page');
   revalidatePath('/en/dashboard/talent/events/[id]', 'page');
-  revalidatePath('/es/dashboard/talent/photos', 'page');
-  revalidatePath('/en/dashboard/talent/photos', 'page');
+  revalidatePath('/es/dashboard/talent/favorites', 'page');
+  revalidatePath('/en/dashboard/talent/favorites', 'page');
 }
 
 /**
@@ -61,8 +61,8 @@ export async function removePhotoFromMyPhotosAction(photoId: string): Promise<vo
   await untagPhotoForTalent(supabase, photoId, user.id);
   revalidatePath('/es/dashboard/talent/events/[id]', 'page');
   revalidatePath('/en/dashboard/talent/events/[id]', 'page');
-  revalidatePath('/es/dashboard/talent/photos', 'page');
-  revalidatePath('/en/dashboard/talent/photos', 'page');
+  revalidatePath('/es/dashboard/talent/favorites', 'page');
+  revalidatePath('/en/dashboard/talent/favorites', 'page');
 }
 
 /**
@@ -129,8 +129,8 @@ export async function addPhotosToMyPhotosAction(photoIds: string[]): Promise<voi
   await tagPhotosForTalent(supabase, photoIds, user.id, user.id);
   revalidatePath('/es/dashboard/talent/events/[id]', 'page');
   revalidatePath('/en/dashboard/talent/events/[id]', 'page');
-  revalidatePath('/es/dashboard/talent/photos', 'page');
-  revalidatePath('/en/dashboard/talent/photos', 'page');
+  revalidatePath('/es/dashboard/talent/favorites', 'page');
+  revalidatePath('/en/dashboard/talent/favorites', 'page');
 }
 
 /**

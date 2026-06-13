@@ -51,7 +51,7 @@ export function TalentDashboardHeader({
 
   const talentNavLinks = [
     { href: '/dashboard/talent/events', label: navLabels.explore, icon: Search },
-    { href: '/dashboard/talent/photos', label: navLabels.myPhotos, icon: Package },
+    { href: '/dashboard/talent/favorites', label: navLabels.myPhotos, icon: Package },
     { href: '/dashboard/talent/orders', label: navLabels.orders, icon: ShoppingBag },
     { href: '/dashboard/talent/profile', label: navLabels.profile, icon: User },
     // Privacy lives in the avatar dropdown, not the top nav — it's a
