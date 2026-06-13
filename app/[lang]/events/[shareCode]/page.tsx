@@ -30,6 +30,7 @@ import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { stringifyJsonLd } from '@/lib/json-ld';
+import { thumbRelativeUrl } from '@/lib/thumbnails';
 import { ContributeDialog } from './contribute-dialog';
 import { PublicEventPhotoViewer } from './public-event-photo-viewer';
 import { UploadProgressProvider } from './upload-progress-provider';
@@ -399,9 +400,14 @@ export default async function EventPage({
         const name = ownerProfile?.display_name ?? ownerProfile?.username ?? '';
         if (name) uploader = { name, isAuthenticated: true };
       }
+      const thumbsReady = (p as { thumbnail_status?: string }).thumbnail_status === 'ready';
       return {
         id: p.id,
         url,
+        thumbSmall:
+          thumbsReady && p.original_url ? thumbRelativeUrl(p.original_url, 'small') : undefined,
+        thumbMedium:
+          thumbsReady && p.original_url ? thumbRelativeUrl(p.original_url, 'medium') : undefined,
         alt: `${activityLabel} photo at ${event.name} in ${location}`,
         originalPath: p.original_url,
         uploadedBy,

@@ -16,7 +16,11 @@ const PRELOAD_RADIUS = 2;
 
 export type PhotoLightboxItem = {
   id: string;
+  /** Full-resolution fallback (watermark route or signed original). */
   url: string;
+  /** /api/thumb/.../medium.webp — shown as the visible lightbox image when
+   * available. The original (url) is only fetched on explicit Download. */
+  thumbMedium?: string;
   alt?: string;
   width?: number;
   height?: number;
@@ -477,7 +481,7 @@ export function PhotoLightbox({
             return (
               <Image
                 key={item.id}
-                src={item.url}
+                src={item.thumbMedium ?? item.url}
                 alt={item.alt || 'Photo'}
                 fill
                 className={`object-contain pointer-events-none transition-opacity duration-150 ${
@@ -487,7 +491,10 @@ export function PhotoLightbox({
                 sizes="100vw"
                 draggable={false}
                 onLoad={() => markLoaded(item.id)}
-                unoptimized={item.url.includes('/api/') || item.url.includes('localhost')}
+                unoptimized={
+                  (item.thumbMedium ?? item.url).includes('/api/') ||
+                  (item.thumbMedium ?? item.url).includes('localhost')
+                }
               />
             );
           })}

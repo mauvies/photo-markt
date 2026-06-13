@@ -2,6 +2,7 @@ import { cacheLife, cacheTag } from 'next/cache';
 import { createSignedUrl, getPhotosForEvents, getTopEvents } from '@/database/queries';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { type EventStatus, getEventStatus } from '@/lib/event-status';
+import { thumbRelativeUrl } from '@/lib/thumbnails';
 
 // Up to 4 of each status are returned so the client can filter the
 // All / Upcoming / Completed views without a server round-trip.
@@ -19,6 +20,8 @@ export type TopEventItem = {
   pricePerPhoto: number | null;
   photoCount: number;
   coverUrl: string | null;
+  /** /api/thumb/.../small.webp — set when the cover photo has thumbnails ready. */
+  coverThumbUrl: string | null;
   photographerUsername: string | null;
   photographerDisplayName: string | null;
   status: EventStatus;
@@ -35,12 +38,18 @@ export async function getCachedTopEvents(): Promise<TopEventItem[]> {
   const eventIds = candidates.map((e) => e.id);
   const photoRows = await getPhotosForEvents(supabaseAdmin, eventIds);
 
-  const stats = new Map<string, { count: number; coverPath: string | null }>();
+  const stats = new Map<
+    string,
+    { count: number; coverPath: string | null; coverThumbReady: boolean }
+  >();
   for (const row of photoRows) {
     if (!row.event_id) continue;
-    const s = stats.get(row.event_id) ?? { count: 0, coverPath: null };
+    const s = stats.get(row.event_id) ?? { count: 0, coverPath: null, coverThumbReady: false };
     s.count++;
-    if (!s.coverPath && row.original_url) s.coverPath = row.original_url;
+    if (!s.coverPath && row.original_url) {
+      s.coverPath = row.original_url;
+      s.coverThumbReady = row.thumbnail_status === 'ready';
+    }
     stats.set(row.event_id, s);
   }
 
@@ -57,6 +66,7 @@ export async function getCachedTopEvents(): Promise<TopEventItem[]> {
         ...e,
         photoCount,
         coverPath: stats.get(e.id)?.coverPath ?? null,
+        coverThumbReady: stats.get(e.id)?.coverThumbReady ?? false,
         score,
         status: getEventStatus(e.date),
       };
@@ -100,6 +110,7 @@ export async function getCachedTopEvents(): Promise<TopEventItem[]> {
     pricePerPhoto: e.price_per_photo,
     photoCount: e.photoCount,
     coverUrl: coverUrls.get(e.id) ?? null,
+    coverThumbUrl: e.coverThumbReady && e.coverPath ? thumbRelativeUrl(e.coverPath, 'small') : null,
     photographerUsername: profileMap.get(e.user_id)?.username ?? null,
     photographerDisplayName: profileMap.get(e.user_id)?.display_name ?? null,
     status: e.status,

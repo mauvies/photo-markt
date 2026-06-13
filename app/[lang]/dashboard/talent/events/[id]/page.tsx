@@ -30,6 +30,7 @@ import { getBaseUrl } from '@/lib/get-base-url';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
+import { thumbRelativeUrl } from '@/lib/thumbnails';
 import { EventPhotoViewer } from './event-photo-viewer';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -259,9 +260,14 @@ export default async function ExploreEventDetailPage({
           if (name) uploader = { name, isAuthenticated: true };
         }
       }
+      const thumbsReady = (p as { thumbnail_status?: string }).thumbnail_status === 'ready';
       return {
         id: p.id,
         url,
+        thumbSmall:
+          thumbsReady && p.original_url ? thumbRelativeUrl(p.original_url, 'small') : undefined,
+        thumbMedium:
+          thumbsReady && p.original_url ? thumbRelativeUrl(p.original_url, 'medium') : undefined,
         alt: p.original_url || `Photo from ${event.name}`,
         uploader,
         width: p.width ?? undefined,

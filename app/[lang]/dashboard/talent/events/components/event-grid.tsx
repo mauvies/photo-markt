@@ -111,6 +111,7 @@ export function EventGrid({
             activityLabel={activities[event.activity as keyof typeof activities] ?? event.activity}
             photoCount={event.photoCount}
             coverUrl={event.coverUrl}
+            coverThumbUrl={(event as { coverThumbUrl?: string | null }).coverThumbUrl}
             photographer={{
               username: event.photographerUsername,
               displayName: event.photographerDisplayName,
