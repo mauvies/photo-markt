@@ -45,14 +45,14 @@ export interface WatermarkTileConfig {
 export const DEFAULT_WATERMARK_TILE_CONFIG: WatermarkTileConfig = {
   text: 'PHOTO MARKT',
   tileSize: 400,
-  fontSize: 35,
+  fontSize: 30,
   angleDeg: -40,
-  opacity: 0.5,
+  opacity: 0.4,
   color: '#ffffff',
   rows: 6,
   letterSpacing: 4,
   fontFamily: 'Helvetica Neue, Helvetica, Arial, sans-serif',
-  shadow: { color: '#000000', opacity: 0.45, offsetX: 1.5, offsetY: 1.5 },
+  shadow: { color: '#000000', opacity: 0.45, offsetX: 1.8, offsetY: 1.8 },
 };
 
 /** Escape the five XML metacharacters so arbitrary text can't break the SVG. */
