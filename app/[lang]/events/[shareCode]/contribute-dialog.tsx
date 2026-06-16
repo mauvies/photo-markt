@@ -56,7 +56,7 @@ export function ContributeDialog({
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{t.uploadHeading}</DialogTitle>
             <DialogDescription>

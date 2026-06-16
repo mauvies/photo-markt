@@ -129,17 +129,24 @@ export function usePhotoUpload(): UsePhotoUploadReturn {
 
     // ─── Stage 1: mint signed upload URLs ─────────────────────────────────
     setStage('preparing');
-    const { uploads } = await createPhotoUploadUrls({
-      eventId,
-      files: files.map((f) => ({
-        originalFilename: f.name,
-        sizeBytes: f.size,
-        mimeType: f.type,
-      })),
-      shareCode: shareCode ?? null,
-      guestName: guestName ?? null,
-      guestEmail: guestEmail ?? null,
-    });
+    const CHUNK_SIZE = 100;
+    const fileMeta = files.map((f) => ({
+      originalFilename: f.name,
+      sizeBytes: f.size,
+      mimeType: f.type,
+    }));
+    const urlChunks: Awaited<ReturnType<typeof createPhotoUploadUrls>>['uploads'] = [];
+    for (let i = 0; i < fileMeta.length; i += CHUNK_SIZE) {
+      const chunk = await createPhotoUploadUrls({
+        eventId,
+        files: fileMeta.slice(i, i + CHUNK_SIZE),
+        shareCode: shareCode ?? null,
+        guestName: guestName ?? null,
+        guestEmail: guestEmail ?? null,
+      });
+      urlChunks.push(...chunk.uploads);
+    }
+    const uploads = urlChunks;
     if (uploads.length !== files.length) {
       throw new Error('Mismatch between requested files and signed URLs.');
     }
@@ -175,37 +182,43 @@ export function usePhotoUpload(): UsePhotoUploadReturn {
     let insertSkipped: Array<{ path: string; reason: string }> = [];
 
     if (succeeded.length > 0) {
+      const photoMeta = succeeded.map((s) => ({
+        path: s.path,
+        originalFilename: s.file.name,
+        sizeBytes: s.sizeBytes,
+      }));
       const backoffs = [500, 1500, 4000];
-      let lastErr: unknown = null;
-      for (let attempt = 0; attempt < backoffs.length; attempt += 1) {
-        try {
-          const attachResult = await attachPhotosToEvent({
-            eventId,
-            shareCode: shareCode ?? null,
-            guestName: guestName ?? null,
-            guestEmail: guestEmail ?? null,
-            photos: succeeded.map((s) => ({
-              path: s.path,
-              originalFilename: s.file.name,
-              sizeBytes: s.sizeBytes,
-            })),
-          });
-          attached = attachResult.inserted.map((row) => ({
-            id: row.id,
-            path: row.path,
-            deleteToken: row.deleteToken,
-          }));
-          insertSkipped = attachResult.skipped;
-          lastErr = null;
-          break;
-        } catch (err) {
-          lastErr = err;
-          if (attempt < backoffs.length - 1) {
-            await new Promise<void>((resolve) => setTimeout(resolve, backoffs[attempt]));
+      for (let i = 0; i < photoMeta.length; i += CHUNK_SIZE) {
+        const chunk = photoMeta.slice(i, i + CHUNK_SIZE);
+        let lastErr: unknown = null;
+        for (let attempt = 0; attempt < backoffs.length; attempt += 1) {
+          try {
+            const attachResult = await attachPhotosToEvent({
+              eventId,
+              shareCode: shareCode ?? null,
+              guestName: guestName ?? null,
+              guestEmail: guestEmail ?? null,
+              photos: chunk,
+            });
+            attached.push(
+              ...attachResult.inserted.map((row) => ({
+                id: row.id,
+                path: row.path,
+                deleteToken: row.deleteToken,
+              })),
+            );
+            insertSkipped.push(...attachResult.skipped);
+            lastErr = null;
+            break;
+          } catch (err) {
+            lastErr = err;
+            if (attempt < backoffs.length - 1) {
+              await new Promise<void>((resolve) => setTimeout(resolve, backoffs[attempt]));
+            }
           }
         }
+        if (lastErr) throw lastErr;
       }
-      if (lastErr) throw lastErr;
     }
 
     // ─── Final stage ─────────────────────────────────────────────────────

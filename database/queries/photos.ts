@@ -42,6 +42,9 @@ export interface PhotoDetail {
   city: string | null;
   country: string | null;
   state: string | null;
+  /** The row owner — set for every photo regardless of upload path. */
+  user_id?: string | null;
+  /** Set only for guest-uploaded photos; null for authenticated uploads. */
   uploaded_by?: string | null;
   guest_name?: string | null;
   guest_email?: string | null;
@@ -256,7 +259,7 @@ export async function getEventPhotosPublic(
   const { data, error } = await supabase
     .from('photos')
     .select(
-      'id, original_url, taken_at, city, country, uploaded_by, guest_name, width, height, thumbnail_status',
+      'id, original_url, taken_at, city, country, user_id, uploaded_by, guest_name, width, height, thumbnail_status',
     )
     .eq('event_id', eventId)
     .eq('upload_status', 'approved')

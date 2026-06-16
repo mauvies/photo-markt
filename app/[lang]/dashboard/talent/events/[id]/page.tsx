@@ -277,11 +277,12 @@ export default async function ExploreEventDetailPage({
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
   // Photo IDs the current talent uploaded — backs the "My photos" filter on
-  // collaborative events.
+  // collaborative events. Check user_id first (set for all photos) and fall
+  // back to uploaded_by (only set for guest-uploaded photos).
   const myUploadedPhotoIds = new Set<string>(
     user
       ? photos
-          .filter((p) => (p as { uploaded_by?: string | null }).uploaded_by === user.id)
+          .filter((p) => p.user_id === user.id || p.uploaded_by === user.id)
           .map((p) => p.id)
       : [],
   );

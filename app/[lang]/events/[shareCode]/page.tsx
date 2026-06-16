@@ -383,6 +383,7 @@ export default async function EventPage({
     .map((p) => {
       const url = p.original_url ? signed[p.original_url] : null;
       if (!url) return null;
+      const userId = (p as { user_id?: string | null }).user_id ?? null;
       const uploadedBy = (p as { uploaded_by?: string | null }).uploaded_by ?? null;
       const guestName = (p as { guest_name?: string | null }).guest_name ?? null;
       let uploader: { name: string; isAuthenticated: boolean } | undefined;
@@ -410,6 +411,7 @@ export default async function EventPage({
           thumbsReady && p.original_url ? thumbRelativeUrl(p.original_url, 'medium') : undefined,
         alt: `${activityLabel} photo at ${event.name} in ${location}`,
         originalPath: p.original_url,
+        userId,
         uploadedBy,
         uploader,
         width: p.width ?? undefined,

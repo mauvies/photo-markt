@@ -36,6 +36,9 @@ interface PhotoItem {
   url: string;
   alt: string;
   originalPath: string | null;
+  /** Row owner — set for all photos regardless of upload path. */
+  userId?: string | null;
+  /** Set only for guest-uploaded photos; null for authenticated uploads. */
   uploadedBy?: string | null;
   uploader?: PhotoUploaderInfo;
   /** Displayed pixel dimensions — drives the gallery's reserved-space layout. */
@@ -174,21 +177,27 @@ export function PublicEventPhotoViewer({
     setGuestOwnedPhotoIds(new Set(stored.map((s) => s.photoId)));
   }, [shareCode]);
 
-  // Photos the current viewer uploaded — an authenticated contributor matches
-  // by `uploaded_by`, a guest matches by the locally-stored upload tokens.
-  // This is the viewer's identity set for both the delete affordance and the
-  // "My photos" filter (you can only delete what you uploaded).
+  // Photos the current viewer uploaded.
+  // - Authenticated: match by user_id (set on every photo) or uploaded_by (set
+  //   only on guest-uploaded photos, kept as fallback for edge cases).
+  // - Guest (unauthenticated): match by localStorage token.
+  // - Authenticated user who previously uploaded as guest: both checks apply,
+  //   so photos from both identities are included (union).
   const myPhotoIds = useMemo(() => {
     const set = new Set<string>();
     for (const p of photos) {
-      if (currentUserId && p.uploadedBy === currentUserId) {
+      if (
+        currentUserId &&
+        (p.userId === currentUserId || p.uploadedBy === currentUserId)
+      ) {
         set.add(p.id);
-      } else if (!isAuthenticated && shareCode && guestOwnedPhotoIds.has(p.id)) {
+      }
+      if (shareCode && guestOwnedPhotoIds.has(p.id)) {
         set.add(p.id);
       }
     }
     return set;
-  }, [photos, currentUserId, isAuthenticated, shareCode, guestOwnedPhotoIds]);
+  }, [photos, currentUserId, shareCode, guestOwnedPhotoIds]);
 
   const deletableIds = myPhotoIds;
 

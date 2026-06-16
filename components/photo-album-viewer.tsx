@@ -359,7 +359,7 @@ export default function PhotoAlbumViewer({
           photos={photos}
           targetRowHeight={250}
           rowConstraints={{ singleRowMaxHeight: 250 }}
-          spacing={10}
+          spacing={8}
           render={{
             extras: renderExtras,
             button: (props, { photo }) => {

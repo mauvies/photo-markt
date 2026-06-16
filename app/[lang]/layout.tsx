@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { ConditionalFooter } from '@/components/conditional-footer';
 import { ConditionalHeader } from '@/components/conditional-header';
@@ -27,6 +28,7 @@ export default async function LangLayout({
   params: Promise<{ lang: string }>;
 }) {
   const { lang } = await params;
+  if (!(locales as readonly string[]).includes(lang)) notFound();
   const dict = await getDictionary(lang as Locale);
 
   return (

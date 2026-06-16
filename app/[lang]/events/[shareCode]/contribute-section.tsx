@@ -135,105 +135,120 @@ export function ContributeSection({
     onSuccess?.();
   };
 
-  return (
-    <section
+  // Content shared between embedded and standalone modes.
+  const inputsAndDropzone = (
+    <div
       className={
-        embedded ? 'space-y-4' : 'space-y-4 rounded-lg border border-input bg-card p-4 md:p-6'
+        // Two-column on md+ when we need to ask for guest name/email
+        // (left column = inputs, right column = dropzone). Authenticated
+        // users skip the inputs entirely, so the dropzone takes full width.
+        isAuthenticated ? 'flex flex-col gap-4' : 'grid gap-4 md:grid-cols-2 md:items-start'
       }
     >
-      {embedded ? null : (
-        <div className="space-y-1">
-          <h2 className="text-lg font-semibold">{t.uploadHeading}</h2>
-          <p className="text-sm text-muted-foreground">
-            {requireApproval ? t.uploadDescPending : t.uploadDesc}
-          </p>
+      {!isAuthenticated && (
+        <div className="flex flex-col gap-2">
+          <div className="grid gap-2">
+            <Label htmlFor={nameInputId}>{t.guestNameLabel}</Label>
+            <Input
+              id={nameInputId}
+              value={guestName}
+              onChange={(e) => setGuestName(e.target.value)}
+              placeholder={t.guestNamePlaceholder}
+              maxLength={60}
+              disabled={isPending}
+              autoComplete="name"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor={emailInputId}>{t.guestEmailLabel}</Label>
+            <Input
+              id={emailInputId}
+              type="email"
+              value={guestEmail}
+              onChange={(e) => setGuestEmail(e.target.value)}
+              placeholder={t.guestEmailPlaceholder}
+              maxLength={120}
+              disabled={isPending}
+              autoComplete="email"
+            />
+            <p className="text-xs text-muted-foreground">{t.guestEmailHelper}</p>
+          </div>
         </div>
       )}
 
-      <div
-        className={
-          // Two-column on md+ when we need to ask for guest name/email
-          // (left column = inputs, right column = dropzone). Authenticated
-          // users skip the inputs entirely, so the dropzone takes full width.
-          isAuthenticated ? 'flex flex-col gap-4' : 'grid gap-4 md:grid-cols-2 md:items-start'
-        }
-      >
-        {!isAuthenticated && (
-          <div className="flex flex-col gap-2">
-            <div className="grid gap-2">
-              <Label htmlFor={nameInputId}>{t.guestNameLabel}</Label>
-              <Input
-                id={nameInputId}
-                value={guestName}
-                onChange={(e) => setGuestName(e.target.value)}
-                placeholder={t.guestNamePlaceholder}
-                maxLength={60}
-                disabled={isPending}
-                autoComplete="name"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor={emailInputId}>{t.guestEmailLabel}</Label>
-              <Input
-                id={emailInputId}
-                type="email"
-                value={guestEmail}
-                onChange={(e) => setGuestEmail(e.target.value)}
-                placeholder={t.guestEmailPlaceholder}
-                maxLength={120}
-                disabled={isPending}
-                autoComplete="email"
-              />
-              <p className="text-xs text-muted-foreground">{t.guestEmailHelper}</p>
-            </div>
+      <div className="flex flex-col gap-2">
+        <Dropzone accept="image/*" onSelect={handleFiles} className="rounded-lg" />
+        {previews.length > 0 && (
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4">
+            {previews.map((preview) => (
+              <div
+                key={preview.id}
+                className="group relative aspect-square overflow-visible rounded-lg"
+              >
+                <div className="absolute inset-0 overflow-hidden rounded-lg border border-dashed border-primary/50 bg-muted">
+                  <Image
+                    src={preview.url}
+                    alt={preview.file.name}
+                    fill
+                    sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 14vw"
+                    className="object-cover"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeFile(preview.file)}
+                  className="absolute -right-1 -top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-foreground/80 text-gray-300 shadow-sm transition-opacity hover:bg-foreground"
+                  aria-label={t.removePhoto}
+                  disabled={isPending}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
           </div>
         )}
+      </div>
+    </div>
+  );
 
-        <div className="flex flex-col gap-2">
-          <Dropzone accept="image/*" onSelect={handleFiles} className="rounded-lg" />
-          {previews.length > 0 && (
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4">
-              {previews.map((preview) => (
-                <div
-                  key={preview.id}
-                  className="group relative aspect-square overflow-visible rounded-lg"
-                >
-                  <div className="absolute inset-0 overflow-hidden rounded-lg border border-dashed border-primary/50 bg-muted">
-                    <Image
-                      src={preview.url}
-                      alt={preview.file.name}
-                      fill
-                      sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 14vw"
-                      className="object-cover"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeFile(preview.file)}
-                    className="absolute -right-1 -top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-foreground/80 text-gray-300 shadow-sm transition-opacity hover:bg-foreground"
-                    aria-label={t.removePhoto}
-                    disabled={isPending}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+  const submitButton = (
+    <Button type="button" onClick={handleSubmit} disabled={isPending || files.length === 0}>
+      {isPending
+        ? t.uploadingButton
+        : files.length > 0
+          ? t.submitButton.replace('{n}', String(files.length))
+          : t.submitButtonEmpty}
+    </Button>
+  );
+
+  // In embedded (dialog) mode: flex column with a scrollable body and a
+  // pinned footer so the submit button is always visible regardless of how
+  // many photo previews are queued.
+  if (embedded) {
+    return (
+      <section className="flex min-h-0 flex-1 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+          {inputsAndDropzone}
         </div>
-      </div>
+        <div className="flex flex-col gap-2 pt-4">
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <div className="flex justify-end">{submitButton}</div>
+        </div>
+      </section>
+    );
+  }
 
+  return (
+    <section className="space-y-4 rounded-lg border border-input bg-card p-4 md:p-6">
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold">{t.uploadHeading}</h2>
+        <p className="text-sm text-muted-foreground">
+          {requireApproval ? t.uploadDescPending : t.uploadDesc}
+        </p>
+      </div>
+      {inputsAndDropzone}
       {error && <p className="text-sm text-destructive">{error}</p>}
-
-      <div className="flex justify-end">
-        <Button type="button" onClick={handleSubmit} disabled={isPending || files.length === 0}>
-          {isPending
-            ? t.uploadingButton
-            : files.length > 0
-              ? t.submitButton.replace('{n}', String(files.length))
-              : t.submitButtonEmpty}
-        </Button>
-      </div>
+      <div className="flex justify-end">{submitButton}</div>
     </section>
   );
 }

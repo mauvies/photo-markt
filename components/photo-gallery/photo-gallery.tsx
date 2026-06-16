@@ -150,7 +150,7 @@ export function PhotoGallery({
       {showInlineToolbar ? (
         <PhotoSelectionToolbar
           className={toolbarClassName}
-          leading={selection.isSelecting ? undefined : toolbarLeading}
+          leading={toolbarLeading}
           selectable={selectable}
           isSelecting={selection.isSelecting}
           countLabel={countLabel}

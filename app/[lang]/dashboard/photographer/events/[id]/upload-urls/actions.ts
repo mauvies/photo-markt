@@ -27,7 +27,7 @@ const adminClient = supabaseAdmin as unknown as SupabaseServerClient;
 /** Hard cap on files per single SA call. Keeps the request body small and
  *  bounds Storage list operations downstream. The wizard chunks larger
  *  batches into multiple createPhotoUploadUrls calls. */
-const MAX_FILES_PER_REQUEST = 100;
+const MAX_FILES_PER_REQUEST = 200;
 /** Guest-upload rate limit window — matches the legacy `uploadGuestPhotosAction`. */
 const GUEST_RATELIMIT_WINDOW_SEC = 3600;
 const GUEST_RATELIMIT_MAX = 30;
@@ -503,30 +503,28 @@ export async function attachPhotosToEvent(input: AttachPhotosInput): Promise<Att
       }
 
       inserted.push({ id: insertedId, path: photo.path, deleteToken });
-
-      // Worker validates bytes and (when AI matching is enabled) indexes
-      // faces. We emit unconditionally — the worker handles AI-off events
-      // by setting face_index_status='not_applicable' and still running
-      // validation.
-      try {
-        await inngest.send({
-          name: 'photo.uploaded',
-          data: { photoId: insertedId, eventId, storagePath: photo.path },
-        });
-      } catch (err) {
-        console.error('[attachPhotosToEvent] failed to enqueue photo.uploaded', err);
-        // Best-effort mark not_applicable so the row doesn't sit at
-        // face_index_status='pending' forever if Inngest is unreachable.
-        // The validate step still won't run — Re-validate will pick it up.
-        try {
-          await updatePhotoFaceIndexStatus(adminClient, insertedId, 'not_applicable');
-        } catch {
-          // best-effort cleanup; ignore
-        }
-      }
     } catch (err) {
       console.error('[attachPhotosToEvent] insert failed', { path: photo.path, err });
       skipped.push({ path: photo.path, reason: 'insert_failed' });
+    }
+  }
+
+  // Batch-send all photo.uploaded events in one round-trip. Sending one
+  // per photo (the old pattern) made large uploads take 30+ seconds.
+  if (inserted.length > 0) {
+    try {
+      await inngest.send(
+        inserted.map(({ id, path }) => ({
+          name: 'photo.uploaded' as const,
+          data: { photoId: id, eventId, storagePath: path },
+        })),
+      );
+    } catch (err) {
+      console.error('[attachPhotosToEvent] failed to enqueue photo.uploaded batch', err);
+      // Best-effort mark not_applicable so rows don't sit at pending forever.
+      await Promise.allSettled(
+        inserted.map(({ id }) => updatePhotoFaceIndexStatus(adminClient, id, 'not_applicable')),
+      );
     }
   }
 
