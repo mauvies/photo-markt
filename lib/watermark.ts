@@ -24,13 +24,15 @@ import sharp from 'sharp';
 
 const WATERMARK_TILE_PATH = path.join(process.cwd(), 'public', 'watermark', 'watermark-tile.png');
 
-// Cache the tile buffer once per cold start. The file is small (~5 KB) and
-// reading it on every request would be wasteful.
-let cachedTileBuffer: Buffer | null = null;
-async function getTileBuffer(): Promise<Buffer> {
-  if (cachedTileBuffer) return cachedTileBuffer;
-  cachedTileBuffer = await sharp(WATERMARK_TILE_PATH).toBuffer();
-  return cachedTileBuffer;
+// Cache the tile buffer (and its dimensions) once per cold start. The file is
+// small (~5 KB) and reading/probing it on every request would be wasteful.
+let cachedTile: { buffer: Buffer; width: number; height: number } | null = null;
+async function getTile(): Promise<{ buffer: Buffer; width: number; height: number }> {
+  if (cachedTile) return cachedTile;
+  const buffer = await sharp(WATERMARK_TILE_PATH).toBuffer();
+  const { width = 0, height = 0 } = await sharp(buffer).metadata();
+  cachedTile = { buffer, width, height };
+  return cachedTile;
 }
 
 // ---------------------------------------------------------------------------
@@ -56,13 +58,25 @@ export async function addWatermarkToImage(imageBuffer: Buffer): Promise<Buffer> 
 
   const { width: w, height: h } = info;
 
-  const [tileBuffer, noiseBuffer] = await Promise.all([getTileBuffer(), buildNoiseBuffer(w, h)]);
+  const [tile, noiseBuffer] = await Promise.all([getTile(), buildNoiseBuffer(w, h)]);
+
+  // Sharp throws "Image to composite must have same dimensions or smaller" when
+  // a composite input is larger than the base — even with `tile: true`. This
+  // happens for source images smaller than the tile (the resize above keeps
+  // previews small via `withoutEnlargement`). Shrink the tile to fit so it
+  // still repeats across the whole preview.
+  const tileInput =
+    tile.width > w || tile.height > h
+      ? await sharp(tile.buffer)
+          .resize({ width: w, height: h, fit: 'inside', withoutEnlargement: true })
+          .toBuffer()
+      : tile.buffer;
 
   return sharp(degradedBuffer)
     .composite([
       // `tile: true` repeats the input across the entire base image. Opacity
       // and rotation are pre-baked into the PNG, so no runtime adjustment.
-      { input: tileBuffer, tile: true, blend: 'over' },
+      { input: tileInput, tile: true, blend: 'over' },
       // Grayscale grain layer (~3 % opacity via alpha channel)
       { input: noiseBuffer, top: 0, left: 0, blend: 'over' },
     ])
