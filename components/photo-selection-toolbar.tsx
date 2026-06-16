@@ -71,9 +71,13 @@ export function PhotoSelectionToolbar({
 }: PhotoSelectionToolbarProps) {
   return (
     <div className={cn('z-30 bg-background/95 py-3 backdrop-blur-sm', className)}>
-      <div className="flex items-center gap-3 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {leading}
-        {!selectable ? null : isSelecting ? (
+      {/* Single row in both states so the toolbar height never changes — no
+          layout shift when entering/leaving selection. While selecting, the
+          filter tabs (`leading`) are hidden entirely and replaced by the
+          selection actions; min-h keeps the row height identical to the tabs
+          row (which is a touch taller than the sm buttons). */}
+      <div className="flex min-h-9 items-center gap-3 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {selectable && isSelecting ? (
           <>
             <div className="shrink-0 whitespace-nowrap text-sm font-medium">{countLabel}</div>
             <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -84,15 +88,20 @@ export function PhotoSelectionToolbar({
             </div>
           </>
         ) : (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onStartSelecting}
-            className="ml-auto shrink-0"
-          >
-            {selectLabel}
-          </Button>
+          <>
+            {leading}
+            {selectable && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onStartSelecting}
+                className="ml-auto shrink-0"
+              >
+                {selectLabel}
+              </Button>
+            )}
+          </>
         )}
       </div>
     </div>

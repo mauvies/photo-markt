@@ -83,6 +83,9 @@ type PhotoAlbumViewerProps = {
   imageUnavailableLabel?: string;
   /** When set, each tile shows a 3-dot "more options" menu (collaborative photographer view). */
   moreMenu?: PhotoMoreMenuConfig;
+  /** When true, the uploader's name is shown as always-visible text at the
+   * bottom-left of each tile instead of the camera-icon popover. */
+  showUploaderName?: boolean;
   /** When true, the per-photo overlay is hidden on coarse-pointer (touch)
    * devices — the clean mobile gallery. Desktop hover is unaffected. */
   cleanOnCoarsePointer?: boolean;
@@ -124,6 +127,7 @@ export default function PhotoAlbumViewer({
   uploaderLabels,
   imageUnavailableLabel = 'Image unavailable',
   moreMenu,
+  showUploaderName = false,
   cleanOnCoarsePointer = false,
   lightboxActionBar = 'top',
   onClaimToProfile,
@@ -317,6 +321,7 @@ export default function PhotoAlbumViewer({
           moreMenu={moreMenu}
           moreMenuOpen={openMenuPhotoId === photoId}
           onMoreMenuOpenChange={(open) => setOpenMenuPhotoId(open ? photoId : null)}
+          showUploaderName={showUploaderName}
           tooltips={iconTooltips}
         />
       );
@@ -347,6 +352,7 @@ export default function PhotoAlbumViewer({
       deleteTooltip,
       uploaderLabels,
       moreMenu,
+      showUploaderName,
       openMenuPhotoId,
       cleanGrid,
     ],

@@ -7,7 +7,6 @@ import {
   upsertUserRole as dbUpsertUserRole,
   getProfileActiveRole,
   getUserRoles,
-  updateProfile,
 } from '@/database/queries';
 import { createClient } from '@/database/server';
 import { getLangFromHeaders } from '@/lib/i18n/get-lang-from-headers';
@@ -20,6 +19,7 @@ import {
   roleSlugToEnum,
   type UserRole,
 } from '@/lib/roles';
+import { isValidUsername, normalizeUsername } from '@/lib/username';
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -48,18 +48,69 @@ async function enableTalentRoleInternal(supabase: SupabaseServerClient, userId: 
   await dbUpsertProfileRole(supabase, userId, ROLES.TALENT);
 }
 
+/** Recoverable failure outcome from {@link completeOnboarding}. Success redirects and never returns. */
+export type CompleteOnboardingResult = { error: 'username_invalid' | 'username_taken' };
+
+/** True when a Postgres error reflects a unique-constraint violation (code 23505). */
+function isUniqueViolation(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /23505|duplicate key|already exists/i.test(message);
+}
+
 /**
- * Finish onboarding: assign the chosen role and optionally set the username, then redirect.
+ * Finish onboarding: assign the chosen role and persist the chosen username,
+ * then redirect to the role's dashboard.
+ *
+ * The username is normalized, format-checked, and uniqueness-checked before a
+ * single upsert writes `active_role`, `username`, and `slug` together — so the
+ * chosen value can't be clobbered by the email-derived fallback. A TOCTOU
+ * unique-violation is mapped to the same friendly "taken" outcome.
+ *
+ * Returns a {@link CompleteOnboardingResult} on recoverable failure; on success
+ * it redirects (throws NEXT_REDIRECT) and does not return.
  */
-export async function completeOnboarding(initialRole: UserRole, username?: string) {
+export async function completeOnboarding(
+  initialRole: UserRole,
+  username?: string,
+): Promise<CompleteOnboardingResult | undefined> {
   const role = userRoleSchema.parse(initialRole);
   const { supabase, user } = await getAuthenticatedClient();
 
-  if (username) {
-    await updateProfile(supabase, user.id, { username });
+  let normalizedUsername: string | undefined;
+  if (username !== undefined) {
+    normalizedUsername = normalizeUsername(username);
+    if (!isValidUsername(normalizedUsername)) {
+      return { error: 'username_invalid' };
+    }
+
+    // Uniqueness check mirroring updateProfileAction: a user never collides
+    // with their own current username.
+    const { data: existingProfile, error: lookupError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('username', normalizedUsername)
+      .neq('id', user.id)
+      .maybeSingle();
+    if (lookupError) {
+      throw new Error(`Failed to check username availability: ${lookupError.message}`);
+    }
+    if (existingProfile) {
+      return { error: 'username_taken' };
+    }
   }
 
-  await dbUpsertProfileRole(supabase, user.id, role);
+  try {
+    await dbUpsertProfileRole(supabase, user.id, role, normalizedUsername);
+  } catch (error) {
+    // Defense-in-depth: another request may have claimed the username between
+    // our check and this write (TOCTOU). Map the unique violation to the same
+    // friendly "taken" outcome instead of throwing a 500.
+    if (normalizedUsername && isUniqueViolation(error)) {
+      return { error: 'username_taken' };
+    }
+    throw error;
+  }
+
   await dbUpsertUserRole(supabase, user.id, role);
 
   revalidatePath('/es/dashboard');
@@ -67,6 +118,34 @@ export async function completeOnboarding(initialRole: UserRole, username?: strin
   const dashboardPath = role === ROLES.TALENT ? '/dashboard/talent' : '/dashboard/photographer';
   const lang = await getLangFromHeaders();
   localizedRedirect(lang, dashboardPath);
+}
+
+/** Result of {@link checkUsernameAvailability}. */
+export type UsernameAvailability = { available: boolean; reason?: 'invalid' | 'taken' };
+
+/**
+ * Report whether a candidate username is free for the current user, applying
+ * the same normalization and format rules as {@link completeOnboarding}. The
+ * user's own current username counts as available.
+ */
+export async function checkUsernameAvailability(candidate: string): Promise<UsernameAvailability> {
+  const normalized = normalizeUsername(candidate);
+  if (!isValidUsername(normalized)) {
+    return { available: false, reason: 'invalid' };
+  }
+
+  const { supabase, user } = await getAuthenticatedClient();
+  const { data: existingProfile, error } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('username', normalized)
+    .neq('id', user.id)
+    .maybeSingle();
+  if (error) {
+    throw new Error(`Failed to check username availability: ${error.message}`);
+  }
+
+  return existingProfile ? { available: false, reason: 'taken' } : { available: true };
 }
 
 /** Enable the talent role for the current user if not already present. */
@@ -117,7 +196,27 @@ export async function switchRole(
   return { activeRole: slug };
 }
 
-/** Return the active role for the current user, falling back to photographer if none is set. */
+/**
+ * Resolve the current user's active role as a slug, or `null` when they have
+ * not onboarded yet (no profile row). Pure read — performs NO write. Use this
+ * for routing/gating: a `null` result means "send the user to onboarding."
+ */
+export async function getActiveRoleOrNull(): Promise<RoleSlug | null> {
+  const { supabase, user } = await getAuthenticatedClient();
+  const activeRole = await getProfileActiveRole(supabase, user.id);
+  return activeRole ? roleEnumToSlug(activeRole) : null;
+}
+
+/**
+ * Return the active role for the current user, falling back to photographer if
+ * none is set.
+ *
+ * Pure read — it does NOT create or modify a profile. Resolving a role must
+ * never mint a default profile (that would silently bypass onboarding and
+ * stamp an email-derived username); profile creation lives only in
+ * `completeOnboarding` / `switchRole` / `enableTalentRole`. Callers that need
+ * to distinguish "not onboarded yet" should use `getActiveRoleOrNull`.
+ */
 export async function getActiveRole(): Promise<{
   activeRole: RoleSlug;
 }> {
@@ -130,7 +229,9 @@ export async function getActiveRole(): Promise<{
     return { activeRole: roleEnumToSlug(activeRole) };
   }
 
-  // Profile doesn't exist - check user roles to determine what to set
+  // Profile doesn't exist - check user roles to determine the fallback to
+  // report. We do NOT persist it; that happens only on explicit onboarding /
+  // role-switch writes.
   const rolesData = await getUserRoles(supabase, user.id);
 
   // Prefer PHOTOGRAPHER as fallback (default role), then TALENT, then first available
@@ -139,9 +240,6 @@ export async function getActiveRole(): Promise<{
     rolesData.find((role) => role === ROLES.TALENT) ??
     rolesData[0] ??
     (ROLES.PHOTOGRAPHER as UserRole);
-
-  // Create/update profile with the fallback role
-  await dbUpsertProfileRole(supabase, user.id, fallback);
 
   return { activeRole: roleEnumToSlug(fallback) };
 }

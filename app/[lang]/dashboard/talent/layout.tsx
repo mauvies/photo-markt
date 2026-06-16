@@ -1,10 +1,11 @@
-import { getActiveRole, switchRole } from '@/app/[lang]/actions/roles';
+import { getActiveRoleOrNull, switchRole } from '@/app/[lang]/actions/roles';
 import { TalentDashboardHeader } from '@/components/talent-dashboard-header';
 import { getProfileFields } from '@/database/queries';
 import { createClient } from '@/database/server';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { getLangFromHeaders } from '@/lib/i18n/get-lang-from-headers';
+import { localizedRedirect } from '@/lib/i18n/redirect';
 
 export default async function TalentLayout({ children }: { children: React.ReactNode }) {
   const lang = await getLangFromHeaders();
@@ -14,10 +15,15 @@ export default async function TalentLayout({ children }: { children: React.React
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [profile, { activeRole: currentRole }] = await Promise.all([
+  const [profile, currentRole] = await Promise.all([
     getProfileFields(supabase, user?.id ?? '', ['display_name', 'active_role']),
-    getActiveRole(),
+    getActiveRoleOrNull(),
   ]);
+
+  // No chosen role yet → onboarding, instead of relying on a minted profile.
+  if (!currentRole) {
+    return localizedRedirect(lang, '/onboarding/role');
+  }
 
   let activeRole = currentRole;
   if (activeRole !== 'talent') {

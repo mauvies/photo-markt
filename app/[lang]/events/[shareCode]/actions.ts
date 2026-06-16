@@ -36,8 +36,12 @@ import {
  *
  * Authorization:
  *   1. Authenticated event owner → always allowed.
- *   2. Authenticated user matching photo.uploaded_by → allowed.
- *   3. Anonymous guest with a matching deleteToken → allowed.
+ *   2. Authenticated user who owns the row (photo.user_id) → allowed. This is
+ *      the path for authenticated contributors, whose uploads set user_id but
+ *      leave uploaded_by null.
+ *   3. Authenticated user matching photo.uploaded_by → allowed (guest-uploaded
+ *      rows later associated with an account; kept as a fallback).
+ *   4. Anonymous guest with a matching deleteToken → allowed.
  *   Else → 403-style error.
  *
  * Uses the service-role client because guests have no auth session and the
@@ -71,12 +75,13 @@ export async function deleteContributorPhotoAction(input: {
   } = await supabase.auth.getUser();
 
   const isEventOwner = Boolean(user && user.id === photo.event_owner_id);
+  const isAuthedRowOwner = Boolean(user && photo.user_id && user.id === photo.user_id);
   const isAuthedUploader = Boolean(user && photo.uploaded_by && user.id === photo.uploaded_by);
   const isGuestUploader = Boolean(
     !user && deleteToken && photo.delete_token && deleteToken === photo.delete_token,
   );
 
-  if (!isEventOwner && !isAuthedUploader && !isGuestUploader) {
+  if (!isEventOwner && !isAuthedRowOwner && !isAuthedUploader && !isGuestUploader) {
     throw new Error('Not authorized to delete this photo.');
   }
 

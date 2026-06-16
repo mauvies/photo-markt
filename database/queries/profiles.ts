@@ -3,6 +3,7 @@
  */
 
 import type { UserRole } from '@/lib/roles';
+import { normalizeUsername } from '@/lib/username';
 import type { SupabaseServerClient } from './types';
 import { getErrorMessage } from './types';
 
@@ -110,28 +111,18 @@ export async function getProfileActiveRole(
 }
 
 /**
- * Generate a unique username from email
+ * Turn a raw base string into a valid, currently-available username:
+ * normalize to the username format, pad short values, cap at 30 chars, then
+ * append a numeric suffix (`_1`, `_2`, …) until the value is free.
+ *
+ * Shared by the email-derived fallback and the onboarding suggestion so the
+ * uniqueness rule lives in one place.
  */
-async function generateUsernameFromEmail(
+async function ensureUniqueUsername(
   supabase: SupabaseServerClient,
-  userId: string,
+  rawBase: string,
 ): Promise<string> {
-  // Get user email using RPC function
-  const { data: userEmails, error: emailError } = await supabase.rpc('get_user_emails_batch', {
-    user_ids: [userId],
-  });
-
-  if (emailError || !userEmails || userEmails.length === 0 || !userEmails[0]?.email) {
-    throw new Error(
-      `Failed to get user email for username generation: ${getErrorMessage(emailError)}`,
-    );
-  }
-
-  // Generate username from email
-  const email = userEmails[0].email;
-  let baseUsername = email.toLowerCase().split('@')[0];
-  baseUsername = baseUsername.replace(/\./g, '_');
-  baseUsername = baseUsername.replace(/[^a-z0-9_-]/g, '');
+  let baseUsername = normalizeUsername(rawBase);
 
   // Ensure minimum length
   if (baseUsername.length < 3) {
@@ -170,37 +161,115 @@ async function generateUsernameFromEmail(
 }
 
 /**
- * Update or insert a profile's active role
+ * Generate a unique username from email
+ */
+async function generateUsernameFromEmail(
+  supabase: SupabaseServerClient,
+  userId: string,
+): Promise<string> {
+  // Get user email using RPC function
+  const { data: userEmails, error: emailError } = await supabase.rpc('get_user_emails_batch', {
+    user_ids: [userId],
+  });
+
+  if (emailError || !userEmails || userEmails.length === 0 || !userEmails[0]?.email) {
+    throw new Error(
+      `Failed to get user email for username generation: ${getErrorMessage(emailError)}`,
+    );
+  }
+
+  // Use the local-part, mapping dots to underscores so `john.doe` -> `john_doe`.
+  const base = userEmails[0].email.toLowerCase().split('@')[0].replace(/\./g, '_');
+  return ensureUniqueUsername(supabase, base);
+}
+
+/**
+ * Suggest a valid, currently-available username to pre-fill the onboarding
+ * field. Prefers the user's display name (e.g. a Google `full_name`), falling
+ * back to the email local-part when no usable name exists.
+ */
+export async function getSuggestedUsername(
+  supabase: SupabaseServerClient,
+  { fullName, email }: { fullName?: string | null; email?: string | null },
+): Promise<string> {
+  const nameBase = fullName ? normalizeUsername(fullName) : '';
+  if (nameBase.length >= 3) {
+    return ensureUniqueUsername(supabase, nameBase);
+  }
+
+  const emailLocal = email ? email.toLowerCase().split('@')[0].replace(/\./g, '_') : '';
+  return ensureUniqueUsername(supabase, emailLocal || 'user');
+}
+
+/**
+ * Update or insert a profile's active role.
+ *
+ * When `username` is supplied (the onboarding path), it is persisted verbatim
+ * together with `slug` so the chosen value is never clobbered by the
+ * email-derived fallback. The caller is responsible for normalizing and
+ * uniqueness-checking that value first (see `completeOnboarding`).
+ *
+ * When `username` is omitted, the existing username is preserved, or — for a
+ * brand-new profile with no row yet — one is generated from the user's email
+ * to satisfy the NOT NULL constraint.
  */
 export async function upsertProfileRole(
   supabase: SupabaseServerClient,
   userId: string,
   role: UserRole,
+  username?: string,
 ): Promise<void> {
-  // Check if profile exists
-  const existingProfile = await getProfile(supabase, userId);
+  // Determine the username + slug to persist.
+  let resolvedUsername: string;
+  let slug: string | undefined;
 
-  // Determine username: use existing or generate new one
-  let username: string;
-  if (existingProfile?.username) {
-    username = existingProfile.username;
+  if (username) {
+    // Onboarding path: persist the user's chosen username and mirror it to
+    // slug so public photographer URLs resolve immediately.
+    resolvedUsername = username;
+    slug = username;
   } else {
-    // Generate username from email
-    username = await generateUsernameFromEmail(supabase, userId);
+    // Role-switch path: keep the existing username, or generate one for a
+    // profile that doesn't exist yet.
+    const existingProfile = await getProfile(supabase, userId);
+    resolvedUsername = existingProfile?.username
+      ? existingProfile.username
+      : await generateUsernameFromEmail(supabase, userId);
   }
 
-  // Upsert with username and role (always include username to satisfy NOT NULL constraint)
-  const { error } = await supabase.from('profiles').upsert(
-    { id: userId, active_role: role, username },
-    {
-      onConflict: 'id',
-      ignoreDuplicates: false,
-    },
-  );
+  // Upsert with username and role (always include username to satisfy NOT NULL
+  // constraint). Spread a typed Partial<Profile> rather than an inline literal
+  // so the optional `slug` column doesn't trip excess-property checks against
+  // the generated row type (mirrors `upsertProfile`).
+  const fields: Partial<Profile> = { active_role: role, username: resolvedUsername };
+  if (slug) fields.slug = slug;
+
+  let { error } = await supabase
+    .from('profiles')
+    .upsert({ id: userId, ...fields }, { onConflict: 'id', ignoreDuplicates: false });
+
+  // Some environments don't have the `slug` column (schema drift between the
+  // cloud DB, which has it, and a stripped-down local DB). When that's the
+  // only problem, the username still mirrors to slug everywhere it's read via
+  // a `slug ?? username` fallback, so retry without slug rather than failing
+  // onboarding outright.
+  if (error && slug && isMissingSlugColumn(error)) {
+    const { slug: _slug, ...withoutSlug } = fields;
+    ({ error } = await supabase
+      .from('profiles')
+      .upsert({ id: userId, ...withoutSlug }, { onConflict: 'id', ignoreDuplicates: false }));
+  }
 
   if (error) {
     throw new Error(`Failed to upsert profile role: ${getErrorMessage(error)}`);
   }
+}
+
+/** True when a Supabase error reports the `slug` column is absent from `profiles`. */
+function isMissingSlugColumn(error: { code?: string; message?: string }): boolean {
+  // 42703 = undefined_column (Postgres); PGRST204 = column missing from
+  // PostgREST schema cache. Both mention `slug` in the message.
+  return /slug/i.test(error.message ?? '') && (error.code === '42703' || error.code === 'PGRST204');
 }
 
 /**

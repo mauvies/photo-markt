@@ -114,5 +114,8 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}${localizedPath(lang, dashboardPath)}`);
   }
 
-  return NextResponse.redirect(`${origin}${localizedPath(lang, '/dashboard')}`);
+  // No chosen role yet → onboarding, mirroring the login page. Sending a
+  // roleless user to /dashboard previously let the dashboard mint a default
+  // profile and silently skip onboarding.
+  return NextResponse.redirect(`${origin}${localizedPath(lang, '/onboarding/role')}`);
 }

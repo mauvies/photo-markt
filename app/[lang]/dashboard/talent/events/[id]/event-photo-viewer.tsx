@@ -1,6 +1,7 @@
 'use client';
 
-import { ArrowLeft, Download, Heart, ShoppingCart, UserRoundPlus } from 'lucide-react';
+import { ArrowLeft, Download, Heart, ShoppingCart, Trash2, UserRoundPlus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -12,6 +13,7 @@ import {
   buildBuckets,
   type FaceSearchResultsLabels,
 } from '@/app/[lang]/events/[shareCode]/face-search-shared';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useFaceSearch } from '@/components/event-gallery-with-face-search';
 import { type EventPhotoFilter, EventPhotoFilterTabs } from '@/components/event-photo-filter-tabs';
 import { FaceSearchResults } from '@/components/face-search-results';
@@ -24,6 +26,10 @@ import {
 import type { PhotoIconTooltips, PhotoMoreMenuConfig } from '@/components/photo-icon-buttons';
 import type { BulkDownloadLabels } from '@/components/photo-selection-toolbar';
 import { Button } from '@/components/ui/button';
+import {
+  type BulkContributorDeleteLabels,
+  useBulkContributorDelete,
+} from '@/hooks/use-bulk-contributor-delete';
 import { useBulkPhotoDownload } from '@/hooks/use-bulk-photo-download';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
 import { useTranslations } from '@/lib/i18n/translations-provider';
@@ -58,8 +64,13 @@ type EventPhotoViewerProps = {
   isFreeEvent: boolean;
   /** Collaborative events get the "All photos / My photos" filter + uploader row. */
   isCollaborative?: boolean;
-  /** Photo IDs the current talent uploaded — backs the "My photos" filter. */
+  /** Event share code — required to delete the talent's own collaborative uploads. */
+  shareCode?: string | null;
+  /** Photo IDs the current talent uploaded — backs the "My photos" filter and
+   * gates bulk delete (talents may only delete their own uploads). */
   uploadedPhotoIds?: Set<string>;
+  /** Labels for the bulk-delete flow (collaborative events). */
+  bulkDeleteLabels: BulkContributorDeleteLabels;
   /** Labels for the "All photos / My photos" filter (collaborative events). */
   filterLabels: { all: string; mine: string; empty: string };
   /** Labels for the per-photo "more options" dropdown. */
@@ -79,11 +90,13 @@ type EventPhotoViewerProps = {
 };
 
 export function EventPhotoViewer({
-  items,
+  items: itemsProp,
   eventId,
   isFreeEvent,
   isCollaborative = false,
+  shareCode = null,
   uploadedPhotoIds = new Set(),
+  bulkDeleteLabels,
   filterLabels,
   menuLabels,
   resultsLabels,
@@ -113,6 +126,18 @@ export function EventPhotoViewer({
     failedBulkFavorite: string;
     failedBulkClaim: string;
   }>();
+  const router = useRouter();
+
+  // Bulk-delete dialog state. `deletedIds` filters the server-provided list so
+  // deleted tiles drop instantly; router.refresh() then reconciles.
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
+  const [skippedDeleteCount, setSkippedDeleteCount] = useState(0);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const items = useMemo(
+    () => itemsProp.filter((i) => !deletedIds.has(i.id)),
+    [itemsProp, deletedIds],
+  );
 
   // Favorites — optimistic, seeded from the server prop.
   const [myPhotos, setMyPhotos] = useState<Set<string>>(initialPhotosInMyPhotos);
@@ -288,6 +313,47 @@ export function EventPhotoViewer({
     [photosInCart, purchasedPhotoIds, addToCart, bulkDownload],
   );
 
+  // ── Bulk delete — talents may only delete their own uploads ─────────────
+  const handlePhotosDeleted = useCallback(
+    (ids: string[]) => {
+      setDeletedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) next.add(id);
+        return next;
+      });
+      router.refresh();
+    },
+    [router],
+  );
+
+  const { isDeleting, deleteEligible, notifyNoneEligible } = useBulkContributorDelete({
+    shareCode,
+    labels: bulkDeleteLabels,
+    onDeleted: handlePhotosDeleted,
+  });
+
+  const handleBulkDeleteRequest = useCallback(
+    (ids: string[]) => {
+      const eligible = ids.filter((id) => uploadedPhotoIds.has(id));
+      if (eligible.length === 0) {
+        notifyNoneEligible();
+        return;
+      }
+      setPendingDeleteIds(eligible);
+      setSkippedDeleteCount(ids.length - eligible.length);
+      setDeleteDialogOpen(true);
+    },
+    [uploadedPhotoIds, notifyNoneEligible],
+  );
+
+  const handleBulkDeleteConfirm = useCallback(
+    () => deleteEligible(pendingDeleteIds, skippedDeleteCount),
+    [deleteEligible, pendingDeleteIds, skippedDeleteCount],
+  );
+
+  // Only collaborative events where the talent has uploads expose delete.
+  const canDeleteOwnPhotos = isCollaborative && Boolean(shareCode) && uploadedPhotoIds.size > 0;
+
   // ── AI face-search results ─────────────────────────────────────────────
   const faceSearch = useFaceSearch();
   const bucketed = useMemo(
@@ -462,6 +528,14 @@ export function EventPhotoViewer({
         isPending: isBulkClaiming,
         visible: isFreeEvent,
       },
+      {
+        key: 'delete',
+        label: bulkDeleteLabels.button,
+        icon: Trash2,
+        onRun: handleBulkDeleteRequest,
+        isPending: isDeleting,
+        visible: canDeleteOwnPhotos,
+      },
     ],
     [
       bulkDownload.addToCart,
@@ -476,6 +550,10 @@ export function EventPhotoViewer({
       handleBulkClaim,
       isBulkClaiming,
       isFreeEvent,
+      bulkDeleteLabels.button,
+      handleBulkDeleteRequest,
+      isDeleting,
+      canDeleteOwnPhotos,
     ],
   );
 
@@ -493,6 +571,28 @@ export function EventPhotoViewer({
 
   const toolbarClassName = 'sticky top-[var(--header-height)] -mx-4 px-4 md:-mx-6 md:px-6';
   const selectionResetKey = `${filter}:${faceSearch.matches === null ? 'all' : 'search'}`;
+
+  // Shared across both render paths (full gallery + AI results) since the
+  // delete bulk action is reachable from either.
+  const deleteDialog = (
+    <ConfirmDialog
+      open={deleteDialogOpen}
+      onOpenChange={(open) => {
+        if (!open && !isDeleting) setDeleteDialogOpen(false);
+      }}
+      title={bulkDeleteLabels.confirmTitle}
+      description={bulkDeleteLabels.confirmDesc
+        .replace('{n}', String(pendingDeleteIds.length))
+        .replace(
+          '{noun}',
+          pendingDeleteIds.length === 1 ? bulkDeleteLabels.photoNoun : bulkDeleteLabels.photosNoun,
+        )}
+      confirmText={bulkDeleteLabels.confirmButton}
+      cancelText={bulkDeleteLabels.cancelButton}
+      pendingText={bulkDeleteLabels.deletingLabel}
+      onConfirm={handleBulkDeleteConfirm}
+    />
+  );
 
   // ── AI face-search results view ────────────────────────────────────────
   if (faceSearch.matches !== null) {
@@ -522,36 +622,40 @@ export function EventPhotoViewer({
             />
           )}
         />
+        {deleteDialog}
       </div>
     );
   }
 
   // ── Full gallery ───────────────────────────────────────────────────────
   return (
-    <PhotoGallery
-      items={visiblePhotos}
-      galleryProps={galleryProps}
-      bulkActions={bulkActions}
-      labels={selectionLabels}
-      selectionResetKey={selectionResetKey}
-      toolbarClassName={toolbarClassName}
-      toolbarLeading={
-        isCollaborative ? (
-          <EventPhotoFilterTabs
-            value={filter}
-            onValueChange={setFilter}
-            allLabel={filterLabels.all}
-            mineLabel={filterLabels.mine}
-          />
-        ) : undefined
-      }
-      emptyState={
-        filter === 'mine' ? (
-          <div className="py-12 text-center">
-            <p className="text-muted-foreground">{filterLabels.empty}</p>
-          </div>
-        ) : undefined
-      }
-    />
+    <>
+      <PhotoGallery
+        items={visiblePhotos}
+        galleryProps={galleryProps}
+        bulkActions={bulkActions}
+        labels={selectionLabels}
+        selectionResetKey={selectionResetKey}
+        toolbarClassName={toolbarClassName}
+        toolbarLeading={
+          isCollaborative ? (
+            <EventPhotoFilterTabs
+              value={filter}
+              onValueChange={setFilter}
+              allLabel={filterLabels.all}
+              mineLabel={filterLabels.mine}
+            />
+          ) : undefined
+        }
+        emptyState={
+          filter === 'mine' ? (
+            <div className="py-12 text-center">
+              <p className="text-muted-foreground">{filterLabels.empty}</p>
+            </div>
+          ) : undefined
+        }
+      />
+      {deleteDialog}
+    </>
   );
 }
