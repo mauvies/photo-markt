@@ -111,7 +111,18 @@
     "photographer": "Fotógrafo",
     "talent": "Talento / Deportista",
     "photographerDesc": "Sube fotos de eventos y véndelas",
-    "talentDesc": "Encuentra y compra fotos de ti mismo"
+    "talentDesc": "Encuentra y compra fotos de ti mismo",
+    "usernameLabel": "Elige un nombre de usuario",
+    "usernameHelp": "Así te verán los demás (p. ej. en las etiquetas de fotos). 3-30 caracteres: letras minúsculas, números, guiones bajos y guiones.",
+    "usernamePlaceholder": "juanperez",
+    "usernameTooShort": "El nombre de usuario debe tener entre 3 y 30 caracteres.",
+    "usernameInvalid": "Ese nombre de usuario no es válido. Usa de 3 a 30 letras minúsculas, números, guiones bajos o guiones.",
+    "usernameTaken": "Ese nombre de usuario ya está en uso. Elige otro.",
+    "roleRequired": "Selecciona un rol para continuar.",
+    "continue": "Continuar",
+    "checking": "Comprobando disponibilidad…",
+    "available": "El nombre de usuario está disponible",
+    "unavailable": "El nombre de usuario ya está en uso"
   },
   "dashboard": {
     "overview": "Resumen",

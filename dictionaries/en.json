@@ -111,7 +111,18 @@
     "photographer": "Photographer",
     "talent": "Athlete / Model",
     "photographerDesc": "Upload event photos and sell them",
-    "talentDesc": "Find and buy photos of yourself"
+    "talentDesc": "Find and buy photos of yourself",
+    "usernameLabel": "Choose a username",
+    "usernameHelp": "This is how others will see you (e.g. in photo tags). 3-30 characters: lowercase letters, numbers, underscores, and hyphens.",
+    "usernamePlaceholder": "johndoe",
+    "usernameTooShort": "Username must be between 3 and 30 characters.",
+    "usernameInvalid": "That username isn't valid. Use 3-30 lowercase letters, numbers, underscores, or hyphens.",
+    "usernameTaken": "That username is already taken. Please choose another.",
+    "roleRequired": "Please select a role to continue.",
+    "continue": "Continue",
+    "checking": "Checking availability…",
+    "available": "Username is available",
+    "unavailable": "Username is already taken"
   },
   "dashboard": {
     "overview": "Overview",
