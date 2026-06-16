@@ -35,6 +35,8 @@ pnpm spell        # Spell check .ts/.tsx files
 - **Forms**: TanStack React Form + Zod validation
 - **Linting/Formatting**: Biome (not ESLint/Prettier)
 - **Email**: Resend
+- **AI matching**: AWS Rekognition (face indexing/search) — see AI Photo Search below
+- **Background jobs**: Inngest (face indexing, thumbnail generation, storage cleanup) served at `/api/inngest`
 - **i18n**: Custom dictionary system (`/dictionaries/en.json`, `/dictionaries/es.json`)
 
 ## Architecture
@@ -67,7 +69,7 @@ Two user roles with separate dashboards:
 - **PHOTOGRAPHER** (`/dashboard/photographer`) — manages events, uploads/manages photos, tracks sales and earnings, manages payout account
 - **TALENT** (`/dashboard/talent`) — browses events, finds and purchases photos of themselves, manages saved photos
 
-Role is stored in `profiles.active_role`. Users can switch roles. Initial role assigned during onboarding via `/app/actions/roles.ts`.
+Role is stored in `profiles.active_role`. Users can switch roles. Initial role assigned during onboarding via `app/[lang]/actions/roles.ts`.
 
 ### Key Architectural Patterns
 
@@ -113,7 +115,7 @@ database/queries/
 - Always add new strings to both dictionaries. Never hardcode visible strings.
 
 **Feature flags**
-Controlled in `lib/feature-flags.ts`. `AI_MATCHING` is currently disabled.
+Controlled in `lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it powers face indexing (AWS Rekognition) and talent selfie search, run through Inngest background jobs. `searchFacesInEvent` re-checks the flag server-side, so keep both gates in sync.
 
 **Environment validation**
 `env.mjs` uses T3 Env (Zod). Always add new environment variables here.
@@ -130,10 +132,15 @@ Controlled in `lib/feature-flags.ts`. `AI_MATCHING` is currently disabled.
 - `share_code` allows access to private events
 
 **photos** (via `/database/queries/photos.ts`)
-- Has embedding columns for future AI vector search
+- `face_index_status` (`pending`/`indexing`/`indexed`/`failed`/`no_faces`/`not_applicable`) and `thumbnail_status` track the Inngest jobs; `width`/`height` persisted for layout
 - Stored in Supabase Storage bucket: `photos`
 - Watermarked previews served via `/app/api/watermark/`
 - Full resolution only accessible via short-lived signed URLs after purchase
+
+**photo_faces** (via `/database/queries/rekognition.ts`)
+`photo_id, aws_face_id, aws_collection_id, confidence, bounding_box, indexed_at`
+- One row per face AWS Rekognition indexes in a photo; unique on `(photo_id, aws_face_id)`
+- Face embeddings themselves live inside the AWS collection — the DB only stores the returned `aws_face_id`. Talent selfie search maps AWS face IDs back to photo IDs here
 
 **carts / cart_items**
 `carts: id, user_id` — `cart_items: id, cart_id, photo_id, photographer_id, unit_price_cents`
@@ -150,11 +157,11 @@ Controlled in `lib/feature-flags.ts`. `AI_MATCHING` is currently disabled.
 
 **payouts**
 `id, photographer_id, amount_cents, status, paid_at`
-- Automatic weekly payouts via Stripe Connect ($25 minimum threshold)
+- Transfers fire **per order**, synchronously in the Stripe webhook on `payment_intent.succeeded` (one per `(order_item, photographer)`); this table is the historical record. There is no payout cron or minimum threshold. A manual admin-approval path also exists via `/api/admin/payouts/[id]`. See `ARCHITECTURE.md` §4.3
 
 **ai_search_profiles**
-`id, user_id, selfie_embedding, activity_type, country, region, date_from, date_to`
-- Stores talent selfie embeddings for AI photo matching (currently disabled)
+`id, user_id, activity_type, country, region, date_from, date_to`
+- Stores a talent's saved face-search filters. The old `selfie_embedding` column was dropped (migration `20260518000000_drop_legacy_ai_schema.sql`) — selfies are sent to AWS Rekognition per search and never stored. The Rekognition events table fields (`ai_matching_enabled`, `contains_minors`, `rekognition_collection_id`, `rekognition_region`, `ai_matching_status`) gate indexing per event
 
 **admin_users**
 `user_id, granted_at, granted_by`
@@ -182,7 +189,7 @@ After confirmed payment: order saved, cart cleared, photos available in talent p
 ### Photographer Payouts (Stripe Connect)
 - Photographers connect Stripe Express accounts in `/dashboard/photographer/profile/payout-profile/`
 - Photo Markt absorbs the Stripe Connect fee (0.5%) — photographer always receives exactly their promised net amount
-- Automatic weekly payouts, $25 minimum threshold
+- Transfers fire per order, synchronously in the `payment_intent.succeeded` webhook handler — there is no cron or minimum threshold (see `ARCHITECTURE.md` §4.3)
 - Sales tracked in `/dashboard/photographer/sales/`, earnings in `/dashboard/photographer/ganancias/`
 
 ## Shared Components
@@ -298,7 +305,14 @@ The goal is **60% on lines, branches, functions, and statements**. Thresholds ar
 
 ## AI Photo Search
 
-Infrastructure in place (vector columns, similarity search RPC, rate limiting) but disabled behind `AI_MATCHING` feature flag. Mock provider in `lib/ai/embedding-provider.ts`. Planned: CLIP or InsightFace for outfit pattern recognition.
+**Enabled** (`AI_MATCHING: true`). Implemented with **AWS Rekognition face collections** + **Inngest** background jobs — not the old pgvector/CLIP embedding path, which was removed in migration `20260518000000_drop_legacy_ai_schema.sql`.
+
+- **Indexing (photographer side):** a new photo emits a `photo.uploaded` Inngest event. `indexPhotoFaces` (`lib/inngest/functions/index-photo-faces.ts`) downloads the image, calls Rekognition `IndexFaces`, and writes `photo_faces` rows; `generatePhotoThumbnails` runs in parallel off the same event. Enabling AI on an existing event fans out via `backfillEventIndexing`; disabling or deleting an event tears down the AWS collection (`disableEventIndexing` / `cleanupOnEventDelete`).
+- **Search (talent side):** `searchFacesInEvent` (`app/[lang]/events/[shareCode]/actions.ts`, surfaced by `components/event-gallery-with-face-search.tsx`) validates a selfie, calls Rekognition `SearchFacesByImage` (threshold 80), maps matched face IDs to photos via `getPhotoFacesByAwsFaceIds`, filters to public/approved/non-minor photos, and buckets results (`very-likely` 95+, `likely` 85+, `possibly` 80+). Selfies are ephemeral — never persisted.
+- **AWS calls** (`lib/aws/`): `CreateCollection`/`IndexFaces`/`SearchFacesByImage`/`DeleteFaces`/`DeleteCollection`. Collections are named `${REKOGNITION_COLLECTION_PREFIX}-${env}-event-${eventId}` (`lib/aws/collection-naming.ts`).
+- **Error safety:** every AWS/Sharp/Storage call in these flows is wrapped in `safeCall` (`lib/safe-call.ts`) so image buffers can't leak into Inngest step output or serverless error responses.
+- **Rate limits** (`lib/ai/rate-limits.ts`): monthly search quotas by plan (free 3, starter 20, pro unlimited) plus a per-`(shareCode, IP)` limit of 10 searches/hour.
+- **Worker route:** all Inngest functions are registered at `/app/api/inngest/route.ts`.
 
 ## Environment Variables
 
@@ -359,7 +373,7 @@ Check these branches before touching related code:
 | `feature/refactor-backend` | Backend code cleanup |
 | `feature/refactor-shared-components` | Shared component cleanup |
 | `feature/time-sync-filtering` | Camera time sync for events |
-| `feature/ai-matching-rewrite` | AI photo matching (disabled) |
+| `feature/ai-matching-rewrite` | AI photo matching — now shipped on `main` (AWS Rekognition + Inngest); branch is historical |
 
 ## Working with Claude
 

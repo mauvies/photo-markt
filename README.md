@@ -7,9 +7,10 @@ A marketplace connecting photographers with athletes and event-goers. Photograph
 - **Framework**: Next.js 16 (App Router) + React 19 + TypeScript
 - **Database**: Supabase (PostgreSQL) — raw SQL migrations, no ORM
 - **Auth**: Supabase Auth with Google OAuth
-- **Payments**: Stripe (subscriptions for photographers, one-time purchases for talent)
+- **Payments**: Stripe (subscriptions for photographers, one-time purchases for talent, Connect for payouts)
 - **Styling**: Tailwind CSS v4 + shadcn/ui (New York) + Radix UI
 - **Forms**: TanStack React Form + Zod
+- **AI matching**: AWS Rekognition (face indexing/search) run via Inngest background jobs
 - **Linting/Formatting**: Biome
 
 ## Getting Started
@@ -40,8 +41,10 @@ SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
 # Stripe
 STRIPE_SECRET_KEY=sk_...
 STRIPE_WEBHOOK_SECRET=whsec_...
-STRIPE_PRICE_AMATEUR=price_...
-STRIPE_PRICE_PRO=price_...
+STRIPE_PRICE_AMATEUR=price_...          # Starter plan, monthly
+STRIPE_PRICE_PRO=price_...              # Pro plan, monthly
+STRIPE_PRICE_AMATEUR_YEARLY=price_...   # Starter plan, yearly
+STRIPE_PRICE_PRO_YEARLY=price_...       # Pro plan, yearly
 
 # App
 SITE_URL=http://localhost:3000
@@ -49,9 +52,23 @@ SITE_URL=http://localhost:3000
 # Email (Resend)
 RESEND_API_KEY=re_...
 
+# AWS Rekognition — face indexing/search for AI photo matching
+AWS_REGION=eu-west-1                       # optional, defaults to eu-west-1
+AWS_ACCESS_KEY_ID=<access-key-id>
+AWS_SECRET_ACCESS_KEY=<secret-access-key>
+REKOGNITION_COLLECTION_PREFIX=photomarkt   # optional, namespaces collections per env
+
+# Inngest — background worker that runs face indexing (served at /api/inngest)
+INNGEST_EVENT_KEY=<event-key>
+INNGEST_SIGNING_KEY=<signing-key>
+
 # Optional: enables location autocomplete in event creation
 NEXT_PUBLIC_GOOGLE_PLACES_API_KEY=
 ```
+
+> The full validated schema lives in `env.mjs` (T3 Env). The server-side
+> `SUPABASE_URL` / `SUPABASE_ANON_KEY` checks are satisfied by the
+> `NEXT_PUBLIC_SUPABASE_*` values above, so you don't set those twice.
 
 ### 3. Run database migrations
 
@@ -103,10 +120,10 @@ env.mjs                 # T3 Env schema — validates all env vars at runtime
 
 The platform has two roles, stored as `active_role` on the `profiles` table:
 
-- **Photographer** — creates events, uploads photos, tracks sales and earnings, subscribes to Amateur or Pro plans
-- **Talent** — browses events, searches for photos of themselves, purchases individual photos
+- **Photographer** — creates events (including collaborative events with guest uploads and invited photographers), uploads photos, tracks sales and earnings, manages payouts, subscribes to the Free, Starter, or Pro plan
+- **Talent** — browses events, searches for photos of themselves (including AI face search), purchases individual photos
 
-Users can switch roles. Initial role is assigned during onboarding (`app/actions/roles.ts`).
+Users can switch roles. Initial role is assigned during onboarding (`app/[lang]/actions/roles.ts`).
 
 ## Key Architectural Patterns
 
@@ -114,16 +131,16 @@ Users can switch roles. Initial role is assigned during onboarding (`app/actions
 
 **Database query layer** — all Supabase queries live in `database/queries/` with a central export in `index.ts`. Add new queries there rather than inline in components.
 
-**Feature flags** — controlled in `lib/feature-flags.ts`. AI photo matching (`AI_MATCHING`) is currently disabled.
+**Feature flags** — controlled in `lib/feature-flags.ts`. AI photo matching (`AI_MATCHING`) is enabled; it indexes faces with AWS Rekognition via Inngest background jobs and lets talent find themselves with a selfie search.
 
 **Image watermarking** — watermarked previews are served via `/app/api/watermark/`. Photos are stored in the `photos` Supabase Storage bucket.
 
 ## Stripe Setup
 
-Photographers subscribe to one of two plans. Create the products/prices in your Stripe dashboard and add the price IDs to your env:
+Photographers are on the **Free** plan by default (12% commission) and can subscribe to **Starter** (8%) or **Pro** (5%). Create the paid products/prices in your Stripe dashboard and add the price IDs to your env:
 
-- `STRIPE_PRICE_AMATEUR` — Amateur plan price ID
-- `STRIPE_PRICE_PRO` — Pro plan price ID
+- `STRIPE_PRICE_AMATEUR` / `STRIPE_PRICE_AMATEUR_YEARLY` — Starter plan price IDs (the `AMATEUR` name is the legacy env key for the Starter tier)
+- `STRIPE_PRICE_PRO` / `STRIPE_PRICE_PRO_YEARLY` — Pro plan price IDs
 
 To receive webhooks locally, use the Stripe CLI:
 

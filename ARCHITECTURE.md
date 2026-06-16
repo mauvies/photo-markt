@@ -6,9 +6,9 @@ prose intro. Anything not yet implemented is explicitly marked **PLANNED** or
 
 Source of truth: actual migrations in `supabase/migrations/`, query layer in
 `database/queries/`, routes in `app/[lang]/`, feature flags in
-`lib/feature-flags.ts`. CLAUDE.md is supplementary; this document corrects it
-where the code disagrees (e.g. "weekly payout cron" is aspirational — payouts
-fire per-order on the Stripe webhook).
+`lib/feature-flags.ts`. CLAUDE.md is supplementary; where the two ever
+disagree, the code (and therefore this document) wins. One detail worth
+calling out: payouts fire **per-order on the Stripe webhook**, not on a cron.
 
 ---
 
@@ -16,8 +16,9 @@ fire per-order on the Stripe webhook).
 
 Three user types interact with one Next.js app, which fans out to a handful of
 external systems. Stripe and Supabase carry the load; the rest are
-single-purpose integrations. The AI provider edge is dotted because it is
-**PLANNED** — no production traffic flows there today.
+single-purpose integrations. AWS Rekognition (face indexing/search) and Inngest
+(the background-job runner that drives it) are now live — AI photo matching
+ships on `main`.
 
 ```mermaid
 flowchart LR
@@ -32,7 +33,8 @@ flowchart LR
   Resend["Resend<br/>Transactional email"]
   Google["Google OAuth"]
   GMaps["Google Maps Places API"]
-  Replicate["Replicate / CLIP<br/>PLANNED"]
+  Rekognition["AWS Rekognition<br/>Face collections"]
+  Inngest["Inngest<br/>Background jobs"]
 
   Photographer --> App
   Talent --> App
@@ -43,10 +45,12 @@ flowchart LR
   App --> Resend
   App -->|sign-in| Google
   App -->|location autocomplete| GMaps
-  App -.->|embeddings| Replicate
+  App -->|enqueue jobs| Inngest
+  Inngest -->|index / search faces| Rekognition
 
   Stripe -->|webhooks| App
   Google -->|OAuth callback| App
+  Inngest -->|invoke /api/inngest| App
 ```
 
 ---
@@ -104,7 +108,7 @@ Conventions enforced by this layout (see `CLAUDE.md`):
   reserved for things that must be addressable HTTP endpoints (Stripe
   webhook, watermark CDN-style URL, admin endpoints).
 - **Service role is used only when RLS would block a legitimate operation**
-  (Stripe webhook writes, admin endpoints, watermark API, embedding writes).
+  (Stripe webhook writes, admin endpoints, watermark API, Inngest face-index writes).
   Every other path uses the user-scoped client so RLS catches mistakes.
 
 ---
@@ -113,7 +117,7 @@ Conventions enforced by this layout (see `CLAUDE.md`):
 
 The schema separates clearly into three concerns: identity (`profiles`,
 `admin_users`, `subscriptions`), commerce (`carts → orders → payouts`), and
-AI (`ai_search_profiles`, `photo_embeddings`). All `*_id` FKs to "users" are
+AI face matching (`ai_search_profiles`, `photo_faces`). All `*_id` FKs to "users" are
 to Supabase's built-in `auth.users` table (shown collapsed onto `profiles`
 since `profiles.id` is a 1:1 FK to it). Auxiliary tables like
 `talent_photo_tags`, `rate_limit_buckets`, `download_tokens`, `guest_orders`,
@@ -136,7 +140,7 @@ erDiagram
 
   PHOTOS ||--o{ CART_ITEMS : in
   PHOTOS ||--o{ ORDER_ITEMS : purchased_in
-  PHOTOS ||--o| PHOTO_EMBEDDINGS : "vectorized (1:1)"
+  PHOTOS ||--o{ PHOTO_FACES : "faces indexed in"
 
   CARTS ||--o{ CART_ITEMS : holds
   CARTS ||--o{ ORDERS : "checked out as"
@@ -166,7 +170,7 @@ erDiagram
     uuid user_id FK
     text stripe_customer_id
     text stripe_subscription_id
-    text plan_id "free|amateur|pro"
+    text plan_id "free|starter|pro (legacy 'amateur' = starter; CHECK constraint dropped)"
     text status "active|trialing|past_due|..."
     timestamptz current_period_end
   }
@@ -185,6 +189,11 @@ erDiagram
     bool is_public
     bool watermark_enabled
     bool is_collaborative
+    bool ai_matching_enabled "photographer opt-in"
+    bool contains_minors "blocks indexing"
+    text rekognition_collection_id "per-event AWS collection"
+    text rekognition_region
+    text ai_matching_status "idle|indexing|ready|failed"
     timestamptz deleted_at "soft delete"
   }
 
@@ -193,10 +202,13 @@ erDiagram
     uuid user_id FK
     uuid event_id FK
     text original_url "storage path"
-    text photo_hash
     bigint size_bytes
+    int width
+    int height
     text upload_status "approved|pending"
     text uploaded_by "owner | invited photographer | guest"
+    text face_index_status "pending|indexing|indexed|failed|no_faces|not_applicable"
+    text thumbnail_status "pending|ready|failed"
     text delete_token "guest delete"
     timestamptz taken_at
   }
@@ -259,7 +271,6 @@ erDiagram
     uuid id PK
     uuid user_id FK
     text name
-    vector selfie_embedding "768-dim"
     text activity_type
     text country
     text region
@@ -267,12 +278,20 @@ erDiagram
     date date_to
   }
 
-  PHOTO_EMBEDDINGS {
-    uuid photo_id PK
-    vector embedding "768-dim, HNSW indexed"
-    text model_version
+  PHOTO_FACES {
+    uuid photo_id FK
+    text aws_face_id "returned by Rekognition IndexFaces"
+    text aws_collection_id
+    numeric confidence
+    jsonb bounding_box "{Width,Height,Left,Top}"
+    timestamptz indexed_at
   }
 ```
+
+> The face embeddings themselves live inside AWS Rekognition collections —
+> Postgres only stores the returned `aws_face_id` per face. The old
+> `photo_embeddings` / `selfie_embedding` pgvector schema was dropped in
+> migration `20260518000000_drop_legacy_ai_schema.sql`.
 
 **Auxiliary tables not pictured:**
 
@@ -281,9 +300,14 @@ erDiagram
   `(photo_id, talent_user_id)`.
 - `rate_limit_buckets` — fixed-window counter table backing `lib/rate-limit.ts`.
   Composite PK `(bucket_key, window_start)`. Service-role-only access.
-- `ai_search_usage` — monthly per-user search counter; unique on
-  `(user_id, period_year, period_month)`. Drives subscription-tier rate
-  limits.
+- `photo_faces` — one row per face AWS Rekognition indexes in a photo
+  (`aws_face_id`, `aws_collection_id`, `confidence`, `bounding_box`). Unique on
+  `(photo_id, aws_face_id)`. Talent selfie search maps Rekognition face IDs back
+  to photos through this table (`database/queries/rekognition.ts`).
+- `ai_search_usage` — monthly per-user search counter, unique on
+  `(user_id, period_year, period_month)`. Part of the legacy AI schema and no
+  longer queried from application code; the live per-search/monthly quotas are
+  enforced via `lib/rate-limit.ts` + `lib/ai/rate-limits.ts`.
 - `download_tokens` — opaque tokens minted on purchase that let guests
   download their photos via `/[lang]/download/[token]` without auth.
 - `guest_orders` / `guest_order_items` / `pending_guest_checkouts` — mirror
@@ -295,15 +319,16 @@ erDiagram
   between (vs `profiles.active_role` which is the *currently selected* role).
 - `feedback` — user-submitted product feedback.
 
-**Known schema-level findings** (see `docs/AI_MATCHING_AUDIT.md`):
-
-- `photo_embeddings` INSERT/UPDATE policies are `using (true) with check
-  (true)` — same defense-in-depth gap that was closed on `orders`/`payouts`.
-  Authenticated users can write arbitrary embeddings via PostgREST.
-- `ai_search_usage` has the same permissive UPDATE/INSERT/DELETE policy,
-  and its `SECURITY DEFINER` RPCs (`increment_ai_search_usage`,
-  `get_ai_search_usage_count`) never had EXECUTE revoked from anon /
-  authenticated — they can be called directly by any user via PostgREST.
+**Legacy AI schema (vestigial):** the original pgvector matching path —
+`photo_embeddings`, `ai_search_profiles.selfie_embedding`,
+`photos.photo_hash` / `color_signature`, and the
+`search_photos_by_similarity()` RPC — was dropped in migration
+`20260518000000_drop_legacy_ai_schema.sql` and is no longer referenced from
+code. Any remnants that still physically exist (e.g. the `photo_embeddings`
+table or `ai_search_usage` RPCs flagged in `docs/AI_MATCHING_AUDIT.md` for
+permissive `using (true)` policies and un-revoked `SECURITY DEFINER` EXECUTE)
+should be dropped or locked down — they are not part of the live Rekognition
+flow.
 
 ---
 
@@ -490,56 +515,84 @@ source (see `app/api/watermark/[...path]/route.ts`).
 
 ---
 
-## 6. AI matching architecture — **PLANNED · DISABLED**
+## 6. AI matching architecture — **ENABLED**
 
-The AI face-recognition feature has database scaffolding (HNSW-indexed
-vectors, RPC for similarity search) and a complete UI behind the
-`AI_MATCHING` feature flag, but **production traffic is disabled**. The
-only embedding provider currently wired is a deterministic mock that does
-not produce real similarity. A `feature/ai-matching-rewrite` branch added a
-Replicate CLIP provider and a hybrid (perceptual hash + color signature +
-embedding) approach but was never merged. See `docs/AI_MATCHING_AUDIT.md`
-for a detailed inventory.
+AI photo matching ships on `main` (`AI_MATCHING: true`). It is built on **AWS
+Rekognition face collections** driven by **Inngest** background jobs — the
+earlier pgvector/CLIP design was removed (see migration
+`20260518000000_drop_legacy_ai_schema.sql`). The face embeddings live inside
+AWS; Postgres only stores the `aws_face_id` each photo maps to. Selfies used
+for search are **ephemeral** — sent to Rekognition per request and never
+persisted.
+
+Two things gate indexing per event: the photographer must opt in
+(`events.ai_matching_enabled`) and the event must not be flagged
+`contains_minors`. Each event gets its own Rekognition collection, named
+`${REKOGNITION_COLLECTION_PREFIX}-${env}-event-${eventId}`
+(`lib/aws/collection-naming.ts`).
+
+**Indexing (photographer side).** A new photo emits a `photo.uploaded` Inngest
+event, which two functions consume in parallel:
 
 ```mermaid
-flowchart LR
-  subgraph WhenEnabled["When AI_MATCHING=true (PLANNED)"]
-    direction LR
-    NewPhoto["Photo uploaded"]
-    Provider["EmbeddingProvider<br/>Mock today / Replicate CLIP planned"]
-    Embed[("photo_embeddings<br/>vector(768)<br/>HNSW · cosine_ops")]
+flowchart TB
+  Upload["Photo uploaded<br/>(server action)"] -->|emit photo.uploaded| Inngest["Inngest"]
 
-    Selfie["Talent selfie<br/>(in AI matching modal)"]
-    SearchProfile[("ai_search_profiles<br/>selfie_embedding 768")]
+  Inngest --> Index["indexPhotoFaces<br/>lib/inngest/functions/index-photo-faces.ts"]
+  Inngest --> Thumbs["generatePhotoThumbnails<br/>WebP 400px + 800px → Storage"]
 
-    RPC["search_photos_by_similarity()<br/>SECURITY DEFINER<br/>filters by activity/country/date"]
-    Usage[("ai_search_usage<br/>monthly counter")]
-    Results["Top-N matches<br/>→ talent_photo_tags"]
-  end
-
-  NewPhoto --> Provider
-  Provider --> Embed
-
-  Selfie --> Provider
-  Provider --> SearchProfile
-
-  SearchProfile --> RPC
-  Embed --> RPC
-  RPC --> Results
-  RPC -.->|increment| Usage
+  Index -->|download original| Storage[("Supabase Storage")]
+  Index -->|IndexFaces (MaxFaces 10, QualityFilter AUTO)| Rek["AWS Rekognition<br/>per-event collection"]
+  Index -->|insert rows| Faces[("photo_faces<br/>aws_face_id + bounding_box")]
+  Index -->|set face_index_status| Photos[("photos")]
+  Index -->|drain → ai_matching_status='ready'| Events[("events")]
 ```
+
+Lifecycle events fan out to dedicated functions: enabling AI on an existing
+event triggers `backfillEventIndexing` (`event.ai-matching-enabled` → create
+collection, reset statuses, re-emit `photo.uploaded` per photo); disabling
+triggers `disableEventIndexing` (delete collection + `photo_faces`); deleting an
+event triggers `cleanupOnEventDelete` (hard-delete the AWS collection even
+though the event is soft-deleted, to save cost). All functions are registered at
+`app/api/inngest/route.ts`.
+
+**Search (talent side).** `searchFacesInEvent`
+(`app/[lang]/events/[shareCode]/actions.ts`, surfaced by
+`components/event-gallery-with-face-search.tsx` → `FaceSearchModal`):
+
+```mermaid
+sequenceDiagram
+  participant T as Talent
+  participant App as searchFacesInEvent
+  participant Rek as AWS Rekognition
+  participant SB as Supabase
+
+  T->>App: submit selfie (in modal)
+  App->>App: re-check AI_MATCHING + event eligible (not minors, collection exists)
+  App->>App: rate-limit per (shareCode, IP) — 10/hour
+  App->>App: validate + downscale selfie (Sharp magic-byte, <5MB)
+  App->>Rek: SearchFacesByImage (FaceMatchThreshold 80, MaxFaces 100)
+  Rek-->>App: matched aws_face_ids + similarity
+  App->>SB: getPhotoFacesByAwsFaceIds → map to photo_ids
+  App->>App: dedupe by photo (max similarity), filter to public/approved/non-minor
+  App-->>T: matches bucketed: very-likely 95+ · likely 85+ · possibly 80+
+```
+
+Every AWS / Sharp / Storage call in both flows is wrapped in `safeCall`
+(`lib/safe-call.ts`), which strips the original error so image buffers can't
+leak into Inngest's step-output record or a serverless error response.
 
 Status snapshot:
 
 | Concern | State |
 |---|---|
-| Feature flag | `AI_MATCHING: false` in `lib/feature-flags.ts` |
-| UI | Built (button + 5-step modal + results); renders "Coming soon" |
-| DB schema | Deployed (vector(768), HNSW, RPC) — partially ahead of TS code |
-| Embedding provider | Mock-only on `main`; Replicate CLIP exists on stale rewrite branch |
-| Similarity search | `findSimilarPhotos` in `main` does app-layer cosine over a 1000-row prefetch (does not call the RPC, ignores HNSW); rewrite branch fixes this |
-| Server actions | Wired and callable; flag check only enforced in UI |
-| Rate limits | Tier quotas defined in `lib/ai/rate-limits.ts` (3 / 20 / unlimited per month) |
+| Feature flag | `AI_MATCHING: true` in `lib/feature-flags.ts` (re-checked server-side in `searchFacesInEvent`) |
+| Provider | AWS Rekognition collections — `IndexFaces` / `SearchFacesByImage` / `CreateCollection` / `DeleteFaces` / `DeleteCollection` (`lib/aws/`) |
+| Background runner | Inngest — `indexPhotoFaces`, `generatePhotoThumbnails`, `backfillEventIndexing`, `disableEventIndexing`, `cleanupOnEventDelete` + storage-cleanup jobs |
+| DB footprint | `photo_faces` (face IDs), `events.rekognition_*` / `ai_matching_status`, `photos.face_index_status` / `thumbnail_status` |
+| Selfie storage | None — ephemeral per search |
+| Rate limits | Monthly quota by plan (free 3 / starter 20 / pro unlimited, `lib/ai/rate-limits.ts`) + per-`(shareCode, IP)` 10/hour |
+| Compliance gate | `events.contains_minors` blocks indexing and search |
 
 ---
 
@@ -551,13 +604,14 @@ Status snapshot:
 | **React** | 19 | UI framework |
 | **TypeScript** | 5.9 | Type system (strict, no `any` allowed) |
 | **Supabase** | `@supabase/ssr` 0.8, `supabase-js` 2.105 | Postgres + Auth (Google OAuth) + Storage + Realtime |
-| **Postgres + pgvector** | 17 / 0.7 | Row-level security on every table; HNSW indexes for AI |
+| **Postgres** | 17 | Row-level security on every table (pgvector left enabled but unused since the legacy AI schema was dropped) |
 | **Stripe** | 20.4 | Checkout Sessions, Subscriptions, Connect Express transfers |
 | **Resend** | 6.x | Transactional emails (purchase receipts, guest order delivery) |
 | **Google OAuth** | — | Only auth provider |
 | **Google Maps Places** | — | Location autocomplete in event create/edit forms only |
-| **Replicate** | — | **PLANNED** CLIP embeddings (`andreasjansson/clip-features`, 768-dim) |
-| **Sharp** | 0.34 | Server-side watermarking + magic-byte image validation |
+| **AWS Rekognition** | `@aws-sdk/client-rekognition` | Face indexing/search for AI photo matching (per-event collections) |
+| **Inngest** | — | Background-job runner (face indexing, thumbnails, storage cleanup) served at `/api/inngest` |
+| **Sharp** | 0.34 | Server-side watermarking, thumbnail generation + magic-byte image validation |
 | **Tailwind CSS** | v4 | Styling (CSS-first config in `app/globals.css`) |
 | **shadcn/ui** | New York style + Radix primitives | Component library — do not introduce alternatives |
 | **TanStack React Query** | 5 | Client-side data fetching/cache (cart count, AI search availability) |
@@ -565,7 +619,7 @@ Status snapshot:
 | **Zod** | 4 | Schema validation (forms + env via T3 Env) |
 | **T3 Env** | 0.13 | Type-safe env vars in `env.mjs` |
 | **Biome** | 2.3 | Linting + formatting (replaces ESLint + Prettier) |
-| **tsx** | 4 | Test runner via `node:test` (`pnpm test`) |
+| **Vitest** | — | Test runner (`pnpm test`); integration tests run against local Supabase |
 | **pnpm** | — | Package manager + workspace lockfile |
 | **Vercel** | — | Hosting (no native cron — payouts fire via Stripe webhook, not schedule) |
 
@@ -579,14 +633,8 @@ Status snapshot:
 - `docs/AI_MATCHING.md` and `docs/AI_EMBEDDINGS_SETUP.md` — present only on
   the `feature/ai-matching-rewrite` branch.
 
-**Discrepancies between CLAUDE.md and this document** (this document wins
-for "what the code does today"):
-
-1. CLAUDE.md says "Automatic weekly payouts via Stripe Connect ($25 minimum
-   threshold)" — the codebase has no cron and no $25 threshold. Transfers
-   are per-order, synchronous with `payment_intent.succeeded`.
-2. CLAUDE.md says "AI Photo Search ... rate limiting" implies it is live —
-   it is disabled.
-3. CLAUDE.md lists `database/queries/sales.ts` and `earnings.ts` — those
-   live as action files under `app/[lang]/dashboard/photographer/`, not as
-   query modules.
+**Consistency with CLAUDE.md.** As of this revision the two documents agree on
+the previously-flagged points: payouts are per-order on the Stripe webhook (no
+cron, no minimum threshold), and AI photo matching is **enabled** (AWS
+Rekognition + Inngest). If they ever drift again, the code — and this
+document — wins for "what runs today."
