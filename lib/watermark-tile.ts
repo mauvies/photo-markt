@@ -34,18 +34,25 @@ export interface WatermarkTileConfig {
   letterSpacing: number;
   /** Font stack; resolved at generation time, baked into the raster. */
   fontFamily: string;
+  /**
+   * Dark drop-shadow rendered behind each glyph so the white text stays legible
+   * over bright/busy photos (pure white at any opacity vanishes on light areas).
+   * Set to `null` to disable.
+   */
+  shadow: { color: string; opacity: number; offsetX: number; offsetY: number } | null;
 }
 
 export const DEFAULT_WATERMARK_TILE_CONFIG: WatermarkTileConfig = {
   text: 'PHOTO MARKT',
   tileSize: 400,
-  fontSize: 30,
-  angleDeg: -30,
-  opacity: 0.4,
+  fontSize: 35,
+  angleDeg: -40,
+  opacity: 0.5,
   color: '#ffffff',
-  rows: 5,
-  letterSpacing: 3,
+  rows: 6,
+  letterSpacing: 4,
   fontFamily: 'Helvetica Neue, Helvetica, Arial, sans-serif',
+  shadow: { color: '#000000', opacity: 0.45, offsetX: 1.5, offsetY: 1.5 },
 };
 
 /** Escape the five XML metacharacters so arbitrary text can't break the SVG. */
@@ -76,10 +83,18 @@ export function buildWatermarkTileSvg(config?: Partial<WatermarkTileConfig>): st
     const brick = (row % 2) * (c.tileSize / 2);
     for (let col = -1; col < 3; col++) {
       const x = brick + (col * c.tileSize) / 1.2;
-      body +=
-        `<text x="${x}" y="${y}" font-family="${c.fontFamily}" font-size="${c.fontSize}" ` +
-        `font-weight="700" letter-spacing="${c.letterSpacing}" fill="${c.color}" ` +
-        `fill-opacity="${c.opacity}" transform="rotate(${c.angleDeg} ${x} ${y})">${text}</text>`;
+      const font =
+        `font-family="${c.fontFamily}" font-size="${c.fontSize}" ` +
+        `font-weight="700" letter-spacing="${c.letterSpacing}"`;
+      // Both glyphs rotate around the same pivot (x, y) so the shadow stays
+      // a consistent offset behind the white text after rotation.
+      const rot = `transform="rotate(${c.angleDeg} ${x} ${y})"`;
+      if (c.shadow) {
+        body +=
+          `<text x="${x + c.shadow.offsetX}" y="${y + c.shadow.offsetY}" ${font} ${rot} ` +
+          `fill="${c.shadow.color}" fill-opacity="${c.shadow.opacity}">${text}</text>`;
+      }
+      body += `<text x="${x}" y="${y}" ${font} ${rot} fill="${c.color}" fill-opacity="${c.opacity}">${text}</text>`;
     }
   }
 
