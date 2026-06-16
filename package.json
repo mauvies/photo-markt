@@ -19,6 +19,7 @@
     "format:fix": "biome format --write",
     "typecheck": "tsc --noEmit",
     "spell": "cspell --quiet **/*.ts **/*.tsx",
+    "watermark:gen": "tsx scripts/gen-watermark.ts",
     "prepare": "git config core.hooksPath .githooks"
   },
   "dependencies": {
