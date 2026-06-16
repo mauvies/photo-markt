@@ -599,14 +599,19 @@ export default async function EventPage({
                       guestLabel: dict.collaborativeEvent.uploaderGuestLabel,
                       authenticatedLabel: dict.collaborativeEvent.uploaderAuthenticatedLabel,
                     }}
-                    deleteLabels={{
-                      tooltip: dict.events.deletePhoto,
-                      confirmTitle: dict.events.deletePhotoConfirmTitle,
-                      confirmDesc: dict.events.deletePhotoConfirmDesc,
+                    bulkDeleteLabels={{
+                      button: dict.events.removeButton,
+                      confirmTitle: dict.events.deletePhotosTitle,
+                      confirmDesc: dict.events.deletePhotosDesc,
                       confirmButton: dict.events.confirmButton,
                       cancelButton: dict.events.cancelButton,
-                      successToast: dict.events.deletePhotoToast,
-                      failedToast: dict.events.deletePhotoFailed,
+                      deletingLabel: dict.events.deletingLabel,
+                      successToast: dict.events.deletedPhotosToast,
+                      skippedToast: dict.events.deletedPhotosSkippedToast,
+                      noneEligibleToast: dict.events.deleteNoneEligible,
+                      failedToast: dict.events.failedDeletePhotos,
+                      photoNoun: dict.events.photo,
+                      photosNoun: dict.events.photos,
                     }}
                     cartToastLabels={{
                       failedAdd: dict.eventPhotoViewer.failedAddCart,

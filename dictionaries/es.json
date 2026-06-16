@@ -188,6 +188,8 @@
     "deletePhotosTitle": "Eliminar fotos",
     "deletePhotosDesc": "¿Seguro que quieres eliminar {n} {noun}? Esta acción no se puede deshacer.",
     "deletedPhotosToast": "{n} {noun} eliminadas",
+    "deletedPhotosSkippedToast": "{n} {noun} eliminadas, {m} omitidas que no subiste",
+    "deleteNoneEligible": "Solo puedes eliminar fotos que tú subiste",
     "failedDeletePhotos": "Error al eliminar las fotos",
     "failedDeleteEvent": "Error al eliminar el evento",
     "confirmButton": "Eliminar",
@@ -1251,11 +1253,11 @@
       "removeSelfie": "Quitar foto"
     },
     "results": {
-      "veryLikelyTitle": "Muy probablemente tú",
-      "veryLikelySubtitle": "Coincidencias con alta confianza.",
+      "veryLikelyTitle": "Casi seguro tú",
+      "veryLikelySubtitle": "Coincidencias sólidas para ti.",
       "likelyTitle": "Probablemente tú",
       "likelySubtitle": "Coincidencias probables.",
-      "possiblyTitle": "Posiblemente tú",
+      "possiblyTitle": "Quizás tú",
       "possiblySubtitle": "Estas podrían ser tú.",
       "viewAllPhotos": "Ver todas las fotos",
       "noMatchesTitle": "No te encontramos",

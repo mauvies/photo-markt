@@ -1,8 +1,8 @@
 'use client';
 
-import { ArrowLeft, Download, Loader2, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, Download, Loader2, ShoppingCart, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   addPhotoToCartAction,
@@ -23,10 +23,14 @@ import type { PhotoIconTooltips, PhotoMoreMenuConfig } from '@/components/photo-
 import type { BulkDownloadLabels } from '@/components/photo-selection-toolbar';
 import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
 import { Button } from '@/components/ui/button';
+import {
+  type BulkContributorDeleteLabels,
+  useBulkContributorDelete,
+} from '@/hooks/use-bulk-contributor-delete';
 import { useBulkPhotoDownload } from '@/hooks/use-bulk-photo-download';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
 import type { GuestCartItem } from '@/lib/guest-cart';
-import { deleteContributorPhotoAction, getEventPhotoDownloadUrlAction } from './actions';
+import { getEventPhotoDownloadUrlAction } from './actions';
 import { buildBuckets, type FaceSearchResultsLabels } from './face-search-shared';
 import { readGuestUploads, removeGuestUpload } from './guest-uploads-storage';
 import { useOptionalUploadProgress } from './upload-progress-provider';
@@ -78,16 +82,8 @@ interface PublicEventPhotoViewerProps {
     guestLabel: string;
     authenticatedLabel: string;
   };
-  /** Labels for the per-photo delete affordance. */
-  deleteLabels?: {
-    tooltip: string;
-    confirmTitle: string;
-    confirmDesc: string;
-    confirmButton: string;
-    cancelButton: string;
-    successToast: string;
-    failedToast: string;
-  };
+  /** Labels for the bulk-delete flow (collaborative events). */
+  bulkDeleteLabels: BulkContributorDeleteLabels;
   /** Translated error toasts for the cart icon. */
   cartToastLabels: { failedAdd: string; failedRemove: string };
   /** Labels for the "All photos / My photos" filter (collaborative events). */
@@ -113,7 +109,7 @@ interface PublicEventPhotoViewerProps {
 }
 
 export function PublicEventPhotoViewer({
-  photos,
+  photos: photosProp,
   eventId,
   eventName,
   eventDate,
@@ -129,7 +125,7 @@ export function PublicEventPhotoViewer({
   emptyText,
   uploadingLabel,
   uploaderLabels,
-  deleteLabels,
+  bulkDeleteLabels,
   cartToastLabels,
   filterLabels,
   menuLabels,
@@ -159,10 +155,21 @@ export function PublicEventPhotoViewer({
       failedRemove: cartToastLabels.failedRemove,
     },
   });
-  const [pendingDeletePhotoId, setPendingDeletePhotoId] = useState<string | null>(null);
-  const [isDeleting, startDeleting] = useTransition();
+  // Bulk-delete dialog state. `deletedIds` filters the server-provided list so
+  // deleted tiles drop instantly; router.refresh() then reconciles.
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
+  const [skippedDeleteCount, setSkippedDeleteCount] = useState(0);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const photos = useMemo(
+    () => photosProp.filter((p) => !deletedIds.has(p.id)),
+    [photosProp, deletedIds],
+  );
   // Photo IDs the current browser owns (guest-upload tokens stored locally).
   const [guestOwnedPhotoIds, setGuestOwnedPhotoIds] = useState<Set<string>>(new Set());
+  // Per-photo guest delete tokens, kept in sync with `guestOwnedPhotoIds` so a
+  // bulk delete can pass each token without re-reading localStorage per id.
+  const guestTokensRef = useRef<Map<string, string>>(new Map());
 
   // Hydrate guest-owned set from localStorage on mount and whenever the
   // photo list changes (e.g. after the contribute modal uploads new photos
@@ -171,10 +178,16 @@ export function PublicEventPhotoViewer({
   useEffect(() => {
     if (!shareCode) {
       setGuestOwnedPhotoIds(new Set());
+      guestTokensRef.current = new Map();
       return;
     }
     const stored = readGuestUploads(shareCode);
     setGuestOwnedPhotoIds(new Set(stored.map((s) => s.photoId)));
+    guestTokensRef.current = new Map(
+      stored
+        .filter((s): s is typeof s & { deleteToken: string } => Boolean(s.deleteToken))
+        .map((s) => [s.photoId, s.deleteToken]),
+    );
   }, [shareCode]);
 
   // Photos the current viewer uploaded.
@@ -195,8 +208,6 @@ export function PublicEventPhotoViewer({
     }
     return set;
   }, [photos, currentUserId, shareCode, guestOwnedPhotoIds]);
-
-  const deletableIds = myPhotoIds;
 
   const photosInCart = useMemo(() => {
     if (isAuthenticated) return authCartPhotos;
@@ -300,42 +311,58 @@ export function PublicEventPhotoViewer({
     [isAuthenticated, removeAuthCart, guestCart],
   );
 
-  const handleDeleteRequest = useCallback((photoId: string) => {
-    setPendingDeletePhotoId(photoId);
-  }, []);
-
-  const handleDeleteConfirm = useCallback(() => {
-    const photoId = pendingDeletePhotoId;
-    if (!photoId || !shareCode) return;
-    const stored = readGuestUploads(shareCode);
-    const token = stored.find((s) => s.photoId === photoId)?.deleteToken ?? undefined;
-
-    startDeleting(async () => {
-      try {
-        await deleteContributorPhotoAction({
-          photoId,
-          shareCode,
-          deleteToken: token ?? undefined,
-        });
-        removeGuestUpload(shareCode, photoId);
+  // Optimistic removal after a bulk delete: drop the tiles, clean any guest
+  // tokens for guest-owned deletions, then reconcile with the server.
+  const handlePhotosDeleted = useCallback(
+    (ids: string[]) => {
+      setDeletedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) next.add(id);
+        return next;
+      });
+      if (shareCode) {
+        for (const id of ids) {
+          if (guestOwnedPhotoIds.has(id)) removeGuestUpload(shareCode, id);
+        }
         setGuestOwnedPhotoIds((prev) => {
           const next = new Set(prev);
-          next.delete(photoId);
+          for (const id of ids) next.delete(id);
           return next;
         });
-        setPendingDeletePhotoId(null);
-        toast.success(deleteLabels?.successToast ?? 'Photo deleted');
-        router.refresh();
-      } catch (err) {
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : (deleteLabels?.failedToast ?? 'Could not delete the photo.'),
-        );
-        setPendingDeletePhotoId(null);
       }
-    });
-  }, [pendingDeletePhotoId, shareCode, deleteLabels, router]);
+      router.refresh();
+    },
+    [shareCode, guestOwnedPhotoIds, router],
+  );
+
+  const { isDeleting, deleteEligible, notifyNoneEligible } = useBulkContributorDelete({
+    shareCode: shareCode ?? null,
+    labels: bulkDeleteLabels,
+    getDeleteToken: (id) => guestTokensRef.current.get(id),
+    onDeleted: handlePhotosDeleted,
+  });
+
+  // Bulk delete is gated to photos the viewer uploaded (server re-checks).
+  const handleBulkDeleteRequest = useCallback(
+    (ids: string[]) => {
+      const eligible = ids.filter((id) => myPhotoIds.has(id));
+      if (eligible.length === 0) {
+        notifyNoneEligible();
+        return;
+      }
+      setPendingDeleteIds(eligible);
+      setSkippedDeleteCount(ids.length - eligible.length);
+      setDeleteDialogOpen(true);
+    },
+    [myPhotoIds, notifyNoneEligible],
+  );
+
+  const handleBulkDeleteConfirm = useCallback(
+    () => deleteEligible(pendingDeleteIds, skippedDeleteCount),
+    [deleteEligible, pendingDeleteIds, skippedDeleteCount],
+  );
+
+  const canDeleteOwnPhotos = isCollaborative && myPhotoIds.size > 0;
 
   // Free events download for anyone (incl. logged-out guests); paid events
   // need an authenticated buyer, so selection is disabled for paid-event guests.
@@ -346,7 +373,7 @@ export function PublicEventPhotoViewer({
   // cart, signed-in viewers the optimistic auth cart. Free events have no
   // cart. The Select button shows when either bulk action is reachable.
   const canBulkAddToCart = showAddToCart && !isFreeEvent;
-  const canSelect = canBulkDownload || canBulkAddToCart;
+  const canSelect = canBulkDownload || canBulkAddToCart || canDeleteOwnPhotos;
   const { isDownloading, downloadSelected } = useBulkPhotoDownload({
     eventId,
     isFreeEvent,
@@ -438,11 +465,9 @@ export function PublicEventPhotoViewer({
       onAddToCart: handleAddToCart,
       onRemoveFromCart: handleRemoveFromCart,
       iconTooltips,
-      deletableIds,
-      onDeleteOwn: handleDeleteRequest,
-      deleteTooltip: deleteLabels?.tooltip,
       uploaderLabels,
-      moreMenu,
+      moreMenu: isCollaborative ? undefined : moreMenu,
+      showUploaderName: isCollaborative,
       showDownload: canBulkDownload,
       isPhotoDownloadable,
       onDownload: handleDownloadPhoto,
@@ -461,10 +486,8 @@ export function PublicEventPhotoViewer({
       handleAddToCart,
       handleRemoveFromCart,
       iconTooltips,
-      deletableIds,
-      handleDeleteRequest,
-      deleteLabels?.tooltip,
       uploaderLabels,
+      isCollaborative,
       moreMenu,
       canBulkDownload,
       isPhotoDownloadable,
@@ -495,15 +518,28 @@ export function PublicEventPhotoViewer({
         isPending: isDownloading,
       });
     }
+    if (canDeleteOwnPhotos) {
+      actions.push({
+        key: 'delete',
+        label: bulkDeleteLabels.button,
+        icon: Trash2,
+        onRun: (ids) => handleBulkDeleteRequest(ids),
+        isPending: isDeleting,
+      });
+    }
     return actions;
   }, [
     canBulkAddToCart,
     canBulkDownload,
+    canDeleteOwnPhotos,
     bulkDownload.addToCart,
     bulkDownload.download,
+    bulkDeleteLabels.button,
     handleBulkAddToCart,
     downloadSelected,
     isDownloading,
+    handleBulkDeleteRequest,
+    isDeleting,
   ]);
 
   const selectionLabels = useMemo(
@@ -593,19 +629,25 @@ export function PublicEventPhotoViewer({
           </div>
         </div>
       ) : null}
-      {deleteLabels ? (
-        <ConfirmDialog
-          open={pendingDeletePhotoId !== null}
-          onOpenChange={(open) => {
-            if (!open && !isDeleting) setPendingDeletePhotoId(null);
-          }}
-          title={deleteLabels.confirmTitle}
-          description={deleteLabels.confirmDesc}
-          confirmText={deleteLabels.confirmButton}
-          cancelText={deleteLabels.cancelButton}
-          onConfirm={handleDeleteConfirm}
-        />
-      ) : null}
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && !isDeleting) setDeleteDialogOpen(false);
+        }}
+        title={bulkDeleteLabels.confirmTitle}
+        description={bulkDeleteLabels.confirmDesc
+          .replace('{n}', String(pendingDeleteIds.length))
+          .replace(
+            '{noun}',
+            pendingDeleteIds.length === 1
+              ? bulkDeleteLabels.photoNoun
+              : bulkDeleteLabels.photosNoun,
+          )}
+        confirmText={bulkDeleteLabels.confirmButton}
+        cancelText={bulkDeleteLabels.cancelButton}
+        pendingText={bulkDeleteLabels.deletingLabel}
+        onConfirm={handleBulkDeleteConfirm}
+      />
     </div>
   );
 }

@@ -385,7 +385,22 @@ export default async function ExploreEventDetailPage({
                   isFreeEvent={isFreeEvent}
                   purchasedPhotoIds={purchasedPhotoIds}
                   isCollaborative={event.is_collaborative}
+                  shareCode={event.share_code ?? null}
                   uploadedPhotoIds={myUploadedPhotoIds}
+                  bulkDeleteLabels={{
+                    button: dict.events.removeButton,
+                    confirmTitle: dict.events.deletePhotosTitle,
+                    confirmDesc: dict.events.deletePhotosDesc,
+                    confirmButton: dict.events.confirmButton,
+                    cancelButton: dict.events.cancelButton,
+                    deletingLabel: dict.events.deletingLabel,
+                    successToast: dict.events.deletedPhotosToast,
+                    skippedToast: dict.events.deletedPhotosSkippedToast,
+                    noneEligibleToast: dict.events.deleteNoneEligible,
+                    failedToast: dict.events.failedDeletePhotos,
+                    photoNoun: dict.events.photo,
+                    photosNoun: dict.events.photos,
+                  }}
                   filterLabels={{
                     all: dict.collaborativeEvent.myPhotosAll,
                     mine: dict.collaborativeEvent.myPhotosMine,

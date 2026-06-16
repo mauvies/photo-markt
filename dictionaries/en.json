@@ -188,6 +188,8 @@
     "deletePhotosTitle": "Delete Photos",
     "deletePhotosDesc": "Are you sure you want to delete {n} {noun}? This action cannot be undone.",
     "deletedPhotosToast": "Deleted {n} {noun}",
+    "deletedPhotosSkippedToast": "Deleted {n} {noun}, skipped {m} you didn't upload",
+    "deleteNoneEligible": "You can only delete photos you uploaded",
     "failedDeletePhotos": "Failed to delete photos",
     "failedDeleteEvent": "Failed to delete event",
     "confirmButton": "Delete",
@@ -1251,11 +1253,11 @@
       "removeSelfie": "Remove photo"
     },
     "results": {
-      "veryLikelyTitle": "Very likely you",
-      "veryLikelySubtitle": "These are highly confident matches.",
+      "veryLikelyTitle": "Almost certainly you",
+      "veryLikelySubtitle": "Strong matches for you.",
       "likelyTitle": "Likely you",
       "likelySubtitle": "These are likely matches.",
-      "possiblyTitle": "Possibly you",
+      "possiblyTitle": "Maybe you",
       "possiblySubtitle": "These might be you.",
       "viewAllPhotos": "View all photos",
       "noMatchesTitle": "We couldn't find you",

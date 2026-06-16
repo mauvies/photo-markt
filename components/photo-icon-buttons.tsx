@@ -108,6 +108,12 @@ interface PhotoIconButtonsProps {
    */
   moreMenuOpen?: boolean;
   onMoreMenuOpenChange?: (open: boolean) => void;
+  /**
+   * When true, the uploader's name is shown as always-visible text at the
+   * bottom-left instead of the camera-icon popover. Used for collaborative
+   * event galleries where contributor attribution is inline, not in a popover.
+   */
+  showUploaderName?: boolean;
   className?: string;
   tooltips?: Partial<PhotoIconTooltips>;
 }
@@ -140,6 +146,7 @@ export function PhotoIconButtons({
   moreMenu,
   moreMenuOpen = false,
   onMoreMenuOpenChange = () => {},
+  showUploaderName = false,
   className,
   tooltips,
 }: PhotoIconButtonsProps) {
@@ -197,7 +204,8 @@ export function PhotoIconButtons({
       <div
         className={cn(
           'pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-linear-to-t from-black/30 via-black/10 to-transparent z-0 opacity-0 transition-opacity group-hover:opacity-100',
-          hasAnyOpen && 'opacity-100',
+          (hasAnyOpen || (showUploaderName && !!uploader?.name && !selectionActive)) &&
+            'opacity-100',
         )}
       />
 
@@ -253,11 +261,11 @@ export function PhotoIconButtons({
         </div>
       </div>
 
-      {/* Bottom row: Tag (left) + Heart (right) */}
+      {/* Bottom row: Tag / uploader name (left) + Heart (right) */}
       {!selectionActive && (
         <div className="relative z-10 mt-auto flex w-full items-end justify-between">
-          {/* Tag button */}
-          <div className="pointer-events-auto">
+          {/* Left: tag button, or uploader name text for collaborative events */}
+          <div className="pointer-events-auto min-w-0 flex-1">
             {onTagPhoto && !hasTags && !moreMenu?.onTagPeople && (
               <div className={cn(ICON_WRAP, hasAnyOpen && 'md:opacity-100')}>
                 <PhotoActionIcon
@@ -289,11 +297,16 @@ export function PhotoIconButtons({
                 />
               </div>
             )}
+            {showUploaderName && uploader?.name && (
+              <p className="truncate pr-1 text-[11px] font-medium leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.7)]">
+                {uploader.name}
+              </p>
+            )}
           </div>
 
           {/* Right cluster: uploader badge, Heart / Save and contributor Delete */}
           <div className="flex items-end gap-1.5">
-            {uploader && !moreMenu?.showUploaderRow && (
+            {uploader && !moreMenu?.showUploaderRow && !showUploaderName && (
               <div
                 className={cn(
                   'pointer-events-auto transition-opacity duration-150',
