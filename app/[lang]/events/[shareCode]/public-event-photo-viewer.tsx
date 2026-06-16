@@ -186,10 +186,7 @@ export function PublicEventPhotoViewer({
   const myPhotoIds = useMemo(() => {
     const set = new Set<string>();
     for (const p of photos) {
-      if (
-        currentUserId &&
-        (p.userId === currentUserId || p.uploadedBy === currentUserId)
-      ) {
+      if (currentUserId && (p.userId === currentUserId || p.uploadedBy === currentUserId)) {
         set.add(p.id);
       }
       if (shareCode && guestOwnedPhotoIds.has(p.id)) {

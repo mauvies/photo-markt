@@ -178,8 +178,8 @@ export function usePhotoUpload(): UsePhotoUploadReturn {
 
     // ─── Stage 3: attach photos (with retry) ─────────────────────────────
     setStage('finalizing');
-    let attached: AttachedPhoto[] = [];
-    let insertSkipped: Array<{ path: string; reason: string }> = [];
+    const attached: AttachedPhoto[] = [];
+    const insertSkipped: Array<{ path: string; reason: string }> = [];
 
     if (succeeded.length > 0) {
       const photoMeta = succeeded.map((s) => ({
