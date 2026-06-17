@@ -99,6 +99,7 @@ export function EventGalleryWithFaceSearch({
       <div className="flex flex-col gap-4">
         {aiSearchEligible && matches === null ? (
           <AIFindPhotosBanner
+            key="ai-find-photos-banner"
             state={aiState}
             labels={bannerLabels}
             onOpenSearch={() => setModalOpen(true)}
@@ -106,6 +107,7 @@ export function EventGalleryWithFaceSearch({
         ) : null}
         {fullGallery}
         <FaceSearchModal
+          key="face-search-modal"
           open={modalOpen}
           onOpenChange={setModalOpen}
           shareCode={shareCode}
