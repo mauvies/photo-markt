@@ -279,10 +279,11 @@ export async function getPhotoStoragePaths(
   supabase: SupabaseServerClient,
   eventId: string,
   userId: string,
+  excludePhotoIds: string[] = [],
 ): Promise<string[]> {
   const { data, error } = await supabase
     .from('photos')
-    .select('original_url')
+    .select('id, original_url')
     .eq('event_id', eventId)
     .eq('user_id', userId);
 
@@ -290,7 +291,11 @@ export async function getPhotoStoragePaths(
     throw new Error(`Failed to get photo storage paths: ${getErrorMessage(error)}`);
   }
 
+  // Keep the original files for purchased photos — buyers access them via
+  // short-lived signed URLs, so deleting storage would break their downloads.
+  const excluded = new Set(excludePhotoIds);
   return (data ?? [])
+    .filter((photo) => !excluded.has(photo.id as string))
     .map((photo) => photo.original_url)
     .filter((path): path is string => typeof path === 'string' && path.length > 0);
 }
@@ -586,19 +591,65 @@ export async function deletePhoto(
 }
 
 /**
- * Delete all photos for an event
+ * Photo ids in an event that back a real purchase — referenced by `order_items`
+ * or `guest_order_items` (both `ON DELETE RESTRICT`). These must survive an
+ * event delete: they hold sales records and the buyer still needs the original.
+ *
+ * Event-wide across ALL buyers (incl. guest orders) — distinct from
+ * `orders.getPurchasedPhotoIdsForEvent`, which is scoped to one buyer.
+ *
+ * Reads the order tables, so it MUST be called with a service-role client —
+ * `order_items` RLS scopes rows to the buyer, not the photographer. Ownership
+ * is enforced by the caller (the event is fetched user-scoped first).
+ */
+export async function getSoldPhotoIdsForEvent(
+  supabaseAdmin: SupabaseServerClient,
+  eventId: string,
+): Promise<string[]> {
+  const { data: photos, error: photosError } = await supabaseAdmin
+    .from('photos')
+    .select('id')
+    .eq('event_id', eventId);
+  if (photosError) {
+    throw new Error(`Failed to list event photos: ${getErrorMessage(photosError)}`);
+  }
+  const ids = (photos ?? []).map((p) => p.id as string);
+  if (ids.length === 0) return [];
+
+  const [orderItems, guestOrderItems] = await Promise.all([
+    supabaseAdmin.from('order_items').select('photo_id').in('photo_id', ids),
+    supabaseAdmin.from('guest_order_items').select('photo_id').in('photo_id', ids),
+  ]);
+  if (orderItems.error) {
+    throw new Error(`Failed to check order items: ${getErrorMessage(orderItems.error)}`);
+  }
+  if (guestOrderItems.error) {
+    throw new Error(`Failed to check guest order items: ${getErrorMessage(guestOrderItems.error)}`);
+  }
+
+  const purchased = new Set<string>();
+  for (const row of orderItems.data ?? []) purchased.add(row.photo_id as string);
+  for (const row of guestOrderItems.data ?? []) purchased.add(row.photo_id as string);
+  return [...purchased];
+}
+
+/**
+ * Delete all photos for an event, optionally excluding a set of photo ids
+ * (e.g. purchased photos that can't be removed — see
+ * {@link getPurchasedPhotoIdsForEvent}).
  */
 export async function deleteEventPhotos(
   supabase: SupabaseServerClient,
   eventId: string,
   userId: string,
+  excludePhotoIds: string[] = [],
 ): Promise<void> {
-  const { error } = await supabase
-    .from('photos')
-    .delete()
-    .eq('event_id', eventId)
-    .eq('user_id', userId);
+  let query = supabase.from('photos').delete().eq('event_id', eventId).eq('user_id', userId);
+  if (excludePhotoIds.length > 0) {
+    query = query.not('id', 'in', `(${excludePhotoIds.join(',')})`);
+  }
 
+  const { error } = await query;
   if (error) {
     throw new Error(`Failed to delete event photos: ${getErrorMessage(error)}`);
   }

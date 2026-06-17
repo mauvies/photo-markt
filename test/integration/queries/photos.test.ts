@@ -7,14 +7,18 @@
  */
 
 import { beforeEach, describe, expect, it } from 'vitest';
+import { addOrderItems, createOrder } from '@/database/queries/orders';
 import {
   createPhoto,
+  deleteEventPhotos,
   deletePhoto,
   getEventPhotos,
   getEventPhotosPublic,
   getPhoto,
+  getPhotoStoragePaths,
   getPhotosForEvents,
   getPhotosUploadedCount,
+  getSoldPhotoIdsForEvent,
   getStorageUsageBytes,
   updatePhotoUploadStatus,
 } from '@/database/queries/photos';
@@ -31,12 +35,67 @@ describe('database/queries/photos', () => {
     await resetDatabase();
   });
 
+  // Regression: deleting an event hard-deleted ALL its photos, but a sold
+  // photo is referenced by order_items (ON DELETE RESTRICT), so the delete
+  // threw a FK violation and the whole event-delete failed.
+  describe('deleting event photos with a sold photo', () => {
+    async function seedEventWithOneSoldPhoto() {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id, { price_per_photo: 3 });
+      const sold = await createTestPhoto(event.id);
+      const unsold = await createTestPhoto(event.id);
+      const talent = await createTestUser('TALENT');
+      const sb = createServiceClient();
+      const order = await createOrder(sb, talent.id, {
+        total_amount_cents: 300,
+        status: 'completed',
+      });
+      await addOrderItems(sb, order.id, [
+        { photo_id: sold.id, photographer_id: photographer.id, unit_price_cents: 300 },
+      ]);
+      return { photographer, event, sold, unsold, sb };
+    }
+
+    it('getSoldPhotoIdsForEvent returns only the purchased photo', async () => {
+      const { event, sold, sb } = await seedEventWithOneSoldPhoto();
+      const ids = await getSoldPhotoIdsForEvent(sb, event.id);
+      expect(ids).toEqual([sold.id]);
+    });
+
+    it('without excluding the sold photo, the delete throws the FK violation', async () => {
+      const { event, photographer, sb } = await seedEventWithOneSoldPhoto();
+      await expect(deleteEventPhotos(sb, event.id, photographer.id)).rejects.toThrow(
+        /foreign key|order_items/i,
+      );
+    });
+
+    it('excluding sold photos deletes the rest and keeps the sold row + its storage path', async () => {
+      const { event, photographer, sold, unsold, sb } = await seedEventWithOneSoldPhoto();
+      const soldIds = await getSoldPhotoIdsForEvent(sb, event.id);
+
+      await expect(
+        deleteEventPhotos(sb, event.id, photographer.id, soldIds),
+      ).resolves.not.toThrow();
+
+      // Sold photo survives, unsold is gone.
+      expect((await getPhoto(sb, sold.id, event.id, photographer.id))?.id).toBe(sold.id);
+      expect(await getPhoto(sb, unsold.id, event.id, photographer.id)).toBeNull();
+
+      // Storage paths exclude the sold photo so the buyer keeps download access.
+      const paths = await getPhotoStoragePaths(sb, event.id, photographer.id, soldIds);
+      const soldRow = await getPhoto(sb, sold.id, event.id, photographer.id);
+
+      expect(paths).not.toContain(soldRow?.original_url);
+    });
+  });
+
   describe('getPhoto', () => {
     it('returns the photo when owner asks', async () => {
       const owner = await createTestUser('PHOTOGRAPHER');
       const event = await createTestEvent(owner.id);
       const photo = await createTestPhoto(event.id);
       const found = await getPhoto(createServiceClient(), photo.id, event.id, owner.id);
+
       expect(found?.id).toBe(photo.id);
     });
 
@@ -46,6 +105,7 @@ describe('database/queries/photos', () => {
       const event = await createTestEvent(owner.id);
       const photo = await createTestPhoto(event.id);
       const found = await getPhoto(createServiceClient(), photo.id, event.id, stranger.id);
+
       expect(found).toBeNull();
     });
   });
@@ -68,6 +128,7 @@ describe('database/queries/photos', () => {
       });
 
       const photos = await getEventPhotos(sb, event.id, owner.id);
+
       expect(photos).toHaveLength(1);
       expect(photos[0].id).toBe(approved.id);
     });
@@ -257,6 +318,7 @@ describe('database/queries/photos', () => {
         city: 'Barcelona',
         country: 'ES',
       });
+
       expect(error).not.toBeNull();
     });
 
@@ -272,6 +334,7 @@ describe('database/queries/photos', () => {
         .from('photos')
         .select('*', { count: 'exact', head: true })
         .eq('id', id);
+
       expect(count).toBe(0);
     });
   });
