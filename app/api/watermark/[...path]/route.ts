@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { type NextRequest, NextResponse } from 'next/server';
+import { getPhotoFaceBoxesByStoragePath } from '@/database/queries/rekognition';
 import { env } from '@/env.mjs';
-import { addWatermarkToImage, buildWatermarkErrorPlaceholder } from '@/lib/watermark';
+import { addWatermarkToImage, buildWatermarkErrorPlaceholder, type FaceBox } from '@/lib/watermark';
 
 /**
  * API route to serve watermarked images — accessible without authentication.
@@ -110,9 +111,22 @@ export async function GET(
     const arrayBuffer = await imageData.arrayBuffer();
     const imageBuffer = Buffer.from(arrayBuffer);
 
+    // Best-effort: anchor a watermark over a face if this photo has indexed
+    // faces. Any failure here must NOT break the preview — degrade to tile-only.
+    let faceBoxes: FaceBox[] = [];
+    try {
+      faceBoxes = await getPhotoFaceBoxesByStoragePath(supabase, fullPath);
+    } catch (faceErr) {
+      logWatermarkError('face box lookup failed (degrading to tile-only)', {
+        path: fullPath,
+        error: faceErr,
+        status: 200,
+      });
+    }
+
     let watermarkedBuffer: Buffer;
     try {
-      watermarkedBuffer = await addWatermarkToImage(imageBuffer);
+      watermarkedBuffer = await addWatermarkToImage(imageBuffer, faceBoxes);
     } catch (watermarkErr) {
       // CRITICAL: never fall back to `imageBuffer` here — that would expose
       // the original, payment-gated photo to anyone who can hit the URL.

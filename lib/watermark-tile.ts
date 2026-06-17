@@ -28,6 +28,12 @@ export interface WatermarkTileConfig {
   opacity: number;
   /** Text color (any CSS/SVG color). */
   color: string;
+  /**
+   * Outer stroke width (px) on each glyph. Thickens the text edges so AI
+   * watermark removers — which exploit thin, low-contrast lines — can't render
+   * the mark out cleanly. 0 disables.
+   */
+  strokeWidth: number;
   /** Number of text rows down the tile — higher = denser. */
   rows: number;
   /** Letter spacing in px. */
@@ -47,8 +53,9 @@ export const DEFAULT_WATERMARK_TILE_CONFIG: WatermarkTileConfig = {
   tileSize: 400,
   fontSize: 25,
   angleDeg: -40,
-  opacity: 0.4,
+  opacity: 0.5,
   color: '#ffffff',
+  strokeWidth: 1,
   rows: 6,
   letterSpacing: 5,
   fontFamily: 'Helvetica Neue, Helvetica, Arial, sans-serif',
@@ -94,7 +101,11 @@ export function buildWatermarkTileSvg(config?: Partial<WatermarkTileConfig>): st
           `<text x="${x + c.shadow.offsetX}" y="${y + c.shadow.offsetY}" ${font} ${rot} ` +
           `fill="${c.shadow.color}" fill-opacity="${c.shadow.opacity}">${text}</text>`;
       }
-      body += `<text x="${x}" y="${y}" ${font} ${rot} fill="${c.color}" fill-opacity="${c.opacity}">${text}</text>`;
+      const stroke =
+        c.strokeWidth > 0
+          ? ` stroke="${c.color}" stroke-width="${c.strokeWidth}" stroke-opacity="${c.opacity}"`
+          : '';
+      body += `<text x="${x}" y="${y}" ${font} ${rot} fill="${c.color}" fill-opacity="${c.opacity}"${stroke}>${text}</text>`;
     }
   }
 

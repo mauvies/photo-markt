@@ -2,7 +2,7 @@
  * Server-side image watermarking utilities.
  *
  * Preview pipeline (applied in order):
- *   1. Resize  — longest side capped at 1200 px (never upscales)
+ *   1. Resize  — longest side capped at 1024 px (never upscales)
  *   2. Watermark — pre-rendered transparent PNG tile composited with `tile: true`
  *   3. Noise   — subtle grayscale grain at ~3% opacity
  *   4. Encode  — JPEG at quality 70
@@ -40,18 +40,111 @@ async function getTile(): Promise<{ buffer: Buffer; width: number; height: numbe
 // Public API
 // ---------------------------------------------------------------------------
 
+export interface FaceBox {
+  /** AWS Rekognition normalized box: Left/Top/Width/Height in 0–1. */
+  boundingBox: Record<string, number>;
+  confidence: number;
+}
+
+// Face-overlay knobs. Conservative on purpose: one face, partial coverage, mild
+// extra opacity — over-watermarking kills buyer evaluation (FinisherPix's
+// mistake). Tune these against real event photos.
+// ponytail: stacking the 0.5-opacity tile twice ≈ 0.75 effective opacity. If a
+// stronger, single-pass opaque badge is wanted, bake a dedicated badge PNG.
+const FACE_BADGE_COVERAGE = 0.7; // fraction of the face box the badge fills
+const FACE_BADGE_STACK = 2; // composite the tile this many times for opacity
+
+export interface BadgeRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Pure geometry: pick the most prominent indexed face (largest area, tie-break
+ * on confidence), scale its normalized box to pixels, and return the centered
+ * badge rect at `FACE_BADGE_COVERAGE`. Returns null when there's no usable box
+ * or the box is degenerate/oversized — caller then degrades to tile-only.
+ * Exported for unit testing; this is the logic that can actually break.
+ */
+export function selectFaceBadgeRect(
+  faceBoxes: FaceBox[] | undefined,
+  width: number,
+  height: number,
+): BadgeRect | null {
+  const usable = (faceBoxes ?? []).filter((f) => f.boundingBox);
+  if (usable.length === 0) return null;
+
+  const area = (b: Record<string, number>) => (b.Width ?? 0) * (b.Height ?? 0);
+  const best = usable.reduce((a, b) =>
+    area(b.boundingBox) > area(a.boundingBox) ||
+    (area(b.boundingBox) === area(a.boundingBox) && b.confidence > a.confidence)
+      ? b
+      : a,
+  ).boundingBox;
+
+  const boxW = (best.Width ?? 0) * width;
+  const boxH = (best.Height ?? 0) * height;
+  const badgeW = Math.round(boxW * FACE_BADGE_COVERAGE);
+  const badgeH = Math.round(boxH * FACE_BADGE_COVERAGE);
+  if (badgeW < 1 || badgeH < 1 || badgeW > width || badgeH > height) return null;
+
+  return {
+    left: Math.max(0, Math.round((best.Left ?? 0) * width + (boxW - badgeW) / 2)),
+    top: Math.max(0, Math.round((best.Top ?? 0) * height + (boxH - badgeH) / 2)),
+    width: badgeW,
+    height: badgeH,
+  };
+}
+
+/**
+ * Build composite entries that drop a watermark badge over the most prominent
+ * indexed face. The badge is the pre-baked tile (no runtime font rendering),
+ * resized to the face box — inpainting over a face reconstructs it badly, so
+ * this is the most AI-removal-resistant mark. Returns [] when there's no usable
+ * box, so the caller degrades to tile-only.
+ */
+async function buildFaceBadgeComposites(
+  faceBoxes: FaceBox[] | undefined,
+  tileBuffer: Buffer,
+  width: number,
+  height: number,
+): Promise<sharp.OverlayOptions[]> {
+  const rect = selectFaceBadgeRect(faceBoxes, width, height);
+  if (!rect) return [];
+
+  const badge = await sharp(tileBuffer).resize(rect.width, rect.height, { fit: 'fill' }).toBuffer();
+  return Array.from({ length: FACE_BADGE_STACK }, () => ({
+    input: badge,
+    top: rect.top,
+    left: rect.left,
+    blend: 'over' as const,
+  }));
+}
+
 /**
  * Takes the raw original image buffer and returns a degraded, watermarked
  * JPEG preview buffer. Always outputs JPEG regardless of the input format.
+ *
+ * When `faceBoxes` are supplied (from the Rekognition flow), an extra badge is
+ * composited over one face for stronger AI-removal resistance. Face data is
+ * best-effort: an empty/undefined list just yields the tile-only preview.
  */
-export async function addWatermarkToImage(imageBuffer: Buffer): Promise<Buffer> {
+export async function addWatermarkToImage(
+  imageBuffer: Buffer,
+  faceBoxes?: FaceBox[],
+): Promise<Buffer> {
   // Resize first so the watermark tile composites at a consistent density
   // regardless of the original photo size.
   const { data: degradedBuffer, info } = await sharp(imageBuffer)
     .rotate() // honour EXIF orientation before anything else
     .resize({
-      width: 1200,
-      height: 1200,
+      // 1024 px longest side ("social media res", matches Sportograf). An
+      // AI-cleaned copy at this size is unusable for print/large display, which
+      // is the real anti-removal lever — not out-watermarking the AI.
+      width: 1024,
+      height: 1024,
       fit: 'inside',
       withoutEnlargement: true,
     })
@@ -73,11 +166,15 @@ export async function addWatermarkToImage(imageBuffer: Buffer): Promise<Buffer> 
           .toBuffer()
       : tile.buffer;
 
+  const faceBadges = await buildFaceBadgeComposites(faceBoxes, tile.buffer, w, h);
+
   return sharp(degradedBuffer)
     .composite([
       // `tile: true` repeats the input across the entire base image. Opacity
       // and rotation are pre-baked into the PNG, so no runtime adjustment.
       { input: tileInput, tile: true, blend: 'over' },
+      // Badge over a face (if any) — composited on top of the tile.
+      ...faceBadges,
       // Grayscale grain layer (~3 % opacity via alpha channel)
       { input: noiseBuffer, top: 0, left: 0, blend: 'over' },
     ])
