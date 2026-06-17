@@ -68,7 +68,12 @@ vi.mock('@/lib/i18n/get-lang-from-headers', () => ({
   getLangFromHeaders: vi.fn(async () => 'en'),
 }));
 
-import { completeOnboarding, enableTalentRole, switchRole } from '@/app/[lang]/actions/roles';
+import {
+  completeOnboarding,
+  enableTalentRole,
+  switchRole,
+  userHasRole,
+} from '@/app/[lang]/actions/roles';
 import {
   createServiceClient,
   createTestUser,
@@ -80,6 +85,23 @@ describe('roles Server Actions', () => {
     await resetDatabase();
     mockSession.userId = null;
     mockSession.activeRole = 'photographer';
+  });
+
+  describe('userHasRole', () => {
+    it('reflects membership, not active view', async () => {
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+      // active view is photographer (beforeEach), capability is talent
+      expect(await userHasRole('talent')).toBe(true);
+      expect(await userHasRole('photographer')).toBe(false);
+    });
+
+    it('is false for a role the user does not hold', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      mockSession.userId = photographer.id;
+      expect(await userHasRole('talent')).toBe(false);
+      expect(await userHasRole('photographer')).toBe(true);
+    });
   });
 
   describe('switchRole', () => {

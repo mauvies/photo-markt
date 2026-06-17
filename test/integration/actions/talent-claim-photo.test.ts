@@ -10,8 +10,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockSession } from '../../helpers/server-action-mocks';
 
+// Talent gating is by CAPABILITY now — mirror the real `userHasRole` against
+// the seeded `user_role_memberships`, not the mutable `active_role`.
 vi.mock('@/app/[lang]/actions/roles', () => ({
-  getActiveRole: vi.fn(async () => ({ activeRole: mockSession.activeRole })),
+  userHasRole: vi.fn(async (slug: string) => {
+    if (!mockSession.userId) return false;
+    const { createClient } = await import('@supabase/supabase-js');
+    const sb = createClient(
+      'http://127.0.0.1:54321',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU',
+      { auth: { autoRefreshToken: false, persistSession: false } },
+    );
+    const { data } = await sb
+      .from('user_role_memberships')
+      .select('role')
+      .eq('user_id', mockSession.userId);
+    return (data ?? []).some((r: { role: string }) => r.role.toLowerCase() === slug);
+  }),
 }));
 
 vi.mock('@/database/server', async () => {

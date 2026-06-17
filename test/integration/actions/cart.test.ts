@@ -5,8 +5,8 @@
  *   1. `vi.mock('@/database/server')` — replace the cookie-backed
  *      `createClient` with a service-role client. Cookies/Next.js render
  *      context aren't available outside of a real request, so we stub.
- *   2. `vi.mock('@/app/[lang]/actions/roles')` — `getActiveRole` reads
- *      cookies too. Stub it to return whatever role the test needs.
+ *   2. `vi.mock('@/app/[lang]/actions/roles')` — `userHasRole` reads cookies
+ *      too. Stub it against seeded `user_role_memberships` (capability).
  *   3. Seed test data via the shared helpers, then call the Server Action
  *      directly as a plain function.
  *   4. Assert DB side-effects via a fresh service-role client.
@@ -25,8 +25,24 @@ import { mockSession } from '../../helpers/server-action-mocks';
 // at the top level of the test file. See `test/helpers/server-action-mocks.ts`
 // for the rationale and the canonical block to copy.
 
+// Cart gating is by CAPABILITY now (does the user hold the TALENT role), not by
+// the mutable `active_role`. Mirror the real `userHasRole` against the seeded
+// `user_role_memberships` so tests reflect membership, not current view.
 vi.mock('@/app/[lang]/actions/roles', () => ({
-  getActiveRole: vi.fn(async () => ({ activeRole: mockSession.activeRole })),
+  userHasRole: vi.fn(async (slug: string) => {
+    if (!mockSession.userId) return false;
+    const { createClient } = await import('@supabase/supabase-js');
+    const sb = createClient(
+      'http://127.0.0.1:54321',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU',
+      { auth: { autoRefreshToken: false, persistSession: false } },
+    );
+    const { data } = await sb
+      .from('user_role_memberships')
+      .select('role')
+      .eq('user_id', mockSession.userId);
+    return (data ?? []).some((r: { role: string }) => r.role.toLowerCase() === slug);
+  }),
 }));
 
 vi.mock('@/database/server', async () => {
@@ -112,10 +128,30 @@ describe('cart Server Actions', () => {
       );
     });
 
-    it('rejects when the user is currently in photographer mode', async () => {
+    // Regression (fix-role-switch-stale-state): a talent-capable user must be
+    // able to add to cart even while their active view is photographer — the
+    // old code gated on `active_role`, which a background render could revert.
+    it('allows a talent-capable user even while in photographer view', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id, { price_per_photo: 7 });
+      const photo = await createTestPhoto(event.id);
       const talent = await createTestUser('TALENT');
       mockSession.userId = talent.id;
-      mockSession.activeRole = 'photographer';
+      mockSession.activeRole = 'photographer'; // stale/irrelevant now
+
+      await expect(addPhotoToCartAction(photo.id)).resolves.not.toThrow();
+
+      const cart = await getOrCreateCart(createServiceClient(), talent.id);
+      const { count } = await createServiceClient()
+        .from('cart_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('cart_id', cart.id);
+      expect(count).toBe(1);
+    });
+
+    it('rejects a user who does not hold the talent role', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      mockSession.userId = photographer.id;
       await expect(addPhotoToCartAction('00000000-0000-0000-0000-000000000000')).rejects.toThrow(
         /talent users/i,
       );
@@ -188,10 +224,9 @@ describe('cart Server Actions', () => {
       expect(await getCartItemCountAction()).toBe(0);
     });
 
-    it('returns 0 when the caller is in photographer mode (cart is talent-only)', async () => {
-      const talent = await createTestUser('TALENT');
-      mockSession.userId = talent.id;
-      mockSession.activeRole = 'photographer';
+    it('returns 0 when the caller lacks the talent role (cart is talent-only)', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      mockSession.userId = photographer.id;
       expect(await getCartItemCountAction()).toBe(0);
     });
   });

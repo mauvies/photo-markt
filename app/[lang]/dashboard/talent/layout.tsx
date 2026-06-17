@@ -1,4 +1,4 @@
-import { getActiveRoleOrNull, switchRole } from '@/app/[lang]/actions/roles';
+import { getActiveRoleOrNull, userHasRole } from '@/app/[lang]/actions/roles';
 import { TalentDashboardHeader } from '@/components/talent-dashboard-header';
 import { getProfileFields } from '@/database/queries';
 import { createClient } from '@/database/server';
@@ -15,9 +15,10 @@ export default async function TalentLayout({ children }: { children: React.React
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [profile, currentRole] = await Promise.all([
-    getProfileFields(supabase, user?.id ?? '', ['display_name', 'active_role']),
+  const [profile, currentRole, hasTalent] = await Promise.all([
+    getProfileFields(supabase, user?.id ?? '', ['display_name']),
     getActiveRoleOrNull(),
+    userHasRole('talent'),
   ]);
 
   // No chosen role yet → onboarding, instead of relying on a minted profile.
@@ -25,11 +26,14 @@ export default async function TalentLayout({ children }: { children: React.React
     return localizedRedirect(lang, '/onboarding/role');
   }
 
-  let activeRole = currentRole;
-  if (activeRole !== 'talent') {
-    await switchRole('talent', { skipRevalidation: true });
-    activeRole = 'talent';
+  // Gate by capability — never write active_role on render. A background
+  // prefetch / multi-tab render must not be able to flip the user's role.
+  // This is the talent layout, so the view is talent by definition.
+  if (!hasTalent) {
+    return localizedRedirect(lang, '/dashboard');
   }
+
+  const activeRole = 'talent';
 
   const sidebarUser = {
     name: profile?.display_name ?? user?.user_metadata?.full_name ?? user?.email ?? 'Member',

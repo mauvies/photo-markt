@@ -1,4 +1,4 @@
-import { getActiveRole } from '@/app/[lang]/actions/roles';
+import { userHasRole } from '@/app/[lang]/actions/roles';
 import { listSavedEvents } from '@/app/[lang]/actions/saved-events';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { FavoritesTabs } from '@/components/favorites-tabs';
@@ -28,9 +28,8 @@ export default async function TalentFavoritesPage({
     return redirectToLogin();
   }
 
-  // Ensure user is in talent role
-  const { activeRole } = await getActiveRole();
-  if (activeRole !== 'talent') {
+  // Gate by capability, not active view (active_role is a mutable UI preference).
+  if (!(await userHasRole('talent'))) {
     return localizedRedirect(lang, '/dashboard');
   }
 

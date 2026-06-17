@@ -1,4 +1,4 @@
-import { getActiveRoleOrNull, switchRole } from '@/app/[lang]/actions/roles';
+import { getActiveRoleOrNull, userHasRole } from '@/app/[lang]/actions/roles';
 import { AppSidebar } from '@/components/app-sidebar';
 import { DashboardTopHeader } from '@/components/dashboard-top-header';
 import { PhotographerBottomNav } from '@/components/photographer-bottom-nav';
@@ -18,9 +18,10 @@ export default async function PhotographerLayout({ children }: { children: React
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [profile, currentRole] = await Promise.all([
-    getProfileFields(supabase, user?.id ?? '', ['display_name', 'active_role']),
+  const [profile, currentRole, hasPhotographer] = await Promise.all([
+    getProfileFields(supabase, user?.id ?? '', ['display_name']),
     getActiveRoleOrNull(),
+    userHasRole('photographer'),
   ]);
 
   // No chosen role yet → onboarding, instead of relying on a minted profile.
@@ -28,11 +29,14 @@ export default async function PhotographerLayout({ children }: { children: React
     return localizedRedirect(lang, '/onboarding/role');
   }
 
-  let activeRole = currentRole;
-  if (activeRole !== 'photographer') {
-    await switchRole('photographer', { skipRevalidation: true });
-    activeRole = 'photographer';
+  // Gate by capability — never write active_role on render. A background
+  // prefetch / multi-tab render must not be able to flip the user's role.
+  // This is the photographer layout, so the view is photographer by definition.
+  if (!hasPhotographer) {
+    return localizedRedirect(lang, '/dashboard');
   }
+
+  const activeRole = 'photographer';
 
   const sidebarUser = {
     name: profile?.display_name ?? user?.user_metadata?.full_name ?? user?.email ?? 'Member',

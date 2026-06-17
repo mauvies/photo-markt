@@ -1,4 +1,3 @@
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { switchRole } from '@/app/[lang]/actions/roles';
 import type { RoleSlug } from '@/lib/roles';
@@ -13,8 +12,5 @@ export async function POST(request: Request) {
 
   await switchRole(role as RoleSlug);
 
-  const response = NextResponse.json({ ok: true, activeRole: role });
-  const cookieStore = await cookies();
-  cookieStore.set('active_role', role, { path: '/', httpOnly: false });
-  return response;
+  return NextResponse.json({ ok: true, activeRole: role });
 }
