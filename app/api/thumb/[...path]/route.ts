@@ -4,8 +4,9 @@ import { env } from '@/env.mjs';
 
 /**
  * Serves pre-generated WebP thumbnails from Supabase Storage.
- * Path format: /api/thumb/photos/userId/eventId/thumbs/uuid/small.webp
- *              /api/thumb/photos/userId/eventId/thumbs/uuid/medium.webp
+ * Path format: /api/thumb/userId/eventId/thumbs/uuid/small.webp
+ *              /api/thumb/userId/eventId/thumbs/uuid/medium.webp
+ * (segments map 1:1 to the storage object path inside the `photos` bucket)
  *
  * Security posture: fail-CLOSED. Any error returns 404 with no body —
  * galleries fall back to their existing source (watermark route or signed
@@ -24,8 +25,8 @@ export async function GET(
   const { path: pathSegments } = await params;
   const fullPath = pathSegments.join('/');
 
-  // Validate structure — at minimum: photos/{uid}/{eventId}/thumbs/{uuid}/{size}.webp
-  if (pathSegments.length < 6) {
+  // Validate structure — at minimum: {uid}/{eventId}/thumbs/{uuid}/{size}.webp
+  if (pathSegments.length < 5) {
     return new NextResponse('Invalid path', { status: 400 });
   }
   if (
