@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { getActiveRole } from '@/app/[lang]/actions/roles';
+import { userHasRole } from '@/app/[lang]/actions/roles';
 import {
   createSignedUrl,
   getPhotosForEvents,
@@ -53,8 +53,8 @@ async function requireTalent() {
     throw new Error('You must be signed in to manage saved events.');
   }
 
-  const { activeRole } = await getActiveRole();
-  if (activeRole !== 'talent') {
+  // Gate by capability, not active view — active_role is a mutable UI preference.
+  if (!(await userHasRole('talent'))) {
     throw new Error('Only talent users can manage saved events.');
   }
 
@@ -102,8 +102,9 @@ export async function getSavedEventIdsAction(): Promise<{
 
   if (!user) return { isTalent: false, savedEventIds: [] };
 
-  const { activeRole } = await getActiveRole();
-  if (activeRole !== 'talent') return { isTalent: false, savedEventIds: [] };
+  // Capability, not active view — a talent-capable user gets their saved events
+  // regardless of which dashboard they last switched to.
+  if (!(await userHasRole('talent'))) return { isTalent: false, savedEventIds: [] };
 
   const savedEventIds = await getSavedEventIdsForTalent(supabase, user.id);
   return { isTalent: true, savedEventIds };

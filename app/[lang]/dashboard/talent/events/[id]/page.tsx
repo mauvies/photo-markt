@@ -1,7 +1,7 @@
 import { CalendarClock } from 'lucide-react';
 import { cacheLife, cacheTag } from 'next/cache';
 import { notFound } from 'next/navigation';
-import { getActiveRole } from '@/app/[lang]/actions/roles';
+import { userHasRole } from '@/app/[lang]/actions/roles';
 import { ContributeDialog } from '@/app/[lang]/events/[shareCode]/contribute-dialog';
 import { UploadProgressProvider } from '@/app/[lang]/events/[shareCode]/upload-progress-provider';
 import { DashboardHeader } from '@/components/dashboard-header';
@@ -129,15 +129,16 @@ export default async function ExploreEventDetailPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  let activeRole: string | null = null;
+  // Capability, not active view: a talent-capable user sees their cart/purchase
+  // state here regardless of which dashboard they last switched to.
+  let viewerIsTalent = false;
   if (user) {
     try {
-      activeRole = (await getActiveRole()).activeRole ?? null;
+      viewerIsTalent = await userHasRole('talent');
     } catch {
-      activeRole = null;
+      viewerIsTalent = false;
     }
   }
-  const viewerIsTalent = activeRole === 'talent';
 
   const cached = await getCachedTalentEventData(param, baseUrl, viewerIsTalent);
   if (!cached) notFound();
@@ -190,7 +191,7 @@ export default async function ExploreEventDetailPage({
   const photosClaimedToProfile: string[] = [];
   // Photos this talent has purchased — gates the bulk download on paid events.
   let purchasedPhotoIds = new Set<string>();
-  if (user && eventStatus !== 'upcoming' && activeRole === 'talent') {
+  if (user && eventStatus !== 'upcoming' && viewerIsTalent) {
     const photoIds = photos.map((p) => p.id);
     if (photoIds.length > 0) {
       const [cartIds, tagsResult, claimedIds] = await Promise.all([

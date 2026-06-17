@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { getActiveRole } from '@/app/[lang]/actions/roles';
+import { userHasRole } from '@/app/[lang]/actions/roles';
 import { claimPhotoForTalent } from '@/database/queries/talent-library';
 import {
   tagPhotoForTalent,
@@ -25,8 +25,7 @@ export async function addPhotoToMyPhotosAction(photoId: string): Promise<void> {
   }
 
   // Verify user is talent
-  const { activeRole } = await getActiveRole();
-  if (activeRole !== 'talent') {
+  if (!(await userHasRole('talent'))) {
     throw new Error('Only talent users can add photos to their library.');
   }
 
@@ -52,8 +51,7 @@ export async function removePhotoFromMyPhotosAction(photoId: string): Promise<vo
   }
 
   // Verify user is talent
-  const { activeRole } = await getActiveRole();
-  if (activeRole !== 'talent') {
+  if (!(await userHasRole('talent'))) {
     throw new Error('Only talent users can remove photos from their library.');
   }
 
@@ -81,8 +79,7 @@ export async function addPhotoToProfileAction(photoId: string): Promise<void> {
     throw new Error('You must be signed in to add photos to your profile.');
   }
 
-  const { activeRole } = await getActiveRole();
-  if (activeRole !== 'talent') {
+  if (!(await userHasRole('talent'))) {
     throw new Error('Only talent users can add photos to their profile.');
   }
 
@@ -121,8 +118,7 @@ export async function addPhotosToMyPhotosAction(photoIds: string[]): Promise<voi
     throw new Error('You must be signed in to add photos to your library.');
   }
 
-  const { activeRole } = await getActiveRole();
-  if (activeRole !== 'talent') {
+  if (!(await userHasRole('talent'))) {
     throw new Error('Only talent users can add photos to their library.');
   }
 
@@ -151,8 +147,7 @@ export async function addPhotosToProfileAction(
     throw new Error('You must be signed in to add photos to your profile.');
   }
 
-  const { activeRole } = await getActiveRole();
-  if (activeRole !== 'talent') {
+  if (!(await userHasRole('talent'))) {
     throw new Error('Only talent users can add photos to their profile.');
   }
 

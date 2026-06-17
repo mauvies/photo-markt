@@ -1,4 +1,4 @@
-import { getActiveRole } from '@/app/[lang]/actions/roles';
+import { userHasRole } from '@/app/[lang]/actions/roles';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { createClient } from '@/database/server';
 import { redirectToLogin } from '@/lib/auth/redirect-to-login';
@@ -29,9 +29,8 @@ export default async function CartPage({ params: routeParams, searchParams }: Ca
     return redirectToLogin();
   }
 
-  // Ensure user is in talent role
-  const { activeRole } = await getActiveRole();
-  if (activeRole !== 'talent') {
+  // Gate by capability, not active view (active_role is a mutable UI preference).
+  if (!(await userHasRole('talent'))) {
     return localizedRedirect(lang, '/dashboard');
   }
 

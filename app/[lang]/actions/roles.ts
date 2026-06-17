@@ -208,6 +208,17 @@ export async function getActiveRoleOrNull(): Promise<RoleSlug | null> {
 }
 
 /**
+ * Whether the current user *holds* the given role (capability), independent of
+ * which dashboard they are currently viewing. Use this to gate role-specific
+ * actions — never `active_role`, which is a mutable UI preference. Pure read.
+ */
+export async function userHasRole(slug: RoleSlug): Promise<boolean> {
+  const { supabase, user } = await getAuthenticatedClient();
+  const roles = await getUserRoles(supabase, user.id);
+  return roles.includes(roleSlugToEnum(slug));
+}
+
+/**
  * Return the active role for the current user, falling back to photographer if
  * none is set.
  *

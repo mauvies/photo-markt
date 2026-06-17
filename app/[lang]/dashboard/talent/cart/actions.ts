@@ -1,7 +1,7 @@
 'use server';
 
 import { headers } from 'next/headers';
-import { getActiveRole } from '@/app/[lang]/actions/roles';
+import { userHasRole } from '@/app/[lang]/actions/roles';
 import {
   createPhotoUrls,
   addPhotoToCart as dbAddPhotoToCart,
@@ -51,8 +51,7 @@ export async function getCurrentCart(): Promise<CartData> {
   }
 
   // Verify user is talent
-  const { activeRole } = await getActiveRole();
-  if (activeRole !== 'talent') {
+  if (!(await userHasRole('talent'))) {
     throw new Error('Only talent users can access the cart.');
   }
 
@@ -111,9 +110,7 @@ export async function addPhotoToCartAction(photoId: string): Promise<void> {
   }
 
   // Verify user is talent
-  const { activeRole } = await getActiveRole();
-
-  if (activeRole !== 'talent') {
+  if (!(await userHasRole('talent'))) {
     throw new Error('Only talent users can add items to the cart.');
   }
 
@@ -171,8 +168,7 @@ export async function removePhotoFromCartAction(photoId: string): Promise<void> 
   }
 
   // Verify user is talent
-  const { activeRole } = await getActiveRole();
-  if (activeRole !== 'talent') {
+  if (!(await userHasRole('talent'))) {
     throw new Error('Only talent users can modify the cart.');
   }
 
@@ -195,9 +191,7 @@ export async function clearCartAction(): Promise<void> {
   }
 
   // Verify user is talent
-  const { activeRole } = await getActiveRole();
-
-  if (activeRole !== 'talent') {
+  if (!(await userHasRole('talent'))) {
     throw new Error('Only talent users can clear the cart.');
   }
 
@@ -221,9 +215,7 @@ export async function getCartItemCountAction(): Promise<number> {
 
   // Only return count if user is talent
   try {
-    const { activeRole } = await getActiveRole();
-
-    if (activeRole !== 'talent') {
+    if (!(await userHasRole('talent'))) {
       return 0;
     }
   } catch {
@@ -249,8 +241,7 @@ export async function checkPhotoInCartAction(photoId: string): Promise<boolean> 
 
   // Only check if user is talent
   try {
-    const { activeRole } = await getActiveRole();
-    if (activeRole !== 'talent') {
+    if (!(await userHasRole('talent'))) {
       return false;
     }
   } catch {
@@ -274,8 +265,7 @@ export async function createCheckoutSessionAction(): Promise<{ url: string }> {
   }
 
   // Verify user is talent
-  const { activeRole } = await getActiveRole();
-  if (activeRole !== 'talent') {
+  if (!(await userHasRole('talent'))) {
     throw new Error('Only talent users can checkout.');
   }
 
