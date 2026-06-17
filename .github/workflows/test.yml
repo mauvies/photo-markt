@@ -46,9 +46,11 @@ jobs:
         # The dev-dependency supabase CLI is on $PATH via `pnpm exec`. This
         # boots Postgres + Auth + Storage and applies every migration in
         # supabase/migrations/ + supabase/seed.sql.
-        # `--exclude` trims Studio + the imgproxy + the analytics services
-        # we never touch from tests, which keeps the cold-start under 60s.
-        run: pnpm exec supabase start --exclude studio,imgproxy,vector
+        # `--exclude` trims every service the tests never touch: Studio, meta,
+        # imgproxy, analytics, vector, realtime, edge functions and inbucket.
+        # Tests only hit db, rest, auth, storage and kong (the gateway) — fewer
+        # images to pull is the win here.
+        run: pnpm exec supabase start --exclude studio,meta,imgproxy,analytics,vector,realtime,edge-runtime,functions,inbucket
 
       - name: Typecheck
         run: pnpm typecheck

@@ -11,6 +11,11 @@ export default defineConfig({
     // per file via the `@vitest-environment happy-dom` docblock.
     environment: 'node',
     globals: false,
+    // App code logs on its error/fail-closed branches, which integration
+    // tests deliberately exercise — expected noise, not failures. Silence
+    // console from passing tests; keep it for failing ones so a real failure
+    // still shows its logs.
+    silent: 'passed-only',
     // Populate env-var defaults before any test file imports `env.mjs` — see
     // test/setup.ts for the rationale.
     setupFiles: ['./test/setup.ts'],

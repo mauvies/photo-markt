@@ -97,7 +97,7 @@ describe('/api/thumb route', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 400 when path has fewer than 6 segments', async () => {
+  it('returns 400 when path has fewer than 5 segments', async () => {
     const res = await makeRequest(['thumbs', 'uuid', 'small.webp']);
     expect(res.status).toBe(400);
   });
