@@ -23,6 +23,20 @@ describe('buildWatermarkTileSvg', () => {
   // Text is configurable, so it must be XML-escaped — otherwise a value like
   // "</text>" or "&" would produce malformed SVG and the tile would fail to
   // rasterize (or worse, inject markup).
+  // Anti-AI-removal: thin, low-contrast lines are what watermark removers
+  // exploit. Glyphs must carry an outer stroke and composite at >= 0.5 opacity.
+  it('renders glyphs with an outer stroke at the configured opacity', () => {
+    const svg = buildWatermarkTileSvg();
+    expect(DEFAULT_WATERMARK_TILE_CONFIG.opacity).toBeGreaterThanOrEqual(0.5);
+    expect(DEFAULT_WATERMARK_TILE_CONFIG.strokeWidth).toBeGreaterThan(0);
+    expect(svg).toContain(`stroke-width="${DEFAULT_WATERMARK_TILE_CONFIG.strokeWidth}"`);
+    expect(svg).toContain(`stroke-opacity="${DEFAULT_WATERMARK_TILE_CONFIG.opacity}"`);
+  });
+
+  it('omits the stroke when strokeWidth is 0', () => {
+    expect(buildWatermarkTileSvg({ strokeWidth: 0 })).not.toContain('stroke-width=');
+  });
+
   it('escapes XML metacharacters in the text', () => {
     const svg = buildWatermarkTileSvg({ text: 'A & B </text><rect/>' });
     expect(svg).not.toContain('& B');

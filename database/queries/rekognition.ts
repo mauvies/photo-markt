@@ -198,6 +198,44 @@ export async function getPhotoFacesByAwsFaceIds(
 }
 
 /**
+ * Look up the indexed face boxes for a photo by its storage path
+ * (`photos.original_url`, which is the key the watermark route serves from).
+ * Used by the preview pipeline to anchor a watermark badge over a face — the
+ * boxes are produced by the existing Rekognition flow, so no AWS call here.
+ *
+ * Returns `[]` when the photo isn't found or has no faces; callers must treat
+ * an empty result as "tile-only preview", never an error.
+ */
+export async function getPhotoFaceBoxesByStoragePath(
+  supabase: SupabaseServerClient,
+  storagePath: string,
+): Promise<Array<{ boundingBox: Record<string, number>; confidence: number }>> {
+  const { data: photo, error: photoError } = await supabase
+    .from('photos')
+    .select('id')
+    .eq('original_url', storagePath)
+    .maybeSingle();
+  if (photoError) {
+    throw new Error(`Failed to look up photo by storage path: ${getErrorMessage(photoError)}`);
+  }
+  if (!photo) return [];
+
+  const { data, error } = await supabase
+    .from('photo_faces')
+    .select('bounding_box, confidence')
+    .eq('photo_id', photo.id as string);
+  if (error) {
+    throw new Error(`Failed to get photo faces by storage path: ${getErrorMessage(error)}`);
+  }
+  return (data ?? [])
+    .filter((row) => row.bounding_box)
+    .map((row) => ({
+      boundingBox: row.bounding_box as Record<string, number>,
+      confidence: (row.confidence as number) ?? 0,
+    }));
+}
+
+/**
  * Service-role only. Clean up every face record for a photo — used when
  * the photographer deletes a photo or disables AI matching on the event.
  * The corresponding AWS-side DeleteFaces call lives in PR 2's worker.

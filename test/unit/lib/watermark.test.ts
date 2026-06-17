@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
-import { addWatermarkToImage } from '@/lib/watermark';
+import { addWatermarkToImage, type FaceBox, selectFaceBadgeRect } from '@/lib/watermark';
 
 describe('addWatermarkToImage', () => {
   it('watermarks a large image and returns a JPEG', async () => {
@@ -14,8 +14,26 @@ describe('addWatermarkToImage', () => {
     const meta = await sharp(out).metadata();
 
     expect(meta.format).toBe('jpeg');
-    // longest side capped at 1200
-    expect(Math.max(meta.width ?? 0, meta.height ?? 0)).toBe(1200);
+    // longest side capped at 1024
+    expect(Math.max(meta.width ?? 0, meta.height ?? 0)).toBe(1024);
+  });
+
+  it('composites a face badge without throwing, and tile-only when no faces', async () => {
+    const source = await sharp({
+      create: { width: 1024, height: 768, channels: 3, background: '#777' },
+    })
+      .jpeg()
+      .toBuffer();
+
+    const faces: FaceBox[] = [
+      { boundingBox: { Left: 0.4, Top: 0.3, Width: 0.2, Height: 0.25 }, confidence: 99 },
+    ];
+
+    const withFace = await addWatermarkToImage(source, faces);
+    const tileOnly = await addWatermarkToImage(source, []);
+
+    expect((await sharp(withFace).metadata()).format).toBe('jpeg');
+    expect((await sharp(tileOnly).metadata()).format).toBe('jpeg');
   });
 
   // Regression: a source image smaller than the 400px watermark tile produced
@@ -51,5 +69,48 @@ describe('addWatermarkToImage', () => {
     expect(meta.format).toBe('jpeg');
     expect(meta.width).toBe(1000);
     expect(meta.height).toBe(150);
+  });
+});
+
+describe('selectFaceBadgeRect', () => {
+  const W = 1000;
+  const H = 800;
+
+  it('returns null when there are no faces', () => {
+    expect(selectFaceBadgeRect([], W, H)).toBeNull();
+    expect(selectFaceBadgeRect(undefined, W, H)).toBeNull();
+  });
+
+  it('scales the normalized box to pixels and centers the badge', () => {
+    const rect = selectFaceBadgeRect(
+      [{ boundingBox: { Left: 0.4, Top: 0.25, Width: 0.2, Height: 0.25 }, confidence: 99 }],
+      W,
+      H,
+    );
+    // box = 200x200 px at (400,200); badge = 70% = 140x140, centered → +30,+30
+    expect(rect).toEqual({ left: 430, top: 230, width: 140, height: 140 });
+  });
+
+  it('picks the largest face (tie-break on confidence)', () => {
+    const rect = selectFaceBadgeRect(
+      [
+        { boundingBox: { Left: 0, Top: 0, Width: 0.1, Height: 0.1 }, confidence: 99 },
+        { boundingBox: { Left: 0.5, Top: 0.5, Width: 0.4, Height: 0.4 }, confidence: 80 },
+      ],
+      W,
+      H,
+    );
+    // larger box wins despite lower confidence: 0.4*1000 * 0.7 = 280 wide
+    expect(rect?.width).toBe(280);
+  });
+
+  it('returns null for a degenerate (sub-pixel) box', () => {
+    expect(
+      selectFaceBadgeRect(
+        [{ boundingBox: { Left: 0, Top: 0, Width: 0.0001, Height: 0.0001 }, confidence: 99 }],
+        W,
+        H,
+      ),
+    ).toBeNull();
   });
 });
