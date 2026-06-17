@@ -130,7 +130,7 @@ export async function PhotographerPublicProfile({
       </div>
 
       <section className="mt-4">
-        <h2 className="mb-6 text-xl font-semibold tracking-tight sm:text-2xl">{p.events}</h2>
+        <h2 className="mb-4 text-xl font-semibold tracking-tight sm:text-2xl">{p.events}</h2>
         {photographerEvents.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed py-20 text-center sm:py-24">
             <Camera className="mb-4 h-12 w-12 text-muted-foreground/40" aria-hidden />
