@@ -9,8 +9,10 @@ import {
   getEvent,
   getPhoto,
   getPhotoStoragePaths,
+  getSoldPhotoIdsForEvent,
 } from '@/database/queries';
 import { createClient } from '@/database/server';
+import { supabaseAdmin } from '@/database/supabase-admin';
 import { inngest } from '@/lib/inngest/client';
 
 /**
@@ -40,11 +42,17 @@ export const deleteEventAction = async (eventId: string) => {
     throw new Error('Event not found.');
   }
 
-  // Get storage paths before deleting photos
-  const storagePaths = await getPhotoStoragePaths(supabase, eventId, user.id);
+  // Purchased photos back real sales (order_items / guest_order_items are
+  // ON DELETE RESTRICT) — keep their rows AND their storage so the order
+  // history stays intact and buyers keep download access. Checked with the
+  // admin client because order tables are RLS-scoped to the buyer.
+  const purchasedPhotoIds = await getSoldPhotoIdsForEvent(supabaseAdmin, eventId);
 
-  // Delete photos from database
-  await deleteEventPhotos(supabase, eventId, user.id);
+  // Get storage paths before deleting photos (excluding purchased ones)
+  const storagePaths = await getPhotoStoragePaths(supabase, eventId, user.id, purchasedPhotoIds);
+
+  // Delete photos from database (excluding purchased ones)
+  await deleteEventPhotos(supabase, eventId, user.id, purchasedPhotoIds);
 
   // Delete files from storage
   if (storagePaths.length > 0) {
