@@ -2,7 +2,6 @@ import { ArrowRight, Camera, Download, Sparkles } from 'lucide-react';
 import { cacheLife, cacheTag } from 'next/cache';
 import Link from 'next/link';
 import { EventSearchBar } from '@/components/event-search-bar';
-import { HomeAuthRedirect } from '@/components/home-auth-redirect';
 import { PricingSection } from '@/components/pricing-section';
 import { Button } from '@/components/ui/button';
 import type { Locale } from '@/lib/i18n/config';
@@ -32,7 +31,6 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
 
   return (
     <div className="flex min-h-svh flex-col">
-      <HomeAuthRedirect lang={lang} />
       {/* Hero Section */}
       <section className="relative flex min-h-[calc(100svh-4rem)] flex-col items-center justify-center overflow-hidden bg-linear-to-br from-background via-background to-primary/5">
         {/* Decorative background */}
