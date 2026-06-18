@@ -1,11 +1,11 @@
 # T-014 · Traducir y dejar lista para producción la página de soporte
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/support-page-i18n-production`
 - **OpenSpec change:** —  (contenido + i18n acotado a 1 componente)
-- **PR:** —
+- **PR:** #61
 
 ## Requerimiento
 La página de soporte falta traducir a español. Actualizarla, completarla y mejorarla para que esté lista

@@ -1295,5 +1295,114 @@
     "free": "Free",
     "starter": "Starter",
     "pro": "Pro"
+  },
+  "support": {
+    "back": "Back to dashboard",
+    "title": "Support",
+    "subtitleTalent": "Find answers about your photos, orders, and account.",
+    "subtitlePhotographer": "Get help with payouts, uploads, pricing, and more.",
+    "searchPlaceholder": "Search help articles...",
+    "quickActionsLabel": "Quick actions",
+    "faqsLabel": "Frequently asked questions",
+    "noResultsPrefix": "No articles match",
+    "clearSearch": "Clear search",
+    "supportTier": "Support tier",
+    "prioritySupport": "Priority support",
+    "avgResponse2h": "Avg. 2h response",
+    "emailSupport": "Standard support",
+    "avgResponse24h": "Avg. 24h response",
+    "upgradeForPriority": "Upgrade to Pro for priority support →",
+    "submitTicket": "Submit a ticket",
+    "submitTicketDesc": "Describe your issue and we'll get back to you.",
+    "subjectLabel": "Subject",
+    "subjectPlaceholder": "Brief summary of your issue",
+    "categoryLabel": "Category",
+    "categoryPlaceholder": "Select category",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "Include relevant details — event name, order ID, error message…",
+    "priorityLabel": "Priority",
+    "priorityPlaceholder": "Select priority",
+    "priorityLow": "Low — general question",
+    "priorityMedium": "Medium — something isn't working",
+    "priorityHigh": "High — blocking my workflow",
+    "send": "Send ticket",
+    "sending": "Sending…",
+    "fillAllFields": "Please fill in all fields.",
+    "submitSuccess": "Ticket submitted — we'll be in touch soon.",
+    "submitError": "Something went wrong. Please try again.",
+    "quickActionsTalent": [
+      { "title": "Missing photo", "description": "Report a photo you expected but cannot find" },
+      { "title": "Download access", "description": "Fix issues with downloading purchased photos" },
+      { "title": "Order help", "description": "Questions about charges, receipts, or refunds" },
+      { "title": "Profile privacy", "description": "Control who can see your profile and photos" }
+    ],
+    "quickActionsPhotographer": [
+      { "title": "Payout status", "description": "Check the status of your sales and payouts" },
+      { "title": "Upload error", "description": "Resolve failed or stuck photo uploads" },
+      { "title": "Pricing settings", "description": "Help configuring per-photo prices" },
+      {
+        "title": "Copyright & watermarks",
+        "description": "Protect your work and manage watermark rules"
+      }
+    ],
+    "categoriesTalent": [
+      "Photo discovery",
+      "Orders & payments",
+      "Downloads",
+      "Account & privacy",
+      "Other"
+    ],
+    "categoriesPhotographer": [
+      "Payouts & billing",
+      "Uploads & storage",
+      "Pricing",
+      "Watermarks & copyright",
+      "Account",
+      "Other"
+    ],
+    "faqsTalent": [
+      {
+        "question": "How do I find photos from my event?",
+        "answer": "Use the Explore page to search by event name, location, or date. Once you find your event, browse the gallery or upload a selfie to let AI matching find photos of you automatically."
+      },
+      {
+        "question": "My download isn't working — what do I do?",
+        "answer": "First, check your Orders page to confirm the payment completed. If the order shows as paid but the download fails, try clearing your browser cache or using a different browser. Still stuck? Submit a ticket below."
+      },
+      {
+        "question": "Can I request a refund?",
+        "answer": "If a photo's quality is significantly different from its watermarked preview, submit a ticket below with your order ID and we'll review it. Refunds are handled case by case by our team."
+      },
+      {
+        "question": "How do I hide my profile from photographers?",
+        "answer": "Go to Profile → Privacy and turn off your public profile. Your purchases stay intact; photographers just can't find your profile directly."
+      },
+      {
+        "question": "Why can't I see all photos from my event?",
+        "answer": "Photographers control photo visibility. Some photos may be set to private, may still be processing, or may have been removed. Contact the photographer through the event page if you believe photos are missing."
+      }
+    ],
+    "faqsPhotographer": [
+      {
+        "question": "When will I get paid for my sales?",
+        "answer": "Payouts are sent automatically after each sale through Stripe Connect — there's no minimum balance or waiting period on our side. Once Stripe releases the funds, your bank typically posts them within 2–5 business days. Connect your payout account in Settings → Payout profile."
+      },
+      {
+        "question": "Why did my photo upload fail?",
+        "answer": "Common causes: files larger than 50 MB, an unsupported format (JPEG, PNG, WebP, HEIF, AVIF and GIF are accepted), or a slow or interrupted connection. Try re-uploading in smaller batches. If it keeps failing, include any error message in a support ticket."
+      },
+      {
+        "question": "How do I set pricing for an event?",
+        "answer": "Open the event from your Events page and set the price per photo in the event settings. You can adjust it at any time before sharing the event."
+      },
+      {
+        "question": "How does watermarking work?",
+        "answer": "When watermarking is enabled on an event, Photo Markt overlays a tiled watermark on every preview image. Buyers receive clean, un-watermarked files after purchase. Toggle watermarking per event in the event settings."
+      },
+      {
+        "question": "How do I report a copyright issue?",
+        "answer": "Submit a ticket below with the photo URL, evidence of ownership, and your contact details. We review reports promptly and will remove content pending investigation when needed."
+      }
+    ]
   }
 }
