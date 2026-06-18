@@ -72,18 +72,27 @@ export function FeaturedEvents({ events, lang, activities, t }: FeaturedEventsPr
           </div>
         </div>
 
-        {/* `min-h` keeps the section height stable when a status tab has no
-            events, so the content below doesn't jump as the user toggles. */}
         {visible.length === 0 ? (
-          <div className="flex min-h-80 items-center justify-center rounded-xl border border-dashed border-border/60 px-4 text-center">
-            <p className="text-sm text-muted-foreground">{t.noEvents}</p>
+          /* Empty state mirrors a single card's footprint — a same-width
+             aspect-square box plus a reserved text area — so the section keeps
+             the exact height of a populated tab and the content below doesn't
+             jump when toggling.
+             ponytail: h-24 text reserve ≈ a 2-line title + meta; bump it if
+             cards ever grow taller text blocks. */
+          <div className="flex justify-center">
+            <div className="w-[80vw] sm:w-[45vw] xl:w-1/4">
+              <div className="mb-2 flex aspect-square w-full items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/30 px-4 text-center">
+                <p className="text-sm text-muted-foreground">{t.noEvents}</p>
+              </div>
+              <div aria-hidden className="h-24" />
+            </div>
           </div>
         ) : (
           /* `touch-pan-x touch-pan-y`: the browser handles horizontal panning
              of this carousel AND vertical panning (page scroll) natively.
              `touch-pan-x` alone blocks vertical scroll for touches that
              start on a carousel item. */
-          <div className="flex min-h-80 gap-4 overflow-x-auto overscroll-x-contain touch-pan-x touch-pan-y scroll-smooth snap-x snap-mandatory pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:grid xl:grid-cols-4 xl:overflow-visible xl:pb-0">
+          <div className="flex gap-4 overflow-x-auto overscroll-x-contain touch-pan-x touch-pan-y scroll-smooth snap-x snap-mandatory pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:grid xl:grid-cols-4 xl:overflow-visible xl:pb-0">
             {visible.map((event, index) => (
               <div
                 key={event.id}
