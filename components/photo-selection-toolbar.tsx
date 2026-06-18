@@ -1,5 +1,6 @@
 'use client';
 
+import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -38,6 +39,8 @@ interface PhotoSelectionToolbarProps {
   countLabel: string;
   selectLabel: string;
   clearLabel: string;
+  /** aria-label for the mobile exit (X) button shown while selecting. */
+  exitLabel: string;
   onStartSelecting: () => void;
   onClear: () => void;
   /** View-specific bulk actions (Download, Delete, …) rendered while selecting. */
@@ -62,6 +65,7 @@ export function PhotoSelectionToolbar({
   countLabel,
   selectLabel,
   clearLabel,
+  exitLabel,
   onStartSelecting,
   onClear,
   children,
@@ -79,9 +83,27 @@ export function PhotoSelectionToolbar({
       <div className="flex min-h-9 items-center gap-3 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {selectable && isSelecting ? (
           <>
+            {/* Mobile: an X on the left exits selection mode (replaces the
+                Clear button, which stays on desktop). */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onClear}
+              aria-label={exitLabel}
+              className="-ml-1 size-8 shrink-0 md:hidden"
+            >
+              <X className="h-5 w-5" />
+            </Button>
             <div className="shrink-0 whitespace-nowrap text-sm font-medium">{countLabel}</div>
             <div className="ml-auto flex shrink-0 items-center gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={onClear}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onClear}
+                className="hidden md:inline-flex"
+              >
                 {clearLabel}
               </Button>
               {children}

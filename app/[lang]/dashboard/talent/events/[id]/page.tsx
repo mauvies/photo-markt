@@ -314,10 +314,7 @@ export default async function ExploreEventDetailPage({
     <div className="space-y-4">
       <MarkEventSeen eventId={event.id} />
       <div>
-        <DashboardHeader
-          title={event.name}
-          actions={<EventSaveButton eventId={event.id} variant="button" />}
-        />
+        <DashboardHeader title={event.name} />
         <div className="mt-2 text-sm leading-relaxed text-muted-foreground">
           {new Date(event.date).toDateString().split(' ').slice(1).join(' ')} •{' '}
           {event.city[0]?.toUpperCase() + event.city.slice(1)}
@@ -327,6 +324,9 @@ export default async function ExploreEventDetailPage({
               • ${event.price_per_photo.toFixed(2)} {dict.talentDashboard.perPhoto}
             </>
           )}
+        </div>
+        <div className="mt-3">
+          <EventSaveButton eventId={event.id} variant="button" />
         </div>
       </div>
 

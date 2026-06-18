@@ -63,6 +63,17 @@ describe('PhotoGallery', () => {
     expect(screen.getByText('No photos selected')).toBeTruthy();
   });
 
+  it('exits selection mode via the X button, returning to the Select toolbar', () => {
+    render(<PhotoGallery items={items} galleryProps={galleryProps} labels={labels} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    expect(screen.getByText('No photos selected')).toBeTruthy();
+
+    // The same sticky toolbar holds the exit (X); clicking it returns to idle.
+    fireEvent.click(screen.getByRole('button', { name: 'Exit' }));
+    expect(screen.queryByText('No photos selected')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Select' })).toBeTruthy();
+  });
+
   it('runs a bulk action with the selected ids', () => {
     const onRun = vi.fn();
     render(

@@ -1,7 +1,7 @@
 # T-007 · Mejorar toolbar de la galería del evento en mobile (favorito + modo selección sin salto)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `fix/event-gallery-mobile-toolbar`
 - **OpenSpec change:** —  (fix + polish de UI acotado)
