@@ -14,7 +14,6 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 4 | P2 | T-014 | Traducir y dejar lista para producción la página de soporte | — | doing |
 | 5 | P2 | T-015 | Traducir y dejar lista para producción la página de comentarios (feedback) | tras T-014 | todo |
 | 6 | P2 | T-016 | Completar y dejar lista para producción la página de privacidad | tras T-015 | todo |
 | 7 | P2 | T-007 | Toolbar de galería del evento en mobile: favorito + modo selección sin salto | — | todo |
@@ -44,5 +43,6 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 - **T-004** · Empty state + altura estable en tabs de eventos destacados (home) — PR #58
 - **T-005** · Redirect server-side de la home al dashboard por rol — PR #59
 - **T-012** · Fotos compradas sin watermark (signed URL original) en pedidos — PR #60
+- **T-014** · Página de soporte: i18n completo + contenido corregido + form real — PR #61
 
 <!-- Los tickets completados se mueven aquí con su nº de PR. -->
