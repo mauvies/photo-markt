@@ -21,7 +21,11 @@ export interface OrderWithItemCount {
   created_at: string;
   completed_at: string | null;
   item_count: number;
-  /** Up to THUMBNAILS_PER_ORDER watermarked preview URLs. */
+  /**
+   * Up to THUMBNAILS_PER_ORDER preview URLs. For `completed` orders these are
+   * short-lived signed URLs to the original (un-watermarked) photo — the buyer
+   * paid for it. For any other status they are watermarked previews.
+   */
   thumbnails: string[];
 }
 
@@ -69,29 +73,42 @@ export async function getTalentOrders(): Promise<OrderWithItemCount[]> {
     }
   }
 
-  // Batch all thumbnail paths into one signed-URL request. Watermarked
-  // previews keep us safe even if a photo's order later refunds — we never
-  // expose the original storage path on this page.
-  const allPaths = Array.from(pathsByOrderId.values()).flat();
+  // `completed` orders are paid for, so we surface the original photo via a
+  // short-lived signed URL. Every other status (pending/failed/refunded) stays
+  // watermarked. Ownership is already enforced — `getUserOrders` scoped these
+  // to the authenticated user's own orders.
+  const originalPaths = new Set<string>();
+  const watermarkedPaths = new Set<string>();
+  for (const order of orders) {
+    const target = order.status === 'completed' ? originalPaths : watermarkedPaths;
+    for (const path of pathsByOrderId.get(order.id) ?? []) {
+      target.add(path);
+    }
+  }
+
   const baseUrl = await getBaseUrl();
-  const signedUrlsMap: Record<string, string | null> =
-    allPaths.length > 0
-      ? Object.fromEntries(
-          (
-            await createPhotoUrls(supabase, 'photos', allPaths, {
-              expiresIn: 3600,
-              useWatermark: true,
-              baseUrl,
-            })
-          ).map((u) => [u.path, u.signedUrl]),
-        )
-      : {};
+  const [originalSigned, watermarkedSigned] = await Promise.all([
+    originalPaths.size > 0
+      ? createPhotoUrls(supabase, 'photos', [...originalPaths], {
+          expiresIn: 3600,
+          useWatermark: false,
+        })
+      : Promise.resolve([]),
+    watermarkedPaths.size > 0
+      ? createPhotoUrls(supabase, 'photos', [...watermarkedPaths], {
+          expiresIn: 3600,
+          useWatermark: true,
+          baseUrl,
+        })
+      : Promise.resolve([]),
+  ]);
+  const originalUrls = Object.fromEntries(originalSigned.map((u) => [u.path, u.signedUrl]));
+  const watermarkedUrls = Object.fromEntries(watermarkedSigned.map((u) => [u.path, u.signedUrl]));
 
   return orders.map((order) => {
     const paths = pathsByOrderId.get(order.id) ?? [];
-    const thumbnails = paths
-      .map((p) => signedUrlsMap[p])
-      .filter((url): url is string => Boolean(url));
+    const urls = order.status === 'completed' ? originalUrls : watermarkedUrls;
+    const thumbnails = paths.map((p) => urls[p]).filter((url): url is string => Boolean(url));
     return {
       id: order.id,
       status: order.status,

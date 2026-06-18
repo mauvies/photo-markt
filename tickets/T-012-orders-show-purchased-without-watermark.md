@@ -1,7 +1,7 @@
 # T-012 · Mostrar fotos compradas sin marca de agua en la página de pedidos
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `feat/orders-unwatermarked-purchased`
 - **OpenSpec change:** —  (acotado; si toca varias capas de auth, evaluar propose)
