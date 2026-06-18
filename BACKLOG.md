@@ -14,7 +14,6 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 5 | P2 | T-015 | Traducir y dejar lista para producción la página de comentarios (feedback) | tras T-014 | doing |
 | 6 | P2 | T-016 | Completar y dejar lista para producción la página de privacidad | tras T-015 | todo |
 | 7 | P2 | T-007 | Toolbar de galería del evento en mobile: favorito + modo selección sin salto | — | todo |
 | 8 | P2 | T-018 | Detallar features de cada plan en la facturación del fotógrafo | — | todo |
@@ -44,5 +43,6 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 - **T-005** · Redirect server-side de la home al dashboard por rol — PR #59
 - **T-012** · Fotos compradas sin watermark (signed URL original) en pedidos — PR #60
 - **T-014** · Página de soporte: i18n completo + contenido corregido + form real — PR #61
+- **T-015** · Página de feedback: i18n completo + roadmap corregido (AI Live) — PR #62
 
 <!-- Los tickets completados se mueven aquí con su nº de PR. -->
