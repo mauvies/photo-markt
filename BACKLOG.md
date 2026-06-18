@@ -1,16 +1,45 @@
 # Backlog
 
-Cola priorizada de tickets. La fila de **más arriba sin blockers** es la siguiente en ejecutarse.
+Cola ordenada por **orden de ejecución** (`#`): se ejecuta de arriba hacia abajo. El orden respeta
+prioridad y dependencias, de modo que ningún ticket bloquea al siguiente si se ejecutan en este orden.
 Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecutar con `/work-next`.
 
 **Prioridad:** `P0` urgente · `P1` alta · `P2` normal · `P3` algún día.
 **Estado:** `todo` · `blocked` · `doing` · `done` (al terminar se mueve a la sección Archivo).
+**Dep:** ejecutar después de ese ticket (mismo archivo/área o dependencia lógica). Sin Dep = independiente.
 
-| Pri | ID | Título | Blockers | Estado | OpenSpec change |
-|-----|------|--------|----------|--------|-----------------|
-| P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | Upgrade a Inngest Pro | blocked | — |
+> **Regla anti-conflicto:** mergea (o rebasa) cada PR antes de arrancar el siguiente. Varios tickets
+> editan `en.json`/`es.json` y los mismos componentes; en serie con merge previo no hay conflicto.
+> El loop `scripts/run-backlog.sh` ya va en serie; respétalo, no lances ramas en paralelo sobre el mismo cluster.
 
-<!-- Añade filas arriba con /ticket. Mantén la tabla ordenada por prioridad, luego por orden de llegada. -->
+| # | Pri | ID | Título | Dep | Estado |
+|---|-----|------|--------|-----|--------|
+| 1 | P2 | T-004 | Mantener altura + empty state en tabs de eventos destacados (home) | — | todo |
+| 2 | P2 | T-005 | Redirigir la home al dashboard cuando el usuario está autenticado (por rol) | — | todo |
+| 3 | P2 | T-012 | Mostrar fotos compradas sin marca de agua en la página de pedidos | — | todo |
+| 4 | P2 | T-014 | Traducir y dejar lista para producción la página de soporte | — | todo |
+| 5 | P2 | T-015 | Traducir y dejar lista para producción la página de comentarios (feedback) | tras T-014 | todo |
+| 6 | P2 | T-016 | Completar y dejar lista para producción la página de privacidad | tras T-015 | todo |
+| 7 | P2 | T-007 | Toolbar de galería del evento en mobile: favorito + modo selección sin salto | — | todo |
+| 8 | P2 | T-011 | Secuencia + identificador editable para fotos de un evento (DB + UI, OpenSpec) | — | todo |
+| 9 | P3 | T-010 | Limpiar acciones de la barra de modo selección (quitar descargar/compartir) | tras T-007 | todo |
+| 10 | P3 | T-008 | Galería del evento full-width en mobile (quitar/reducir padding-x) | tras T-007 | todo |
+| 11 | P3 | T-002 | Pulir diseño del language toggler dropdown (bordes, banderas más pequeñas) | — | todo |
+| 12 | P3 | T-003 | Borde fino gris en el avatar del header (consistente con el toggler) | tras T-002 | todo |
+| 13 | P3 | T-006 | Mover carrito a la bottom nav del dashboard de talento (mobile) | tras T-003 | todo |
+| 14 | P3 | T-013 | Estandarizar el diseño de tabs (underline) en toda la app | tras T-004 | todo |
+| 15 | P3 | T-009 | Mejorar UX del Lightbox (header, flechas, transición swipe en mobile) | — | todo |
+| 16 | P3 | T-017 | Íconos (lápiz/basura) en el dropdown de acciones de eventos del fotógrafo | — | todo |
+| — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
+
+### Clusters (tocan el mismo código — ejecutar contiguos y en orden)
+- **Galería del evento (mobile):** T-007 → T-010 → T-008. T-007 reestructura la toolbar; los otros dos dependen de esa base.
+- **Header / nav:** T-002 → T-003 → T-006. T-003 reusa el borde de T-002; T-006 oculta el header en mobile (coordinar con T-003).
+- **Tabs:** T-004 (arregla el salto) → T-013 (restila todos los tabs, incluidos los de eventos destacados).
+- **Páginas i18n/producción:** T-014 → T-015 → T-016. Comparten `en.json`/`es.json`; en serie evitan conflictos de diccionario.
+- **Independientes (sin cluster):** T-005, T-012, T-011, T-009, T-017.
+
+<!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
 
