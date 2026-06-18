@@ -62,8 +62,11 @@ describe('FeaturedEvents empty state', () => {
     // Switch to "Completed" — there are no completed events.
     fireEvent.click(screen.getByRole('button', { name: t.statusCompleted }));
 
-    expect(screen.queryByText('Race One')).toBeNull();
-    expect(screen.getByText(t.noEvents)).toBeTruthy();
+    // The empty message shows. (A copy of the first card is also rendered, but
+    // aria-hidden + invisible, purely to hold the section's height.)
+    const message = screen.getByText(t.noEvents);
+    expect(message).toBeTruthy();
+    expect(message.closest('[aria-hidden="true"]')).toBeNull();
   });
 
   it('renders nothing when there are no events at all', () => {

@@ -73,18 +73,38 @@ export function FeaturedEvents({ events, lang, activities, t }: FeaturedEventsPr
         </div>
 
         {visible.length === 0 ? (
-          /* Empty state mirrors a single card's footprint — a same-width
-             aspect-square box plus a reserved text area — so the section keeps
-             the exact height of a populated tab and the content below doesn't
-             jump when toggling.
-             ponytail: h-24 text reserve ≈ a 2-line title + meta; bump it if
-             cards ever grow taller text blocks. */
-          <div className="flex justify-center">
-            <div className="w-[80vw] sm:w-[45vw] xl:w-1/4">
-              <div className="mb-2 flex aspect-square w-full items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/30 px-4 text-center">
-                <p className="text-sm text-muted-foreground">{t.noEvents}</p>
+          /* An invisible real card sets the exact height of a populated tab, so
+             the section never changes height when a status tab has no events.
+             The message is overlaid on top, centered. */
+          <div className="relative">
+            <div aria-hidden className="pointer-events-none invisible">
+              <div className="w-[80vw] sm:w-[45vw] xl:mx-auto xl:w-1/4">
+                <EventCard
+                  id={events[0].id}
+                  hrefParam={events[0].slug ?? events[0].id}
+                  name={events[0].name}
+                  date={events[0].date}
+                  city={events[0].city}
+                  country={events[0].country}
+                  activity={events[0].activity}
+                  activityLabel={
+                    activities[events[0].activity as keyof typeof activities] ?? events[0].activity
+                  }
+                  photoCount={events[0].photoCount}
+                  coverUrl={events[0].coverUrl}
+                  coverThumbUrl={events[0].coverThumbUrl}
+                  photographer={{
+                    username: events[0].photographerUsername,
+                    displayName: events[0].photographerDisplayName,
+                  }}
+                  status={events[0].status}
+                  linkPrefix={eventsHref}
+                  t={t.card}
+                />
               </div>
-              <div aria-hidden className="h-24" />
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center rounded-xl border border-border bg-background px-4 text-center">
+              <p className="text-sm text-muted-foreground">{t.noEvents}</p>
             </div>
           </div>
         ) : (
