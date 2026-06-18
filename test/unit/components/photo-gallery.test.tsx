@@ -88,7 +88,9 @@ describe('PhotoGallery', () => {
     fireEvent.click(screen.getByTestId('tile-b'));
     expect(screen.getByText('2 selected')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Download' }));
+    // Bulk actions render twice (desktop inline + mobile bottom bar); CSS shows
+    // one. Either fires the same handler.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Download' })[0]);
     expect(onRun).toHaveBeenCalledWith(['a', 'b']);
   });
 
@@ -107,8 +109,23 @@ describe('PhotoGallery', () => {
     );
     fireEvent.click(screen.getByTestId('tile-a'));
     fireEvent.click(screen.getByTestId('tile-b'));
-    fireEvent.click(screen.getByRole('button', { name: 'Download' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Download' })[0]);
     expect(onRun).toHaveBeenCalledWith(['a', 'b']);
+  });
+
+  it('renders bulk actions both inline (desktop) and in the bottom bar (mobile)', () => {
+    render(
+      <PhotoGallery
+        items={items}
+        galleryProps={galleryProps}
+        labels={labels}
+        bulkActions={[{ key: 'dl', label: 'Download', icon: Download, onRun: vi.fn() }]}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    // The inline toolbar (desktop) and the fixed bottom bar (mobile) each render
+    // the action; CSS hides the one that doesn't apply to the viewport.
+    expect(screen.getAllByRole('button', { name: 'Download' })).toHaveLength(2);
   });
 
   it('renders the empty state and no toolbar when there are no photos', () => {

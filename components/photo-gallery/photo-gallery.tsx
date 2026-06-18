@@ -53,10 +53,11 @@ const EMPTY_SELECTION_LABELS: PhotoGallerySelectionLabels = {
 
 /**
  * The event photo gallery: a clean grid, tap → lightbox, hover actions
- * (desktop), and one sticky `PhotoSelectionToolbar`. Selection mode is entered
- * via the "Select" button; the same toolbar then shows the count, an exit (X)
- * and the bulk actions — its height is stable across states so the grid never
- * jumps. Owns selection state; the host supplies the per-photo + bulk handlers.
+ * (desktop), and a sticky `PhotoSelectionToolbar`. Selection mode is entered via
+ * the "Select" button; the toolbar slot then shows the count + an exit (X) in
+ * the same place (stable height → the grid never jumps). The bulk actions sit
+ * inline in that toolbar on desktop, and in a fixed bottom bar over the nav on
+ * mobile. Owns selection state; the host supplies the per-photo + bulk handlers.
  */
 export function PhotoGallery({
   items,
@@ -161,6 +162,16 @@ export function PhotoGallery({
       ) : null}
 
       {allItems.length === 0 ? emptyState : <div className="flex flex-col gap-4">{grids}</div>}
+
+      {selection.isSelecting && bulkButtons.length > 0 ? (
+        // Mobile only: the bulk actions live in a fixed bar over the bottom nav
+        // (same height), horizontally scrollable, staying visible until
+        // selection exits. Desktop shows the same actions inline in the toolbar
+        // above instead (so they render in both places, CSS hides one).
+        <div className="fixed inset-x-0 bottom-0 z-[60] flex min-h-16 items-center gap-2 overflow-x-auto border-t border-border bg-background/95 px-3 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {bulkButtons}
+        </div>
+      ) : null}
     </div>
   );
 }
