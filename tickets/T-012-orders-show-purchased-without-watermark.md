@@ -1,11 +1,11 @@
 # T-012 · Mostrar fotos compradas sin marca de agua en la página de pedidos
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/orders-unwatermarked-purchased`
 - **OpenSpec change:** —  (acotado; si toca varias capas de auth, evaluar propose)
-- **PR:** —
+- **PR:** #60
 
 ## Requerimiento
 En la página de pedidos, al expandir un pedido se ven las fotos compradas **con marca de agua**. Como ya

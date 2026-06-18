@@ -14,7 +14,6 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 3 | P2 | T-012 | Mostrar fotos compradas sin marca de agua en la página de pedidos | — | doing |
 | 4 | P2 | T-014 | Traducir y dejar lista para producción la página de soporte | — | todo |
 | 5 | P2 | T-015 | Traducir y dejar lista para producción la página de comentarios (feedback) | tras T-014 | todo |
 | 6 | P2 | T-016 | Completar y dejar lista para producción la página de privacidad | tras T-015 | todo |
@@ -44,5 +43,6 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 - **T-004** · Empty state + altura estable en tabs de eventos destacados (home) — PR #58
 - **T-005** · Redirect server-side de la home al dashboard por rol — PR #59
+- **T-012** · Fotos compradas sin watermark (signed URL original) en pedidos — PR #60
 
 <!-- Los tickets completados se mueven aquí con su nº de PR. -->
