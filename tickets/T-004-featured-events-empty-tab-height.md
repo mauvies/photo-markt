@@ -1,11 +1,11 @@
 # T-004 · Mantener altura + empty state en tabs de eventos destacados (home)
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/featured-events-empty-tab`
 - **OpenSpec change:** —  (fix de UI acotado)
-- **PR:** —
+- **PR:** #58
 
 ## Requerimiento
 En la home, sección de eventos destacados, al cambiar entre los tabs (eventos próximos / finalizados),
