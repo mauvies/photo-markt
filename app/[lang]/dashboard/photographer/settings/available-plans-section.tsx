@@ -1,13 +1,18 @@
 'use client';
 
+import { CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
 import { BillingPeriodToggle } from '@/components/billing-period-toggle';
-import { type BillingPeriod, formatPlanPrice, type Plan } from '@/lib/plans';
+import { Badge } from '@/components/ui/badge';
+import type { PlanFeatureItem } from '@/lib/plan-features';
+import { type BillingPeriod, formatPlanPrice, type Plan, type PlanId } from '@/lib/plans';
 import { UpgradePlanButton } from './upgrade-plan-button';
 
 interface AvailablePlansSectionProps {
   /** All plans the user is *not* currently on. */
   plans: Plan[];
+  /** Per-plan feature lists (shared with the landing pricing cards). */
+  featuresByPlan: Record<PlanId, PlanFeatureItem[]>;
   /** Labels — fed from the parent server component's dict so the
    * settings page stays mostly server-rendered. */
   labels: {
@@ -28,7 +33,11 @@ interface AvailablePlansSectionProps {
  * card and the period passed to the Upgrade button. The rest of the
  * settings page stays server-rendered.
  */
-export function AvailablePlansSection({ plans, labels }: AvailablePlansSectionProps) {
+export function AvailablePlansSection({
+  plans,
+  featuresByPlan,
+  labels,
+}: AvailablePlansSectionProps) {
   const [billing, setBilling] = useState<BillingPeriod>('monthly');
   const isYearly = billing === 'yearly';
 
@@ -78,6 +87,23 @@ export function AvailablePlansSection({ plans, labels }: AvailablePlansSectionPr
                 )}
               </div>
             </div>
+
+            <ul className="mt-4 space-y-2">
+              {featuresByPlan[plan.id].map((feature) => (
+                <li key={feature.text} className="flex items-start gap-2 text-sm">
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                  <span className={feature.bold ? 'font-medium' : undefined}>
+                    {feature.text}
+                    {feature.badge && (
+                      <Badge variant="secondary" className="ml-1.5 py-0 text-[10px]">
+                        {feature.badge}
+                      </Badge>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+
             <div className="mt-4">
               {/* Free is filtered out by the parent — the UpgradePlanButton
                   only accepts starter/pro. */}
