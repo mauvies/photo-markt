@@ -1,11 +1,11 @@
 # T-018 · Detallar features de cada plan en la facturación del fotógrafo
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/billing-plan-details`
 - **OpenSpec change:** —  (UI + reuso de datos de planes; si se ramifica, evaluar)
-- **PR:** —
+- **PR:** #65
 
 ## Requerimiento
 En el dashboard del fotógrafo, la sección de cambiar plan de facturación lista los planes pero **no
