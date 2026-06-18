@@ -1291,6 +1291,98 @@
     "gdprBody": "You have the right to access, correct, and request deletion of any personal data we hold about you. Because we don't persist your selfie or biometric data from a face search, the only relevant records are search-event logs (rate-limit telemetry). For any data request or question about this processing, contact us at",
     "gdprContact": "privacy@photomarkt.com"
   },
+  "privacyPolicy": {
+    "title": "Privacy Policy",
+    "lastUpdated": "Last updated: June 2026",
+    "intro": "Photo Markt is a marketplace that connects sports photographers with the people they photograph. This policy explains what personal data we collect, why we collect it, who we share it with, and the rights you have over it. We collect the minimum we need to run the marketplace.",
+    "contactTitle": "Contact us",
+    "contactBody": "For any privacy question, or to exercise any of your rights, email us at",
+    "contactEmail": "privacy@photomarkt.com",
+    "sections": [
+      {
+        "heading": "Information we collect",
+        "body": "We collect the following personal data, depending on how you use Photo Markt:",
+        "bullets": [
+          "Account details from Google when you sign in (name, email address, and profile picture).",
+          "Profile information you add, such as your display name and username.",
+          "Photos that photographers upload to their events, and the cover images shown publicly.",
+          "Order and purchase history, including which photos you bought.",
+          "Feedback and support messages you send us, including any screenshot you attach.",
+          "Limited technical data — your IP address and timestamps — used to keep sessions secure and to rate-limit abuse."
+        ]
+      },
+      {
+        "heading": "How we use your information",
+        "body": "We use your data to provide and improve the service:",
+        "bullets": [
+          "To create and secure your account and keep you signed in.",
+          "To let photographers publish events and sell photos, and to let buyers find and purchase them.",
+          "To process payments and pay photographers their earnings.",
+          "To send transactional emails such as purchase confirmations.",
+          "To respond to your feedback and support requests.",
+          "To prevent fraud and abuse, and to comply with our legal obligations."
+        ]
+      },
+      {
+        "heading": "Face search and biometric data",
+        "body": "Our optional \"find my photos\" feature lets you upload a selfie to find pictures of yourself at an event. Your selfie is sent to AWS Rekognition (region eu-west-1) for a single similarity search and is then discarded — we do not store your selfie or any biometric data derived from it. To make this matching possible, faces detected in photographers' event photos are indexed in AWS Rekognition; we keep only the returned face identifiers mapped to the photos, never raw biometric templates. Events involving minors are excluded from this feature.",
+        "bullets": []
+      },
+      {
+        "heading": "Event photos",
+        "body": "Original photos are stored privately. Public previews are watermarked and reduced in quality; the full-resolution original is only made available through a short-lived link after a confirmed purchase. We never expose the original storage location publicly.",
+        "bullets": []
+      },
+      {
+        "heading": "Payments",
+        "body": "Payments are processed by Stripe. We do not see or store your full card number — Stripe handles card data directly as a PCI-compliant provider. We retain order records (amounts, status, and Stripe references) to fulfil purchases, pay photographers, and meet accounting obligations.",
+        "bullets": []
+      },
+      {
+        "heading": "Service providers we share data with",
+        "body": "We share data only with the providers that power the service, and only as needed to run it:",
+        "bullets": [
+          "Supabase — database, authentication, and photo storage.",
+          "Stripe — payment processing and photographer payouts.",
+          "AWS Rekognition — face matching for the optional photo-search feature.",
+          "Resend — transactional email delivery.",
+          "Google — sign-in (OAuth).",
+          "Our hosting and background-job providers, which process data on our behalf."
+        ]
+      },
+      {
+        "heading": "Cookies and sessions",
+        "body": "We use strictly necessary cookies to keep you signed in and to secure your session. We do not use advertising cookies or sell your data to advertisers.",
+        "bullets": []
+      },
+      {
+        "heading": "Data retention",
+        "body": "We keep your account and order data for as long as your account is active and as long as we need it to meet legal and accounting obligations. Selfies used for face search are not retained. You can ask us to delete your account and associated personal data at any time.",
+        "bullets": []
+      },
+      {
+        "heading": "Your rights",
+        "body": "Depending on where you live, you may have the right to:",
+        "bullets": [
+          "Access the personal data we hold about you.",
+          "Correct inaccurate data.",
+          "Request deletion of your data.",
+          "Object to or restrict certain processing.",
+          "Request a copy of your data in a portable format."
+        ]
+      },
+      {
+        "heading": "Children",
+        "body": "Photo Markt is not intended for children. Events that may involve minors are excluded from face-search indexing, and we do not knowingly collect personal data from children. If you believe a child's data has been shared with us, contact us and we will remove it.",
+        "bullets": []
+      },
+      {
+        "heading": "Changes to this policy",
+        "body": "We may update this policy as the product evolves. When we make material changes, we will update the date at the top of this page.",
+        "bullets": []
+      }
+    ]
+  },
   "plans": {
     "free": "Free",
     "starter": "Starter",
