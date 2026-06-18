@@ -1,8 +1,11 @@
 import { createServerClient } from '@supabase/ssr';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { getProfileFields } from '@/database/queries';
 import { env } from '@/env.mjs';
+import { homeRedirectPath } from '@/lib/auth/home-redirect';
 import { defaultLocale } from '@/lib/i18n/config';
+import { localizedPath } from '@/lib/i18n/localized-path';
 
 const LOCALES = ['es', 'en'] as const;
 
@@ -38,6 +41,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const lang = firstSegment; // 'es' | 'en'
+  const isHome = pathname === `/${lang}` || pathname === `/${lang}/`;
 
   // ── Headers ──────────────────────────────────────────────────────────────
   const requestHeaders = new Headers(request.headers);
@@ -82,7 +86,27 @@ export async function proxy(request: NextRequest) {
     // by centralizing token refresh in proxy
     // This ensures tokens are refreshed before server components/API routes access them
     try {
-      await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      // Authenticated visitors to the public home go straight to their
+      // dashboard, server-side — no client-side flash of the landing page.
+      // Anonymous visitors keep the statically-rendered home.
+      if (user && isHome) {
+        const profile = await getProfileFields(supabase, user.id, ['active_role']);
+        const dest = homeRedirectPath(true, profile?.active_role ?? null);
+        if (dest) {
+          const redirectResponse = NextResponse.redirect(
+            new URL(localizedPath(lang, dest), request.url),
+          );
+          // Carry over any auth cookies refreshed above.
+          for (const cookie of response.cookies.getAll()) {
+            redirectResponse.cookies.set(cookie);
+          }
+          return redirectResponse;
+        }
+      }
     } catch (error) {
       // If it's a refresh token error, the session is invalid
       // Let individual routes handle authentication errors

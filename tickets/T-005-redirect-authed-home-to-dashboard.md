@@ -1,7 +1,7 @@
 # T-005 · Redirigir la home al dashboard cuando el usuario está autenticado
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `feat/authed-home-redirect`
 - **OpenSpec change:** —  (decidir en implementación: toca routing + auth → si crece, `/opsx:propose`)
