@@ -143,7 +143,7 @@ export function PhotoGallery({
     selection.isSelecting || toolbarLeading != null || (selectable && allItems.length > 0);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-1">
       {showInlineToolbar ? (
         <PhotoSelectionToolbar
           className={toolbarClassName}

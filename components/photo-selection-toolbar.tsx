@@ -80,7 +80,7 @@ export function PhotoSelectionToolbar({
           filter tabs (`leading`) are hidden entirely and replaced by the
           selection actions; min-h keeps the row height identical to the tabs
           row (which is a touch taller than the sm buttons). */}
-      <div className="flex min-h-9 items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex min-h-9 items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {selectable && isSelecting ? (
           <>
             {/* Mobile: only the X (exit) + count live here, left-aligned — the
