@@ -12,8 +12,6 @@ export type PlanId = 'free' | 'starter' | 'pro';
  */
 export const MAX_PHOTOS_PER_EVENT = 5000;
 
-export type PlanFeature = string | { text: string; badge?: string };
-
 export type BillingPeriod = 'monthly' | 'yearly';
 
 export interface PlanPricing {
@@ -38,7 +36,6 @@ export interface Plan {
   maxEvents: number | null; // null for unlimited
   salesFeePercent: number;
   allowCustomBundles: boolean;
-  features: PlanFeature[];
   popular?: boolean;
 }
 
@@ -52,12 +49,6 @@ export const PLANS: Plan[] = [
     maxEvents: 5,
     salesFeePercent: 12,
     allowCustomBundles: false,
-    features: [
-      'Up to 5 events',
-      'Default pricing bundles only',
-      'Basic search & analytics',
-      '12% sales fee',
-    ],
   },
   {
     id: 'starter',
@@ -72,14 +63,6 @@ export const PLANS: Plan[] = [
     maxEvents: null,
     salesFeePercent: 8,
     allowCustomBundles: true,
-    features: [
-      'Unlimited events',
-      { text: 'AI-assisted talent tagging', badge: 'Coming soon' },
-      'Advanced analytics',
-      'Custom pricing bundles',
-      'Priority in search results',
-      '8% sales fee',
-    ],
     popular: true,
   },
   {
@@ -93,14 +76,6 @@ export const PLANS: Plan[] = [
     maxEvents: null, // Unlimited
     salesFeePercent: 5,
     allowCustomBundles: true,
-    features: [
-      'Unlimited events',
-      'Add +100GB for $5/mo',
-      { text: 'Full AI auto-tagging', badge: 'Coming soon' },
-      'Highest priority in search results',
-      'Priority support',
-      '5% sales fee',
-    ],
   },
 ];
 

@@ -7,6 +7,7 @@ import { BillingPeriodToggle } from '@/components/billing-period-toggle';
 import { PricingPlanButton } from '@/components/pricing-plan-button';
 import { Badge } from '@/components/ui/badge';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
+import { getPlanFeatures } from '@/lib/plan-features';
 import { type BillingPeriod, getPlanById } from '@/lib/plans';
 
 type PricingT = Dictionary['pricingSection'];
@@ -15,34 +16,8 @@ export function PricingSection({ isAuthenticated, t }: { isAuthenticated: boolea
   const [billing, setBilling] = useState<BillingPeriod>('yearly');
   const isYearly = billing === 'yearly';
 
-  const planFeatures = {
-    free: [
-      { text: t.freeFeature1, bold: true },
-      { text: t.freeFeature2 },
-      { text: t.freeFeature3 },
-      { text: t.freeFeature4 },
-      { text: t.freeFeature5 },
-      { text: t.freeFeature6 },
-    ],
-    starter: [
-      { text: t.starterFeature1, bold: true },
-      { text: t.starterFeature2 },
-      { text: t.starterFeature3 },
-      { text: t.starterFeature4 },
-      { text: t.starterFeature5 },
-      { text: t.starterFeature6 },
-      { text: t.starterFeature7 },
-    ],
-    pro: [
-      { text: t.proFeature1, bold: true },
-      { text: t.proFeature2 },
-      { text: t.proFeature3 },
-      { text: t.proFeature4 },
-      { text: t.proFeature5 },
-      { text: t.proFeature6, badge: t.comingSoon },
-      { text: t.proFeature7 },
-    ],
-  };
+  // Shared with the billing settings page so the two never drift apart.
+  const planFeatures = getPlanFeatures(t);
 
   // Read pricing from `lib/plans.ts` (single source of truth) so the home
   // page and the settings page can't drift apart. Free plan has no pricing
@@ -157,7 +132,7 @@ export function PricingSection({ isAuthenticated, t }: { isAuthenticated: boolea
                       </div>
                       <span className={f.bold ? 'text-[13px] font-semibold' : 'text-[13px]'}>
                         {f.text}
-                        {'badge' in f && f.badge && (
+                        {f.badge && (
                           <Badge variant="secondary" className="ml-1.5 py-0 text-[10px]">
                             {f.badge}
                           </Badge>

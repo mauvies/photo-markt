@@ -1,4 +1,5 @@
 import { CreditCard, Database } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import {
   Card,
   CardContent,
@@ -12,6 +13,7 @@ import { getCurrentPlan } from '@/database/queries';
 import { createClient } from '@/database/server';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
+import { getPlanFeatures } from '@/lib/plan-features';
 import { formatPlanPrice, PLANS } from '@/lib/plans';
 import { getDashboardData } from '../../actions';
 import { AvailablePlansSection } from '../available-plans-section';
@@ -45,6 +47,9 @@ export default async function PhotographerSettingsBillingPage({
   const nextPlanId: 'starter' | 'pro' | null =
     currentPlanId === 'free' ? 'starter' : currentPlanId === 'starter' ? 'pro' : null;
 
+  // Shared, translated feature lists — same source as the landing pricing cards.
+  const planFeatures = getPlanFeatures(dict.pricingSection);
+
   return (
     <>
       <UpgradeHandler />
@@ -76,20 +81,19 @@ export default async function PhotographerSettingsBillingPage({
           <div className="space-y-2">
             <p className="text-sm font-medium">{dict.photographerDashboard.planFeatures}</p>
             <ul className="space-y-2 text-sm text-muted-foreground">
-              {[
-                ...(currentPlan.storageGB !== null
-                  ? [`${currentPlan.storageGB}GB storage`]
-                  : ['Unlimited storage']),
-                ...currentPlan.features,
-              ].map((feature) => {
-                const text = typeof feature === 'string' ? feature : feature.text;
-                return (
-                  <li key={text} className="flex items-start gap-2">
-                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                    <span>{text}</span>
-                  </li>
-                );
-              })}
+              {planFeatures[currentPlanId].map((feature) => (
+                <li key={feature.text} className="flex items-start gap-2">
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                  <span>
+                    {feature.text}
+                    {feature.badge && (
+                      <Badge variant="secondary" className="ml-1.5 py-0 text-[10px]">
+                        {feature.badge}
+                      </Badge>
+                    )}
+                  </span>
+                </li>
+              ))}
             </ul>
           </div>
 
@@ -121,6 +125,7 @@ export default async function PhotographerSettingsBillingPage({
 
           <AvailablePlansSection
             plans={PLANS.filter((plan) => plan.id !== currentPlanId && plan.id !== 'free')}
+            featuresByPlan={planFeatures}
             labels={{
               sectionTitle: dict.photographerDashboard.availablePlans,
               popularBadge: dict.photographerDashboard.popular,
