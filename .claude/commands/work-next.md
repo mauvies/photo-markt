@@ -17,7 +17,8 @@ Flujo (no te saltes pasos):
 5. `pnpm typecheck && pnpm lint && pnpm test`. Si algo falla, arréglalo antes de seguir.
 6. Commit con Conventional Commits. **NUNCA** añadas el trailer `Co-Authored-By` (rompe el plan Vercel Hobby).
 7. `git push -u origin <rama>`.
-8. `gh pr create --draft --base main` con título = el commit y cuerpo = requerimiento + criterio de aceptación.
+8. `gh pr create --draft --base main`. **Título y cuerpo del PR SIEMPRE en inglés** (aunque el ticket esté en español):
+   título = el commit, cuerpo = requerimiento + criterio de aceptación traducidos.
    (Draft a propósito: el usuario revisa y mergea; el repo es Free+private, sin branch protection por API.)
 9. Marca el ticket `done`, muévelo a la sección Archivo de `BACKLOG.md` con el nº de PR.
 10. Si hubo OpenSpec change, `/opsx:archive`.
