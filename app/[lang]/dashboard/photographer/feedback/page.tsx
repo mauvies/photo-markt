@@ -3,6 +3,7 @@ import { DashboardHeader } from '@/components/dashboard-header';
 import { FeedbackView } from '@/components/feedback-view';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
+import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 
 export default async function PhotographerFeedbackPage({
   params,
@@ -19,7 +20,9 @@ export default async function PhotographerFeedbackPage({
       <p className="text-sm text-muted-foreground mb-4">
         {dict.photographerDashboard.feedbackSubtitle}
       </p>
-      <FeedbackView userRole="photographer" initialVotes={initialVotes} />
+      <TranslationsProvider translations={dict.feedback}>
+        <FeedbackView userRole="photographer" initialVotes={initialVotes} />
+      </TranslationsProvider>
     </div>
   );
 }

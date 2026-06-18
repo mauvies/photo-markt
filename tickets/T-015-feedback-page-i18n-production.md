@@ -1,7 +1,7 @@
 # T-015 · Traducir y dejar lista para producción la página de comentarios (feedback)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `feat/feedback-page-i18n-production`
 - **OpenSpec change:** —  (contenido + i18n acotado a 1 componente)
