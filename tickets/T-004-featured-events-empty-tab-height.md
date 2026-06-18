@@ -1,7 +1,7 @@
 # T-004 · Mantener altura + empty state en tabs de eventos destacados (home)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `fix/featured-events-empty-tab`
 - **OpenSpec change:** —  (fix de UI acotado)

@@ -70,6 +70,7 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
           statusAll: dict.home.statusAll,
           statusUpcoming: dict.home.statusUpcoming,
           statusCompleted: dict.home.statusCompleted,
+          noEvents: dict.home.noEventsAvailableYet,
           card: {
             photo: dict.eventCard.photo,
             photos: dict.eventCard.photos,

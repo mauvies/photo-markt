@@ -25,6 +25,7 @@ interface FeaturedEventsProps {
     statusAll: string;
     statusUpcoming: string;
     statusCompleted: string;
+    noEvents: string;
     card: EventCardLabels;
   };
 }
@@ -71,43 +72,51 @@ export function FeaturedEvents({ events, lang, activities, t }: FeaturedEventsPr
           </div>
         </div>
 
-        {/* `touch-pan-x touch-pan-y`: the browser handles horizontal panning
-            of this carousel AND vertical panning (page scroll) natively.
-            `touch-pan-x` alone blocks vertical scroll for touches that
-            start on a carousel item. */}
-        <div className="flex gap-4 overflow-x-auto overscroll-x-contain touch-pan-x touch-pan-y scroll-smooth snap-x snap-mandatory pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:grid xl:grid-cols-4 xl:overflow-visible xl:pb-0">
-          {visible.map((event, index) => (
-            <div
-              key={event.id}
-              className="w-[80vw] shrink-0 snap-start sm:w-[45vw] xl:w-auto xl:shrink"
-            >
-              <EventCard
-                id={event.id}
-                hrefParam={event.slug ?? event.id}
-                name={event.name}
-                date={event.date}
-                city={event.city}
-                country={event.country}
-                activity={event.activity}
-                activityLabel={
-                  activities[event.activity as keyof typeof activities] ?? event.activity
-                }
-                photoCount={event.photoCount}
-                coverUrl={event.coverUrl}
-                coverThumbUrl={event.coverThumbUrl}
-                priority={index < DISPLAY_LIMIT}
-                photographer={{
-                  username: event.photographerUsername,
-                  displayName: event.photographerDisplayName,
-                }}
-                status={event.status}
-                linkPrefix={eventsHref}
-                saveSlot={<EventSaveButton eventId={event.id} />}
-                t={t.card}
-              />
-            </div>
-          ))}
-        </div>
+        {/* `min-h` keeps the section height stable when a status tab has no
+            events, so the content below doesn't jump as the user toggles. */}
+        {visible.length === 0 ? (
+          <div className="flex min-h-80 items-center justify-center rounded-xl border border-dashed border-border/60 px-4 text-center">
+            <p className="text-sm text-muted-foreground">{t.noEvents}</p>
+          </div>
+        ) : (
+          /* `touch-pan-x touch-pan-y`: the browser handles horizontal panning
+             of this carousel AND vertical panning (page scroll) natively.
+             `touch-pan-x` alone blocks vertical scroll for touches that
+             start on a carousel item. */
+          <div className="flex min-h-80 gap-4 overflow-x-auto overscroll-x-contain touch-pan-x touch-pan-y scroll-smooth snap-x snap-mandatory pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:grid xl:grid-cols-4 xl:overflow-visible xl:pb-0">
+            {visible.map((event, index) => (
+              <div
+                key={event.id}
+                className="w-[80vw] shrink-0 snap-start sm:w-[45vw] xl:w-auto xl:shrink"
+              >
+                <EventCard
+                  id={event.id}
+                  hrefParam={event.slug ?? event.id}
+                  name={event.name}
+                  date={event.date}
+                  city={event.city}
+                  country={event.country}
+                  activity={event.activity}
+                  activityLabel={
+                    activities[event.activity as keyof typeof activities] ?? event.activity
+                  }
+                  photoCount={event.photoCount}
+                  coverUrl={event.coverUrl}
+                  coverThumbUrl={event.coverThumbUrl}
+                  priority={index < DISPLAY_LIMIT}
+                  photographer={{
+                    username: event.photographerUsername,
+                    displayName: event.photographerDisplayName,
+                  }}
+                  status={event.status}
+                  linkPrefix={eventsHref}
+                  saveSlot={<EventSaveButton eventId={event.id} />}
+                  t={t.card}
+                />
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="mt-6 flex justify-center xl:hidden">
           <Link href={eventsHref}>

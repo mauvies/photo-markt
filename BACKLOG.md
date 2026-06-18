@@ -14,7 +14,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-004 | Mantener altura + empty state en tabs de eventos destacados (home) | — | todo |
+| 1 | P2 | T-004 | Mantener altura + empty state en tabs de eventos destacados (home) | — | doing |
 | 2 | P2 | T-005 | Redirigir la home al dashboard cuando el usuario está autenticado (por rol) | — | todo |
 | 3 | P2 | T-012 | Mostrar fotos compradas sin marca de agua en la página de pedidos | — | todo |
 | 4 | P2 | T-014 | Traducir y dejar lista para producción la página de soporte | — | todo |
