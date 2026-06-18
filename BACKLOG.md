@@ -14,7 +14,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 4 | P2 | T-014 | Traducir y dejar lista para producción la página de soporte | — | todo |
+| 4 | P2 | T-014 | Traducir y dejar lista para producción la página de soporte | — | doing |
 | 5 | P2 | T-015 | Traducir y dejar lista para producción la página de comentarios (feedback) | tras T-014 | todo |
 | 6 | P2 | T-016 | Completar y dejar lista para producción la página de privacidad | tras T-015 | todo |
 | 7 | P2 | T-007 | Toolbar de galería del evento en mobile: favorito + modo selección sin salto | — | todo |

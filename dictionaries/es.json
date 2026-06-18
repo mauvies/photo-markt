@@ -1295,5 +1295,126 @@
     "free": "Gratis",
     "starter": "Starter",
     "pro": "Pro"
+  },
+  "support": {
+    "back": "Volver al panel",
+    "title": "Soporte",
+    "subtitleTalent": "Encuentra respuestas sobre tus fotos, pedidos y cuenta.",
+    "subtitlePhotographer": "Obtén ayuda con pagos, subidas, precios y más.",
+    "searchPlaceholder": "Buscar artículos de ayuda...",
+    "quickActionsLabel": "Acciones rápidas",
+    "faqsLabel": "Preguntas frecuentes",
+    "noResultsPrefix": "Ningún artículo coincide con",
+    "clearSearch": "Limpiar búsqueda",
+    "supportTier": "Nivel de soporte",
+    "prioritySupport": "Soporte prioritario",
+    "avgResponse2h": "Respuesta media 2 h",
+    "emailSupport": "Soporte estándar",
+    "avgResponse24h": "Respuesta media 24 h",
+    "upgradeForPriority": "Mejora a Pro para soporte prioritario →",
+    "submitTicket": "Enviar un ticket",
+    "submitTicketDesc": "Describe tu problema y te responderemos.",
+    "subjectLabel": "Asunto",
+    "subjectPlaceholder": "Resumen breve de tu problema",
+    "categoryLabel": "Categoría",
+    "categoryPlaceholder": "Selecciona una categoría",
+    "descriptionLabel": "Descripción",
+    "descriptionPlaceholder": "Incluye detalles relevantes — nombre del evento, ID del pedido, mensaje de error…",
+    "priorityLabel": "Prioridad",
+    "priorityPlaceholder": "Selecciona la prioridad",
+    "priorityLow": "Baja — pregunta general",
+    "priorityMedium": "Media — algo no funciona",
+    "priorityHigh": "Alta — me bloquea el trabajo",
+    "send": "Enviar ticket",
+    "sending": "Enviando…",
+    "fillAllFields": "Por favor, completa todos los campos.",
+    "submitSuccess": "Ticket enviado — te contactaremos pronto.",
+    "submitError": "Algo salió mal. Inténtalo de nuevo.",
+    "quickActionsTalent": [
+      { "title": "Foto faltante", "description": "Reporta una foto que esperabas y no encuentras" },
+      {
+        "title": "Acceso a descargas",
+        "description": "Soluciona problemas al descargar fotos compradas"
+      },
+      { "title": "Ayuda con pedidos", "description": "Dudas sobre cargos, recibos o reembolsos" },
+      {
+        "title": "Privacidad del perfil",
+        "description": "Controla quién puede ver tu perfil y tus fotos"
+      }
+    ],
+    "quickActionsPhotographer": [
+      { "title": "Estado de pagos", "description": "Consulta el estado de tus ventas y pagos" },
+      {
+        "title": "Error de subida",
+        "description": "Resuelve subidas de fotos fallidas o atascadas"
+      },
+      {
+        "title": "Configuración de precios",
+        "description": "Ayuda para configurar el precio por foto"
+      },
+      {
+        "title": "Copyright y marcas de agua",
+        "description": "Protege tu trabajo y gestiona las marcas de agua"
+      }
+    ],
+    "categoriesTalent": [
+      "Descubrir fotos",
+      "Pedidos y pagos",
+      "Descargas",
+      "Cuenta y privacidad",
+      "Otro"
+    ],
+    "categoriesPhotographer": [
+      "Pagos y facturación",
+      "Subidas y almacenamiento",
+      "Precios",
+      "Marcas de agua y copyright",
+      "Cuenta",
+      "Otro"
+    ],
+    "faqsTalent": [
+      {
+        "question": "¿Cómo encuentro fotos de mi evento?",
+        "answer": "Usa la página de Explorar para buscar por nombre del evento, ubicación o fecha. Cuando encuentres tu evento, navega la galería o sube una selfie para que el emparejamiento con IA encuentre fotos tuyas automáticamente."
+      },
+      {
+        "question": "Mi descarga no funciona, ¿qué hago?",
+        "answer": "Primero, revisa tu página de Pedidos para confirmar que el pago se completó. Si el pedido aparece como pagado pero la descarga falla, prueba a limpiar la caché del navegador o usar otro navegador. ¿Sigue sin funcionar? Envía un ticket abajo."
+      },
+      {
+        "question": "¿Puedo pedir un reembolso?",
+        "answer": "Si la calidad de una foto es muy distinta a su vista previa con marca de agua, envía un ticket abajo con el ID de tu pedido y lo revisaremos. Los reembolsos se gestionan caso por caso por nuestro equipo."
+      },
+      {
+        "question": "¿Cómo oculto mi perfil a los fotógrafos?",
+        "answer": "Ve a Perfil → Privacidad y desactiva tu perfil público. Tus compras se mantienen intactas; los fotógrafos simplemente no podrán encontrar tu perfil directamente."
+      },
+      {
+        "question": "¿Por qué no veo todas las fotos de mi evento?",
+        "answer": "Los fotógrafos controlan la visibilidad de las fotos. Algunas pueden estar en privado, aún procesándose o haber sido eliminadas. Contacta al fotógrafo desde la página del evento si crees que faltan fotos."
+      }
+    ],
+    "faqsPhotographer": [
+      {
+        "question": "¿Cuándo cobro mis ventas?",
+        "answer": "Los pagos se envían automáticamente tras cada venta a través de Stripe Connect — sin saldo mínimo ni periodo de espera por nuestra parte. Una vez que Stripe libera los fondos, tu banco suele reflejarlos en 2–5 días hábiles. Conecta tu cuenta de cobro en Ajustes → Perfil de cobro."
+      },
+      {
+        "question": "¿Por qué falló mi subida de fotos?",
+        "answer": "Causas comunes: archivos de más de 50 MB, un formato no soportado (se aceptan JPEG, PNG, WebP, HEIF, AVIF y GIF), o una conexión lenta o interrumpida. Prueba a subir en lotes más pequeños. Si sigue fallando, incluye el mensaje de error en un ticket de soporte."
+      },
+      {
+        "question": "¿Cómo configuro el precio de un evento?",
+        "answer": "Abre el evento desde tu página de Eventos y establece el precio por foto en los ajustes del evento. Puedes cambiarlo en cualquier momento antes de compartir el evento."
+      },
+      {
+        "question": "¿Cómo funciona la marca de agua?",
+        "answer": "Cuando la marca de agua está activada en un evento, Photo Markt superpone una marca de agua en mosaico sobre cada vista previa. Los compradores reciben los archivos limpios, sin marca de agua, tras la compra. Activa o desactiva la marca de agua por evento en los ajustes del evento."
+      },
+      {
+        "question": "¿Cómo reporto un problema de copyright?",
+        "answer": "Envía un ticket abajo con la URL de la foto, una prueba de propiedad y tus datos de contacto. Revisamos los reportes con prontitud y retiraremos el contenido mientras se investiga cuando sea necesario."
+      }
+    ]
   }
 }
