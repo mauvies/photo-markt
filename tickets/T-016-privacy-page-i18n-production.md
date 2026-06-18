@@ -1,7 +1,7 @@
 # T-016 · Completar y dejar lista para producción la página de privacidad
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `feat/privacy-page-i18n-production`
 - **OpenSpec change:** —  (contenido + i18n acotado)

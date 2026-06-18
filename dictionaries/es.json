@@ -1291,6 +1291,98 @@
     "gdprBody": "Tienes derecho a acceder, corregir y solicitar la eliminación de cualquier dato personal que tengamos sobre ti. Como no conservamos tu selfie ni datos biométricos derivados de una búsqueda, los únicos registros relevantes son los logs de eventos de búsqueda (telemetría de rate-limit). Para cualquier solicitud o duda sobre este procesamiento, escríbenos a",
     "gdprContact": "privacy@photomarkt.com"
   },
+  "privacyPolicy": {
+    "title": "Política de privacidad",
+    "lastUpdated": "Última actualización: junio de 2026",
+    "intro": "Photo Markt es un marketplace que conecta a fotógrafos deportivos con las personas a las que fotografían. Esta política explica qué datos personales recopilamos, por qué los recopilamos, con quién los compartimos y qué derechos tienes sobre ellos. Recopilamos lo mínimo necesario para operar el marketplace.",
+    "contactTitle": "Contáctanos",
+    "contactBody": "Para cualquier duda de privacidad, o para ejercer cualquiera de tus derechos, escríbenos a",
+    "contactEmail": "privacy@photomarkt.com",
+    "sections": [
+      {
+        "heading": "Información que recopilamos",
+        "body": "Recopilamos los siguientes datos personales, según cómo uses Photo Markt:",
+        "bullets": [
+          "Datos de tu cuenta de Google al iniciar sesión (nombre, correo electrónico y foto de perfil).",
+          "Información de perfil que añadas, como tu nombre visible y tu nombre de usuario.",
+          "Fotos que los fotógrafos suben a sus eventos, y las imágenes de portada que se muestran públicamente.",
+          "Historial de pedidos y compras, incluidas las fotos que compraste.",
+          "Comentarios y mensajes de soporte que nos envías, incluida cualquier captura que adjuntes.",
+          "Datos técnicos limitados — tu dirección IP y marcas de tiempo — usados para mantener las sesiones seguras y limitar abusos."
+        ]
+      },
+      {
+        "heading": "Cómo usamos tu información",
+        "body": "Usamos tus datos para ofrecer y mejorar el servicio:",
+        "bullets": [
+          "Para crear y proteger tu cuenta y mantener tu sesión iniciada.",
+          "Para que los fotógrafos publiquen eventos y vendan fotos, y para que los compradores las encuentren y compren.",
+          "Para procesar pagos y abonar a los fotógrafos sus ganancias.",
+          "Para enviar correos transaccionales, como confirmaciones de compra.",
+          "Para responder a tus comentarios y solicitudes de soporte.",
+          "Para prevenir el fraude y los abusos, y cumplir con nuestras obligaciones legales."
+        ]
+      },
+      {
+        "heading": "Búsqueda facial y datos biométricos",
+        "body": "Nuestra función opcional «encontrar mis fotos» te permite subir una selfie para encontrar fotos tuyas en un evento. Tu selfie se envía a AWS Rekognition (región eu-west-1) para una única búsqueda de similitud y luego se descarta — no almacenamos tu selfie ni ningún dato biométrico derivado de ella. Para hacer posible este emparejamiento, las caras detectadas en las fotos de los eventos se indexan en AWS Rekognition; solo guardamos los identificadores de cara devueltos, vinculados a las fotos, nunca plantillas biométricas en bruto. Los eventos que involucran a menores quedan excluidos de esta función.",
+        "bullets": []
+      },
+      {
+        "heading": "Fotos de los eventos",
+        "body": "Las fotos originales se almacenan de forma privada. Las vistas previas públicas llevan marca de agua y calidad reducida; el original a resolución completa solo se entrega mediante un enlace de corta duración tras una compra confirmada. Nunca exponemos públicamente la ubicación de almacenamiento original.",
+        "bullets": []
+      },
+      {
+        "heading": "Pagos",
+        "body": "Los pagos los procesa Stripe. No vemos ni almacenamos el número completo de tu tarjeta — Stripe gestiona los datos de la tarjeta directamente como proveedor con certificación PCI. Conservamos registros de los pedidos (importes, estado y referencias de Stripe) para completar las compras, pagar a los fotógrafos y cumplir obligaciones contables.",
+        "bullets": []
+      },
+      {
+        "heading": "Proveedores con los que compartimos datos",
+        "body": "Solo compartimos datos con los proveedores que hacen funcionar el servicio, y únicamente lo necesario para operarlo:",
+        "bullets": [
+          "Supabase — base de datos, autenticación y almacenamiento de fotos.",
+          "Stripe — procesamiento de pagos y pagos a fotógrafos.",
+          "AWS Rekognition — emparejamiento facial para la función opcional de búsqueda.",
+          "Resend — envío de correos transaccionales.",
+          "Google — inicio de sesión (OAuth).",
+          "Nuestros proveedores de hosting y de tareas en segundo plano, que procesan datos por nuestra cuenta."
+        ]
+      },
+      {
+        "heading": "Cookies y sesiones",
+        "body": "Usamos cookies estrictamente necesarias para mantener tu sesión iniciada y protegerla. No usamos cookies publicitarias ni vendemos tus datos a anunciantes.",
+        "bullets": []
+      },
+      {
+        "heading": "Conservación de datos",
+        "body": "Conservamos los datos de tu cuenta y pedidos mientras tu cuenta esté activa y durante el tiempo que necesitemos para cumplir obligaciones legales y contables. Las selfies usadas para la búsqueda facial no se conservan. Puedes pedirnos eliminar tu cuenta y los datos personales asociados en cualquier momento.",
+        "bullets": []
+      },
+      {
+        "heading": "Tus derechos",
+        "body": "Según dónde residas, puedes tener derecho a:",
+        "bullets": [
+          "Acceder a los datos personales que tenemos sobre ti.",
+          "Corregir datos inexactos.",
+          "Solicitar la eliminación de tus datos.",
+          "Oponerte o restringir ciertos tratamientos.",
+          "Solicitar una copia de tus datos en un formato portátil."
+        ]
+      },
+      {
+        "heading": "Menores",
+        "body": "Photo Markt no está dirigido a menores. Los eventos que puedan involucrar a menores quedan excluidos del indexado de búsqueda facial, y no recopilamos conscientemente datos personales de menores. Si crees que se han compartido con nosotros datos de un menor, contáctanos y los eliminaremos.",
+        "bullets": []
+      },
+      {
+        "heading": "Cambios en esta política",
+        "body": "Podemos actualizar esta política a medida que evoluciona el producto. Cuando hagamos cambios importantes, actualizaremos la fecha de la parte superior de esta página.",
+        "bullets": []
+      }
+    ]
+  },
   "plans": {
     "free": "Gratis",
     "starter": "Starter",

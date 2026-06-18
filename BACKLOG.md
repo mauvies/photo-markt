@@ -14,7 +14,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 6 | P2 | T-016 | Completar y dejar lista para producción la página de privacidad | tras T-015 | todo |
+| 6 | P2 | T-016 | Completar y dejar lista para producción la página de privacidad | tras T-015 | doing |
 | 7 | P2 | T-007 | Toolbar de galería del evento en mobile: favorito + modo selección sin salto | — | todo |
 | 8 | P2 | T-018 | Detallar features de cada plan en la facturación del fotógrafo | — | todo |
 | 9 | P2 | T-011 | Secuencia + identificador editable para fotos de un evento (DB + UI, OpenSpec) | — | todo |
