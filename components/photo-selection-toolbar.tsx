@@ -1,5 +1,6 @@
 'use client';
 
+import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -38,6 +39,8 @@ interface PhotoSelectionToolbarProps {
   countLabel: string;
   selectLabel: string;
   clearLabel: string;
+  /** aria-label for the mobile exit (X) button shown while selecting. */
+  exitLabel: string;
   onStartSelecting: () => void;
   onClear: () => void;
   /** View-specific bulk actions (Download, Delete, …) rendered while selecting. */
@@ -62,6 +65,7 @@ export function PhotoSelectionToolbar({
   countLabel,
   selectLabel,
   clearLabel,
+  exitLabel,
   onStartSelecting,
   onClear,
   children,
@@ -76,11 +80,26 @@ export function PhotoSelectionToolbar({
           filter tabs (`leading`) are hidden entirely and replaced by the
           selection actions; min-h keeps the row height identical to the tabs
           row (which is a touch taller than the sm buttons). */}
-      <div className="flex min-h-9 items-center gap-3 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex min-h-9 items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {selectable && isSelecting ? (
           <>
+            {/* Mobile: only the X (exit) + count live here, left-aligned — the
+                bulk actions render in the fixed bottom bar instead. Desktop:
+                the X is hidden and the Clear button + actions sit inline on the
+                right. Either way the row height matches the idle "Select" row,
+                so entering selection never shifts the grid. */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onClear}
+              aria-label={exitLabel}
+              className="-ml-1 size-8 shrink-0 md:hidden"
+            >
+              <X className="h-5 w-5" />
+            </Button>
             <div className="shrink-0 whitespace-nowrap text-sm font-medium">{countLabel}</div>
-            <div className="ml-auto flex shrink-0 items-center gap-2">
+            <div className="ml-auto hidden shrink-0 items-center gap-2 md:flex">
               <Button type="button" variant="outline" size="sm" onClick={onClear}>
                 {clearLabel}
               </Button>

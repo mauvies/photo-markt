@@ -1,11 +1,11 @@
 # T-007 · Mejorar toolbar de la galería del evento en mobile (favorito + modo selección sin salto)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/event-gallery-mobile-toolbar`
 - **OpenSpec change:** —  (fix + polish de UI acotado)
-- **PR:** —
+- **PR:** #64
 
 ## Requerimiento
 En el dashboard de un evento, galería de fotos, vista **mobile**, dos problemas:
@@ -14,18 +14,19 @@ En el dashboard de un evento, galería de fotos, vista **mobile**, dos problemas
    esa sección del botón desaparece y todo el contenido de abajo da un **salto hacia arriba**. Hay que
    evitar el salto (reservar el espacio / transición estable) y darle mejor colocación al botón.
 
-## Enfoque acordado (mobile) — barra sticky única que sirve de toggle y de barra de selección
-La causa del salto: el modo selección mostraba la barra de "fotos seleccionadas" arriba (antes encima del
-header superior), pero ese header ya no existe ni en talent ni en fotógrafo en mobile; y al activar selección
-la sección del botón "seleccionar" se quita, encogiendo el contenedor → el contenido de abajo salta.
+## Enfoque acordado (mobile) — dos barras (corregido)
+La causa del salto: al activar selección se desmontaba el slot del botón "seleccionar" (en flujo) y se
+sustituía por una barra fija encima del header → el contenido de abajo subía.
 
-Solución: **una sola sección sticky** en el mismo sitio que el botón "seleccionar", que se reutiliza para
-ambos estados (no se elimina ni cambia de altura):
-- **Estado normal:** muestra el botón "seleccionar" (y el de favorito).
-- **Estado selección:** en ese mismo contenedor muestra el contador de fotos seleccionadas + una **X a la
-  izquierda** para salir del modo selección (y las acciones de selección).
-- El contenedor es **sticky** en el top de la pantalla al hacer scroll, con **altura estable** entre ambos
-  estados → cero salto del contenido de abajo. El contenido por encima se deja tal cual.
+Solución (dos barras, casi como estaba antes; solo cambia la de arriba):
+- **Arriba = el mismo slot del botón "seleccionar".** En selección muestra solo el **contador + una X**
+  para salir, alineados a la **izquierda**, en el mismo sitio del botón "seleccionar". Misma altura que el
+  estado idle → **cero salto**, y ya **no** hay barra fija encima del header.
+- **Abajo = barra de acciones fija sobre el nav inferior** (misma altura, scroll horizontal), con todos los
+  botones de acción (favoritos, descargar, carrito… según la página), visible hasta salir del modo. **Como
+  estaba antes.**
+- Desktop sin cambios: contador + Limpiar + acciones inline. Las acciones se renderizan en ambos sitios
+  (inline + barra inferior) y CSS oculta la que no aplica.
 
 ## Criterio de aceptación (Definition of Done)
 - [ ] Botón de favorito con diseño mejorado y bien integrado en el toolbar (mobile)
