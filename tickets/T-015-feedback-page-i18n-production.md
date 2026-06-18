@@ -1,11 +1,11 @@
 # T-015 · Traducir y dejar lista para producción la página de comentarios (feedback)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/feedback-page-i18n-production`
 - **OpenSpec change:** —  (contenido + i18n acotado a 1 componente)
-- **PR:** —
+- **PR:** #62
 
 ## Requerimiento
 Igual que T-014 pero para la página de **comentarios / feedback**: traducir a español, completar, mejorar y

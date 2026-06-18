@@ -1416,5 +1416,76 @@
         "answer": "Envía un ticket abajo con la URL de la foto, una prueba de propiedad y tus datos de contacto. Revisamos los reportes con prontitud y retiraremos el contenido mientras se investiga cuando sea necesario."
       }
     ]
+  },
+  "feedback": {
+    "thankYou": "¡Gracias!",
+    "successLine1": "Estamos construyendo Photo Markt juntos.",
+    "successLine2": "Tus comentarios nos ayudan a decidir qué sigue. Leemos cada envío.",
+    "submitAnother": "Enviar otro comentario",
+    "ratingLabels": ["Pésimo", "Malo", "Aceptable", "Bueno", "Excelente"],
+    "starRatingAria": "Valoración por estrellas",
+    "roadmapTitle": "Qué viene próximamente",
+    "roadmapSubtitle": "Vota las funciones que más quieres",
+    "statusLive": "Disponible",
+    "statusPlanned": "Previsto",
+    "voted": "Votado",
+    "wantThis": "Quiero esto",
+    "anotherIdeaPrefix": "¿Tienes otra idea?",
+    "anotherIdeaCta": "Usa el formulario para sugerir una función.",
+    "ratingLabel": "Satisfacción general",
+    "optional": "(opcional)",
+    "subjectLabel": "Asunto",
+    "subjectFallbackPlaceholder": "Resume tu comentario en una línea",
+    "descriptionLabel": "Descripción",
+    "screenshotLabel": "Captura de pantalla",
+    "uploadCta": "Haz clic para subir",
+    "uploadOrDragDrop": "o arrastra y suelta",
+    "uploadHint": "PNG, JPG, WebP — hasta 5 MB",
+    "send": "Enviar comentario",
+    "sending": "Enviando…",
+    "errorImageFile": "Por favor, sube un archivo de imagen",
+    "errorScreenshotSize": "La captura debe pesar menos de 5 MB",
+    "errorSelectCategory": "Por favor, selecciona una categoría",
+    "errorAddSubject": "Por favor, añade un asunto",
+    "errorAddDescription": "Por favor, describe tu comentario",
+    "errorVote": "No se pudo guardar el voto",
+    "errorSubmit": "No se pudo enviar el comentario",
+    "categories": {
+      "bug": {
+        "label": "Reportar un error",
+        "description": "Algo roto o que no funciona como debería"
+      },
+      "feature": {
+        "label": "Sugerir una función",
+        "description": "Una idea que mejoraría Photo Markt"
+      },
+      "general": {
+        "label": "Experiencia general",
+        "description": "Cuéntanos cómo ha sido tu experiencia en general"
+      }
+    },
+    "subjectPlaceholders": {
+      "bug": "ej. Las fotos no cargan en la galería del evento",
+      "feature": "ej. Descarga en lote de todas las fotos compradas",
+      "general": "ej. La experiencia de navegación se siente fluida"
+    },
+    "descriptionPlaceholders": {
+      "talent": "Cuéntanos cómo podemos facilitarte encontrar tus fotos...",
+      "photographer": "¿Qué herramienta te ayudaría a vender más fotos o a ahorrar tiempo al subirlas?"
+    },
+    "roadmap": [
+      {
+        "title": "Emparejamiento con IA",
+        "description": "Sube una selfie para encontrar al instante fotos tuyas en un evento."
+      },
+      {
+        "title": "App móvil",
+        "description": "App nativa para iOS y Android para fotógrafos y talento sobre la marcha."
+      },
+      {
+        "title": "Paquetes de fotos",
+        "description": "Compra todas las fotos de un evento a un precio de paquete con descuento."
+      }
+    ]
   }
 }

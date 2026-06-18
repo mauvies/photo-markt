@@ -1404,5 +1404,76 @@
         "answer": "Submit a ticket below with the photo URL, evidence of ownership, and your contact details. We review reports promptly and will remove content pending investigation when needed."
       }
     ]
+  },
+  "feedback": {
+    "thankYou": "Thank you!",
+    "successLine1": "We're building Photo Markt together.",
+    "successLine2": "Your feedback helps us shape what comes next. We read every submission.",
+    "submitAnother": "Submit another feedback",
+    "ratingLabels": ["Terrible", "Poor", "Okay", "Good", "Excellent"],
+    "starRatingAria": "Star rating",
+    "roadmapTitle": "What's coming next",
+    "roadmapSubtitle": "Vote for the features you want most",
+    "statusLive": "Live",
+    "statusPlanned": "Planned",
+    "voted": "Voted",
+    "wantThis": "I want this",
+    "anotherIdeaPrefix": "Have another idea?",
+    "anotherIdeaCta": "Use the form to suggest a feature.",
+    "ratingLabel": "Overall satisfaction",
+    "optional": "(optional)",
+    "subjectLabel": "Subject",
+    "subjectFallbackPlaceholder": "Summarise your feedback in one line",
+    "descriptionLabel": "Description",
+    "screenshotLabel": "Screenshot",
+    "uploadCta": "Click to upload",
+    "uploadOrDragDrop": "or drag & drop",
+    "uploadHint": "PNG, JPG, WebP — up to 5 MB",
+    "send": "Send feedback",
+    "sending": "Sending…",
+    "errorImageFile": "Please upload an image file",
+    "errorScreenshotSize": "Screenshot must be under 5 MB",
+    "errorSelectCategory": "Please select a feedback category",
+    "errorAddSubject": "Please add a subject",
+    "errorAddDescription": "Please describe your feedback",
+    "errorVote": "Failed to save vote",
+    "errorSubmit": "Failed to submit feedback",
+    "categories": {
+      "bug": {
+        "label": "Report a bug",
+        "description": "Something broken or not working as expected"
+      },
+      "feature": {
+        "label": "Suggest a feature",
+        "description": "An idea that would make Photo Markt better"
+      },
+      "general": {
+        "label": "General experience",
+        "description": "Share how your overall experience has been"
+      }
+    },
+    "subjectPlaceholders": {
+      "bug": "e.g. Photos not loading in the event gallery",
+      "feature": "e.g. Batch download for all purchased photos",
+      "general": "e.g. The browsing experience feels smooth"
+    },
+    "descriptionPlaceholders": {
+      "talent": "Tell us how we can make finding your photos easier...",
+      "photographer": "What tool would help you sell more photos or save time during uploads?"
+    },
+    "roadmap": [
+      {
+        "title": "AI photo matching",
+        "description": "Upload a selfie to instantly find photos of yourself across an event."
+      },
+      {
+        "title": "Mobile app",
+        "description": "Native iOS & Android app for photographers and talent on the go."
+      },
+      {
+        "title": "Bulk photo bundles",
+        "description": "Buy all photos from an event at a discounted bundle price."
+      }
+    ]
   }
 }

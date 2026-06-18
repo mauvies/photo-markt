@@ -3,6 +3,7 @@ import { DashboardHeader } from '@/components/dashboard-header';
 import { FeedbackView } from '@/components/feedback-view';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
+import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 
 export default async function TalentFeedbackPage({
   params,
@@ -17,7 +18,9 @@ export default async function TalentFeedbackPage({
     <div className="flex flex-1 flex-col gap-2">
       <DashboardHeader title={dict.talentDashboard.shareFeedback} />
       <p className="text-sm text-muted-foreground mb-4">{dict.talentDashboard.feedbackSubtitle}</p>
-      <FeedbackView userRole="talent" initialVotes={initialVotes} />
+      <TranslationsProvider translations={dict.feedback}>
+        <FeedbackView userRole="talent" initialVotes={initialVotes} />
+      </TranslationsProvider>
     </div>
   );
 }

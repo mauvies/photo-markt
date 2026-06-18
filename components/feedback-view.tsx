@@ -26,18 +26,22 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
+import type { Dictionary } from '@/lib/i18n/get-dictionary';
+import { useTranslations } from '@/lib/i18n/translations-provider';
 import type { RoleSlug } from '@/lib/roles';
 import { cn } from '@/lib/utils';
+
+type FeedbackT = Dictionary['feedback'];
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 type CategoryId = 'bug' | 'feature' | 'general';
 
-const CATEGORIES = [
+// Visual metadata for each category — the label/description text lives in the
+// dictionary under `feedback.categories[id]`, paired here by id.
+const CATEGORY_META = [
   {
     id: 'bug' as CategoryId,
-    label: 'Report a Bug',
-    description: 'Something broken or not working as expected',
     icon: AlertCircle,
     iconColor: 'text-red-500',
     selectedBg: 'bg-red-50 dark:bg-red-950/30',
@@ -45,8 +49,6 @@ const CATEGORIES = [
   },
   {
     id: 'feature' as CategoryId,
-    label: 'Suggest a Feature',
-    description: 'An idea that would make Photo Markt better',
     icon: Lightbulb,
     iconColor: 'text-purple-500',
     selectedBg: 'bg-purple-50 dark:bg-purple-950/30',
@@ -54,8 +56,6 @@ const CATEGORIES = [
   },
   {
     id: 'general' as CategoryId,
-    label: 'General Experience',
-    description: 'Share how your overall experience has been',
     icon: Heart,
     iconColor: 'text-blue-500',
     selectedBg: 'bg-blue-50 dark:bg-blue-950/30',
@@ -63,43 +63,28 @@ const CATEGORIES = [
   },
 ] as const;
 
-const ROADMAP_FEATURES = [
+// Visual metadata for roadmap items — title/description/status text lives in the
+// dictionary under `feedback.roadmap`, paired here by index.
+const ROADMAP_META = [
   {
     key: 'ai_face_recognition',
-    title: 'AI Face Recognition',
-    description: 'Automatically match faces across events to find your photos instantly.',
     icon: Brain,
-    status: 'In progress',
-    statusColor: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+    status: 'live' as const,
+    statusColor: 'bg-green-500/10 text-green-600 dark:text-green-400',
   },
   {
     key: 'mobile_app',
-    title: 'Mobile App',
-    description: 'Native iOS & Android app for photographers and talent on the go.',
     icon: Smartphone,
-    status: 'Planned',
+    status: 'planned' as const,
     statusColor: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
   },
   {
     key: 'bulk_discounts',
-    title: 'Bulk Photo Bundles',
-    description: 'Buy all photos from an event at a discounted bundle price.',
     icon: Tag,
-    status: 'Planned',
+    status: 'planned' as const,
     statusColor: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
   },
 ] as const;
-
-const SUBJECT_PLACEHOLDER: Record<CategoryId, string> = {
-  bug: 'e.g. Photos not loading in the event gallery',
-  feature: 'e.g. Batch download for all purchased photos',
-  general: 'e.g. The browsing experience feels smooth',
-};
-
-const DESCRIPTION_PLACEHOLDER: Record<RoleSlug, string> = {
-  talent: 'Tell us how we can make finding your photos easier...',
-  photographer: 'What tool would help you sell more photos or save time during uploads?',
-};
 
 const CONFETTI_COLORS = [
   '#6366f1',
@@ -153,6 +138,7 @@ function ConfettiParticles() {
 }
 
 function SuccessState({ onReset }: { onReset: () => void }) {
+  const { t } = useTranslations<FeedbackT>();
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -176,7 +162,7 @@ function SuccessState({ onReset }: { onReset: () => void }) {
         transition={{ delay: 0.25 }}
         className="text-2xl font-semibold mb-3"
       >
-        Thank you!
+        {t('thankYou')}
       </motion.h2>
 
       <motion.p
@@ -185,7 +171,7 @@ function SuccessState({ onReset }: { onReset: () => void }) {
         transition={{ delay: 0.35 }}
         className="text-muted-foreground max-w-sm mb-2"
       >
-        We're building Photo Markt together.
+        {t('successLine1')}
       </motion.p>
       <motion.p
         initial={{ opacity: 0, y: 10 }}
@@ -193,12 +179,12 @@ function SuccessState({ onReset }: { onReset: () => void }) {
         transition={{ delay: 0.42 }}
         className="text-sm text-muted-foreground/70 max-w-xs mb-10"
       >
-        Your feedback helps us shape what comes next. We read every submission.
+        {t('successLine2')}
       </motion.p>
 
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.55 }}>
         <Button variant="outline" onClick={onReset}>
-          Submit another feedback
+          {t('submitAnother')}
         </Button>
       </motion.div>
     </motion.div>
@@ -218,14 +204,15 @@ function StarRating({
   onHover: (v: number) => void;
   onLeave: () => void;
 }) {
-  const labels = ['Terrible', 'Poor', 'Okay', 'Good', 'Excellent'];
+  const { t } = useTranslations<FeedbackT>();
+  const labels = t('ratingLabels');
   const display = hovered || value;
 
   return (
     <div className="flex items-center gap-3">
       <fieldset
         className="flex gap-0.5 border-0 p-0 m-0"
-        aria-label="Star rating"
+        aria-label={t('starRatingAria')}
         onMouseLeave={onLeave}
       >
         {[1, 2, 3, 4, 5].map((star) => (
@@ -235,7 +222,7 @@ function StarRating({
             onClick={() => onChange(star)}
             onMouseEnter={() => onHover(star)}
             className="p-0.5 transition-transform hover:scale-110 focus:outline-none"
-            aria-label={`Rate ${star} star${star !== 1 ? 's' : ''}`}
+            aria-label={labels[star - 1]}
           >
             <Star
               className={cn(
@@ -274,42 +261,48 @@ function RoadmapSidebar({
   onVote: (key: string) => void;
   pendingVoteKey: string | null;
 }) {
+  const { t } = useTranslations<FeedbackT>();
+  const roadmap = t('roadmap');
+
   return (
     <div className="rounded-xl border border-border bg-card p-5 space-y-4 lg:sticky lg:top-4 self-start">
       <div>
-        <h3 className="font-semibold text-sm">What's coming next</h3>
-        <p className="text-xs text-muted-foreground mt-0.5">Vote for features you want most</p>
+        <h3 className="font-semibold text-sm">{t('roadmapTitle')}</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">{t('roadmapSubtitle')}</p>
       </div>
 
       <Separator />
 
       <div className="space-y-5">
-        {ROADMAP_FEATURES.map((feature) => {
-          const voted = votedFeatures.has(feature.key);
-          const isPending = pendingVoteKey === feature.key;
+        {ROADMAP_META.map((meta, i) => {
+          const item = roadmap[i];
+          if (!item) return null;
+          const voted = votedFeatures.has(meta.key);
+          const isPending = pendingVoteKey === meta.key;
+          const statusLabel = meta.status === 'live' ? t('statusLive') : t('statusPlanned');
 
           return (
-            <div key={feature.key} className="flex gap-3">
+            <div key={meta.key} className="flex gap-3">
               <div className="mt-0.5 shrink-0 flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
-                <feature.icon className="h-4 w-4 text-muted-foreground" />
+                <meta.icon className="h-4 w-4 text-muted-foreground" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium leading-snug">{feature.title}</p>
+                <p className="text-sm font-medium leading-snug">{item.title}</p>
                 <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                  {feature.description}
+                  {item.description}
                 </p>
                 <div className="flex items-center justify-between mt-2">
                   <span
                     className={cn(
                       'text-[10px] font-medium px-2 py-0.5 rounded-full',
-                      feature.statusColor,
+                      meta.statusColor,
                     )}
                   >
-                    {feature.status}
+                    {statusLabel}
                   </span>
                   <button
                     type="button"
-                    onClick={() => onVote(feature.key)}
+                    onClick={() => onVote(meta.key)}
                     disabled={isPending}
                     className={cn(
                       'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg transition-all disabled:opacity-60',
@@ -319,7 +312,7 @@ function RoadmapSidebar({
                     )}
                   >
                     <ThumbsUp className={cn('h-3 w-3', voted && 'fill-current')} />
-                    {voted ? 'Voted' : 'I want this'}
+                    {voted ? t('voted') : t('wantThis')}
                   </button>
                 </div>
               </div>
@@ -331,8 +324,8 @@ function RoadmapSidebar({
       <Separator />
 
       <p className="text-xs text-muted-foreground text-center leading-relaxed">
-        Have another idea?{' '}
-        <span className="text-foreground font-medium">Use the form to suggest a feature.</span>
+        {t('anotherIdeaPrefix')}{' '}
+        <span className="text-foreground font-medium">{t('anotherIdeaCta')}</span>
       </p>
     </div>
   );
@@ -346,6 +339,7 @@ interface FeedbackViewProps {
 }
 
 export function FeedbackView({ userRole, initialVotes }: FeedbackViewProps) {
+  const { t } = useTranslations<FeedbackT>();
   const pathname = usePathname();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isPending, startTransition] = useTransition();
@@ -373,11 +367,11 @@ export function FeedbackView({ userRole, initialVotes }: FeedbackViewProps) {
 
   const handleFileSelect = (file: File) => {
     if (!file.type.startsWith('image/')) {
-      toast.error('Please upload an image file');
+      toast.error(t('errorImageFile'));
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      toast.error('Screenshot must be under 5 MB');
+      toast.error(t('errorScreenshotSize'));
       return;
     }
     if (screenshotPreview) URL.revokeObjectURL(screenshotPreview);
@@ -419,7 +413,7 @@ export function FeedbackView({ userRole, initialVotes }: FeedbackViewProps) {
         else next.delete(featureKey);
         return next;
       });
-      toast.error('Failed to save vote');
+      toast.error(t('errorVote'));
     } finally {
       setPendingVoteKey(null);
     }
@@ -428,15 +422,15 @@ export function FeedbackView({ userRole, initialVotes }: FeedbackViewProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!category) {
-      toast.error('Please select a feedback category');
+      toast.error(t('errorSelectCategory'));
       return;
     }
     if (!subject.trim()) {
-      toast.error('Please add a subject');
+      toast.error(t('errorAddSubject'));
       return;
     }
     if (!description.trim()) {
-      toast.error('Please describe your feedback');
+      toast.error(t('errorAddDescription'));
       return;
     }
 
@@ -453,9 +447,8 @@ export function FeedbackView({ userRole, initialVotes }: FeedbackViewProps) {
 
         await submitFeedbackAction(formData);
         setIsSubmitted(true);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to submit feedback';
-        toast.error(message);
+      } catch {
+        toast.error(t('errorSubmit'));
       }
     });
   };
@@ -475,6 +468,9 @@ export function FeedbackView({ userRole, initialVotes }: FeedbackViewProps) {
     return <SuccessState onReset={handleReset} />;
   }
 
+  const categoryLabels = t('categories');
+  const subjectPlaceholders = t('subjectPlaceholders');
+
   return (
     <form onSubmit={handleSubmit}>
       <div className="flex flex-col lg:flex-row gap-6">
@@ -482,7 +478,7 @@ export function FeedbackView({ userRole, initialVotes }: FeedbackViewProps) {
         <div className="flex-1 space-y-7 min-w-0">
           {/* Category selector */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {CATEGORIES.map((cat) => {
+            {CATEGORY_META.map((cat) => {
               const selected = category === cat.id;
               return (
                 <button
@@ -498,9 +494,9 @@ export function FeedbackView({ userRole, initialVotes }: FeedbackViewProps) {
                 >
                   <cat.icon className={cn('h-5 w-5', cat.iconColor)} />
                   <div>
-                    <p className="font-semibold text-sm">{cat.label}</p>
+                    <p className="font-semibold text-sm">{categoryLabels[cat.id].label}</p>
                     <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                      {cat.description}
+                      {categoryLabels[cat.id].description}
                     </p>
                   </div>
                 </button>
@@ -511,8 +507,8 @@ export function FeedbackView({ userRole, initialVotes }: FeedbackViewProps) {
           {/* Rating */}
           <div className="space-y-2">
             <Label className="text-sm">
-              Overall Satisfaction{' '}
-              <span className="text-muted-foreground font-normal">(optional)</span>
+              {t('ratingLabel')}{' '}
+              <span className="text-muted-foreground font-normal">{t('optional')}</span>
             </Label>
             <StarRating
               value={rating}
@@ -525,11 +521,11 @@ export function FeedbackView({ userRole, initialVotes }: FeedbackViewProps) {
 
           {/* Subject */}
           <div className="space-y-2">
-            <Label htmlFor="feedback-subject">Subject</Label>
+            <Label htmlFor="feedback-subject">{t('subjectLabel')}</Label>
             <Input
               id="feedback-subject"
               placeholder={
-                category ? SUBJECT_PLACEHOLDER[category] : 'Summarise your feedback in one line'
+                category ? subjectPlaceholders[category] : t('subjectFallbackPlaceholder')
               }
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
@@ -539,10 +535,10 @@ export function FeedbackView({ userRole, initialVotes }: FeedbackViewProps) {
 
           {/* Description */}
           <div className="space-y-2">
-            <Label htmlFor="feedback-description">Description</Label>
+            <Label htmlFor="feedback-description">{t('descriptionLabel')}</Label>
             <Textarea
               id="feedback-description"
-              placeholder={DESCRIPTION_PLACEHOLDER[userRole]}
+              placeholder={t('descriptionPlaceholders')[userRole]}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={5}
@@ -557,7 +553,8 @@ export function FeedbackView({ userRole, initialVotes }: FeedbackViewProps) {
           {/* Screenshot upload */}
           <div className="space-y-2">
             <Label>
-              Screenshot <span className="text-muted-foreground font-normal">(optional)</span>
+              {t('screenshotLabel')}{' '}
+              <span className="text-muted-foreground font-normal">{t('optional')}</span>
             </Label>
 
             {screenshotPreview ? (
@@ -605,10 +602,10 @@ export function FeedbackView({ userRole, initialVotes }: FeedbackViewProps) {
               >
                 <Upload className="h-5 w-5 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
-                  <span className="font-medium text-foreground">Click to upload</span> or drag &
-                  drop
+                  <span className="font-medium text-foreground">{t('uploadCta')}</span>{' '}
+                  {t('uploadOrDragDrop')}
                 </p>
-                <p className="text-xs text-muted-foreground">PNG, JPG, WebP — up to 5 MB</p>
+                <p className="text-xs text-muted-foreground">{t('uploadHint')}</p>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -630,10 +627,10 @@ export function FeedbackView({ userRole, initialVotes }: FeedbackViewProps) {
               {isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending…
+                  {t('sending')}
                 </>
               ) : (
-                'Send Feedback'
+                t('send')
               )}
             </Button>
           </div>
