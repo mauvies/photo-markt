@@ -14,7 +14,6 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 14 | P3 | T-006 | Mover carrito a la bottom nav del dashboard de talento (mobile) | tras T-003 | todo |
 | 15 | P3 | T-013 | Estandarizar el diseño de tabs (underline) en toda la app | tras T-004 | todo |
 | 16 | P3 | T-009 | Mejorar UX del Lightbox (header, flechas, transición swipe en mobile) | — | todo |
 | 17 | P3 | T-017 | Íconos (lápiz/basura) en el dropdown de acciones de eventos del fotógrafo | — | todo |
@@ -45,6 +44,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 - **T-008** · Galería del evento full-width en mobile (grid sangra a los bordes; toolbar queda) — PR #69
 - **T-002** · Pulir diseño del language toggler dropdown (rounded-xl, banderas text-xs) — PR #70
 - **T-003** · Borde fino gris en el avatar del header (`border border-input`, igual que el toggler) — PR #71
+- **T-006** · Carrito como tab en la bottom nav de talento (mobile) + header oculto en mobile — PR #72
 
 <!-- Los tickets completados se mueven aquí con su nº de PR. -->
 
