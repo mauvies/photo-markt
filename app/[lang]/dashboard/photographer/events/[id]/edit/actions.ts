@@ -10,6 +10,7 @@ import {
   getEvent,
   getPhoto,
   updateEvent,
+  updatePhotoLabel,
 } from '@/database/queries';
 import { createClient } from '@/database/server';
 import { inngest } from '@/lib/inngest/client';
@@ -236,6 +237,47 @@ export async function updateEventAction(
   revalidateTag('filter-options', 'max');
 
   return { success: true };
+}
+
+/** Max length of a photo's editable code label. */
+const MAX_PHOTO_LABEL_LENGTH = 50;
+
+/**
+ * Set or clear a photo's editable code label (photographer-only). An empty
+ * value clears the override so the displayed code falls back to the auto
+ * sequence number.
+ */
+export async function updatePhotoLabelAction(
+  photoId: string,
+  eventId: string,
+  rawLabel: string,
+): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('You must be signed in to edit a photo.');
+  }
+
+  if (!(await eventExists(supabase, eventId, user.id))) {
+    throw new Error('Event not found or access denied.');
+  }
+
+  const trimmed = rawLabel.trim();
+  if (trimmed.length > MAX_PHOTO_LABEL_LENGTH) {
+    throw new Error(`Label must be ${MAX_PHOTO_LABEL_LENGTH} characters or fewer.`);
+  }
+
+  await updatePhotoLabel(supabase, photoId, eventId, user.id, trimmed === '' ? null : trimmed);
+
+  const event = await getEvent(supabase, eventId, user.id);
+  revalidateAfterEventMutation(user.id, {
+    id: eventId,
+    slug: event?.slug ?? null,
+    share_code: event?.share_code ?? null,
+  });
 }
 
 /**

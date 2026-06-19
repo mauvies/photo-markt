@@ -9,11 +9,22 @@ import type { PhotoAlbumItem } from '@/components/photo-album-viewer';
 import { PhotoGallery, type PhotoGalleryBulkAction } from '@/components/photo-gallery';
 import type { PhotoIconTooltips, PhotoMoreMenuConfig } from '@/components/photo-icon-buttons';
 import { TagTalentDialog } from '@/components/tag-talent-dialog';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { downloadEventPhotosZip } from '@/lib/download-zip';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { getPhotoDownloadUrlAction } from './actions';
-import { deletePhotoAction } from './edit/actions';
+import { deletePhotoAction, updatePhotoLabelAction } from './edit/actions';
 
 type EventsT = Dictionary['events'];
 
@@ -61,6 +72,46 @@ export function EventPhotoAlbum({
   const [isDownloading, setIsDownloading] = useState(false);
   // Bumped to make PhotoGallery clear its selection after a tag/delete.
   const [selectionResetKey, setSelectionResetKey] = useState(0);
+
+  // Edit-code dialog state.
+  const [editCodeOpen, setEditCodeOpen] = useState(false);
+  const [editCodePhotoId, setEditCodePhotoId] = useState<string | null>(null);
+  const [editCodeValue, setEditCodeValue] = useState('');
+  const [editCodePlaceholder, setEditCodePlaceholder] = useState('');
+  const [editCodeSaving, setEditCodeSaving] = useState(false);
+
+  const handleEditCode = useCallback(
+    (photoId: string) => {
+      const item = items.find((i) => i.id === photoId);
+      if (!item) return;
+      setEditCodePhotoId(photoId);
+      setEditCodeValue(item.label ?? '');
+      setEditCodePlaceholder(item.sequence != null ? `#${item.sequence}` : '');
+      setEditCodeOpen(true);
+    },
+    [items],
+  );
+
+  const handleSaveCode = useCallback(async () => {
+    if (!editCodePhotoId) return;
+    const value = editCodeValue.trim();
+    setEditCodeSaving(true);
+    try {
+      await updatePhotoLabelAction(editCodePhotoId, eventId, value);
+      // Optimistic — reflect the new label immediately; router.refresh() reconciles.
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === editCodePhotoId ? { ...it, label: value === '' ? null : value } : it,
+        ),
+      );
+      setEditCodeOpen(false);
+      toast.success(t('editCodeSuccess'));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('editCodeError'));
+    } finally {
+      setEditCodeSaving(false);
+    }
+  }, [editCodePhotoId, editCodeValue, eventId, t]);
 
   const handleUntag = useCallback(() => {
     router.refresh();
@@ -259,6 +310,7 @@ export function EventPhotoAlbum({
           imageUnavailableLabel,
           lightboxActionBar: 'bottom',
           actionBarLabels,
+          onEditCode: handleEditCode,
         }}
       />
       <TagTalentDialog
@@ -279,6 +331,50 @@ export function EventPhotoAlbum({
         pendingText={t('deletingLabel')}
         onConfirm={confirmDelete}
       />
+      <Dialog
+        open={editCodeOpen}
+        onOpenChange={(open) => {
+          if (!editCodeSaving) setEditCodeOpen(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('editCodeTitle')}</DialogTitle>
+            <DialogDescription>{t('editCodeDesc')}</DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void handleSaveCode();
+            }}
+            className="space-y-4"
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor="photo-code-input">{t('editCodeInputLabel')}</Label>
+              <Input
+                id="photo-code-input"
+                value={editCodeValue}
+                onChange={(e) => setEditCodeValue(e.target.value)}
+                placeholder={editCodePlaceholder}
+                maxLength={50}
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditCodeOpen(false)}
+                disabled={editCodeSaving}
+              >
+                {t('cancelButton')}
+              </Button>
+              <Button type="submit" disabled={editCodeSaving}>
+                {t('editCodeSave')}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

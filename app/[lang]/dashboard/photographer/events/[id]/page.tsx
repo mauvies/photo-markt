@@ -199,6 +199,8 @@ export default async function EventDetailPage({
         uploader: buildUploader(p),
         width: p.width ?? undefined,
         height: p.height ?? undefined,
+        sequence: p.sequence ?? null,
+        label: p.label ?? null,
       };
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
