@@ -1,11 +1,11 @@
 # T-017 · Íconos en el dropdown de acciones de eventos (editar/eliminar)
 
 - **Prioridad:** P3
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/event-actions-dropdown-icons`
 - **OpenSpec change:** —  (cambio de UI trivial)
-- **PR:** —
+- **PR:** #75
 
 ## Requerimiento
 En la lista de eventos del dashboard de fotógrafo, cada evento tiene un menú de tres puntos con "editar" y
