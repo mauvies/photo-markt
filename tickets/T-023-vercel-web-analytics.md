@@ -1,7 +1,7 @@
 # T-023 · Analytics de producto con Vercel Web Analytics
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `feat/vercel-web-analytics`
 - **OpenSpec change:** —  (integración mínima)
