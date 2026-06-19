@@ -1,11 +1,11 @@
 # T-010 · Limpiar acciones de la barra de modo selección (quitar descargar/compartir)
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/selection-bar-actions`
 - **OpenSpec change:** —  (cambio de UI acotado)
-- **PR:** —
+- **PR:** #68
 
 ## Requerimiento
 En la galería de eventos **públicos con fotos con marca de agua**, en la barra de acciones del **modo
