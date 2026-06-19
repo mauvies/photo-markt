@@ -87,7 +87,7 @@ export function EventCardActions({ editHref, onDelete, labels }: EventCardAction
             }}
             disabled={isPending}
           >
-            <Pencil className="mr-2 h-4 w-4" />
+            <Pencil className="mr-1 h-4 w-4" />
             {labels.edit}
           </DropdownMenuItem>
           <DropdownMenuItem
@@ -98,7 +98,7 @@ export function EventCardActions({ editHref, onDelete, labels }: EventCardAction
             variant="destructive"
             disabled={isPending}
           >
-            <Trash2 className="mr-2 h-4 w-4" />
+            <Trash2 className="mr-1 h-4 w-4" />
             {labels.delete}
           </DropdownMenuItem>
         </DropdownMenuContent>
