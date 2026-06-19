@@ -141,26 +141,26 @@ describe('PhotoGallery', () => {
     expect(screen.queryByRole('button', { name: 'Select' })).toBeNull();
   });
 
-  it('bleeds the grid wrapper full-width via gridClassName (mobile, T-008)', () => {
+  it('bleeds the grid wrapper nearly full-width via gridClassName (mobile, T-008)', () => {
     render(
       <PhotoGallery
         items={items}
         galleryProps={galleryProps}
         labels={labels}
-        gridClassName="-mx-4 sm:mx-0"
+        gridClassName="-mx-3.5 sm:mx-0"
       />,
     );
     // The grid wrapper is the album's direct parent; the bleed classes land
     // there so the grid spans the screen on mobile while the toolbar stays put.
     const wrapper = screen.getByTestId('album').parentElement;
-    expect(wrapper?.className).toContain('-mx-4');
+    expect(wrapper?.className).toContain('-mx-3.5');
     expect(wrapper?.className).toContain('sm:mx-0');
   });
 
-  it('leaves the grid wrapper unpadded-bleed when gridClassName is omitted', () => {
+  it('leaves the grid wrapper without bleed margins when gridClassName is omitted', () => {
     render(<PhotoGallery items={items} galleryProps={galleryProps} labels={labels} />);
     const wrapper = screen.getByTestId('album').parentElement;
-    expect(wrapper?.className).not.toContain('-mx-4');
+    expect(wrapper?.className).not.toContain('-mx-3.5');
   });
 
   it('omits the Select button when selectable is false', () => {

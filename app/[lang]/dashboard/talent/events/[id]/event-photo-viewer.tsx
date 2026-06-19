@@ -570,9 +570,10 @@ export function EventPhotoViewer({
   );
 
   const toolbarClassName = 'sticky top-[var(--header-height)] -mx-4 px-4 md:-mx-6 md:px-6';
-  // Bleed the grid full-width on mobile (negates the page's px-4); padded again
-  // from sm up so the toolbar stays the only inset chrome on phones.
-  const gridClassName = '-mx-4 sm:mx-0';
+  // Bleed the grid nearly full-width on mobile, leaving a 2px gap at each edge
+  // (-mx-3.5 against the page's px-4); padded again from sm up so the toolbar
+  // stays the only inset chrome on phones.
+  const gridClassName = '-mx-3.5 sm:mx-0';
   const selectionResetKey = `${filter}:${faceSearch.matches === null ? 'all' : 'search'}`;
 
   // Shared across both render paths (full gallery + AI results) since the

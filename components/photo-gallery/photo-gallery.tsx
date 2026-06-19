@@ -37,8 +37,8 @@ interface PhotoGalleryProps {
   /** Slot on the desktop toolbar — the filter tabs. */
   toolbarLeading?: ReactNode;
   toolbarClassName?: string;
-  /** Extra classes on the grid wrapper — e.g. `-mx-4 sm:mx-0` to bleed the
-   * grid full-width on mobile while the padded toolbar stays put. */
+  /** Extra classes on the grid wrapper — e.g. `-mx-3.5 sm:mx-0` to bleed the
+   * grid near full-width on mobile while the padded toolbar stays put. */
   gridClassName?: string;
   /** Selection-bar copy — only needed when `selectable` (the default). */
   labels?: PhotoGallerySelectionLabels;
