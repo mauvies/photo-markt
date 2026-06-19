@@ -1,11 +1,11 @@
 # T-002 · Pulir diseño del language toggler dropdown
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/language-toggler-polish`
 - **OpenSpec change:** —  (cambio chico de UI, 1 archivo)
-- **PR:** —
+- **PR:** #70
 
 ## Requerimiento
 En el dropdown del language toggler: bordes más redondeados para alinear con el estilo de la app,
