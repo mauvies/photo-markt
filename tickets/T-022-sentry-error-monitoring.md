@@ -1,7 +1,7 @@
 # T-022 · Monitoreo de errores en producción con Sentry
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `feat/sentry-error-monitoring`
 - **OpenSpec change:** —  (integración acotada; sin BD/pagos)

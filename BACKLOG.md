@@ -14,7 +14,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-022 | Monitoreo de errores con Sentry (gated por DSN) | — | todo |
+| 1 | P1 | T-022 | Monitoreo de errores con Sentry (gated por DSN) | — | doing |
 | 2 | P2 | T-023 | Vercel Web Analytics (pageviews/visitas base) | — | todo |
 | 3 | P2 | T-024 | Banner de consentimiento de cookies (GDPR) — gatea analytics | T-023 | todo |
 | 4 | P2 | T-026 | Checklist de go-live + docs de despliegue a producción | — | todo |
