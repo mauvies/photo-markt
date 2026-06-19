@@ -5,8 +5,8 @@ prose intro. Anything not yet implemented is explicitly marked **PLANNED** or
 **DISABLED**.
 
 Source of truth: actual migrations in `supabase/migrations/`, query layer in
-`database/queries/`, routes in `app/[lang]/`, feature flags in
-`lib/feature-flags.ts`. CLAUDE.md is supplementary; where the two ever
+`src/database/queries/`, routes in `src/app/[lang]/`, feature flags in
+`src/lib/feature-flags.ts`. CLAUDE.md is supplementary; where the two ever
 disagree, the code (and therefore this document) wins. One detail worth
 calling out: payouts fire **per-order on the Stripe webhook**, not on a cron.
 
@@ -68,19 +68,19 @@ authenticated (server-side, RLS), service role (admin-only, bypasses RLS).
 flowchart TB
   Browser["Browser<br/>Client Components · TanStack Query · localStorage cart"]
 
-  Middleware["proxy.ts<br/>Supabase session refresh + i18n locale detect"]
+  Middleware["src/proxy.ts<br/>Supabase session refresh + i18n locale detect"]
 
   subgraph AppRouter["Next.js App Router"]
     RSC["React Server Components<br/>page.tsx · layout.tsx"]
     Actions["Server Actions<br/>'use server' files"]
-    ApiRoutes["API Routes<br/>app/api/* (Stripe webhook, watermark, admin)"]
+    ApiRoutes["API Routes<br/>src/app/api/* (Stripe webhook, watermark, admin)"]
   end
 
-  Queries["database/queries/*<br/>Domain query layer (events, photos, carts, ...)"]
+  Queries["src/database/queries/*<br/>Domain query layer (events, photos, carts, ...)"]
 
-  ClientSb["database/client.ts<br/>anon JWT · RLS enforced"]
-  ServerSb["database/server.ts<br/>user JWT · RLS enforced"]
-  AdminSb["database/supabase-admin.ts<br/>service role · bypasses RLS"]
+  ClientSb["src/database/client.ts<br/>anon JWT · RLS enforced"]
+  ServerSb["src/database/server.ts<br/>user JWT · RLS enforced"]
+  AdminSb["src/database/supabase-admin.ts<br/>service role · bypasses RLS"]
 
   Supabase[("Supabase<br/>Postgres + Storage")]
 
@@ -298,16 +298,16 @@ erDiagram
 - `talent_photo_tags` — talent users tagged on photos (photographer side for
   in-app tagging; talent side for "my photos" view). Composite-unique on
   `(photo_id, talent_user_id)`.
-- `rate_limit_buckets` — fixed-window counter table backing `lib/rate-limit.ts`.
+- `rate_limit_buckets` — fixed-window counter table backing `src/lib/rate-limit.ts`.
   Composite PK `(bucket_key, window_start)`. Service-role-only access.
 - `photo_faces` — one row per face AWS Rekognition indexes in a photo
   (`aws_face_id`, `aws_collection_id`, `confidence`, `bounding_box`). Unique on
   `(photo_id, aws_face_id)`. Talent selfie search maps Rekognition face IDs back
-  to photos through this table (`database/queries/rekognition.ts`).
+  to photos through this table (`src/database/queries/rekognition.ts`).
 - `ai_search_usage` — monthly per-user search counter, unique on
   `(user_id, period_year, period_month)`. Part of the legacy AI schema and no
   longer queried from application code; the live per-search/monthly quotas are
-  enforced via `lib/rate-limit.ts` + `lib/ai/rate-limits.ts`.
+  enforced via `src/lib/rate-limit.ts` + `src/lib/ai/rate-limits.ts`.
 - `download_tokens` — opaque tokens minted on purchase that let guests
   download their photos via `/[lang]/download/[token]` without auth.
 - `guest_orders` / `guest_order_items` / `pending_guest_checkouts` — mirror
@@ -480,7 +480,7 @@ sequenceDiagram
 ## 5. Photo upload + serving flow
 
 Photographers upload directly to Supabase Storage (private bucket
-`photos`). On the way in, `lib/photo-upload.ts:validatePhotoUpload` reads
+`photos`). On the way in, `src/lib/photo-upload.ts:validatePhotoUpload` reads
 magic bytes via Sharp and rejects anything that isn't a known image format;
 the storage extension and content-type are derived from the *detected*
 format, never from `file.name` or `file.type`. The originals are
@@ -511,7 +511,7 @@ flowchart LR
 
 Fail-closed behavior: the watermark API serves a generic placeholder JPEG
 on any internal failure rather than falling back to the un-watermarked
-source (see `app/api/watermark/[...path]/route.ts`).
+source (see `src/app/api/watermark/[...path]/route.ts`).
 
 ---
 
@@ -529,7 +529,7 @@ Two things gate indexing per event: the photographer must opt in
 (`events.ai_matching_enabled`) and the event must not be flagged
 `contains_minors`. Each event gets its own Rekognition collection, named
 `${REKOGNITION_COLLECTION_PREFIX}-${env}-event-${eventId}`
-(`lib/aws/collection-naming.ts`).
+(`src/lib/aws/collection-naming.ts`).
 
 **Indexing (photographer side).** A new photo emits a `photo.uploaded` Inngest
 event, which two functions consume in parallel:
@@ -538,7 +538,7 @@ event, which two functions consume in parallel:
 flowchart TB
   Upload["Photo uploaded<br/>(server action)"] -->|emit photo.uploaded| Inngest["Inngest"]
 
-  Inngest --> Index["indexPhotoFaces<br/>lib/inngest/functions/index-photo-faces.ts"]
+  Inngest --> Index["indexPhotoFaces<br/>src/lib/inngest/functions/index-photo-faces.ts"]
   Inngest --> Thumbs["generatePhotoThumbnails<br/>WebP 400px + 800px → Storage"]
 
   Index -->|download original| Storage[("Supabase Storage")]
@@ -554,11 +554,11 @@ collection, reset statuses, re-emit `photo.uploaded` per photo); disabling
 triggers `disableEventIndexing` (delete collection + `photo_faces`); deleting an
 event triggers `cleanupOnEventDelete` (hard-delete the AWS collection even
 though the event is soft-deleted, to save cost). All functions are registered at
-`app/api/inngest/route.ts`.
+`src/app/api/inngest/route.ts`.
 
 **Search (talent side).** `searchFacesInEvent`
-(`app/[lang]/events/[shareCode]/actions.ts`, surfaced by
-`components/event-gallery-with-face-search.tsx` → `FaceSearchModal`):
+(`src/app/[lang]/events/[shareCode]/actions.ts`, surfaced by
+`src/components/event-gallery-with-face-search.tsx` → `FaceSearchModal`):
 
 ```mermaid
 sequenceDiagram
@@ -579,19 +579,19 @@ sequenceDiagram
 ```
 
 Every AWS / Sharp / Storage call in both flows is wrapped in `safeCall`
-(`lib/safe-call.ts`), which strips the original error so image buffers can't
+(`src/lib/safe-call.ts`), which strips the original error so image buffers can't
 leak into Inngest's step-output record or a serverless error response.
 
 Status snapshot:
 
 | Concern | State |
 |---|---|
-| Feature flag | `AI_MATCHING: true` in `lib/feature-flags.ts` (re-checked server-side in `searchFacesInEvent`) |
-| Provider | AWS Rekognition collections — `IndexFaces` / `SearchFacesByImage` / `CreateCollection` / `DeleteFaces` / `DeleteCollection` (`lib/aws/`) |
+| Feature flag | `AI_MATCHING: true` in `src/lib/feature-flags.ts` (re-checked server-side in `searchFacesInEvent`) |
+| Provider | AWS Rekognition collections — `IndexFaces` / `SearchFacesByImage` / `CreateCollection` / `DeleteFaces` / `DeleteCollection` (`src/lib/aws/`) |
 | Background runner | Inngest — `indexPhotoFaces`, `generatePhotoThumbnails`, `backfillEventIndexing`, `disableEventIndexing`, `cleanupOnEventDelete` + storage-cleanup jobs |
 | DB footprint | `photo_faces` (face IDs), `events.rekognition_*` / `ai_matching_status`, `photos.face_index_status` / `thumbnail_status` |
 | Selfie storage | None — ephemeral per search |
-| Rate limits | Monthly quota by plan (free 3 / starter 20 / pro unlimited, `lib/ai/rate-limits.ts`) + per-`(shareCode, IP)` 10/hour |
+| Rate limits | Monthly quota by plan (free 3 / starter 20 / pro unlimited, `src/lib/ai/rate-limits.ts`) + per-`(shareCode, IP)` 10/hour |
 | Compliance gate | `events.contains_minors` blocks indexing and search |
 
 ---
@@ -612,7 +612,7 @@ Status snapshot:
 | **AWS Rekognition** | `@aws-sdk/client-rekognition` | Face indexing/search for AI photo matching (per-event collections) |
 | **Inngest** | — | Background-job runner (face indexing, thumbnails, storage cleanup) served at `/api/inngest` |
 | **Sharp** | 0.34 | Server-side watermarking, thumbnail generation + magic-byte image validation |
-| **Tailwind CSS** | v4 | Styling (CSS-first config in `app/globals.css`) |
+| **Tailwind CSS** | v4 | Styling (CSS-first config in `src/app/globals.css`) |
 | **shadcn/ui** | New York style + Radix primitives | Component library — do not introduce alternatives |
 | **TanStack React Query** | 5 | Client-side data fetching/cache (cart count, AI search availability) |
 | **TanStack React Form** | 1.x | Form state |

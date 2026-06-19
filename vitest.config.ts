@@ -33,11 +33,11 @@ export default defineConfig({
       // Files measured for coverage. Exclude obvious noise so the percentage
       // reflects code that's worth testing.
       include: [
-        'app/**/*.{ts,tsx}',
-        'lib/**/*.{ts,tsx}',
-        'database/queries/**/*.ts',
-        'components/photo-gallery/**/*.{ts,tsx}',
-        'components/lightbox-action-bar.tsx',
+        'src/app/**/*.{ts,tsx}',
+        'src/lib/**/*.{ts,tsx}',
+        'src/database/queries/**/*.ts',
+        'src/components/photo-gallery/**/*.{ts,tsx}',
+        'src/components/lightbox-action-bar.tsx',
       ],
       exclude: [
         '**/*.d.ts',
@@ -48,10 +48,10 @@ export default defineConfig({
         '**/loading.tsx',
         '**/not-found.tsx',
         '**/error.tsx',
-        'app/**/page.tsx',
-        'app/**/layout.tsx',
+        'src/app/**/page.tsx',
+        'src/app/**/layout.tsx',
         // Re-exports
-        'database/queries/index.ts',
+        'src/database/queries/index.ts',
       ],
       // Target floor — NOT enforced yet. The thresholds block is omitted on
       // purpose so coverage is reported but the build doesn't fail. Once we

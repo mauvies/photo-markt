@@ -5,14 +5,14 @@
  * Run: `pnpm watermark:gen`
  *
  * Tune the look by editing DEFAULT_WATERMARK_TILE_CONFIG in
- * `lib/watermark-tile.ts` (or pass overrides below), then re-run and commit
+ * `src/lib/watermark-tile.ts` (or pass overrides below), then re-run and commit
  * the regenerated PNG. Runtime never regenerates — it only composites this
- * raster (see lib/watermark-tile.ts for why).
+ * raster (see src/lib/watermark-tile.ts for why).
  */
 import { writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { generateWatermarkTile } from '../lib/watermark-tile';
+import { generateWatermarkTile } from '../src/lib/watermark-tile';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outPath = resolve(here, '../public/watermark/watermark-tile.png');
