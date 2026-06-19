@@ -1,7 +1,7 @@
 # T-009 · Mejorar UX del Lightbox (header, flechas y transición de swipe en mobile)
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `feat/lightbox-mobile-ux`
 - **OpenSpec change:** —  (cambio acotado a 1 componente; si la transición crece, evaluar)

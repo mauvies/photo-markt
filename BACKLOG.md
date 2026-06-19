@@ -14,7 +14,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 16 | P3 | T-009 | Mejorar UX del Lightbox (header, flechas, transición swipe en mobile) | — | todo |
+| 16 | P3 | T-009 | Mejorar UX del Lightbox (header, flechas, transición swipe en mobile) | — | doing |
 | 17 | P3 | T-017 | Íconos (lápiz/basura) en el dropdown de acciones de eventos del fotógrafo | — | todo |
 | 18 | P3 | T-019 | Reorganizar la raíz del repo (mover código fuente a `src/`) | — | todo |
 | 19 | P3 | T-020 | Renombrar "picdemi" → "photo-markt" en el repo (claves localStorage + dir local) | — | todo |

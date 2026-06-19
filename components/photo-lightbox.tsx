@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { LightboxActionLabels } from '@/components/lightbox-action-bar';
 import { LightboxToolbar } from '@/components/lightbox-toolbar';
-import { getLightboxWindow } from '@/components/photo-lightbox-window';
+import { getLightboxWindow, slideOffset } from '@/components/photo-lightbox-window';
 import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
 
 // Radius of the preload window around the current photo — the current image
@@ -412,8 +412,6 @@ export function PhotoLightbox({
       <LightboxToolbar
         visible={controlsVisible}
         currentPhoto={currentPhoto}
-        itemCount={items.length}
-        currentIndex={currentIndex}
         isFullscreen={isFullscreen}
         isInMyPhotos={isInMyPhotos}
         isInCart={isInCart}
@@ -460,7 +458,7 @@ export function PhotoLightbox({
               e.stopPropagation();
               handlePrevious();
             }}
-            className={`absolute left-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition-opacity duration-200 hover:bg-white/15 md:left-8 cursor-pointer ${
+            className={`absolute left-4 z-20 hidden h-14 w-14 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition-opacity duration-200 hover:bg-white/15 md:left-8 md:flex cursor-pointer ${
               controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
             }`}
             aria-label="Previous photo"
@@ -470,23 +468,26 @@ export function PhotoLightbox({
         )}
 
         {/* Image stack — the current photo plus its ±PRELOAD_RADIUS window,
-            all kept mounted. Neighbours render at opacity-0 so the browser
-            fetches the exact same optimized variant ahead of navigation;
-            switching photos is then just an opacity change. */}
+            all kept mounted and eagerly fetched. Each slide is translated to
+            its slot (current at 0, neighbours just off-screen left/right) and
+            transitions transform, so navigation slides the incoming photo in
+            attached to the outgoing one (carousel feel) instead of an abrupt
+            swap. Off-screen slides are clipped by the container's overflow.
+            ponytail: transform-snap on release, not finger-drag-follow —
+            upgrade to scroll-snap if drag-tracking is wanted. */}
         <div className="relative w-full h-full" style={{ minHeight: 0 }}>
           {windowIndices.map((i) => {
             const item = items[i];
             if (!item) return null;
-            const isCurrent = i === currentIndex;
+            const offset = slideOffset(i, currentIndex, items.length);
             return (
               <Image
                 key={item.id}
                 src={item.thumbMedium ?? item.url}
                 alt={item.alt || 'Photo'}
                 fill
-                className={`object-contain pointer-events-none transition-opacity duration-150 ${
-                  isCurrent ? 'opacity-100' : 'opacity-0'
-                }`}
+                className="object-contain pointer-events-none transition-transform duration-300 ease-out"
+                style={{ transform: `translateX(${offset * 100}%)` }}
                 loading="eager"
                 sizes="100vw"
                 draggable={false}
@@ -515,7 +516,7 @@ export function PhotoLightbox({
               e.stopPropagation();
               handleNext();
             }}
-            className={`absolute right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition-opacity duration-200 hover:bg-white/15 md:right-8 cursor-pointer ${
+            className={`absolute right-4 z-20 hidden h-14 w-14 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition-opacity duration-200 hover:bg-white/15 md:right-8 md:flex cursor-pointer ${
               controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
             }`}
             aria-label="Next photo"
