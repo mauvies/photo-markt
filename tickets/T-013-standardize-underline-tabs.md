@@ -1,11 +1,11 @@
 # T-013 · Estandarizar el diseño de tabs (underline) en toda la app
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/standardize-underline-tabs`
 - **OpenSpec change:** —  (refactor de UI transversal; si crece mucho, evaluar propose)
-- **PR:** —
+- **PR:** #73
 
 ## Requerimiento
 La página de configuración del dashboard de talento usa un estilo de tabs que no gusta. Adoptar en
