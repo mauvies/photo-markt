@@ -14,13 +14,12 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-024 | Banner de consentimiento de cookies (GDPR) — gatea analytics | T-023 (PR #80) | doing |
-| 2 | P2 | T-026 | Checklist de go-live + docs de despliegue a producción | — | todo |
-| 3 | P3 | T-025 | Health check endpoint (`/api/health`) | — | todo |
+| 1 | P2 | T-026 | Checklist de go-live + docs de despliegue a producción | — | todo |
+| 2 | P3 | T-025 | Health check endpoint (`/api/health`) | — | todo |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
 ### Clusters (tocan el mismo código — ejecutar contiguos y en orden)
-- **Producción / lanzamiento (T-024…T-026):** ejecutar en el orden de la tabla. **T-024 gatea analytics tras consentimiento y toca `layout.tsx` + `WebAnalytics` (de T-023) → mergear PR #80 antes de arrancar T-024** para no chocar en `layout.tsx`. T-024 también toca `en.json`/`es.json`. T-025 (health) y T-026 (docs) son independientes y pueden intercalarse. (Hechos: T-021 Términos — PR #78; T-022 Sentry — PR #79; T-023 Analytics — PR #80.)
+- **Producción / lanzamiento (T-025, T-026):** lo que queda son dos tickets independientes entre sí: T-026 (docs de go-live) y T-025 (health endpoint). Sin dependencias de código compartido. (Hechos: T-021 Términos — PR #78; T-022 Sentry — PR #79; T-023 Analytics — PR #80; T-024 Cookies — PR #81.)
 - **Galería del evento (mobile):** T-007 → T-010 → T-008. T-007 reestructura la toolbar; los otros dos dependen de esa base.
 - **Header / nav:** T-002 → T-003 → T-006. T-003 reusa el borde de T-002; T-006 oculta el header en mobile (coordinar con T-003).
 - **Tabs:** T-004 (arregla el salto) → T-013 (restila todos los tabs, incluidos los de eventos destacados).
@@ -52,6 +51,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 - **T-021** · Términos de Servicio: contenido real production-ready + i18n (es+en) — PR #78
 - **T-022** · Monitoreo de errores con Sentry (gated por DSN, no-op sin DSN, PII off) — PR #79
 - **T-023** · Vercel Web Analytics + Speed Insights (wrapper `WebAnalytics` en layout) — PR #80
+- **T-024** · Banner de consentimiento de cookies (GDPR) que gatea analytics; preferencias en footer — PR #81
 
 <!-- Los tickets completados se mueven aquí con su nº de PR. -->
 

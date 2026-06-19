@@ -1,11 +1,11 @@
 # T-024 · Banner de consentimiento de cookies (GDPR)
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno (Dep lógico: T-023 ya mergeado)
 - **Rama:** `feat/cookie-consent-banner`
 - **OpenSpec change:** —  (UI + i18n acotado)
-- **PR:** —
+- **PR:** #81
 
 ## Requerimiento
 Parte de «preparar la app para producción». No hay banner de consentimiento de cookies. Para el mercado
