@@ -1,11 +1,11 @@
 # T-021 · Completar y dejar lista para producción la página de Términos de Servicio
 
 - **Prioridad:** P1
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/terms-page-i18n-production`
 - **OpenSpec change:** —  (contenido + i18n acotado, mismo patrón que T-016)
-- **PR:** —
+- **PR:** #78
 
 ## Requerimiento
 Parte de «preparar la app para producción». La página pública `/terms` hoy es solo un placeholder
