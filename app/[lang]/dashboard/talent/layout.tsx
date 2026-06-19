@@ -42,7 +42,12 @@ export default async function TalentLayout({ children }: { children: React.React
   };
 
   return (
-    <div className="flex min-h-svh flex-col">
+    // On mobile the header is hidden (its cart moves to the bottom nav) to free
+    // vertical space, so the in-dashboard sticky toolbars must offset by 0
+    // instead of the header height. Scoping --header-height here cascades that
+    // to every sticky toolbar in the talent dashboard without touching each one;
+    // public pages keep the global value.
+    <div className="flex min-h-svh flex-col [--header-height:0px] md:[--header-height:4.5rem]">
       <TalentDashboardHeader
         user={sidebarUser}
         activeRole={activeRole}
@@ -62,6 +67,7 @@ export default async function TalentLayout({ children }: { children: React.React
           rolePhotographer: dict.photographerDashboard.rolePhotographer,
           roleTalent: dict.talentDashboard.talentRole,
           account: dict.dashboard.account,
+          cart: dict.nav.cart,
         }}
       />
       <div className="mx-auto w-full max-w-screen-2xl flex flex-1 flex-col gap-6 px-3 py-6 pb-20 md:p-6">

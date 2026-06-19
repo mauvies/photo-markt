@@ -1,6 +1,6 @@
 'use client';
 
-import { Package, Search, ShoppingBag, User } from 'lucide-react';
+import { Package, Search, ShoppingBag, ShoppingCart, User } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -8,6 +8,7 @@ import { BottomNav } from '@/components/bottom-nav';
 import { BottomNavAccount } from '@/components/bottom-nav-account';
 import { CartLinkButton } from '@/components/cart-link-button';
 import { DashboardUserMenu } from '@/components/dashboard-user-menu';
+import { useCartItemCount } from '@/hooks/use-cart-item-count';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { RoleSlug } from '@/lib/roles';
 import { cn } from '@/lib/utils';
@@ -43,11 +44,14 @@ export function TalentDashboardHeader({
     roleTalent: string;
     /** Label under the avatar in the mobile bottom nav. */
     account: string;
+    /** Label for the cart tab in the mobile bottom nav. */
+    cart: string;
   };
 }) {
   const pathname = usePathname();
   const lp = useLocalizedPath();
   const pathWithoutLang = pathname.replace(/^\/(es|en)/, '') || '/';
+  const cartCount = useCartItemCount();
 
   const talentNavLinks = [
     { href: '/dashboard/talent/events', label: navLabels.explore, icon: Search },
@@ -62,7 +66,10 @@ export function TalentDashboardHeader({
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur supports-backdrop-filter:bg-background/80">
+      {/* Mobile drops the header entirely — the cart moves to the bottom nav
+          and the account avatar already lives there, so the only loss is the
+          logo. Freeing the 4.5rem bar gives mobile content more vertical room. */}
+      <header className="sticky top-0 z-50 hidden w-full border-b bg-background/80 backdrop-blur supports-backdrop-filter:bg-background/80 md:block">
         <div className="mx-auto flex h-(--header-height) max-w-screen-2xl items-center justify-between px-4 md:px-6">
           {/* Left: Logo */}
           <Link href={lp('/')} className="flex shrink-0 items-center gap-2">
@@ -126,11 +133,26 @@ export function TalentDashboardHeader({
       </header>
 
       {/* Mobile bottom nav: the "Profile" link is dropped here — the profile
-          page is reachable from the avatar account dropdown instead. */}
+          page is reachable from the avatar account dropdown instead. The cart
+          (a header icon on desktop) becomes a tab here, with its item-count
+          badge, since the header is hidden on mobile. */}
       <BottomNav
-        items={talentNavLinks
-          .filter((item) => item.href !== '/dashboard/talent/profile')
-          .map((item) => ({ ...item, href: lp(item.href) }))}
+        items={[
+          ...talentNavLinks
+            .filter((item) => item.href !== '/dashboard/talent/profile')
+            .map((item) => ({ ...item, href: lp(item.href) })),
+          {
+            href: lp('/dashboard/talent/cart'),
+            label: navLabels.cart,
+            icon: ShoppingCart,
+            badge:
+              cartCount > 0 ? (
+                <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                  {cartCount > 99 ? '99+' : cartCount}
+                </span>
+              ) : undefined,
+          },
+        ]}
         account={
           <BottomNavAccount
             user={user}

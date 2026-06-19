@@ -13,6 +13,9 @@ export interface BottomNavItem {
   exact?: boolean;
   /** Override the default active detection. */
   isActive?: (pathname: string) => boolean;
+  /** Optional overlay on the icon — e.g. the cart item-count bubble. The node
+   * positions itself (absolute) over the icon. */
+  badge?: ReactNode;
 }
 
 export function BottomNav({
@@ -47,13 +50,16 @@ export function BottomNav({
               active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground/70',
             )}
           >
-            <item.icon
-              className={cn(
-                'h-5 w-5 shrink-0 transition-all duration-150',
-                active ? 'stroke-[2.5]' : 'stroke-[1.5]',
-              )}
-              aria-hidden="true"
-            />
+            <span className="relative">
+              <item.icon
+                className={cn(
+                  'h-5 w-5 shrink-0 transition-all duration-150',
+                  active ? 'stroke-[2.5]' : 'stroke-[1.5]',
+                )}
+                aria-hidden="true"
+              />
+              {item.badge}
+            </span>
             <span
               className={cn('text-[11px] leading-none tracking-tight', active && 'font-semibold')}
             >
