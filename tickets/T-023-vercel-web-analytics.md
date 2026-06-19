@@ -1,11 +1,11 @@
 # T-023 · Analytics de producto con Vercel Web Analytics
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/vercel-web-analytics`
 - **OpenSpec change:** —  (integración mínima)
-- **PR:** —
+- **PR:** #80
 
 ## Requerimiento
 Parte de «preparar la app para producción». Hoy **no hay analytics**: sin visibilidad de tráfico ni de embudo.
