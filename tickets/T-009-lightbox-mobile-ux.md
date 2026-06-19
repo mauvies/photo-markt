@@ -1,11 +1,11 @@
 # T-009 · Mejorar UX del Lightbox (header, flechas y transición de swipe en mobile)
 
 - **Prioridad:** P3
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/lightbox-mobile-ux`
 - **OpenSpec change:** —  (cambio acotado a 1 componente; si la transición crece, evaluar)
-- **PR:** —
+- **PR:** #74
 
 ## Requerimiento
 Mejoras en el componente Lightbox (`components/photo-lightbox.tsx`) al abrir una foto desde la galería:
