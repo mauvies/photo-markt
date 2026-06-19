@@ -14,7 +14,6 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 19 | P3 | T-020 | Renombrar "picdemi" → "photo-markt" en el repo (claves localStorage + dir local) | — | todo |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
 ### Clusters (tocan el mismo código — ejecutar contiguos y en orden)
@@ -45,6 +44,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 - **T-009** · Lightbox: transición carrusel (slide), sin contador, flechas solo desktop (swipe en mobile) — PR #74
 - **T-017** · Íconos lápiz/basura en el dropdown de acciones de tarjetas de evento (fotógrafo) — PR #75
 - **T-019** · Mover código fuente a `src/` (convención Next); raíz solo configs/docs/public/test — PR #76
+- **T-020** · Renombrar claves localStorage del wizard `picdemi_` → `photo-markt_` (dir local: manual) — PR #77
 
 <!-- Los tickets completados se mueven aquí con su nº de PR. -->
 
