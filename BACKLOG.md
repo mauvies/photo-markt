@@ -14,7 +14,6 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 9 | P2 | T-011 | Secuencia + identificador editable para fotos de un evento (DB + UI, OpenSpec) | — | todo |
 | 10 | P3 | T-010 | Limpiar acciones de la barra de modo selección (quitar descargar/compartir) | tras T-007 | todo |
 | 11 | P3 | T-008 | Galería del evento full-width en mobile (quitar/reducir padding-x) | tras T-007 | todo |
 | 12 | P3 | T-002 | Pulir diseño del language toggler dropdown (bordes, banderas más pequeñas) | — | todo |
@@ -44,5 +43,6 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 - **T-016** · Privacy policy pública escrita y traducida (es+en) — PR #63
 - **T-007** · Toolbar de galería sticky única en mobile (sin salto) + favorito reubicado — PR #64
 - **T-018** · Features detalladas por plan en facturación (fuente única i18n compartida) — PR #65
+- **T-011** · Código de foto por evento: secuencia auto + label editable (DB+UI, OpenSpec) — PR #66
 
 <!-- Los tickets completados se mueven aquí con su nº de PR. -->

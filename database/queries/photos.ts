@@ -54,6 +54,11 @@ export interface PhotoDetail {
   width: number | null;
   height: number | null;
   thumbnail_status?: ThumbnailStatus;
+  /** Auto-assigned, stable per-event code. Photographer-only — selected on the
+   * owner path, omitted from public/talent queries. */
+  sequence?: number | null;
+  /** Optional photographer override for the code; null = use `sequence`. */
+  label?: string | null;
 }
 
 /**
@@ -220,7 +225,7 @@ export async function getEventPhotos(
   let query = supabase
     .from('photos')
     .select(
-      'id, original_url, taken_at, city, country, uploaded_by, guest_name, guest_email, upload_status, width, height, thumbnail_status',
+      'id, original_url, taken_at, city, country, uploaded_by, guest_name, guest_email, upload_status, width, height, thumbnail_status, sequence, label',
     )
     .eq('event_id', eventId);
 
@@ -572,6 +577,30 @@ export async function updatePhotoUploadStatus(
 
   if (error) {
     throw new Error(`Failed to update photo upload status: ${getErrorMessage(error)}`);
+  }
+}
+
+/**
+ * Set or clear a photo's editable code label. Owner-scoped (`user_id` +
+ * `event_id`) so a non-owner update matches zero rows. Pass `null` to clear the
+ * override and fall back to the sequence number.
+ */
+export async function updatePhotoLabel(
+  supabase: SupabaseServerClient,
+  photoId: string,
+  eventId: string,
+  userId: string,
+  label: string | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from('photos')
+    .update({ label })
+    .eq('id', photoId)
+    .eq('event_id', eventId)
+    .eq('user_id', userId);
+
+  if (error) {
+    throw new Error(`Failed to update photo label: ${getErrorMessage(error)}`);
   }
 }
 

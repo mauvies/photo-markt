@@ -1,11 +1,11 @@
 # T-011 · Secuencia + identificador editable para fotos de un evento
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/photo-sequence-editable-id`
 - **OpenSpec change:** **sí — usar `/opsx:propose`** (toca DB + queries + UI; alcance amplio)
-- **PR:** —
+- **PR:** #66
 
 ## Requerimiento
 Poder identificar cada foto de un evento siguiendo una lógica conocida (numeración/nombre con orden), y
