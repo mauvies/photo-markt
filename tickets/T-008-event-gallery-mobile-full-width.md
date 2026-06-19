@@ -1,11 +1,11 @@
 # T-008 · Galería del evento full-width en mobile (quitar/reducir padding-x)
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/event-gallery-mobile-full-width`
 - **OpenSpec change:** —  (cambio de estilo acotado)
-- **PR:** —
+- **PR:** #69
 
 ## Requerimiento
 En la página de un evento, sección de la galería de fotos, en **mobile**: quitar el padding horizontal
