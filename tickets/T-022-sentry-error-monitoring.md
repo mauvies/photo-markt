@@ -1,11 +1,11 @@
 # T-022 · Monitoreo de errores en producción con Sentry
 
 - **Prioridad:** P1
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/sentry-error-monitoring`
 - **OpenSpec change:** —  (integración acotada; sin BD/pagos)
-- **PR:** —
+- **PR:** #79
 
 ## Requerimiento
 Parte de «preparar la app para producción». Hoy **no hay monitoreo de errores**: en producción las excepciones

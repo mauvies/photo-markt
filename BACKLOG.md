@@ -14,15 +14,14 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-022 | Monitoreo de errores con Sentry (gated por DSN) | — | doing |
-| 2 | P2 | T-023 | Vercel Web Analytics (pageviews/visitas base) | — | todo |
-| 3 | P2 | T-024 | Banner de consentimiento de cookies (GDPR) — gatea analytics | T-023 | todo |
-| 4 | P2 | T-026 | Checklist de go-live + docs de despliegue a producción | — | todo |
-| 5 | P3 | T-025 | Health check endpoint (`/api/health`) | — | todo |
+| 1 | P2 | T-023 | Vercel Web Analytics (pageviews/visitas base) | — | todo |
+| 2 | P2 | T-024 | Banner de consentimiento de cookies (GDPR) — gatea analytics | T-023 | todo |
+| 3 | P2 | T-026 | Checklist de go-live + docs de despliegue a producción | — | todo |
+| 4 | P3 | T-025 | Health check endpoint (`/api/health`) | — | todo |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
 ### Clusters (tocan el mismo código — ejecutar contiguos y en orden)
-- **Producción / lanzamiento (T-022…T-026):** ejecutar en el orden de la tabla. T-024 va **después** de T-023 (gatea la carga de analytics). T-023 y T-024 tocan `layout.tsx`, y T-024 toca `en.json`/`es.json` → en serie con merge previo no hay conflicto. T-022 (Sentry), T-025 (health) y T-026 (docs) son independientes y pueden intercalarse. (T-021 Términos de Servicio ya hecho — PR #78.)
+- **Producción / lanzamiento (T-023…T-026):** ejecutar en el orden de la tabla. T-024 va **después** de T-023 (gatea la carga de analytics). T-023 y T-024 tocan `layout.tsx`, y T-024 toca `en.json`/`es.json` → en serie con merge previo no hay conflicto. T-025 (health) y T-026 (docs) son independientes y pueden intercalarse. (Hechos: T-021 Términos — PR #78; T-022 Sentry — PR #79.)
 - **Galería del evento (mobile):** T-007 → T-010 → T-008. T-007 reestructura la toolbar; los otros dos dependen de esa base.
 - **Header / nav:** T-002 → T-003 → T-006. T-003 reusa el borde de T-002; T-006 oculta el header en mobile (coordinar con T-003).
 - **Tabs:** T-004 (arregla el salto) → T-013 (restila todos los tabs, incluidos los de eventos destacados).
@@ -52,6 +51,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 - **T-019** · Mover código fuente a `src/` (convención Next); raíz solo configs/docs/public/test — PR #76
 - **T-020** · Renombrar claves localStorage del wizard `picdemi_` → `photo-markt_` (dir local: manual) — PR #77
 - **T-021** · Términos de Servicio: contenido real production-ready + i18n (es+en) — PR #78
+- **T-022** · Monitoreo de errores con Sentry (gated por DSN, no-op sin DSN, PII off) — PR #79
 
 <!-- Los tickets completados se mueven aquí con su nº de PR. -->
 
