@@ -34,6 +34,11 @@ export const env = createEnv({
     // SIGNING_KEY verifies inbound webhook payloads to /api/inngest.
     INNGEST_EVENT_KEY: z.string().min(1),
     INNGEST_SIGNING_KEY: z.string().min(1),
+    // Sentry error monitoring (optional). Without a DSN the SDK is a no-op, so
+    // the app boots fine locally and in CI without these set. SENTRY_ORG/
+    // SENTRY_PROJECT/SENTRY_AUTH_TOKEN are read directly by withSentryConfig at
+    // build time and are not validated here.
+    SENTRY_DSN: z.string().optional(),
   },
   /*
    * Environment variables available on the client (and server).
@@ -47,6 +52,8 @@ export const env = createEnv({
     NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
     // Optional: if absent the LocationAutocomplete component falls back to mock suggestions
     NEXT_PUBLIC_GOOGLE_PLACES_API_KEY: z.string().optional(),
+    // Optional Sentry browser DSN. Without it client-side error capture is a no-op.
+    NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
   },
   /*
    * Due to how Next.js bundles environment variables on Edge and Client,
@@ -77,5 +84,7 @@ export const env = createEnv({
     REKOGNITION_COLLECTION_PREFIX: process.env.REKOGNITION_COLLECTION_PREFIX,
     INNGEST_EVENT_KEY: process.env.INNGEST_EVENT_KEY,
     INNGEST_SIGNING_KEY: process.env.INNGEST_SIGNING_KEY,
+    SENTRY_DSN: process.env.SENTRY_DSN,
+    NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
   },
 });

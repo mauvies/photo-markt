@@ -1,3 +1,4 @@
+import { withSentryConfig } from '@sentry/nextjs';
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
@@ -120,4 +121,19 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Wrap with Sentry for source-map upload and server/edge instrumentation. The
+// runtime SDK is gated on the DSN (see src/lib/observability/sentry.ts); this
+// wrapper only affects the build. Source maps upload only when SENTRY_AUTH_TOKEN
+// is set, so token-less builds (e.g. Vercel Hobby without secrets) never fail.
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  // Quiet the Sentry build plugin unless we're in CI.
+  silent: !process.env.CI,
+  widenClientFileUpload: true,
+  sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
+  // Proxy Sentry requests through our own origin to dodge ad-blockers.
+  tunnelRoute: '/monitoring',
+  disableLogger: true,
+});
