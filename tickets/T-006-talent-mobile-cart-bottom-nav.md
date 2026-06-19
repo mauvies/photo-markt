@@ -1,11 +1,11 @@
 # T-006 · Mover el carrito a la bottom nav del dashboard de talento (mobile)
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/talent-mobile-cart-tab`
 - **OpenSpec change:** —  (cambio de UI acotado)
-- **PR:** —
+- **PR:** #72
 
 ## Requerimiento
 En el dashboard de talento en **mobile**, el header (logo izq. + carrito der.) ocupa espacio que podría

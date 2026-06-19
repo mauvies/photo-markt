@@ -1,27 +1,14 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
 import { ShoppingCart } from 'lucide-react';
 import Link from 'next/link';
-import { getCartItemCountAction } from '@/app/[lang]/dashboard/talent/cart/actions';
 import { useGuestCart } from '@/components/guest-cart-provider';
 import { Button } from '@/components/ui/button';
+import { useCartItemCount } from '@/hooks/use-cart-item-count';
 import { cn } from '@/lib/utils';
 
 function AuthCartLinkButton() {
-  const { data: cartItemCount = 0 } = useQuery({
-    queryKey: ['cart-count'] as const,
-    queryFn: async () => {
-      try {
-        return await getCartItemCountAction();
-      } catch {
-        return 0;
-      }
-    },
-    staleTime: 30 * 1000,
-    refetchOnWindowFocus: true,
-  });
-
+  const cartItemCount = useCartItemCount();
   return <CartIconButton href="/dashboard/talent/cart" count={cartItemCount} />;
 }
 
