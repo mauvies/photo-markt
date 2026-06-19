@@ -64,7 +64,7 @@ function LanguageSwitcherDropdown() {
           {currentLang}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" className="rounded-xl p-1.5">
         {locales.map((lang) => {
           const isActive = lang === currentLang;
           return (
@@ -72,9 +72,14 @@ function LanguageSwitcherDropdown() {
               <a
                 href={buildHref(lang)}
                 aria-current={isActive ? 'true' : undefined}
-                className={cn('flex items-center gap-2 pr-2', isActive && 'bg-accent font-medium')}
+                className={cn(
+                  'flex items-center gap-2 rounded-lg pr-2',
+                  isActive && 'bg-accent font-medium',
+                )}
               >
-                <span aria-hidden="true">{flags[lang]}</span>
+                <span aria-hidden="true" className="text-xs leading-none">
+                  {flags[lang]}
+                </span>
                 <span>{labels[lang]}</span>
                 <Check
                   className={cn('ml-auto size-4', isActive ? 'opacity-100' : 'opacity-0')}
