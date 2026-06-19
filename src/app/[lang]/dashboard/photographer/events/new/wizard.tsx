@@ -29,12 +29,12 @@ type NewEventT = Dictionary['newEvent'];
 // resurfacing weeks later). Renamed from the previous localStorage key so
 // stale localStorage entries (from earlier hotfix layers) don't get
 // mistakenly re-read.
-const DRAFT_KEY = 'picdemi_event_wizard_draft';
+const DRAFT_KEY = 'photo-markt_event_wizard_draft';
 // Side-channel flag: set when the user picks at least one photo. We don't
 // store the photos themselves (File objects can't be serialized), but knowing
 // that they *had* selected something lets us distinguish a fresh arrival on
 // step 3 (no banner) from a refresh that wiped the in-memory File[] (banner).
-const HAD_FILES_KEY = 'picdemi_event_wizard_had_files';
+const HAD_FILES_KEY = 'photo-markt_event_wizard_had_files';
 
 const STEP_FIELDS: Record<StepNumber, Array<keyof FormValues>> = {
   1: [],

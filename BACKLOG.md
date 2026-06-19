@@ -14,7 +14,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 19 | P3 | T-020 | Renombrar "picdemi" → "photo-markt" en el repo (claves localStorage + dir local) | — | todo |
+| 19 | P3 | T-020 | Renombrar "picdemi" → "photo-markt" en el repo (claves localStorage + dir local) | — | doing |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
 ### Clusters (tocan el mismo código — ejecutar contiguos y en orden)

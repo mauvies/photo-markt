@@ -1,7 +1,7 @@
 # T-020 · Renombrar "picdemi" → "photo-markt" en todo el repo
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `chore/rename-picdemi-to-photo-markt`
 - **OpenSpec change:** — (rename mecánico, sin diseño que capturar)
