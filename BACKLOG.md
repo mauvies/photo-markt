@@ -21,6 +21,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 | 15 | P3 | T-013 | Estandarizar el diseño de tabs (underline) en toda la app | tras T-004 | todo |
 | 16 | P3 | T-009 | Mejorar UX del Lightbox (header, flechas, transición swipe en mobile) | — | todo |
 | 17 | P3 | T-017 | Íconos (lápiz/basura) en el dropdown de acciones de eventos del fotógrafo | — | todo |
+| 18 | P3 | T-019 | Reorganizar la raíz del repo (mover código fuente a `src/`) | — | todo |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
 ### Clusters (tocan el mismo código — ejecutar contiguos y en orden)
@@ -28,7 +29,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 - **Header / nav:** T-002 → T-003 → T-006. T-003 reusa el borde de T-002; T-006 oculta el header en mobile (coordinar con T-003).
 - **Tabs:** T-004 (arregla el salto) → T-013 (restila todos los tabs, incluidos los de eventos destacados).
 - **Páginas i18n/producción:** T-014 → T-015 → T-016. Comparten `en.json`/`es.json`; en serie evitan conflictos de diccionario.
-- **Independientes (sin cluster):** T-005, T-012, T-018, T-009, T-017. (T-018 reusa `pricing-section`/`lib/plans.ts`.)
+- **Independientes (sin cluster):** T-005, T-012, T-018, T-009, T-017, T-019. (T-018 reusa `pricing-section`/`lib/plans.ts`; T-019 es refactor de toda la raíz — ejecutar aislado, con el resto de la cola mergeada.)
 
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 

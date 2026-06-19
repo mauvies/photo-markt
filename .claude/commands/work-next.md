@@ -14,6 +14,8 @@ Flujo (no te saltes pasos):
 2. `git checkout main && git pull --ff-only`, luego crea la rama `<tipo>/<slug>` del ticket.
 3. **OpenSpec solo cuando lo amerita:** usa `/opsx:propose` → `/opsx:apply` si el ticket toca **base de datos/migraciones, auth/seguridad, pagos, o es genuinamente ambiguo** (hay diseño/spec que capturar antes). Para **UI, i18n y bug-fixes** con requerimiento claro, implementa directo aunque toque varios archivos — el ticket ya captura el "qué" y el PR draft es el punto de revisión. Mira el campo "OpenSpec change" del ticket.
 4. Añade un test que falle antes y pase después (regla de CLAUDE.md). Strings nuevos → `en.json` y `es.json`.
+   Si el ticket mueve/renombra rutas documentadas o cambia un patrón de arquitectura, actualiza
+   `CLAUDE.md`/`ARCHITECTURE.md` en el mismo PR (si no toca nada documentado, no los toques).
 5. `pnpm typecheck && pnpm lint && pnpm test`. Si algo falla, arréglalo antes de seguir.
 6. **Revisión IA solo en PRs riesgosos:** si el ticket tocó **pagos/auth/BD-migraciones/seguridad** (mismo criterio que OpenSpec en el paso 3), corre `/code-review` sobre el diff antes de commitear (`/code-review ultra` para pagos) y arregla los findings reales. Para **UI/i18n/bug-fixes**, sáltalo — la revisión humana en el merge del draft alcanza.
 7. Commit con Conventional Commits. **NUNCA** añadas el trailer `Co-Authored-By` (rompe el plan Vercel Hobby; un hook `PreToolUse` lo bloquea, pero igual no lo escribas).
