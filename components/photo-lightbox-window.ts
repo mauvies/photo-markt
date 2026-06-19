@@ -13,3 +13,16 @@ export function getLightboxWindow(currentIndex: number, total: number, radius: n
   }
   return [...indices];
 }
+
+/**
+ * Signed slide-slot offset of `index` relative to `currentIndex` for the
+ * carousel transform — `current * 100%` translateX. Returns the *shortest*
+ * circular distance so a wrap-around neighbour (e.g. the last photo when the
+ * first is shown) sits one slot to the left (-1), not `total-1` slots to the
+ * right. Used to slide neighbours in attached to the outgoing photo.
+ */
+export function slideOffset(index: number, currentIndex: number, total: number): number {
+  if (total <= 0) return 0;
+  const raw = (((index - currentIndex) % total) + total) % total;
+  return raw > total / 2 ? raw - total : raw;
+}

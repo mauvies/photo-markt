@@ -254,7 +254,7 @@ export function EventSearchBar({
 
   if (variant === 'hero') {
     return (
-      <div className={cn('w-full max-w-3xl', className)}>
+      <div className={cn('w-full max-w-3xl mt-3', className)}>
         <div className="md:hidden w-full flex justify-center items-center gap-2">
           <button
             type="button"

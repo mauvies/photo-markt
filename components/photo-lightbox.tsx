@@ -2,11 +2,11 @@
 
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import Image from 'next/image';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { LightboxActionLabels } from '@/components/lightbox-action-bar';
 import { LightboxToolbar } from '@/components/lightbox-toolbar';
-import { getLightboxWindow } from '@/components/photo-lightbox-window';
+import { getLightboxWindow, slideOffset } from '@/components/photo-lightbox-window';
 import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
 
 // Radius of the preload window around the current photo — the current image
@@ -236,39 +236,56 @@ export function PhotoLightbox({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [open, onClose, handlePrevious, handleNext]);
 
-  // Touch/swipe support
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  // Touch/swipe support. The drag is driven imperatively on `trackRef` (the
+  // slide track) so the finger moves the photo live at 60fps with zero React
+  // re-renders mid-gesture; React only kicks in on release to snap.
+  const trackRef = useRef<HTMLDivElement>(null);
+  const dragStartX = useRef<number | null>(null);
+  const dragDeltaX = useRef(0);
 
-  const minSwipeDistance = 50;
+  // Past this many px a horizontal drag commits to next/prev; below TAP_PX a
+  // release is treated as a tap (toggle controls), not a swipe.
+  const SWIPE_COMMIT_PX = 50;
+  const TAP_PX = 10;
 
   const onTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
+    dragStartX.current = e.touches[0].clientX;
+    dragDeltaX.current = 0;
+    // Disable the snap transition so the track follows the finger 1:1.
+    if (trackRef.current) trackRef.current.style.transition = 'none';
   };
 
   const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX);
+    if (dragStartX.current === null) return;
+    dragDeltaX.current = e.touches[0].clientX - dragStartX.current;
+    if (trackRef.current) {
+      trackRef.current.style.transform = `translateX(${dragDeltaX.current}px)`;
+    }
   };
 
   const onTouchEnd = (e: React.TouchEvent) => {
-    if (touchStart === null) return;
+    if (dragStartX.current === null) return;
+    const delta = dragDeltaX.current;
+    dragStartX.current = null;
 
-    const distance = touchEnd !== null ? touchStart - touchEnd : 0;
-    const isLeftSwipe = distance > minSwipeDistance;
-    const isRightSwipe = distance < -minSwipeDistance;
-
-    if (isLeftSwipe && items.length > 1) {
-      handleNext();
-      return;
+    // Restore the snap transition and animate the track back to rest. When we
+    // also advance the index, each slide's own transform animates by one slot;
+    // both tweens share duration/easing so the motion stays continuous from
+    // wherever the finger let go.
+    if (trackRef.current) {
+      trackRef.current.style.transition = '';
+      trackRef.current.style.transform = 'translateX(0px)';
     }
-    if (isRightSwipe && items.length > 1) {
-      handlePrevious();
+
+    if (Math.abs(delta) >= SWIPE_COMMIT_PX && items.length > 1) {
+      if (delta < 0) handleNext();
+      else handlePrevious();
       return;
     }
 
     // Tap (no significant movement) — toggle controls on touch devices,
     // unless the tap landed on an interactive control.
+    if (Math.abs(delta) >= TAP_PX) return; // small drag → just snapped back
     if (!isTouchDevice) return;
     const target = e.target as HTMLElement | null;
     if (target?.closest('button, a, [role="button"]')) return;
@@ -402,7 +419,10 @@ export function PhotoLightbox({
   return createPortal(
     <div
       className="fixed top-0 left-0 right-0 z-[100] flex flex-col bg-black"
-      style={{ height: '100dvh', width: '100vw' }}
+      // `left-0 right-0` spans the viewport exactly; an explicit `100vw` would
+      // include the (scroll-locked, hidden) scrollbar width and overflow a few
+      // px on the right. Height stays dvh for mobile browser chrome.
+      style={{ height: '100dvh' }}
       onClick={handleBackdropClick}
       onKeyDown={handleBackdropKeyDown}
       role="dialog"
@@ -412,8 +432,6 @@ export function PhotoLightbox({
       <LightboxToolbar
         visible={controlsVisible}
         currentPhoto={currentPhoto}
-        itemCount={items.length}
-        currentIndex={currentIndex}
         isFullscreen={isFullscreen}
         isInMyPhotos={isInMyPhotos}
         isInCart={isInCart}
@@ -460,7 +478,7 @@ export function PhotoLightbox({
               e.stopPropagation();
               handlePrevious();
             }}
-            className={`absolute left-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition-opacity duration-200 hover:bg-white/15 md:left-8 cursor-pointer ${
+            className={`absolute left-4 z-20 hidden h-14 w-14 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition-opacity duration-200 hover:bg-white/15 md:left-8 md:flex cursor-pointer ${
               controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
             }`}
             aria-label="Previous photo"
@@ -470,34 +488,41 @@ export function PhotoLightbox({
         )}
 
         {/* Image stack — the current photo plus its ±PRELOAD_RADIUS window,
-            all kept mounted. Neighbours render at opacity-0 so the browser
-            fetches the exact same optimized variant ahead of navigation;
-            switching photos is then just an opacity change. */}
+            all kept mounted and eagerly fetched. Each slide sits at its slot
+            (current at 0, neighbours just off-screen left/right). The track
+            wrapping them is dragged live by the finger (see onTouchMove), and
+            on release the slides' own transforms animate by one slot while the
+            track eases back to 0 — a continuous carousel slide. Off-screen
+            slides are clipped by the container's overflow. */}
         <div className="relative w-full h-full" style={{ minHeight: 0 }}>
-          {windowIndices.map((i) => {
-            const item = items[i];
-            if (!item) return null;
-            const isCurrent = i === currentIndex;
-            return (
-              <Image
-                key={item.id}
-                src={item.thumbMedium ?? item.url}
-                alt={item.alt || 'Photo'}
-                fill
-                className={`object-contain pointer-events-none transition-opacity duration-150 ${
-                  isCurrent ? 'opacity-100' : 'opacity-0'
-                }`}
-                loading="eager"
-                sizes="100vw"
-                draggable={false}
-                onLoad={() => markLoaded(item.id)}
-                unoptimized={
-                  (item.thumbMedium ?? item.url).includes('/api/') ||
-                  (item.thumbMedium ?? item.url).includes('localhost')
-                }
-              />
-            );
-          })}
+          <div
+            ref={trackRef}
+            className="absolute inset-0 transition-transform duration-300 ease-out will-change-transform"
+          >
+            {windowIndices.map((i) => {
+              const item = items[i];
+              if (!item) return null;
+              const offset = slideOffset(i, currentIndex, items.length);
+              return (
+                <Image
+                  key={item.id}
+                  src={item.thumbMedium ?? item.url}
+                  alt={item.alt || 'Photo'}
+                  fill
+                  className="object-contain pointer-events-none transition-transform duration-300 ease-out"
+                  style={{ transform: `translateX(${offset * 100}%)` }}
+                  loading="eager"
+                  sizes="100vw"
+                  draggable={false}
+                  onLoad={() => markLoaded(item.id)}
+                  unoptimized={
+                    (item.thumbMedium ?? item.url).includes('/api/') ||
+                    (item.thumbMedium ?? item.url).includes('localhost')
+                  }
+                />
+              );
+            })}
+          </div>
           {/* Spinner for an unavoidable load — first open, or a jump beyond
               the preload window. In-window navigation is already decoded. */}
           {isCurrentLoaded ? null : (
@@ -515,7 +540,7 @@ export function PhotoLightbox({
               e.stopPropagation();
               handleNext();
             }}
-            className={`absolute right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition-opacity duration-200 hover:bg-white/15 md:right-8 cursor-pointer ${
+            className={`absolute right-4 z-20 hidden h-14 w-14 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition-opacity duration-200 hover:bg-white/15 md:right-8 md:flex cursor-pointer ${
               controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
             }`}
             aria-label="Next photo"

@@ -61,8 +61,6 @@ const TOOLBAR_TRANSLATIONS: Record<
 type LightboxToolbarProps = {
   visible: boolean;
   currentPhoto: PhotoLightboxItem;
-  itemCount: number;
-  currentIndex: number;
   isFullscreen: boolean;
   isInMyPhotos: boolean | undefined;
   isInCart: boolean | undefined;
@@ -91,8 +89,6 @@ type LightboxToolbarProps = {
 export function LightboxToolbar({
   visible,
   currentPhoto,
-  itemCount,
-  currentIndex,
   isFullscreen,
   isInMyPhotos,
   isInCart,
@@ -147,13 +143,6 @@ export function LightboxToolbar({
       {/* Gradient overlay */}
       <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-black/60 via-black/25 to-transparent" />
 
-      {/* Counter */}
-      {itemCount > 1 && (
-        <div className="absolute left-1/2 -translate-x-1/2 text-sm text-white pointer-events-none">
-          {currentIndex + 1} / {itemCount}
-        </div>
-      )}
-
       {/* Close */}
       {!isFullscreen && (
         <div className="relative z-10">
@@ -164,7 +153,7 @@ export function LightboxToolbar({
               e.stopPropagation();
               onClose();
             }}
-            className="h-12 w-12 text-white hover:bg-white/15"
+            className="h-12 w-7 text-white hover:bg-white/15"
             aria-label="Close"
           >
             <X className="h-7 w-7" strokeWidth={1.5} />

@@ -14,7 +14,6 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 16 | P3 | T-009 | Mejorar UX del Lightbox (header, flechas, transición swipe en mobile) | — | todo |
 | 17 | P3 | T-017 | Íconos (lápiz/basura) en el dropdown de acciones de eventos del fotógrafo | — | todo |
 | 18 | P3 | T-019 | Reorganizar la raíz del repo (mover código fuente a `src/`) | — | todo |
 | 19 | P3 | T-020 | Renombrar "picdemi" → "photo-markt" en el repo (claves localStorage + dir local) | — | todo |
@@ -45,6 +44,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 - **T-003** · Borde fino gris en el avatar del header (`border border-input`, igual que el toggler) — PR #71
 - **T-006** · Carrito como tab en la bottom nav de talento (mobile) + header oculto en mobile — PR #72
 - **T-013** · Tabs underline estándar en toda la app (variante `line` por defecto, subrayado primary) — PR #73
+- **T-009** · Lightbox: transición carrusel (slide), sin contador, flechas solo desktop (swipe en mobile) — PR #74
 
 <!-- Los tickets completados se mueven aquí con su nº de PR. -->
 

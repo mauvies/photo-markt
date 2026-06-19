@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getLightboxWindow } from '@/components/photo-lightbox-window';
+import { getLightboxWindow, slideOffset } from '@/components/photo-lightbox-window';
 
 const sorted = (xs: number[]) => [...xs].sort((a, b) => a - b);
 
@@ -36,5 +36,40 @@ describe('getLightboxWindow', () => {
     for (let i = 0; i < 8; i += 1) {
       expect(getLightboxWindow(i, 8, 2)).toContain(i);
     }
+  });
+});
+
+describe('slideOffset', () => {
+  it('is 0 for the current slide', () => {
+    expect(slideOffset(5, 5, 10)).toBe(0);
+  });
+
+  it('gives positive slots to the right, negative to the left', () => {
+    expect(slideOffset(6, 5, 10)).toBe(1);
+    expect(slideOffset(4, 5, 10)).toBe(-1);
+    expect(slideOffset(7, 5, 10)).toBe(2);
+    expect(slideOffset(3, 5, 10)).toBe(-2);
+  });
+
+  it('places the wrap-around previous neighbour one slot to the left', () => {
+    // Showing the first photo: the last photo is the circular "previous", so
+    // it must sit at -1, not +(total-1).
+    expect(slideOffset(9, 0, 10)).toBe(-1);
+    expect(slideOffset(8, 0, 10)).toBe(-2);
+  });
+
+  it('places the wrap-around next neighbour one slot to the right', () => {
+    expect(slideOffset(0, 9, 10)).toBe(1);
+    expect(slideOffset(1, 9, 10)).toBe(2);
+  });
+
+  it('keeps neighbours adjacent in a gallery smaller than the window', () => {
+    // 3-photo loop: from photo 0, photo 2 is the previous (-1), photo 1 next (+1).
+    expect(slideOffset(1, 0, 3)).toBe(1);
+    expect(slideOffset(2, 0, 3)).toBe(-1);
+  });
+
+  it('returns 0 for an empty gallery', () => {
+    expect(slideOffset(0, 0, 0)).toBe(0);
   });
 });
