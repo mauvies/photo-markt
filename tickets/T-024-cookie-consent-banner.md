@@ -1,7 +1,7 @@
 # T-024 · Banner de consentimiento de cookies (GDPR)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno (Dep lógico: T-023 ya mergeado)
 - **Rama:** `feat/cookie-consent-banner`
 - **OpenSpec change:** —  (UI + i18n acotado)

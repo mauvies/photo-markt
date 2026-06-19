@@ -14,7 +14,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-024 | Banner de consentimiento de cookies (GDPR) — gatea analytics | T-023 (PR #80) | todo |
+| 1 | P2 | T-024 | Banner de consentimiento de cookies (GDPR) — gatea analytics | T-023 (PR #80) | doing |
 | 2 | P2 | T-026 | Checklist de go-live + docs de despliegue a producción | — | todo |
 | 3 | P3 | T-025 | Health check endpoint (`/api/health`) | — | todo |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
