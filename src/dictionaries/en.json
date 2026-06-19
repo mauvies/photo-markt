@@ -543,6 +543,14 @@
     "privacy": "Privacy Policy",
     "allRightsReserved": "All rights reserved."
   },
+  "cookieConsent": {
+    "title": "We value your privacy",
+    "description": "We use analytics cookies to understand how the site is used and make it better. Essential cookies are always on. Learn more in our",
+    "privacyLink": "Privacy Policy",
+    "accept": "Accept",
+    "reject": "Reject",
+    "preferencesLabel": "Cookie preferences"
+  },
   "staticPages": {
     "preparing": "This page is being prepared. Check back soon.",
     "termsTitle": "Terms & Conditions",

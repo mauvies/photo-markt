@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { ConditionalFooter } from '@/components/conditional-footer';
 import { ConditionalHeader } from '@/components/conditional-header';
+import { CookieConsent } from '@/components/cookie-consent';
 import { Footer } from '@/components/footer';
 import { GuestCartMerge } from '@/components/guest-cart-merge';
 import { GuestCartProvider } from '@/components/guest-cart-provider';
@@ -14,6 +15,7 @@ import { ScrollToTop } from '@/components/scroll-to-top';
 import { Toaster } from '@/components/ui/sonner';
 import { type Locale, locales } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
+import { localizedPath } from '@/lib/i18n/localized-path';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 
 export function generateStaticParams() {
@@ -58,6 +60,10 @@ export default async function LangLayout({
             <Footer dict={dict} lang={lang} />
           </ConditionalFooter>
           <Toaster />
+          <CookieConsent
+            dict={dict.cookieConsent}
+            privacyHref={localizedPath(lang, '/privacy-policy')}
+          />
         </GuestCartProvider>
       </SavedEventsLabelsProvider>
     </QueryProvider>
