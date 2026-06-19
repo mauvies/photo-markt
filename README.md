@@ -64,6 +64,13 @@ INNGEST_SIGNING_KEY=<signing-key>
 
 # Optional: enables location autocomplete in event creation
 NEXT_PUBLIC_GOOGLE_PLACES_API_KEY=
+
+# Sentry error monitoring — all optional; the SDK is a no-op without a DSN
+SENTRY_DSN=                 # server/edge DSN
+NEXT_PUBLIC_SENTRY_DSN=     # browser DSN
+SENTRY_ORG=                 # build-time, source-map upload only
+SENTRY_PROJECT=             # build-time, source-map upload only
+SENTRY_AUTH_TOKEN=          # build-time; source maps upload only when set
 ```
 
 > The full validated schema lives in `env.mjs` (T3 Env). The server-side

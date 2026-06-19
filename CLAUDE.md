@@ -359,6 +359,13 @@ INNGEST_SIGNING_KEY=                 # verifies inbound webhook payloads at /api
 RESEND_API_KEY=
 RESEND_FROM_EMAIL=
 
+# Sentry error monitoring (all optional — SDK is a no-op without a DSN)
+SENTRY_DSN=                          # server/edge DSN; absent ⇒ no server error capture
+NEXT_PUBLIC_SENTRY_DSN=              # browser DSN; absent ⇒ no client error capture
+SENTRY_ORG=                          # build-time only (source-map upload)
+SENTRY_PROJECT=                      # build-time only (source-map upload)
+SENTRY_AUTH_TOKEN=                   # build-time only; source maps upload only when set
+
 # App
 SITE_URL=
 ```
