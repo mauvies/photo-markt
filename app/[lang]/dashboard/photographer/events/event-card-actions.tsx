@@ -1,6 +1,6 @@
 'use client';
 
-import { MoreVertical } from 'lucide-react';
+import { MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -87,6 +87,7 @@ export function EventCardActions({ editHref, onDelete, labels }: EventCardAction
             }}
             disabled={isPending}
           >
+            <Pencil className="mr-2 h-4 w-4" />
             {labels.edit}
           </DropdownMenuItem>
           <DropdownMenuItem
@@ -97,6 +98,7 @@ export function EventCardActions({ editHref, onDelete, labels }: EventCardAction
             variant="destructive"
             disabled={isPending}
           >
+            <Trash2 className="mr-2 h-4 w-4" />
             {labels.delete}
           </DropdownMenuItem>
         </DropdownMenuContent>

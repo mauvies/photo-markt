@@ -1,7 +1,7 @@
 # T-017 · Íconos en el dropdown de acciones de eventos (editar/eliminar)
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `feat/event-actions-dropdown-icons`
 - **OpenSpec change:** —  (cambio de UI trivial)
