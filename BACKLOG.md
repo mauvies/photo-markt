@@ -14,7 +14,6 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 9 | P2 | T-011 | Secuencia + identificador editable para fotos de un evento (DB + UI, OpenSpec) | — | todo |
 | 10 | P3 | T-010 | Limpiar acciones de la barra de modo selección (quitar descargar/compartir) | tras T-007 | todo |
 | 11 | P3 | T-008 | Galería del evento full-width en mobile (quitar/reducir padding-x) | tras T-007 | todo |
 | 12 | P3 | T-002 | Pulir diseño del language toggler dropdown (bordes, banderas más pequeñas) | — | todo |
@@ -30,7 +29,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 - **Header / nav:** T-002 → T-003 → T-006. T-003 reusa el borde de T-002; T-006 oculta el header en mobile (coordinar con T-003).
 - **Tabs:** T-004 (arregla el salto) → T-013 (restila todos los tabs, incluidos los de eventos destacados).
 - **Páginas i18n/producción:** T-014 → T-015 → T-016. Comparten `en.json`/`es.json`; en serie evitan conflictos de diccionario.
-- **Independientes (sin cluster):** T-005, T-012, T-011, T-018, T-009, T-017. (T-018 reusa `pricing-section`/`lib/plans.ts`.)
+- **Independientes (sin cluster):** T-005, T-012, T-018, T-009, T-017. (T-018 reusa `pricing-section`/`lib/plans.ts`.)
 
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
@@ -46,3 +45,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 - **T-018** · Features detalladas por plan en facturación (fuente única i18n compartida) — PR #65
 
 <!-- Los tickets completados se mueven aquí con su nº de PR. -->
+
+## Descartados / revertidos
+
+- **T-011** · Código de foto por evento — se mergeó (PR #66) y luego se **revirtió** (PR de revert). Poca utilidad como código interno del fotógrafo: texto libre duplicable que no identifica de forma fiable, y el valor real del dominio (número de **dorsal/BIB buscable por el atleta**) es un feature distinto, alineado con el "BIB number recognition" ya anunciado en los planes. Posible repensar como ticket nuevo orientado a talent + OCR.

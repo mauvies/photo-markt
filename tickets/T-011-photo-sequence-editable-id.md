@@ -1,11 +1,17 @@
 # T-011 · Secuencia + identificador editable para fotos de un evento
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** **descartado (revertido)** — se implementó (PR #66) y se revirtió por baja utilidad.
 - **Blockers:** ninguno
-- **Rama:** `feat/photo-sequence-editable-id`
-- **OpenSpec change:** **sí — usar `/opsx:propose`** (toca DB + queries + UI; alcance amplio)
-- **PR:** —
+- **Rama:** `feat/photo-sequence-editable-id` (revertida)
+- **OpenSpec change:** `photo-event-code` (creado y luego revertido)
+- **PR:** #66 (mergeado) + PR de revert
+
+> **Por qué se revirtió:** como código interno del fotógrafo aporta poco — texto libre duplicable que
+> no identifica de forma fiable, y el badge sobre la imagen no convencía. El identificador útil del
+> dominio es el **dorsal/BIB buscable por el atleta** (de cara al talent, idealmente con OCR), que se
+> alinea con el "BIB number recognition" ya anunciado en los planes. Si se retoma, plantear como ticket
+> nuevo orientado a talent.
 
 ## Requerimiento
 Poder identificar cada foto de un evento siguiendo una lógica conocida (numeración/nombre con orden), y
