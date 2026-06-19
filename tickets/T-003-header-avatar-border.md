@@ -1,11 +1,11 @@
 # T-003 · Borde fino en el avatar del header
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/header-avatar-border`
 - **OpenSpec change:** —  (cambio chico de UI, 1 archivo)
-- **PR:** —
+- **PR:** #71
 
 ## Requerimiento
 El avatar de usuario del header debe tener un borde fino grisáceo rodeando el círculo, igual que el
