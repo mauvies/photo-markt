@@ -1384,6 +1384,107 @@
       }
     ]
   },
+  "termsOfService": {
+    "title": "Términos del Servicio",
+    "lastUpdated": "Última actualización: junio de 2026",
+    "intro": "Estos Términos del Servicio regulan tu uso de Photo Markt, un marketplace que conecta a fotógrafos deportivos con las personas a las que fotografían. Al crear una cuenta, explorar eventos, subir fotos o comprar fotos, aceptas estos Términos. Léelos junto con nuestra Política de Privacidad.",
+    "contactTitle": "Contáctanos",
+    "contactBody": "Para cualquier duda sobre estos Términos, escríbenos a",
+    "contactEmail": "support@photomarkt.com",
+    "sections": [
+      {
+        "heading": "Aceptación de estos Términos",
+        "body": "Al acceder o usar Photo Markt confirmas que puedes celebrar un contrato vinculante y que aceptas estos Términos y nuestra Política de Privacidad. Si no estás de acuerdo, no uses el servicio. Si usas Photo Markt en nombre de una organización, confirmas que estás autorizado para obligarla.",
+        "bullets": []
+      },
+      {
+        "heading": "Cuentas y roles",
+        "body": "Inicias sesión con Google y puedes actuar como fotógrafo, como talento (la persona fotografiada) o cambiar entre ambos roles desde tu panel. Eres responsable de mantener tu cuenta segura y de toda la actividad que ocurra en ella.",
+        "bullets": [
+          "Fotógrafo: crea eventos, sube y gestiona fotos, controla ventas y ganancias, y administra tu cuenta de cobros.",
+          "Talento: explora eventos, encuentra fotos de ti y cómpralas.",
+          "Proporciona información veraz, mantenla actualizada y no compartas tu cuenta con terceros."
+        ]
+      },
+      {
+        "heading": "Suscripciones y pagos al fotógrafo",
+        "body": "Los fotógrafos pueden usar Photo Markt en un plan gratuito o en una suscripción de pago. Cada plan tiene un precio mensual y una comisión sobre las ventas, indicados en nuestra página de precios y en tus ajustes de facturación. Las suscripciones de pago se renuevan automáticamente hasta que las canceles, y puedes gestionarlas o cancelarlas en cualquier momento desde tus ajustes.",
+        "bullets": [
+          "La comisión se descuenta de cada venta según tu plan activo en el momento de la venta.",
+          "Los pagos se envían a tu cuenta de Stripe conectada; debes completar el onboarding de Stripe para recibir fondos.",
+          "Photo Markt asume la comisión de transferencia de Stripe Connect, de modo que recibes el importe neto prometido por tu plan."
+        ]
+      },
+      {
+        "heading": "Contenido del fotógrafo, propiedad y licencias",
+        "body": "Conservas la propiedad de las fotos que subes. Al subirlas, otorgas a Photo Markt una licencia no exclusiva y mundial para alojar, procesar, marcar con agua, redimensionar, mostrar vistas previas y entregar tus fotos según sea necesario para operar el marketplace y completar las ventas. Eres responsable del contenido que subes y de tener los derechos y permisos necesarios para venderlo.",
+        "bullets": [
+          "Sube únicamente fotos que hayas tomado o que estés autorizado a vender.",
+          "Obtén el consentimiento que corresponda de las personas que aparecen, y respeta las reglas aplicables a eventos que puedan involucrar a menores.",
+          "No subas contenido ilegal, infractor o dañino."
+        ]
+      },
+      {
+        "heading": "Compra de fotos y tu licencia de uso",
+        "body": "Cuando compras una foto, recibes una licencia personal, no exclusiva e intransferible para usar esa foto con fines personales y no comerciales. El fotógrafo conserva los derechos de autor salvo que acuerde algo distinto contigo directamente, y el uso comercial requiere su permiso aparte.",
+        "bullets": [
+          "Las vistas previas llevan marca de agua y calidad reducida; el archivo en resolución completa se entrega solo tras una compra confirmada, mediante un enlace de corta duración.",
+          "No revendas, redistribuyas ni sublicencies las fotos compradas."
+        ]
+      },
+      {
+        "heading": "Precios, pagos e impuestos",
+        "body": "Los precios se muestran antes de pagar. Los pagos los procesa Stripe y no almacenamos los datos completos de tu tarjeta. Eres responsable de los impuestos que apliquen a tus compras o, si eres fotógrafo, a tus ganancias. Photo Markt cobra una tarifa de plataforma y, cuando corresponde, la comisión del plan, según se describe en nuestra página de precios.",
+        "bullets": []
+      },
+      {
+        "heading": "Reembolsos",
+        "body": "Las fotos son bienes digitales que se entregan de inmediato tras el pago, por lo que las compras son por lo general definitivas una vez que el archivo en resolución completa queda disponible. Si una foto está defectuosa, se cobró por error o hay otro problema con tu pedido, contáctanos y lo revisaremos de buena fe y conforme a la legislación de consumo aplicable.",
+        "bullets": []
+      },
+      {
+        "heading": "Búsqueda con IA y datos biométricos",
+        "body": "La función opcional «encuentra mis fotos» te permite subir una selfie para encontrar fotos de ti en un evento. Tu selfie se envía a AWS Rekognition para una única búsqueda de similitud y Photo Markt no la almacena. El indexado de caras lo activa el fotógrafo por evento y se excluye en eventos que puedan involucrar a menores. Al usar esta función consientes el tratamiento descrito en nuestra Política de Privacidad.",
+        "bullets": []
+      },
+      {
+        "heading": "Uso aceptable",
+        "body": "Para mantener Photo Markt seguro para todos, te comprometes a no:",
+        "bullets": [
+          "Subir contenido que no tengas derecho a vender o que infrinja los derechos de otra persona.",
+          "Subir contenido ilegal, dañino, acosador o sexualmente explotador, incluido cualquier contenido que represente a menores de forma inapropiada.",
+          "Acceder a fotos, cuentas o datos para los que no tengas autorización, ni eludir marcas de agua, enlaces firmados u otros controles de seguridad.",
+          "Extraer, copiar o redistribuir contenido de la plataforma, ni interferir con su funcionamiento normal.",
+          "Usar el servicio para infringir la ley o vulnerar la privacidad o la propiedad intelectual de terceros."
+        ]
+      },
+      {
+        "heading": "Propiedad intelectual",
+        "body": "Photo Markt, incluido su nombre, logotipo, software y diseño, nos pertenece a nosotros o a nuestros licenciantes y está protegido por las leyes de propiedad intelectual. Estos Términos no te otorgan ningún derecho sobre nuestras marcas o plataforma más allá de usar el servicio según lo previsto. Las fotos siguen siendo propiedad de sus respectivos fotógrafos.",
+        "bullets": []
+      },
+      {
+        "heading": "Renuncias y limitación de responsabilidad",
+        "body": "Photo Markt se ofrece «tal cual» y «según disponibilidad», sin garantías de ningún tipo en la medida en que lo permita la ley. No garantizamos que la búsqueda de caras encuentre todas las fotos de ti, ni que el servicio sea ininterrumpido o esté libre de errores. En la máxima medida permitida por la ley, Photo Markt no responde por daños indirectos o consecuentes, y nuestra responsabilidad total por cualquier reclamación se limita al importe que pagaste a través de la plataforma en los doce meses anteriores a la reclamación. Nada en estos Términos limita los derechos que no pueden limitarse según la ley aplicable, incluidos los derechos imperativos de las personas consumidoras.",
+        "bullets": []
+      },
+      {
+        "heading": "Suspensión y terminación",
+        "body": "Puedes dejar de usar Photo Markt y cerrar tu cuenta en cualquier momento. Podemos suspender o terminar el acceso si incumples estos Términos, haces un uso indebido del servicio o cuando la ley nos obligue. Algunos registros, como los pedidos completados, pueden conservarse según se describe en nuestra Política de Privacidad y conforme lo exijan las obligaciones legales y contables.",
+        "bullets": []
+      },
+      {
+        "heading": "Cambios en estos Términos",
+        "body": "Podemos actualizar estos Términos a medida que el producto evoluciona. Cuando hagamos cambios relevantes, actualizaremos la fecha en la parte superior de esta página. Seguir usando Photo Markt después de que los cambios entren en vigor significa que aceptas los Términos actualizados.",
+        "bullets": []
+      },
+      {
+        "heading": "Ley aplicable",
+        "body": "Estos Términos se rigen por las leyes del país en el que esté establecido el operador de Photo Markt, sin afectar los derechos imperativos de protección al consumidor que tengas en tu lugar de residencia. Si eres consumidor en la UE, conservas la protección de las disposiciones imperativas de tu país de residencia. La entidad operadora concreta y la jurisdicción aplicable se confirmarán antes del lanzamiento público.",
+        "bullets": []
+      }
+    ]
+  },
   "plans": {
     "free": "Gratis",
     "starter": "Starter",

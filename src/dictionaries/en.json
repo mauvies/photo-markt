@@ -1384,6 +1384,107 @@
       }
     ]
   },
+  "termsOfService": {
+    "title": "Terms of Service",
+    "lastUpdated": "Last updated: June 2026",
+    "intro": "These Terms of Service govern your use of Photo Markt, a marketplace that connects sports photographers with the people they photograph. By creating an account, browsing events, uploading photos, or buying photos, you agree to these Terms. Please read them together with our Privacy Policy.",
+    "contactTitle": "Contact us",
+    "contactBody": "For any question about these Terms, email us at",
+    "contactEmail": "support@photomarkt.com",
+    "sections": [
+      {
+        "heading": "Acceptance of these Terms",
+        "body": "By accessing or using Photo Markt you confirm that you can form a binding contract and that you accept these Terms and our Privacy Policy. If you do not agree, please do not use the service. If you use Photo Markt on behalf of an organization, you confirm that you are authorized to bind that organization.",
+        "bullets": []
+      },
+      {
+        "heading": "Accounts and roles",
+        "body": "You sign in with Google and can act as a photographer, as talent (the person photographed), or switch between both roles from your dashboard. You are responsible for keeping your account secure and for all activity that happens under it.",
+        "bullets": [
+          "Photographer: create events, upload and manage photos, track sales and earnings, and manage your payout account.",
+          "Talent: browse events, find photos of yourself, and purchase them.",
+          "Provide accurate information, keep it up to date, and do not share your account with others."
+        ]
+      },
+      {
+        "heading": "Photographer subscriptions and payouts",
+        "body": "Photographers can use Photo Markt on a free plan or on a paid subscription. Each plan has a monthly price and a commission rate on sales, shown on our pricing page and in your billing settings. Paid subscriptions renew automatically until cancelled, and you can manage or cancel yours at any time from your settings.",
+        "bullets": [
+          "Commission is deducted from each sale according to your active plan at the time of the sale.",
+          "Payouts are sent to your connected Stripe account; you must complete Stripe onboarding to receive funds.",
+          "Photo Markt absorbs the Stripe Connect transfer fee, so you receive the net amount promised for your plan."
+        ]
+      },
+      {
+        "heading": "Photographer content, ownership and licenses",
+        "body": "You keep ownership of the photos you upload. By uploading, you grant Photo Markt a non-exclusive, worldwide license to host, process, watermark, resize, display previews of, and deliver your photos as needed to operate the marketplace and complete sales. You are responsible for the content you upload and for holding the rights and permissions needed to sell it.",
+        "bullets": [
+          "Only upload photos you took or are otherwise authorized to sell.",
+          "Obtain any consent required from the people depicted, and follow the rules that apply to events that may involve minors.",
+          "Do not upload unlawful, infringing, or harmful content."
+        ]
+      },
+      {
+        "heading": "Buying photos and your license to use them",
+        "body": "When you purchase a photo, you receive a personal, non-exclusive, non-transferable license to use that photo for your own personal, non-commercial purposes. The photographer keeps the copyright unless they agree otherwise with you directly, and commercial use requires their separate permission.",
+        "bullets": [
+          "Previews are watermarked and reduced in quality; the full-resolution file is delivered only after a confirmed purchase, through a short-lived link.",
+          "Do not resell, redistribute, or sublicense purchased photos."
+        ]
+      },
+      {
+        "heading": "Pricing, payments and taxes",
+        "body": "Prices are shown before you pay. Payments are processed by Stripe, and we do not store your full card details. You are responsible for any taxes that apply to your purchases or, for photographers, to your earnings. Photo Markt charges a platform fee and, where applicable, the plan commission, as described on our pricing page.",
+        "bullets": []
+      },
+      {
+        "heading": "Refunds",
+        "body": "Photos are digital goods delivered immediately after payment, so purchases are generally final once the full-resolution file has been made available. If a photo is faulty, was charged in error, or there is another problem with your order, contact us and we will review it in good faith and in line with applicable consumer law.",
+        "bullets": []
+      },
+      {
+        "heading": "AI photo search and biometric data",
+        "body": "The optional \"find my photos\" feature lets you upload a selfie to find pictures of yourself at an event. Your selfie is sent to AWS Rekognition for a single similarity search and is not stored by Photo Markt. Face indexing is enabled per event by the photographer and is excluded for events that may involve minors. By using this feature you consent to the processing described in our Privacy Policy.",
+        "bullets": []
+      },
+      {
+        "heading": "Acceptable use",
+        "body": "To keep Photo Markt safe for everyone, you agree not to:",
+        "bullets": [
+          "Upload content you do not have the right to sell, or that infringes someone else's rights.",
+          "Upload unlawful, harmful, harassing, or sexually exploitative content, including any content that depicts minors inappropriately.",
+          "Access photos, accounts, or data you are not authorized to access, or bypass watermarks, signed links, or other security controls.",
+          "Scrape, copy, or redistribute content from the platform, or interfere with its normal operation.",
+          "Use the service to break the law or to infringe the privacy or intellectual property of others."
+        ]
+      },
+      {
+        "heading": "Intellectual property",
+        "body": "Photo Markt, including its name, logo, software, and design, belongs to us or our licensors and is protected by intellectual-property laws. These Terms do not grant you any right to our trademarks or platform beyond using the service as intended. Photos remain the property of their respective photographers.",
+        "bullets": []
+      },
+      {
+        "heading": "Disclaimers and limitation of liability",
+        "body": "Photo Markt is provided \"as is\" and \"as available,\" without warranties of any kind to the extent permitted by law. We do not guarantee that face search will find every photo of you, or that the service will be uninterrupted or error-free. To the maximum extent permitted by law, Photo Markt is not liable for indirect or consequential damages, and our total liability for any claim is limited to the amount you paid through the platform in the twelve months before the claim. Nothing in these Terms limits rights that cannot be limited under applicable law, including mandatory consumer rights.",
+        "bullets": []
+      },
+      {
+        "heading": "Suspension and termination",
+        "body": "You can stop using Photo Markt and close your account at any time. We may suspend or terminate access if you breach these Terms, misuse the service, or where we are required to by law. Some records, such as completed orders, may be retained as described in our Privacy Policy and as required for legal and accounting purposes.",
+        "bullets": []
+      },
+      {
+        "heading": "Changes to these Terms",
+        "body": "We may update these Terms as the product evolves. When we make material changes, we will update the date at the top of this page. Continuing to use Photo Markt after changes take effect means you accept the updated Terms.",
+        "bullets": []
+      },
+      {
+        "heading": "Governing law",
+        "body": "These Terms are governed by the laws of the country in which the operator of Photo Markt is established, without affecting any mandatory consumer-protection rights you have where you live. If you are a consumer in the EU, you keep the protection of the mandatory provisions of your country of residence. The specific operating entity and governing jurisdiction will be confirmed before public launch.",
+        "bullets": []
+      }
+    ]
+  },
   "plans": {
     "free": "Free",
     "starter": "Starter",
