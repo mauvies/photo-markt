@@ -584,7 +584,8 @@ export function PublicEventPhotoViewer({
               selectable={canSelect}
               labels={selectionLabels}
               selectionResetKey={selectionResetKey}
-              toolbarClassName="sticky top-[var(--header-height)] -mx-4 px-4"
+              toolbarClassName="sticky top-[var(--header-height)] -mx-4 px-3"
+              gridClassName="-mx-3.5 sm:mx-0"
               toolbarLeading={
                 <Button type="button" variant="outline" size="sm" onClick={faceSearch.clearMatches}>
                   <ArrowLeft className="mr-1.5 h-4 w-4" />
@@ -602,7 +603,8 @@ export function PublicEventPhotoViewer({
           selectable={canSelect}
           labels={selectionLabels}
           selectionResetKey={selectionResetKey}
-          toolbarClassName="sticky top-[var(--header-height)] -mx-4 px-4"
+          toolbarClassName="sticky top-[var(--header-height)] -mx-4 px-3"
+          gridClassName="-mx-3.5 sm:mx-0"
           toolbarLeading={
             isCollaborative ? (
               <EventPhotoFilterTabs

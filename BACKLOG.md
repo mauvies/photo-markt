@@ -14,7 +14,6 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 11 | P3 | T-008 | Galería del evento full-width en mobile (quitar/reducir padding-x) | tras T-007 | todo |
 | 12 | P3 | T-002 | Pulir diseño del language toggler dropdown (bordes, banderas más pequeñas) | — | todo |
 | 13 | P3 | T-003 | Borde fino gris en el avatar del header (consistente con el toggler) | tras T-002 | todo |
 | 14 | P3 | T-006 | Mover carrito a la bottom nav del dashboard de talento (mobile) | tras T-003 | todo |
@@ -45,6 +44,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 - **T-007** · Toolbar de galería sticky única en mobile (sin salto) + favorito reubicado — PR #64
 - **T-018** · Features detalladas por plan en facturación (fuente única i18n compartida) — PR #65
 - **T-010** · Quitar descarga masiva en galería pública con watermark (solo eventos gratis) — PR #68
+- **T-008** · Galería del evento full-width en mobile (grid sangra a los bordes; toolbar queda) — PR #69
 
 <!-- Los tickets completados se mueven aquí con su nº de PR. -->
 

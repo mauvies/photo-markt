@@ -243,7 +243,7 @@ export function EventPhotoAlbum({
         selectionResetKey={selectionResetKey}
         bulkActions={bulkActions}
         labels={selectionLabels}
-        toolbarClassName="sticky top-0 -mx-4 px-4"
+        toolbarClassName="sticky top-0 -mx-4 px-3"
         galleryProps={{
           onTagPhoto: handleTagSinglePhoto,
           onUntag: handleUntag,

@@ -64,7 +64,7 @@ export default async function TalentLayout({ children }: { children: React.React
           account: dict.dashboard.account,
         }}
       />
-      <div className="mx-auto w-full max-w-screen-2xl flex flex-1 flex-col gap-6 p-4 py-6 pb-20 md:p-6">
+      <div className="mx-auto w-full max-w-screen-2xl flex flex-1 flex-col gap-6 px-3 py-6 pb-20 md:p-6">
         {children}
       </div>
     </div>
