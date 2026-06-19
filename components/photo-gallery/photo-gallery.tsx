@@ -5,6 +5,7 @@ import PhotoAlbumViewer, { type PhotoAlbumItem } from '@/components/photo-album-
 import { PhotoSelectionToolbar } from '@/components/photo-selection-toolbar';
 import { Button } from '@/components/ui/button';
 import { usePhotoSelection } from '@/hooks/use-photo-selection';
+import { cn } from '@/lib/utils';
 import type {
   PhotoGalleryBulkAction,
   PhotoGallerySection,
@@ -36,6 +37,9 @@ interface PhotoGalleryProps {
   /** Slot on the desktop toolbar — the filter tabs. */
   toolbarLeading?: ReactNode;
   toolbarClassName?: string;
+  /** Extra classes on the grid wrapper — e.g. `-mx-4 sm:mx-0` to bleed the
+   * grid full-width on mobile while the padded toolbar stays put. */
+  gridClassName?: string;
   /** Selection-bar copy — only needed when `selectable` (the default). */
   labels?: PhotoGallerySelectionLabels;
   /** Rendered when there are no photos. */
@@ -68,6 +72,7 @@ export function PhotoGallery({
   selectionResetKey,
   toolbarLeading,
   toolbarClassName,
+  gridClassName,
   labels = EMPTY_SELECTION_LABELS,
   emptyState,
 }: PhotoGalleryProps) {
@@ -161,7 +166,11 @@ export function PhotoGallery({
         </PhotoSelectionToolbar>
       ) : null}
 
-      {allItems.length === 0 ? emptyState : <div className="flex flex-col gap-4">{grids}</div>}
+      {allItems.length === 0 ? (
+        emptyState
+      ) : (
+        <div className={cn('flex flex-col gap-4', gridClassName)}>{grids}</div>
+      )}
 
       {selection.isSelecting && bulkButtons.length > 0 ? (
         // Mobile only: the bulk actions live in a fixed bar over the bottom nav

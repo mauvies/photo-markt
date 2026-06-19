@@ -570,6 +570,9 @@ export function EventPhotoViewer({
   );
 
   const toolbarClassName = 'sticky top-[var(--header-height)] -mx-4 px-4 md:-mx-6 md:px-6';
+  // Bleed the grid full-width on mobile (negates the page's px-4); padded again
+  // from sm up so the toolbar stays the only inset chrome on phones.
+  const gridClassName = '-mx-4 sm:mx-0';
   const selectionResetKey = `${filter}:${faceSearch.matches === null ? 'all' : 'search'}`;
 
   // Shared across both render paths (full gallery + AI results) since the
@@ -613,6 +616,7 @@ export function EventPhotoViewer({
               labels={selectionLabels}
               selectionResetKey={selectionResetKey}
               toolbarClassName={toolbarClassName}
+              gridClassName={gridClassName}
               toolbarLeading={
                 <Button type="button" variant="outline" size="sm" onClick={faceSearch.clearMatches}>
                   <ArrowLeft className="mr-1.5 h-4 w-4" />
@@ -637,6 +641,7 @@ export function EventPhotoViewer({
         labels={selectionLabels}
         selectionResetKey={selectionResetKey}
         toolbarClassName={toolbarClassName}
+        gridClassName={gridClassName}
         toolbarLeading={
           isCollaborative ? (
             <EventPhotoFilterTabs
