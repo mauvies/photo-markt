@@ -1,14 +1,7 @@
 'use client';
 
 import { ImageOff } from 'lucide-react';
-import {
-  type KeyboardEvent,
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import { type KeyboardEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { type Photo, type RenderPhotoContext, RowsPhotoAlbum } from 'react-photo-album';
 import type { LightboxActionLabels } from '@/components/lightbox-action-bar';
 import {
@@ -44,11 +37,6 @@ export type PhotoAlbumItem = {
   }>;
   /** Optional contributor info — when present, the camera badge is rendered. */
   uploader?: PhotoUploaderInfo;
-  /** Photographer-only auto code. Drives the per-tile code badge (display =
-   * `label` when set, else `#sequence`). Absent on talent/public views. */
-  sequence?: number | null;
-  /** Photographer-only editable override for the code; null = use `sequence`. */
-  label?: string | null;
 };
 
 type PhotoAlbumViewerProps = {
@@ -107,9 +95,6 @@ type PhotoAlbumViewerProps = {
   claimedIds?: Set<string>;
   canClaimToProfile?: (photoId: string) => boolean;
   actionBarLabels?: LightboxActionLabels;
-  /** Photographer-only: when set, the per-tile code badge becomes a button that
-   * opens the edit flow for that photo. Absent on talent/public views. */
-  onEditCode?: (photoId: string) => void;
 };
 
 export default function PhotoAlbumViewer({
@@ -149,7 +134,6 @@ export default function PhotoAlbumViewer({
   claimedIds,
   canClaimToProfile,
   actionBarLabels,
-  onEditCode,
 }: PhotoAlbumViewerProps) {
   const { index, openAt, switchTo, close } = usePhotoLightboxUrl(items);
   const [dimensions, setDimensions] = useState<Record<string, { width: number; height: number }>>(
@@ -281,6 +265,11 @@ export default function PhotoAlbumViewer({
         );
       }
 
+      // Clean mobile gallery: no overlay unless the user is selecting.
+      if (cleanGrid && !selectionActive) {
+        return null;
+      }
+
       const isSelected = selectedSet.has(photoId);
       const photoItem = items.find((item) => item.id === photoId);
       const tags = photoItem?.tags || [];
@@ -289,87 +278,52 @@ export default function PhotoAlbumViewer({
 
       const canDelete = deletableIds?.has(photoId) ?? false;
 
-      // Photographer-only code badge: `label` if set, else `#sequence`. Always
-      // visible (even on the clean mobile grid); clickable when `onEditCode` is
-      // provided. Other views never pass sequence/label so nothing renders.
-      const code =
-        photoItem?.label ?? (photoItem?.sequence != null ? `#${photoItem.sequence}` : null);
-      const badgeClass =
-        'absolute bottom-1.5 left-1.5 z-10 max-w-[70%] truncate rounded-md bg-gray-900/70 px-1.5 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm';
-      let codeBadge: ReactNode = null;
-      if (code) {
-        codeBadge = onEditCode ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEditCode(photoId);
-            }}
-            className={cn(badgeClass, 'transition-colors hover:bg-gray-900/90')}
-          >
-            {code}
-          </button>
-        ) : (
-          <span className={badgeClass}>{code}</span>
-        );
-      }
-
-      // Clean mobile gallery: hide the action overlay unless selecting — but the
-      // code badge stays visible.
-      const overlay =
-        cleanGrid && !selectionActive ? null : (
-          <PhotoIconButtons
-            photoId={photoId}
-            isSelected={isSelected}
-            hasTags={tags.length > 0}
-            tags={tags}
-            uploader={uploader}
-            uploaderLabels={uploaderLabels}
-            canDelete={canDelete}
-            onDelete={onDeleteOwn}
-            deleteTooltip={deleteTooltip}
-            isPopoverOpen={isPopoverOpen}
-            onPopoverOpenChange={(open) => {
-              if (open) {
-                setOpenPopovers((prev) => {
-                  const next = new Set(prev);
-                  next.add(photoId);
-                  return next;
-                });
-              } else {
-                setOpenPopovers((prev) => {
-                  const next = new Set(prev);
-                  next.delete(photoId);
-                  return next;
-                });
-              }
-            }}
-            canSelect={canSelect}
-            onToggleSelect={handleToggleSelect}
-            selectionActive={selectionActive}
-            onTagPhoto={onTagPhoto}
-            onUntag={onUntag}
-            showAddToCart={showAddToCart}
-            photosInCart={photosInCart}
-            onAddToCart={onAddToCart}
-            onRemoveFromCart={onRemoveFromCart}
-            showAddToPhotos={showAddToPhotos}
-            photosInMyPhotos={photosInMyPhotos}
-            onAddToPhotos={onAddToPhotos}
-            onRemoveFromPhotos={onRemoveFromPhotos}
-            moreMenu={moreMenu}
-            moreMenuOpen={openMenuPhotoId === photoId}
-            onMoreMenuOpenChange={(open) => setOpenMenuPhotoId(open ? photoId : null)}
-            showUploaderName={showUploaderName}
-            tooltips={iconTooltips}
-          />
-        );
-
       return (
-        <>
-          {codeBadge}
-          {overlay}
-        </>
+        <PhotoIconButtons
+          photoId={photoId}
+          isSelected={isSelected}
+          hasTags={tags.length > 0}
+          tags={tags}
+          uploader={uploader}
+          uploaderLabels={uploaderLabels}
+          canDelete={canDelete}
+          onDelete={onDeleteOwn}
+          deleteTooltip={deleteTooltip}
+          isPopoverOpen={isPopoverOpen}
+          onPopoverOpenChange={(open) => {
+            if (open) {
+              setOpenPopovers((prev) => {
+                const next = new Set(prev);
+                next.add(photoId);
+                return next;
+              });
+            } else {
+              setOpenPopovers((prev) => {
+                const next = new Set(prev);
+                next.delete(photoId);
+                return next;
+              });
+            }
+          }}
+          canSelect={canSelect}
+          onToggleSelect={handleToggleSelect}
+          selectionActive={selectionActive}
+          onTagPhoto={onTagPhoto}
+          onUntag={onUntag}
+          showAddToCart={showAddToCart}
+          photosInCart={photosInCart}
+          onAddToCart={onAddToCart}
+          onRemoveFromCart={onRemoveFromCart}
+          showAddToPhotos={showAddToPhotos}
+          photosInMyPhotos={photosInMyPhotos}
+          onAddToPhotos={onAddToPhotos}
+          onRemoveFromPhotos={onRemoveFromPhotos}
+          moreMenu={moreMenu}
+          moreMenuOpen={openMenuPhotoId === photoId}
+          onMoreMenuOpenChange={(open) => setOpenMenuPhotoId(open ? photoId : null)}
+          showUploaderName={showUploaderName}
+          tooltips={iconTooltips}
+        />
       );
     },
     [
@@ -401,7 +355,6 @@ export default function PhotoAlbumViewer({
       showUploaderName,
       openMenuPhotoId,
       cleanGrid,
-      onEditCode,
     ],
   );
 
