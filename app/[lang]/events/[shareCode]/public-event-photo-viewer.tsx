@@ -29,6 +29,7 @@ import {
 } from '@/hooks/use-bulk-contributor-delete';
 import { useBulkPhotoDownload } from '@/hooks/use-bulk-photo-download';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
+import { type EventBulkActionKey, eventBulkActionKeys } from '@/lib/event-bulk-actions';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import { getEventPhotoDownloadUrlAction } from './actions';
 import { buildBuckets, type FaceSearchResultsLabels } from './face-search-shared';
@@ -498,39 +499,40 @@ export function PublicEventPhotoViewer({
   );
 
   // Bulk actions for the selection bars. "Add to cart" leads on a paid event
-  // (the primary action for a buyer); "Download" follows when available.
+  // (the primary action for a buyer); "Download" only appears on free events —
+  // paid events serve watermarked previews, so bulk-downloading them is useless
+  // (T-010). The key list decides what shows; the map carries the handlers.
   const bulkActions = useMemo<PhotoGalleryBulkAction[]>(() => {
-    const actions: PhotoGalleryBulkAction[] = [];
-    if (canBulkAddToCart) {
-      actions.push({
+    const byKey: Record<EventBulkActionKey, PhotoGalleryBulkAction> = {
+      'add-to-cart': {
         key: 'add-to-cart',
         label: bulkDownload.addToCart,
         icon: ShoppingCart,
         onRun: (ids) => handleBulkAddToCart(ids),
-      });
-    }
-    if (canBulkDownload) {
-      actions.push({
+      },
+      download: {
         key: 'download',
         label: bulkDownload.download,
         icon: Download,
         onRun: (ids) => downloadSelected(ids),
         isPending: isDownloading,
-      });
-    }
-    if (canDeleteOwnPhotos) {
-      actions.push({
+      },
+      delete: {
         key: 'delete',
         label: bulkDeleteLabels.button,
         icon: Trash2,
         onRun: (ids) => handleBulkDeleteRequest(ids),
         isPending: isDeleting,
-      });
-    }
-    return actions;
+      },
+    };
+    return eventBulkActionKeys({
+      canAddToCart: canBulkAddToCart,
+      isFreeEvent,
+      canDeleteOwnPhotos,
+    }).map((key) => byKey[key]);
   }, [
     canBulkAddToCart,
-    canBulkDownload,
+    isFreeEvent,
     canDeleteOwnPhotos,
     bulkDownload.addToCart,
     bulkDownload.download,
