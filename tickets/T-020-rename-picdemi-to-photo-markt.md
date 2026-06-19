@@ -1,11 +1,11 @@
 # T-020 · Renombrar "picdemi" → "photo-markt" en todo el repo
 
 - **Prioridad:** P3
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `chore/rename-picdemi-to-photo-markt`
 - **OpenSpec change:** — (rename mecánico, sin diseño que capturar)
-- **PR:** —
+- **PR:** #77
 
 ## Requerimiento
 El nombre real de la app es "photo-markt", pero el repo/directorio local todavía se llama
