@@ -1,7 +1,7 @@
 # T-019 · Reorganizar la raíz del repo para navegación humana
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `chore/repo-structure-cleanup`
 - **OpenSpec change:** sí (toca tsconfig/build config y muchos archivos → cae en la política OpenSpec)

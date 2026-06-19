@@ -14,7 +14,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 18 | P3 | T-019 | Reorganizar la raíz del repo (mover código fuente a `src/`) | — | todo |
+| 18 | P3 | T-019 | Reorganizar la raíz del repo (mover código fuente a `src/`) | — | doing |
 | 19 | P3 | T-020 | Renombrar "picdemi" → "photo-markt" en el repo (claves localStorage + dir local) | — | todo |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 

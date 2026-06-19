@@ -99,20 +99,26 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Project Structure
 
+All application source lives under `src/` (Next.js' `src` directory convention); the repo root holds only configs, docs, `public/`, and tests.
+
 ```
-app/                    # Next.js App Router pages and API routes
-  [lang]/               # i18n layout
-  api/                  # API routes (Stripe webhooks, watermark generation)
-  auth/                 # Auth callback handlers
-components/             # Shared UI components
-database/
-  queries/              # All Supabase query functions (one file per domain)
-  server.ts             # Server-side Supabase client (cookie-based)
-  client.ts             # Client-side Supabase client
-lib/                    # Shared utilities, feature flags, AI providers
+src/                    # All application source code
+  app/                  # Next.js App Router pages and API routes
+    [lang]/             # i18n layout
+    api/                # API routes (Stripe webhooks, watermark generation)
+    auth/               # Auth callback handlers
+  components/           # Shared UI components
+  hooks/                # Shared React hooks
+  database/
+    queries/            # All Supabase query functions (one file per domain)
+    server.ts           # Server-side Supabase client (cookie-based)
+    client.ts           # Client-side Supabase client
+  dictionaries/         # i18n dictionaries (en.json, es.json)
+  lib/                  # Shared utilities, feature flags, AI providers
+  proxy.ts              # Next.js middleware — refreshes auth sessions
 supabase/
   migrations/           # Timestamped SQL migration files
-proxy.ts                # Next.js middleware — refreshes auth sessions
+test/                   # Vitest unit + integration tests
 env.mjs                 # T3 Env schema — validates all env vars at runtime
 ```
 
@@ -123,15 +129,15 @@ The platform has two roles, stored as `active_role` on the `profiles` table:
 - **Photographer** — creates events (including collaborative events with guest uploads and invited photographers), uploads photos, tracks sales and earnings, manages payouts, subscribes to the Free, Starter, or Pro plan
 - **Talent** — browses events, searches for photos of themselves (including AI face search), purchases individual photos
 
-Users can switch roles. Initial role is assigned during onboarding (`app/[lang]/actions/roles.ts`).
+Users can switch roles. Initial role is assigned during onboarding (`src/app/[lang]/actions/roles.ts`).
 
 ## Key Architectural Patterns
 
 **Server Actions for mutations** — nearly all data mutations use `"use server"` actions colocated in `actions.ts` files next to their page. Avoid new API routes for mutations.
 
-**Database query layer** — all Supabase queries live in `database/queries/` with a central export in `index.ts`. Add new queries there rather than inline in components.
+**Database query layer** — all Supabase queries live in `src/database/queries/` with a central export in `index.ts`. Add new queries there rather than inline in components.
 
-**Feature flags** — controlled in `lib/feature-flags.ts`. AI photo matching (`AI_MATCHING`) is enabled; it indexes faces with AWS Rekognition via Inngest background jobs and lets talent find themselves with a selfie search.
+**Feature flags** — controlled in `src/lib/feature-flags.ts`. AI photo matching (`AI_MATCHING`) is enabled; it indexes faces with AWS Rekognition via Inngest background jobs and lets talent find themselves with a selfie search.
 
 **Image watermarking** — watermarked previews are served via `/app/api/watermark/`. Photos are stored in the `photos` Supabase Storage bucket.
 

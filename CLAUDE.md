@@ -46,14 +46,14 @@ pnpm spell        # Spell check .ts/.tsx files
 - **Email**: Resend
 - **AI matching**: AWS Rekognition (face indexing/search) — see AI Photo Search below
 - **Background jobs**: Inngest (face indexing, thumbnail generation, storage cleanup) served at `/api/inngest`
-- **i18n**: Custom dictionary system (`/dictionaries/en.json`, `/dictionaries/es.json`)
+- **i18n**: Custom dictionary system (`/src/dictionaries/en.json`, `/src/dictionaries/es.json`)
 
 ## Architecture
 
 ### Routing
 
 ```
-app/
+src/app/
   [lang]/               # i18n prefix — always /es/... or /en/...
     page.tsx            # Home page (static)
     events/             # Public events listing and detail
@@ -78,7 +78,7 @@ Two user roles with separate dashboards:
 - **PHOTOGRAPHER** (`/dashboard/photographer`) — manages events, uploads/manages photos, tracks sales and earnings, manages payout account
 - **TALENT** (`/dashboard/talent`) — browses events, finds and purchases photos of themselves, manages saved photos
 
-Role is stored in `profiles.active_role`. Users can switch roles. Initial role assigned during onboarding via `app/[lang]/actions/roles.ts`.
+Role is stored in `profiles.active_role`. Users can switch roles. Initial role assigned during onboarding via `src/app/[lang]/actions/roles.ts`.
 
 ### Key Architectural Patterns
 
@@ -86,10 +86,10 @@ Role is stored in `profiles.active_role`. Users can switch roles. Initial role a
 All data mutations use `"use server"` actions in `actions.ts` files colocated next to their page components. Do not create new API routes for mutations — use server actions instead.
 
 **Database query layer**
-All Supabase queries live in `/database/queries/`. Each domain has its own file. Always add new queries here — never inline in components or actions.
+All Supabase queries live in `/src/database/queries/`. Each domain has its own file. Always add new queries here — never inline in components or actions.
 
 ```
-database/queries/
+src/database/queries/
   events.ts           # Event CRUD and search
   photos.ts           # Photo management and embedding
   profiles.ts         # User profiles
@@ -110,21 +110,21 @@ database/queries/
 ```
 
 **Supabase clients**
-- Server-side (Server Components, Server Actions, API routes): `database/server.ts`
-- Client-side (Client Components): `database/client.ts`
-- Admin (service role, bypasses RLS): `database/supabase-admin.ts`
+- Server-side (Server Components, Server Actions, API routes): `src/database/server.ts`
+- Client-side (Client Components): `src/database/client.ts`
+- Admin (service role, bypasses RLS): `src/database/supabase-admin.ts`
 
 **Middleware**
-`proxy.ts` (Next.js middleware) refreshes Supabase auth sessions on every request and handles locale detection.
+`src/proxy.ts` (Next.js middleware) refreshes Supabase auth sessions on every request and handles locale detection.
 
 **i18n**
-- Dictionaries: `/dictionaries/en.json` and `/dictionaries/es.json`
-- Server-side: `lib/i18n/get-dictionary.ts`
-- Client-side: `lib/i18n/translations-provider.tsx` + `useTranslations()` hook
+- Dictionaries: `/src/dictionaries/en.json` and `/src/dictionaries/es.json`
+- Server-side: `src/lib/i18n/get-dictionary.ts`
+- Client-side: `src/lib/i18n/translations-provider.tsx` + `useTranslations()` hook
 - Always add new strings to both dictionaries. Never hardcode visible strings.
 
 **Feature flags**
-Controlled in `lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it powers face indexing (AWS Rekognition) and talent selfie search, run through Inngest background jobs. `searchFacesInEvent` re-checks the flag server-side, so keep both gates in sync.
+Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it powers face indexing (AWS Rekognition) and talent selfie search, run through Inngest background jobs. `searchFacesInEvent` re-checks the flag server-side, so keep both gates in sync.
 
 **Environment validation**
 `env.mjs` uses T3 Env (Zod). Always add new environment variables here.
@@ -140,13 +140,13 @@ Controlled in `lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it powers
 - `time_sync_enabled` + `time_offset` support the camera time sync feature
 - `share_code` allows access to private events
 
-**photos** (via `/database/queries/photos.ts`)
+**photos** (via `/src/database/queries/photos.ts`)
 - `face_index_status` (`pending`/`indexing`/`indexed`/`failed`/`no_faces`/`not_applicable`) and `thumbnail_status` track the Inngest jobs; `width`/`height` persisted for layout
 - Stored in Supabase Storage bucket: `photos`
-- Watermarked previews served via `/app/api/watermark/`
+- Watermarked previews served via `/src/app/api/watermark/`
 - Full resolution only accessible via short-lived signed URLs after purchase
 
-**photo_faces** (via `/database/queries/rekognition.ts`)
+**photo_faces** (via `/src/database/queries/rekognition.ts`)
 `photo_id, aws_face_id, aws_collection_id, confidence, bounding_box, indexed_at`
 - One row per face AWS Rekognition indexes in a photo; unique on `(photo_id, aws_face_id)`
 - Face embeddings themselves live inside the AWS collection — the DB only stores the returned `aws_face_id`. Talent selfie search maps AWS face IDs back to photo IDs here
@@ -154,7 +154,7 @@ Controlled in `lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it powers
 **carts / cart_items**
 `carts: id, user_id` — `cart_items: id, cart_id, photo_id, photographer_id, unit_price_cents`
 - Guest cart stored in `localStorage` under `photo-markt_guest_cart`
-- Guest cart merged into authenticated cart on login via `components/guest-cart-merge.tsx`
+- Guest cart merged into authenticated cart on login via `src/components/guest-cart-merge.tsx`
 
 **orders / order_items**
 `orders: id, user_id, cart_id, stripe_payment_intent_id, stripe_checkout_session_id, status, total_amount_cents`
@@ -181,7 +181,7 @@ Controlled in `lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it powers
 **rate_limit_buckets**
 `bucket_key, window_start, count`
 - Service-role-only access (RLS enabled, no policies)
-- Backs `lib/rate-limit.ts`. Atomic increments via the `increment_rate_limit_bucket` `SECURITY DEFINER` function — EXECUTE explicitly revoked from `anon` and `authenticated`
+- Backs `src/lib/rate-limit.ts`. Atomic increments via the `increment_rate_limit_bucket` `SECURITY DEFINER` function — EXECUTE explicitly revoked from `anon` and `authenticated`
 - One row per `(bucket_key, window_start)`. No automatic cleanup yet — fine at current scale
 
 ## Payments
@@ -192,7 +192,7 @@ Price IDs in env: `STRIPE_PRICE_AMATEUR`, `STRIPE_PRICE_PRO`.
 Billing management in `/dashboard/photographer/settings/`.
 
 ### Photo Purchases (Talent)
-One-time Stripe payments. Webhook handler at `/app/api/stripe/webhook/route.ts`.
+One-time Stripe payments. Webhook handler at `/src/app/api/stripe/webhook/route.ts`.
 After confirmed payment: order saved, cart cleared, photos available in talent profile and orders.
 
 ### Photographer Payouts (Stripe Connect)
@@ -204,7 +204,7 @@ After confirmed payment: order saved, cart cleared, photos available in talent p
 ## Shared Components
 
 ```
-components/
+src/components/
   ui/
     photo-action-icon.tsx     # Shared photo action icon (dark bg, white icon, tooltip)
     location-autocomplete.tsx # Google Places autocomplete for event forms only
@@ -220,7 +220,7 @@ components/
 
 ## Photo Action Icons
 
-The `PhotoActionIcon` component (`components/ui/photo-action-icon.tsx`) is the standard for all photo action buttons:
+The `PhotoActionIcon` component (`src/components/ui/photo-action-icon.tsx`) is the standard for all photo action buttons:
 - **Style:** Dark semi-transparent background (`bg-gray-900/60 backdrop-blur-sm`), white icon
 - **States:** Outline icon = inactive, filled icon = active. No color changes — only outline vs filled.
 - **Visibility:** Always visible on mobile, visible on hover on desktop (handled by parent with `group` + `md:opacity-0 md:group-hover:opacity-100`)
@@ -229,7 +229,7 @@ The `PhotoActionIcon` component (`components/ui/photo-action-icon.tsx`) is the s
 
 ## Event Search
 
-Search bar (`components/event-search-bar/`) queries Supabase directly — no external APIs:
+Search bar (`src/components/event-search-bar/`) queries Supabase directly — no external APIs:
 ```sql
 events.name ILIKE '%query%'
 OR events.city ILIKE '%query%'
@@ -242,22 +242,22 @@ OR profiles.display_name ILIKE '%query%'
 ## Image Handling
 
 - Original photos: Supabase Storage (private)
-- Previews: watermarked + degraded quality via `/app/api/watermark/`
+- Previews: watermarked + degraded quality via `/src/app/api/watermark/`
 - Purchased photos: short-lived signed URLs — never expose original storage path publicly
 - Watermark: tiled repeating pattern, server-side via Sharp
-- **Uploads:** all paths (photographer + guest collaborative) validate via `lib/photo-upload.ts` before writing to storage. Magic-byte check via Sharp, 50 MB per-file cap, content-type and extension are derived from the detected format — `file.type` and `file.name` are never trusted
+- **Uploads:** all paths (photographer + guest collaborative) validate via `src/lib/photo-upload.ts` before writing to storage. Magic-byte check via Sharp, 50 MB per-file cap, content-type and extension are derived from the detected format — `file.type` and `file.name` are never trusted
 
 ## Security Utilities
 
-The `lib/` modules below enforce conventions across the app. Use them — don't reinvent.
+The `src/lib/` modules below enforce conventions across the app. Use them — don't reinvent.
 
-**`lib/photo-upload.ts`** — `validatePhotoUpload(file)`
+**`src/lib/photo-upload.ts`** — `validatePhotoUpload(file)`
 Reads magic bytes via Sharp, rejects unknown formats, caps per-file size at 50 MB. Returns `{ buffer, contentType, extension }` derived from the detected format. Apply on every upload path before writing to storage.
 
-**`lib/json-ld.ts`** — `stringifyJsonLd(value)`
+**`src/lib/json-ld.ts`** — `stringifyJsonLd(value)`
 Use this instead of `JSON.stringify` whenever embedding structured data in an inline `<script>` via `dangerouslySetInnerHTML`. Escapes `<`, `>`, `&`, U+2028, U+2029 so a user-supplied field containing `</script>` cannot break out of the script block.
 
-**`lib/rate-limit.ts`** — `rateLimit({ key, limit, windowSec })`
+**`src/lib/rate-limit.ts`** — `rateLimit({ key, limit, windowSec })`
 Postgres-backed fixed-window limiter. Apply to:
 - Endpoints that hit external APIs (Stripe, Resend) on every call
 - Endpoints with sequential or guessable id parameters (admin endpoints)
@@ -265,7 +265,7 @@ Postgres-backed fixed-window limiter. Apply to:
 
 Helpers: `getClientIp(headers)` for unauthenticated keying, `retryAfterSeconds(result)` for the `Retry-After` response header. Fails open on backend errors. Backend is pluggable via the `RateLimitBackend` type — currently Postgres, swappable to Upstash/Redis later without touching call sites.
 
-**`lib/auth/safe-next.ts`** — `safeNext(value)`
+**`src/lib/auth/safe-next.ts`** — `safeNext(value)`
 Use for any redirect destination derived from user input (`?next=`, OAuth callback, etc). Rejects protocol-relative URLs (`//evil.com`), backslash variants, and control characters.
 
 ## Testing
@@ -286,11 +286,11 @@ The project uses **Vitest** for tests and **Supabase local** (Docker) for integr
 ```
 test/
   unit/                # Pure functions — no DB, no mocks
-    lib/               # Tests for helpers under lib/
+    src/lib/               # Tests for helpers under src/lib/
   integration/         # Hit local Supabase via test helpers
     actions/           # Server Actions
     api/               # API route handlers (Stripe webhook, etc.)
-    queries/           # database/queries/* layer
+    queries/           # src/database/queries/* layer
     security/          # RLS regression tests
   helpers/
     supabase-test-client.ts   # createTestUser / createTestEvent / resetDatabase / ensurePhotosBucket
@@ -316,12 +316,12 @@ The goal is **60% on lines, branches, functions, and statements**. Thresholds ar
 
 **Enabled** (`AI_MATCHING: true`). Implemented with **AWS Rekognition face collections** + **Inngest** background jobs — not the old pgvector/CLIP embedding path, which was removed in migration `20260518000000_drop_legacy_ai_schema.sql`.
 
-- **Indexing (photographer side):** a new photo emits a `photo.uploaded` Inngest event. `indexPhotoFaces` (`lib/inngest/functions/index-photo-faces.ts`) downloads the image, calls Rekognition `IndexFaces`, and writes `photo_faces` rows; `generatePhotoThumbnails` runs in parallel off the same event. Enabling AI on an existing event fans out via `backfillEventIndexing`; disabling or deleting an event tears down the AWS collection (`disableEventIndexing` / `cleanupOnEventDelete`).
-- **Search (talent side):** `searchFacesInEvent` (`app/[lang]/events/[shareCode]/actions.ts`, surfaced by `components/event-gallery-with-face-search.tsx`) validates a selfie, calls Rekognition `SearchFacesByImage` (threshold 80), maps matched face IDs to photos via `getPhotoFacesByAwsFaceIds`, filters to public/approved/non-minor photos, and buckets results (`very-likely` 95+, `likely` 85+, `possibly` 80+). Selfies are ephemeral — never persisted.
-- **AWS calls** (`lib/aws/`): `CreateCollection`/`IndexFaces`/`SearchFacesByImage`/`DeleteFaces`/`DeleteCollection`. Collections are named `${REKOGNITION_COLLECTION_PREFIX}-${env}-event-${eventId}` (`lib/aws/collection-naming.ts`).
-- **Error safety:** every AWS/Sharp/Storage call in these flows is wrapped in `safeCall` (`lib/safe-call.ts`) so image buffers can't leak into Inngest step output or serverless error responses.
-- **Rate limits** (`lib/ai/rate-limits.ts`): monthly search quotas by plan (free 3, starter 20, pro unlimited) plus a per-`(shareCode, IP)` limit of 10 searches/hour.
-- **Worker route:** all Inngest functions are registered at `/app/api/inngest/route.ts`.
+- **Indexing (photographer side):** a new photo emits a `photo.uploaded` Inngest event. `indexPhotoFaces` (`src/lib/inngest/functions/index-photo-faces.ts`) downloads the image, calls Rekognition `IndexFaces`, and writes `photo_faces` rows; `generatePhotoThumbnails` runs in parallel off the same event. Enabling AI on an existing event fans out via `backfillEventIndexing`; disabling or deleting an event tears down the AWS collection (`disableEventIndexing` / `cleanupOnEventDelete`).
+- **Search (talent side):** `searchFacesInEvent` (`src/app/[lang]/events/[shareCode]/actions.ts`, surfaced by `src/components/event-gallery-with-face-search.tsx`) validates a selfie, calls Rekognition `SearchFacesByImage` (threshold 80), maps matched face IDs to photos via `getPhotoFacesByAwsFaceIds`, filters to public/approved/non-minor photos, and buckets results (`very-likely` 95+, `likely` 85+, `possibly` 80+). Selfies are ephemeral — never persisted.
+- **AWS calls** (`src/lib/aws/`): `CreateCollection`/`IndexFaces`/`SearchFacesByImage`/`DeleteFaces`/`DeleteCollection`. Collections are named `${REKOGNITION_COLLECTION_PREFIX}-${env}-event-${eventId}` (`src/lib/aws/collection-naming.ts`).
+- **Error safety:** every AWS/Sharp/Storage call in these flows is wrapped in `safeCall` (`src/lib/safe-call.ts`) so image buffers can't leak into Inngest step output or serverless error responses.
+- **Rate limits** (`src/lib/ai/rate-limits.ts`): monthly search quotas by plan (free 3, starter 20, pro unlimited) plus a per-`(shareCode, IP)` limit of 10 searches/hour.
+- **Worker route:** all Inngest functions are registered at `/src/app/api/inngest/route.ts`.
 
 ## Environment Variables
 
@@ -409,7 +409,7 @@ Skip planning mode for: bug fixes, UI tweaks, adding fields, isolated features, 
 
 ### Code Conventions
 - All visible strings must be in both `en.json` and `es.json`
-- All Supabase queries go in `/database/queries/`
+- All Supabase queries go in `/src/database/queries/`
 - All mutations use Server Actions — not API routes
 - Use existing Shadcn components — do not introduce new UI libraries
 - Use Biome for formatting — not Prettier
@@ -419,10 +419,10 @@ Skip planning mode for: bug fixes, UI tweaks, adding fields, isolated features, 
 - New features should include tests for critical logic (Server Actions, queries, payment flows). Bug fixes should include a regression test that fails before the fix and passes after
 
 ### Security Conventions
-- File uploads must validate via `lib/photo-upload.ts` — never trust client-supplied MIME or extension
+- File uploads must validate via `src/lib/photo-upload.ts` — never trust client-supplied MIME or extension
 - JSON-LD inside `dangerouslySetInnerHTML` must use `stringifyJsonLd` — never raw `JSON.stringify`
 - Admin endpoints check `admin_users` via `supabaseAdmin` — there is no `profiles.is_admin` column
 - New `SECURITY DEFINER` functions in the `public` schema must explicitly `revoke execute ... from anon, authenticated` — Supabase grants those by default and `revoke from public` doesn't override role-specific grants
 - Tables with no public access pattern: enable RLS with no policies, use `supabaseAdmin` only — see `admin_users` and `rate_limit_buckets` for the pattern
-- Redirect destinations from user input must go through `safeNext()` from `lib/auth/safe-next.ts`
+- Redirect destinations from user input must go through `safeNext()` from `src/lib/auth/safe-next.ts`
 - Permissive RLS policies (`USING (true)`) are forbidden on tables with sensitive writes — service-role bypasses RLS, so the webhook/admin paths still work after locking down user-facing roles
