@@ -25,10 +25,12 @@ const user = {
 } as unknown as User;
 
 describe('UserAvatar', () => {
-  it('rings the header avatar with the same thin border token as the toggler (T-003)', () => {
+  it('rings the header avatar with a visible thin grey border (T-003)', () => {
     const { container } = render(<UserAvatar user={user} />);
     const avatar = container.querySelector('[data-slot="avatar"]');
     expect(avatar?.className).toContain('border');
-    expect(avatar?.className).toContain('border-input');
+    // A visible grey — border-input (#e3e3e3) is too light to read on a
+    // white-background avatar over the white header.
+    expect(avatar?.className).toContain('border-muted-foreground/50');
   });
 });

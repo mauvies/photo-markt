@@ -51,7 +51,7 @@ export function UserAvatar({ user }: Props) {
             type="button"
             className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
           >
-            <Avatar className="border border-input">
+            <Avatar className="border border-muted-foreground/50">
               <AvatarImage src={user.user_metadata.avatar_url} alt="User" />
               <AvatarFallback>{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
             </Avatar>
