@@ -1,11 +1,11 @@
 # T-025 · Endpoint de health check (`/api/health`)
 
 - **Prioridad:** P3
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/health-check-endpoint`
 - **OpenSpec change:** —  (endpoint mínimo)
-- **PR:** —
+- **PR:** #83
 
 ## Requerimiento
 Parte de «preparar la app para producción». No existe endpoint de liveness/health. Añadir un `GET /api/health`
