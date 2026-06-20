@@ -1,7 +1,7 @@
 # T-025 · Endpoint de health check (`/api/health`)
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `feat/health-check-endpoint`
 - **OpenSpec change:** —  (endpoint mínimo)
