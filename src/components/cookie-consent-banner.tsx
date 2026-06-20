@@ -25,7 +25,7 @@ export function CookieConsentBanner({
     <div
       role="dialog"
       aria-label={dict.title}
-      className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[70] mx-auto max-w-3xl px-4 md:bottom-4"
+      className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-[70] mx-auto max-w-3xl px-4 md:bottom-4"
     >
       <div className="rounded-xl border border-border bg-background/95 p-4 shadow-lg backdrop-blur-sm sm:flex sm:items-center sm:gap-4">
         <div className="flex-1 text-sm text-muted-foreground">
