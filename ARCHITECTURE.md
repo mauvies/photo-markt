@@ -628,6 +628,8 @@ Status snapshot:
 ## Cross-references
 
 - `CLAUDE.md` — engineering conventions, security utilities, code style.
+- `docs/deployment.md` — production go-live checklist: env vars, migrations,
+  Stripe live-mode, Resend domain, security headers/CSP, post-deploy smoke test.
 - `docs/AI_MATCHING_AUDIT.md` — detailed reusability assessment of the AI
   feature scaffolding.
 - `docs/AI_MATCHING.md` and `docs/AI_EMBEDDINGS_SETUP.md` — present only on

@@ -163,4 +163,7 @@ stripe listen --forward-to localhost:3000/api/stripe/webhook
 
 ## Deployment
 
-The app is deployed on Vercel. See the [project deployment notes](memory/project_deployment.md) for staging/prod setup details.
+The app is deployed on Vercel. See **[docs/deployment.md](docs/deployment.md)** for the
+full production go-live checklist: required environment variables, database
+migrations, Stripe live-mode, Resend domain verification, security headers/CSP,
+and the post-deploy smoke test.
