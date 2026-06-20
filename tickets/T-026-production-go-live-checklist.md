@@ -1,11 +1,11 @@
 # T-026 · Checklist de go-live + docs de despliegue a producción
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `docs/production-go-live-checklist`
 - **OpenSpec change:** —  (documentación + nota de hardening)
-- **PR:** —
+- **PR:** #82
 
 ## Requerimiento
 Parte de «preparar la app para producción». No hay documentación de despliegue ni checklist de go-live:
