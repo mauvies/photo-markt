@@ -1,7 +1,7 @@
 # T-026 · Checklist de go-live + docs de despliegue a producción
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `docs/production-go-live-checklist`
 - **OpenSpec change:** —  (documentación + nota de hardening)
