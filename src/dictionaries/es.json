@@ -543,6 +543,14 @@
     "privacy": "Política de Privacidad",
     "allRightsReserved": "Todos los derechos reservados."
   },
+  "cookieConsent": {
+    "title": "Valoramos tu privacidad",
+    "description": "Usamos cookies de analítica para entender cómo se usa el sitio y mejorarlo. Las cookies esenciales están siempre activas. Más información en nuestra",
+    "privacyLink": "Política de Privacidad",
+    "accept": "Aceptar",
+    "reject": "Rechazar",
+    "preferencesLabel": "Preferencias de cookies"
+  },
   "staticPages": {
     "preparing": "Esta página está en preparación. Vuelve pronto.",
     "termsTitle": "Términos y Condiciones",

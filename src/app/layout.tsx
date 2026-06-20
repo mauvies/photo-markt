@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { Geist_Mono, Inter, Inter_Tight, Syne } from 'next/font/google';
 import './globals.css';
-import { WebAnalytics } from '@/components/analytics';
 import { getSiteUrl } from '@/lib/get-site-url';
 import { defaultLocale } from '@/lib/i18n/config';
 
@@ -73,10 +72,7 @@ export default function RootLayout({
       lang={defaultLocale}
       className={`${inter.variable} ${geistMono.variable} ${interTight.variable} ${syne.variable}`}
     >
-      <body className="antialiased">
-        {children}
-        <WebAnalytics />
-      </body>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }

@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { FacebookIcon, InstagramIcon, XIcon } from '@/components/brand-icons';
+import { CookiePreferencesButton } from '@/components/cookie-preferences-button';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { localizedPath } from '@/lib/i18n/localized-path';
@@ -131,7 +132,10 @@ export function Footer({ dict, lang }: { dict: Dictionary; lang: string }) {
           <p className="text-sm text-muted-foreground">
             © {new Date().getFullYear()} Photo Markt. {t.allRightsReserved}
           </p>
-          <LanguageSwitcher />
+          <div className="flex items-center gap-4">
+            <CookiePreferencesButton label={dict.cookieConsent.preferencesLabel} />
+            <LanguageSwitcher />
+          </div>
         </div>
       </div>
     </footer>
