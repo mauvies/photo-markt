@@ -547,9 +547,18 @@
     "title": "We value your privacy",
     "description": "We use analytics cookies to understand how the site is used and make it better. Essential cookies are always on. Learn more in our",
     "privacyLink": "Privacy Policy",
-    "accept": "Accept",
-    "reject": "Reject",
-    "preferencesLabel": "Cookie preferences"
+    "accept": "Accept all",
+    "reject": "Reject all",
+    "customize": "Customize",
+    "save": "Save preferences",
+    "preferencesLabel": "Cookie preferences",
+    "manageTitle": "Cookie preferences",
+    "manageDescription": "Choose which cookies we can use. You can change this anytime from the footer.",
+    "necessaryTitle": "Strictly necessary",
+    "necessaryDescription": "Required to sign you in and keep your session secure. These are always on.",
+    "analyticsTitle": "Analytics",
+    "analyticsDescription": "Help us understand how the site is used so we can improve it. Powered by Vercel Web Analytics.",
+    "alwaysOn": "Always on"
   },
   "staticPages": {
     "preparing": "This page is being prepared. Check back soon.",

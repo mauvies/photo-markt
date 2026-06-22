@@ -547,9 +547,18 @@
     "title": "Valoramos tu privacidad",
     "description": "Usamos cookies de analítica para entender cómo se usa el sitio y mejorarlo. Las cookies esenciales están siempre activas. Más información en nuestra",
     "privacyLink": "Política de Privacidad",
-    "accept": "Aceptar",
-    "reject": "Rechazar",
-    "preferencesLabel": "Preferencias de cookies"
+    "accept": "Aceptar todo",
+    "reject": "Rechazar todo",
+    "customize": "Personalizar",
+    "save": "Guardar preferencias",
+    "preferencesLabel": "Preferencias de cookies",
+    "manageTitle": "Preferencias de cookies",
+    "manageDescription": "Elige qué cookies podemos usar. Puedes cambiarlo cuando quieras desde el pie de página.",
+    "necessaryTitle": "Estrictamente necesarias",
+    "necessaryDescription": "Necesarias para iniciar sesión y mantener tu sesión segura. Siempre están activas.",
+    "analyticsTitle": "Analítica",
+    "analyticsDescription": "Nos ayudan a entender cómo se usa el sitio para mejorarlo. Con tecnología de Vercel Web Analytics.",
+    "alwaysOn": "Siempre activas"
   },
   "staticPages": {
     "preparing": "Esta página está en preparación. Vuelve pronto.",

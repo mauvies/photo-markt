@@ -8,18 +8,21 @@ import type { Dictionary } from '@/lib/i18n/get-dictionary';
  * Presentational cookie-consent banner. Floats as a card above the mobile
  * bottom nav (z-50, min-h-16) via z-[70] + a bottom offset, and sits near the
  * bottom on desktop where that nav is hidden. State/persistence lives in the
- * parent <CookieConsent>.
+ * parent <CookieConsent>. Offers three equally-reachable choices: accept all,
+ * reject all, or customize (opens the per-category panel).
  */
 export function CookieConsentBanner({
   dict,
   privacyHref,
-  onAccept,
-  onReject,
+  onAcceptAll,
+  onRejectAll,
+  onCustomize,
 }: {
   dict: Dictionary['cookieConsent'];
   privacyHref: string;
-  onAccept: () => void;
-  onReject: () => void;
+  onAcceptAll: () => void;
+  onRejectAll: () => void;
+  onCustomize: () => void;
 }) {
   return (
     <div
@@ -41,11 +44,14 @@ export function CookieConsentBanner({
             .
           </p>
         </div>
-        <div className="mt-3 flex shrink-0 gap-2 sm:mt-0">
-          <Button variant="outline" size="sm" onClick={onReject}>
+        <div className="mt-3 flex shrink-0 flex-wrap items-center gap-2 sm:mt-0">
+          <Button variant="ghost" size="sm" onClick={onCustomize}>
+            {dict.customize}
+          </Button>
+          <Button variant="outline" size="sm" onClick={onRejectAll}>
             {dict.reject}
           </Button>
-          <Button size="sm" onClick={onAccept}>
+          <Button size="sm" onClick={onAcceptAll}>
             {dict.accept}
           </Button>
         </div>
