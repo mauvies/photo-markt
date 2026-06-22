@@ -259,7 +259,11 @@
     "alreadyHaveAccount": "¿Ya tienes cuenta?",
     "loginHere": "Iniciar sesión",
     "here": "aquí.",
-    "termsNotice": "Al continuar, aceptas los Términos de servicio y la Política de privacidad de Supabase, y recibirás correos periódicos con actualizaciones."
+    "termsNoticePrefix": "Al continuar, aceptas los ",
+    "termsLabel": "Términos de servicio",
+    "termsNoticeMiddle": " y la ",
+    "privacyLabel": "Política de privacidad",
+    "termsNoticeSuffix": " de Photo Markt."
   },
   "checkout": {
     "successTitle": "¡Pago exitoso!",

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getDashboardPath } from '@/app/[lang]/actions/roles';
 import { CloseButton } from '@/components/close-button';
 import { GoogleSignInButton } from '@/components/google-signin-button';
+import { SignupLegalNotice } from '@/components/signup-legal-notice';
 import { SubmitButton } from '@/components/submit-button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -183,7 +184,7 @@ export default async function Signup({
             </Link>
             {dict.signup.here}
           </p>
-          <p className="mt-4 text-center text-xs">{dict.signup.termsNotice}</p>
+          <SignupLegalNotice dict={dict.signup} lang={lang} />
         </form>
       </div>
     </div>
