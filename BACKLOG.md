@@ -14,11 +14,10 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-027 | Personalización granular de cookies (panel "Gestionar preferencias") | T-024 (mergeado) | doing |
-| 2 | P2 | T-031 | Enlaces a Términos y Privacidad en el aviso de `/signup` (+ corregir copy "Supabase") | — | todo |
-| 3 | P2 | T-030 | Auditoría de congruencia: features de planes ↔ lógica de negocio (toca pagos) | — | todo |
-| 4 | P2 | T-028 | Completar y traducir la página "Sobre nosotros" (`/about`) | — | todo |
-| 5 | P2 | T-029 | Completar y traducir la página "Contacto" (`/contact`) | T-028 | todo |
+| 1 | P2 | T-031 | Enlaces a Términos y Privacidad en el aviso de `/signup` (+ corregir copy "Supabase") | — | todo |
+| 2 | P2 | T-030 | Auditoría de congruencia: features de planes ↔ lógica de negocio (toca pagos) | — | todo |
+| 3 | P2 | T-028 | Completar y traducir la página "Sobre nosotros" (`/about`) | — | todo |
+| 4 | P2 | T-029 | Completar y traducir la página "Contacto" (`/contact`) | T-028 | todo |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
 ### Clusters (tocan el mismo código — ejecutar contiguos y en orden)
@@ -57,6 +56,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 - **T-024** · Banner de consentimiento de cookies (GDPR) que gatea analytics; preferencias en footer — PR #81
 - **T-026** · Checklist de go-live + `docs/deployment.md`; arregla enlace roto del README — PR #82
 - **T-025** · Health check endpoint `/api/health` (liveness puro, `no-store`) — PR #83
+- **T-027** · Cookies granulares: panel "Personalizar" con consentimiento por categoría + migración legacy — PR #84
 
 <!-- Los tickets completados se mueven aquí con su nº de PR. -->
 

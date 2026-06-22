@@ -1,11 +1,11 @@
 # T-027 · Personalización granular de cookies (panel "Gestionar preferencias")
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno (Dep lógico: T-024 ya mergeado — construye sobre su sistema de consentimiento)
 - **Rama:** `feat/cookie-preferences-granular`
 - **OpenSpec change:** —  (UI + i18n acotado, extiende T-024)
-- **PR:** —
+- **PR:** #84
 
 ## Requerimiento
 Mejora sobre el banner de cookies de T-024. Hoy el banner ofrece solo **Aceptar / Rechazar** (binario) para la
