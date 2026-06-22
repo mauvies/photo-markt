@@ -259,7 +259,11 @@
     "alreadyHaveAccount": "Already have account?",
     "loginHere": "Log in",
     "here": "here.",
-    "termsNotice": "By continuing, you agree to Supabase's Terms of Service and Privacy Policy, and to receive periodic emails with updates."
+    "termsNoticePrefix": "By continuing, you agree to Photo Markt's ",
+    "termsLabel": "Terms of Service",
+    "termsNoticeMiddle": " and ",
+    "privacyLabel": "Privacy Policy",
+    "termsNoticeSuffix": "."
   },
   "checkout": {
     "successTitle": "Payment successful!",
