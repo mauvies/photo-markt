@@ -15,10 +15,11 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
 | 1 | P2 | T-034 | Aplicar cuota mensual de búsqueda IA por plan + búsquedas guardadas (revisitar sin gastar) | — | todo |
-| 2 | P2 | T-028 | Completar y traducir la página "Sobre nosotros" (`/about`) | — | todo |
-| 3 | P2 | T-029 | Completar y traducir la página "Contacto" (`/contact`) | T-028 | todo |
-| 4 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | todo |
-| 5 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
+| 2 | P2 | T-035 | Consolidar flujo de backlog/tickets en un solo directorio (`backlog/`) + separar done | — | todo |
+| 3 | P2 | T-028 | Completar y traducir la página "Sobre nosotros" (`/about`) | — | todo |
+| 4 | P2 | T-029 | Completar y traducir la página "Contacto" (`/contact`) | T-028 | todo |
+| 5 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | todo |
+| 6 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
 ### Clusters (tocan el mismo código — ejecutar contiguos y en orden)
@@ -28,6 +29,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 - **Tabs:** T-004 (arregla el salto) → T-013 (restila todos los tabs, incluidos los de eventos destacados).
 - **Páginas i18n/producción:** T-014 → T-015 → T-016 (hechas). Mismo patrón pendiente: **T-028 (`/about`) → T-029 (`/contact`)** — placeholders `staticPages.preparing` por completar; comparten `en.json`/`es.json`, ejecutar en serie con merge previo para evitar conflictos de diccionario. (Contacto: no duplicar el formulario que ya vive en `/support`.)
 - **Independientes (sin cluster):** T-005, T-012, T-018, T-009, T-017, T-019, T-020. (T-018 reusa `pricing-section`/`lib/plans.ts`; T-019 es refactor de toda la raíz — ejecutar aislado, con el resto de la cola mergeada. T-020 es rename trivial.)
+- **T-035 (reorg backlog):** ejecutar **aislado** y con todo lo demás mergeado — reescribe la ubicación/estructura del propio `BACKLOG.md` y de `work-next.md`, así que choca con cualquier ticket que marque done/doing en `BACKLOG.md` (mismo cuidado que T-019).
 
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
