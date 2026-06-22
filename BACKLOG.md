@@ -14,6 +14,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
+| 1 | P2 | T-027 | Personalización granular de cookies (panel "Gestionar preferencias") | T-024 (mergeado) | todo |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
 ### Clusters (tocan el mismo código — ejecutar contiguos y en orden)
