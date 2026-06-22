@@ -79,11 +79,14 @@ export const PLANS: Plan[] = [
   },
 ];
 
-export const PLATFORM_FEE_RATES: Record<PlanId, number> = {
-  free: 0.12,
-  starter: 0.08,
-  pro: 0.05,
-};
+/**
+ * Platform commission rate per plan, as a 0–1 fraction. Single source of truth:
+ * derived from each plan's `salesFeePercent` so the advertised "% sales fee" and
+ * the fee actually applied in the Stripe webhook / earnings can never diverge.
+ */
+export const PLATFORM_FEE_RATES: Record<PlanId, number> = Object.fromEntries(
+  PLANS.map((plan) => [plan.id, plan.salesFeePercent / 100]),
+) as Record<PlanId, number>;
 
 export function getPlatformFeeRate(planId: string | null | undefined): number {
   if (planId && planId in PLATFORM_FEE_RATES) {
