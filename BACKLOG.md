@@ -15,6 +15,8 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
 | 1 | P2 | T-027 | Personalización granular de cookies (panel "Gestionar preferencias") | T-024 (mergeado) | todo |
+| 2 | P2 | T-028 | Completar y traducir la página "Sobre nosotros" (`/about`) | — | todo |
+| 3 | P2 | T-029 | Completar y traducir la página "Contacto" (`/contact`) | T-028 | todo |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
 ### Clusters (tocan el mismo código — ejecutar contiguos y en orden)
@@ -22,7 +24,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 - **Galería del evento (mobile):** T-007 → T-010 → T-008. T-007 reestructura la toolbar; los otros dos dependen de esa base.
 - **Header / nav:** T-002 → T-003 → T-006. T-003 reusa el borde de T-002; T-006 oculta el header en mobile (coordinar con T-003).
 - **Tabs:** T-004 (arregla el salto) → T-013 (restila todos los tabs, incluidos los de eventos destacados).
-- **Páginas i18n/producción:** T-014 → T-015 → T-016. Comparten `en.json`/`es.json`; en serie evitan conflictos de diccionario.
+- **Páginas i18n/producción:** T-014 → T-015 → T-016 (hechas). Mismo patrón pendiente: **T-028 (`/about`) → T-029 (`/contact`)** — placeholders `staticPages.preparing` por completar; comparten `en.json`/`es.json`, ejecutar en serie con merge previo para evitar conflictos de diccionario. (Contacto: no duplicar el formulario que ya vive en `/support`.)
 - **Independientes (sin cluster):** T-005, T-012, T-018, T-009, T-017, T-019, T-020. (T-018 reusa `pricing-section`/`lib/plans.ts`; T-019 es refactor de toda la raíz — ejecutar aislado, con el resto de la cola mergeada. T-020 es rename trivial.)
 
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
