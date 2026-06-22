@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import en from '@/dictionaries/en.json';
 import es from '@/dictionaries/es.json';
-import { AI_SEARCH_RATE_LIMITS } from '@/lib/ai/rate-limits';
 import { getPlanById, getPlatformFeeRate, PLATFORM_FEE_RATES, type PlanId } from '@/lib/plans';
 
 /**
- * Guard test for T-030: the advertised pricing copy (the `pricingSection`
+ * Guard test (T-030): the advertised pricing copy (the `pricingSection`
  * dictionary, both locales) must stay congruent with the structured business
- * config (`plans.ts`, `ai/rate-limits.ts`). If someone changes a plan's fee,
- * storage, event cap, or AI quota in one place but not the copy, this fails.
+ * config (`plans.ts`). If someone changes a plan's fee, storage, or event cap
+ * in one place but not the copy, this fails.
  *
  * It only pins the dimensions the copy states as a concrete number; features
- * with no number (e.g. "Unlimited events") aren't asserted here.
+ * with no number (e.g. "Unlimited events", "Face recognition") aren't asserted.
+ * The per-plan monthly AI-search quota was removed in T-036 (it advertised an
+ * unenforceable number — see T-034), so it's intentionally not pinned here.
  */
 const PLANS: PlanId[] = ['free', 'starter', 'pro'];
 
@@ -45,10 +46,11 @@ describe('pricing copy ↔ config consistency', () => {
         expect(dict.freeFeature3).toContain(String(getPlanById('free')?.maxEvents));
       });
 
-      it('advertises the real free AI search quota', () => {
-        const quota = AI_SEARCH_RATE_LIMITS.free.maxSearchesPerMonth;
-        expect(quota).not.toBeNull();
-        expect(dict.freeFeature5).toContain(String(quota));
+      it('does not promise an (unenforceable) monthly face-search number', () => {
+        // T-036: face search is anonymous-friendly and the quota was never
+        // enforceable per plan, so the copy must not state "N searches/month".
+        expect(dict.freeFeature5).not.toMatch(/\d+\s*(searches|búsquedas)/i);
+        expect(dict.freeFeature5).not.toMatch(/month|mes/i);
       });
     });
   }
