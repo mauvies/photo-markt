@@ -1,7 +1,7 @@
 # T-031 · Enlaces a Términos y Privacidad en el aviso de /signup (y corregir copy)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno (destinos `/terms` y `/privacy-policy` ya existen — T-021 y T-016 mergeados)
 - **Rama:** `fix/signup-legal-links`
 - **OpenSpec change:** —  (UI + i18n acotado, un archivo + diccionarios)

@@ -14,7 +14,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-031 | Enlaces a Términos y Privacidad en el aviso de `/signup` (+ corregir copy "Supabase") | — | todo |
+| 1 | P2 | T-031 | Enlaces a Términos y Privacidad en el aviso de `/signup` (+ corregir copy "Supabase") | — | doing |
 | 2 | P2 | T-030 | Auditoría de congruencia: features de planes ↔ lógica de negocio (toca pagos) | — | todo |
 | 3 | P2 | T-028 | Completar y traducir la página "Sobre nosotros" (`/about`) | — | todo |
 | 4 | P2 | T-029 | Completar y traducir la página "Contacto" (`/contact`) | T-028 | todo |
