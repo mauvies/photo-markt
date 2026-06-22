@@ -35,7 +35,7 @@ export function BillingPeriodToggle({
   const isYearly = value === 'yearly';
 
   return (
-    <div className="flex items-center justify-center gap-3">
+    <div className="flex items-center justify-center gap-3 h-6">
       <span
         className={
           !isYearly ? 'text-sm font-medium text-foreground' : 'text-sm text-muted-foreground'
