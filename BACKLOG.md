@@ -14,12 +14,11 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-036 | Quitar cuota mensual de búsqueda IA a medias + dropear esquema huérfano | — | doing |
-| 2 | P2 | T-035 | Consolidar flujo de backlog/tickets en un solo directorio (`backlog/`) + separar done | — | todo |
-| 3 | P2 | T-028 | Completar y traducir la página "Sobre nosotros" (`/about`) | — | todo |
-| 4 | P2 | T-029 | Completar y traducir la página "Contacto" (`/contact`) | T-028 | todo |
-| 5 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | todo |
-| 6 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
+| 1 | P2 | T-035 | Consolidar flujo de backlog/tickets en un solo directorio (`backlog/`) + separar done | — | todo |
+| 2 | P2 | T-028 | Completar y traducir la página "Sobre nosotros" (`/about`) | — | todo |
+| 3 | P2 | T-029 | Completar y traducir la página "Contacto" (`/contact`) | T-028 | todo |
+| 4 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | todo |
+| 5 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
@@ -63,6 +62,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 - **T-027** · Cookies granulares: panel "Personalizar" con consentimiento por categoría + migración legacy — PR #84
 - **T-031** · Enlaces a Términos/Privacidad en aviso de `/signup` + corrige copy "Supabase"→Photo Markt — PR #85
 - **T-030** · Congruencia pricing↔lógica: free AI quota 100→10, fee de fuente única, badges coming-soon, test de guardia — PR #86
+- **T-036** · Quitar cuota mensual de búsqueda IA a medias + drop `ai_search_usage` huérfano (rediseño en T-034) — PR #87
 
 <!-- Los tickets completados se mueven aquí con su nº de PR. -->
 

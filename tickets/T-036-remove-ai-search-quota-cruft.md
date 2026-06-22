@@ -1,11 +1,11 @@
 # T-036 · Quitar la cuota mensual de búsqueda IA a medias + dropear esquema huérfano
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `chore/remove-ai-search-quota`
-- **OpenSpec change:** —  (eliminación de código/esquema muerto; sin diseño nuevo. `/code-review` por tocar migración.)
-- **PR:** —
+- **OpenSpec change:** —  (eliminación de código/esquema muerto; sin diseño nuevo. `/code-review` corrido por tocar migración.)
+- **PR:** #87
 
 ## Requerimiento
 La "cuota mensual de búsqueda IA por plan" está **a medias y no es honrable** (el buscador es talent/invitado
