@@ -14,9 +14,11 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-030 | Auditoría de congruencia: features de planes ↔ lógica de negocio (toca pagos) | — | doing |
+| 1 | P2 | T-034 | Aplicar cuota mensual de búsqueda IA por plan + búsquedas guardadas (revisitar sin gastar) | — | todo |
 | 2 | P2 | T-028 | Completar y traducir la página "Sobre nosotros" (`/about`) | — | todo |
 | 3 | P2 | T-029 | Completar y traducir la página "Contacto" (`/contact`) | T-028 | todo |
+| 4 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | todo |
+| 5 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
 ### Clusters (tocan el mismo código — ejecutar contiguos y en orden)
@@ -57,6 +59,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 - **T-025** · Health check endpoint `/api/health` (liveness puro, `no-store`) — PR #83
 - **T-027** · Cookies granulares: panel "Personalizar" con consentimiento por categoría + migración legacy — PR #84
 - **T-031** · Enlaces a Términos/Privacidad en aviso de `/signup` + corrige copy "Supabase"→Photo Markt — PR #85
+- **T-030** · Congruencia pricing↔lógica: free AI quota 100→10, fee de fuente única, badges coming-soon, test de guardia — PR #86
 
 <!-- Los tickets completados se mueven aquí con su nº de PR. -->
 

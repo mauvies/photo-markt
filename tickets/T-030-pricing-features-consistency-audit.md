@@ -1,11 +1,12 @@
 # T-030 · Auditoría de congruencia: features de los planes ↔ lógica de negocio
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `chore/pricing-features-consistency-audit`
-- **OpenSpec change:** **sí, probable** — toca **pagos** (comisión por plan). Usar `/opsx:propose` y `/code-review` al ejecutar.
-- **PR:** —
+- **OpenSpec change:** — (al ejecutar resultó ser refactor behavior-preserving + config/copy; sin diseño ambiguo que capturar. Se corrió `/code-review` como red de seguridad de pagos en su lugar.)
+- **PR:** #86
+- **Seguimiento creado:** T-032 (BIB), T-033 (search priority), T-034 (cuota mensual IA + saved searches).
 
 ## Requerimiento
 Asegurar que **todas las características anunciadas en los pricing packages** (Free / Starter / Pro) son
