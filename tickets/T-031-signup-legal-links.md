@@ -1,11 +1,11 @@
 # T-031 · Enlaces a Términos y Privacidad en el aviso de /signup (y corregir copy)
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno (destinos `/terms` y `/privacy-policy` ya existen — T-021 y T-016 mergeados)
 - **Rama:** `fix/signup-legal-links`
 - **OpenSpec change:** —  (UI + i18n acotado, un archivo + diccionarios)
-- **PR:** —
+- **PR:** #85
 
 ## Requerimiento
 En la página `/signup`, el texto de consentimiento ("Al continuar, aceptas…") debe enlazar a **nuestras**
