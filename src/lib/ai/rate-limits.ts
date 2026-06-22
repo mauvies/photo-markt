@@ -1,5 +1,12 @@
 /**
- * Rate limiting configuration for AI search based on subscription tiers
+ * Per-plan monthly AI-search quota configuration.
+ *
+ * NOTE: this is the *declared* quota that the pricing copy advertises. The
+ * monthly per-plan enforcement (counting + "saved searches that don't re-spend
+ * a search on revisit") is not wired up yet — see the follow-up ticket. The
+ * live limiter today is a per-(shareCode, IP) hourly cap elsewhere. Keep the
+ * numbers here in sync with the advertised `pricingSection` copy; a guard test
+ * pins them together.
  */
 
 import type { PlanId } from '@/lib/plans';
@@ -22,8 +29,8 @@ export interface RateLimitConfig {
  */
 export const AI_SEARCH_RATE_LIMITS: Record<PlanId, RateLimitConfig> = {
   free: {
-    maxSearchesPerMonth: 3,
-    description: '3 searches per month',
+    maxSearchesPerMonth: 10,
+    description: '10 searches per month',
   },
   starter: {
     maxSearchesPerMonth: 20,
