@@ -1,57 +1,47 @@
-# T-034 · Aplicar cuota mensual de búsqueda IA por plan + búsquedas guardadas (revisitar sin gastar)
+# T-034 · [DISEÑO] Modelo anti-abuso y control de coste para la búsqueda facial
 
 - **Prioridad:** P2
-- **Estado:** todo
-- **Blockers:** ninguno
-- **Rama:** `feat/ai-search-monthly-quota`
-- **OpenSpec change:** **sí** — toca BD (tracking de uso) + diseño de "saved searches". `/opsx:propose` al ejecutar.
+- **Estado:** blocked  (necesita decisión de producto/diseño — ver abajo)
+- **Blockers:** **decisión de producto** — ¿de quién es la cuota y cómo se controla el abuso/coste si quien busca es anónimo?
+- **Rama:** `feat/face-search-abuse-model` (cuando se desbloquee)
+- **OpenSpec change:** **sí** — diseño + BD. `/opsx:propose` cuando haya decisión.
 - **PR:** —
 
-## Requerimiento
-La copy de pricing anuncia una cuota mensual de búsqueda facial por plan (Free 10/mes, Starter 20/mes, Pro
-ilimitado), pero **esa cuota mensual por plan no se aplica hoy** (el config existe pero es código muerto).
-Implementar la **aplicación real** de la cuota mensual por plan, **y** que una búsqueda **guardada** se pueda
-**revisitar sin consumir** una nueva búsqueda (requisito explícito del usuario al fijar 10/mes en T-030).
+## El problema (descubierto al ejecutar, 2026-06-22)
+La idea original era "cuota mensual de búsqueda IA por plan (Free 10 / Starter 20 / Pro ilimitado) + búsquedas
+guardadas revisitar-sin-gastar". Al implementarlo aparece un **desajuste de dominio que bloquea el diseño**:
 
-## Estado actual (verificado, durante T-030)
-- `src/lib/ai/rate-limits.ts` declara `AI_SEARCH_RATE_LIMITS` (free 10 / starter 20 / pro null) **pero sus
-  funciones (`hasExceededRateLimit`, `getRemainingSearches`, …) no se llaman en ningún sitio** → cuota mensual
-  por plan **no enforced**.
-- El limitador **vivo** hoy es otro: un cap por `(shareCode, IP)` de 10 búsquedas/hora.
-- Las selfies son efímeras (no se almacenan) y los resultados de búsqueda **no se persisten** → no existe
-  "revisitar una búsqueda" sin re-ejecutarla (y por tanto sin volver a llamar a Rekognition).
-- T-030 dejó la copy y el config congruentes (Free = 10) + un test de guardia copy↔config, pero **no** implementó
-  el enforcement (este ticket).
+- **Quien busca es talent/invitado, normalmente SIN cuenta.** `searchFacesInEvent` es *anonymous-friendly*,
+  limitado hoy solo por `(shareCode, IP)` a 10/hora (`src/lib/rate-limit.ts`).
+- **La cuota "N búsquedas/mes" se anuncia en los planes del FOTÓGRAFO** (Free/Starter/Pro = suscripción del
+  fotógrafo). El buscador (talent) **no es** el dueño del plan.
+- Existía infra a medias: tabla `ai_search_usage` (keyed por `user_id`) + funciones SQL
+  `increment_ai_search_usage`/`get_ai_search_usage_count`, **nunca cableadas** (probablemente abandonadas por este
+  mismo desajuste). El config TS `AI_SEARCH_RATE_LIMITS` era código muerto. → **Eliminado en T-036.**
+- **`ai_search_profiles`** (filtros de búsqueda guardados) también está huérfano (cero refs en app) — relacionado
+  con la idea de "búsquedas guardadas"; revisar al rediseñar.
 
-## Criterio de aceptación (Definition of Done)
-- [ ] **Tracking de uso mensual por usuario** (tabla/migración, p. ej. `ai_search_usage` con ventana mensual) y
-      enforcement real: al exceder la cuota del plan, bloquear con error tipado (patrón `PLAN_LIMIT:` / similar) y
-      CTA de upgrade en la UI
-- [ ] **Búsquedas guardadas:** persistir el resultado de una búsqueda (mapeo selfie→fotos encontradas) de forma que
-      el talent pueda **revisitarla** sin gastar una nueva búsqueda ni re-llamar a Rekognition. Respetar que la
-      **selfie sigue siendo efímera** (no almacenar la imagen; guardar solo el resultado/los IDs de foto)
-- [ ] Mostrar "búsquedas restantes este mes" en la UI (ya hay `getRemainingSearches`, hoy sin uso)
-- [ ] Cablear las funciones de `ai/rate-limits.ts` (dejar de ser código muerto) o reemplazarlas por el nuevo diseño
-- [ ] Coexistir con el cap por `(shareCode, IP)`/hora ya existente (defensa anti-abuso) sin duplicar lógica
-- [ ] El test de guardia de T-030 sigue verde (copy↔config); añadir tests del enforcement y del "revisit no gasta"
+**Preocupación del usuario:** que los talents **abusen** del reconocimiento facial y **agoten/encarezcan** las
+búsquedas (cada búsqueda llama a AWS Rekognition = coste).
+
+## Qué hay que decidir (antes de diseñar/implementar)
+- [ ] **¿De quién es la cuota?** Opciones evaluadas: (a) por plan del fotógrafo, contada por evento (un Free
+      popular se agota y bloquea atletas); (b) por cuenta de talent con login obligatorio (no existe plan talent
+      hoy); (c) sin cuota mensual — capability por plan + límite anti-abuso. Falta elegir.
+- [ ] **Control de coste/abuso** sin cuenta: ¿endurecer el límite por IP? ¿cache de resultados por
+      `(evento, hash-de-selfie)` para no re-llamar a Rekognition en repeticiones? ¿captcha/prueba de humanidad?
+- [ ] **"Búsquedas guardadas / revisitar sin gastar"**: con selfie efímera (no se almacena), ¿qué se persiste
+      para revisitar? (solo IDs de foto del resultado, keyed por qué). Reconsiderar `ai_search_profiles`.
+- [ ] ¿Qué promete la copy de pricing entonces? (T-036 ya quitó el número "/mes" no honrable.)
+
+## Criterio de aceptación (cuando se desbloquee)
+- [ ] Diseño capturado en OpenSpec con el modelo elegido (quién, cómo se cuenta, qué se persiste)
+- [ ] Mecanismo anti-abuso/coste implementado (cache de resultados y/o límites), con selfie efímera respetada
+- [ ] Copy de pricing alineada con lo realmente ofrecido (y su test de guardia)
+- [ ] Tests (incl. el "revisitar no re-llama a Rekognition" si se hace cache)
 - [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
-- [ ] Actualizar la nota de `CLAUDE.md` (hoy dice que la cuota mensual "no está wired") cuando pase a estar enforced
 
 ## Notas
-- **Decisión de producto pendiente confirmada por el usuario:** 10/mes free **asumiendo** que revisitar una búsqueda
-  guardada no gasta cuota. Este ticket es justo esa premisa.
-- Coste: cada búsqueda nueva llama a AWS Rekognition (cuesta) — por eso "revisitar sin gastar" importa
-  económicamente, no solo de UX.
-- Toca BD + privacidad (qué se persiste de una búsqueda) → `/opsx:propose` para capturar el diseño y `/code-review`.
-
----
-
-## Flujo de ejecución (lo sigue `/work-next`, igual para todos)
-1. `git checkout main && git pull` → crear rama `feat/ai-search-monthly-quota`.
-2. BD + diseño → `/opsx:propose` → `/opsx:apply`.
-3. Migración + tracking + enforcement + saved searches + UI + tests.
-4. `pnpm typecheck && pnpm lint && pnpm test`. `/code-review` (BD/cuotas).
-5. Commit (Conventional Commits, **sin** `Co-Authored-By`).
-6. `git push -u origin feat/ai-search-monthly-quota`.
-7. `gh pr create --draft` a `main`. Título y cuerpo en inglés.
-8. Marcar `done`, archivar en `BACKLOG.md`. `/opsx:archive`.
+- Desbloquear eligiendo el modelo (decisión de producto) → entonces `/opsx:propose`.
+- Mientras: la limpieza de lo a medias se hizo en **T-036**; el límite vivo `(shareCode, IP)`/hora sigue como
+  defensa anti-abuso básica.

@@ -14,12 +14,13 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-034 | Aplicar cuota mensual de búsqueda IA por plan + búsquedas guardadas (revisitar sin gastar) | — | todo |
+| 1 | P2 | T-036 | Quitar cuota mensual de búsqueda IA a medias + dropear esquema huérfano | — | doing |
 | 2 | P2 | T-035 | Consolidar flujo de backlog/tickets en un solo directorio (`backlog/`) + separar done | — | todo |
 | 3 | P2 | T-028 | Completar y traducir la página "Sobre nosotros" (`/about`) | — | todo |
 | 4 | P2 | T-029 | Completar y traducir la página "Contacto" (`/contact`) | T-028 | todo |
 | 5 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | todo |
 | 6 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
+| — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
 ### Clusters (tocan el mismo código — ejecutar contiguos y en orden)
