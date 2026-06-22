@@ -1,7 +1,7 @@
 # T-030 · Auditoría de congruencia: features de los planes ↔ lógica de negocio
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `chore/pricing-features-consistency-audit`
 - **OpenSpec change:** **sí, probable** — toca **pagos** (comisión por plan). Usar `/opsx:propose` y `/code-review` al ejecutar.
