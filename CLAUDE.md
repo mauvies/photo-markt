@@ -22,7 +22,9 @@ pnpm lint         # Biome check (linting)
 pnpm lint:fix     # Biome check with auto-fix
 pnpm format       # Biome format with auto-fix
 pnpm typecheck    # TypeScript type checking (no emit)
-pnpm test         # Run all Vitest tests once
+pnpm test         # Run all Vitest tests once (assumes local Supabase already up for integration)
+pnpm test:unit    # Unit tests only (test/unit) — no Docker needed, fast
+pnpm test:integration # supabase start → run test/integration → supabase stop (auto-managed)
 pnpm test:watch   # Vitest watch mode
 pnpm test:coverage # Vitest run + coverage report
 pnpm db:start     # supabase start (Docker; local Supabase for integration tests)
@@ -278,7 +280,9 @@ The project uses **Vitest** for tests and **Supabase local** (Docker) for integr
 
 | Command | What it does |
 |---|---|
-| `pnpm test` | Run every test once |
+| `pnpm test` | Run every test once (integration tests assume the local Supabase stack is already up) |
+| `pnpm test:unit` | Unit tests only (`test/unit`) — no Docker, fast inner loop |
+| `pnpm test:integration` | Boots Supabase, runs `test/integration`, then stops it — Docker only lives during the run |
 | `pnpm test:watch` | Watch mode |
 | `pnpm test:coverage` | Run + write coverage report under `coverage/` |
 | `pnpm db:start` / `db:stop` / `db:reset` | Boot or reset the local Supabase stack (Docker required) |

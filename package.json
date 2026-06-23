@@ -9,6 +9,8 @@
     "lint": "biome check",
     "lint:fix": "biome check --write",
     "test": "vitest run",
+    "test:unit": "vitest run test/unit",
+    "test:integration": "supabase start && (vitest run test/integration; ec=$?; supabase stop; exit $ec)",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "db:start": "supabase start",
