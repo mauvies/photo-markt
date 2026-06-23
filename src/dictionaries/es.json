@@ -1405,6 +1405,45 @@
       }
     ]
   },
+  "aboutPage": {
+    "title": "Sobre nosotros",
+    "intro": "Photo Markt es un marketplace de fotografía de eventos deportivos. Conectamos a los fotógrafos que capturan días de carrera, partidos y competencias con los atletas que quieren esas fotos de sí mismos, y hacemos que encontrarlas, comprarlas y cobrar por ellas sea sencillo.",
+    "contactTitle": "Contáctanos",
+    "contactBody": "¿Tienes una pregunta, una idea de colaboración o comentarios? Nos encantaría saber de ti en",
+    "contactEmail": "hello@photomarkt.com",
+    "sections": [
+      {
+        "heading": "Nuestra misión",
+        "body": "Las fotos deportivas solían ser difíciles de encontrar y aún más de comprar. Los fotógrafos disparaban miles de tomas y los atletas rara vez veían las suyas. Photo Markt cierra esa brecha: damos a los fotógrafos un lugar para publicar su trabajo y cobrar de forma justa, y damos a los atletas una manera rápida de encontrar y tener su momento.",
+        "bullets": []
+      },
+      {
+        "heading": "Qué hacemos",
+        "body": "Los fotógrafos crean un evento, suben sus fotos y fijan un precio. Los atletas exploran el evento, encuentran las fotos en las que aparecen y compran copias en alta resolución. Nosotros nos encargamos del almacenamiento, las vistas previas con marca de agua, los pagos y las liquidaciones, para que ambas partes se concentren en la foto y no en la logística.",
+        "bullets": []
+      },
+      {
+        "heading": "Para fotógrafos",
+        "body": "Convierte tus sesiones de eventos en una tienda en minutos.",
+        "bullets": [
+          "Crea eventos públicos o privados y sube tus fotos de forma masiva.",
+          "Deja que los atletas se encuentren al instante con la búsqueda facial por IA.",
+          "Fija tu propio precio por foto y conserva la mayor parte de cada venta.",
+          "Cobra directo a tu banco a través de Stripe, sin mínimos de liquidación."
+        ]
+      },
+      {
+        "heading": "Para atletas",
+        "body": "Encuentra las fotos de tu gran día sin recorrer miles de tomas.",
+        "bullets": [
+          "Explora los eventos en los que participaste.",
+          "Sube una selfie para ver al instante las fotos en las que apareces.",
+          "Compra copias nítidas en alta resolución, tuyas para guardar y compartir.",
+          "Mantén cada compra organizada en tu biblioteca."
+        ]
+      }
+    ]
+  },
   "termsOfService": {
     "title": "Términos del Servicio",
     "lastUpdated": "Última actualización: junio de 2026",
