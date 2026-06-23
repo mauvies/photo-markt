@@ -1,11 +1,11 @@
 # T-028 · Completar y traducir la página "Sobre nosotros" (`/about`)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/about-page-i18n-production`
 - **OpenSpec change:** —  (contenido + i18n acotado, mismo patrón que T-021/T-016)
-- **PR:** —
+- **PR:** #89
 
 ## Requerimiento
 La página pública `/about` ("Sobre nosotros") hoy es solo un placeholder (`dict.staticPages.preparing`).

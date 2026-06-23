@@ -1405,6 +1405,45 @@
       }
     ]
   },
+  "aboutPage": {
+    "title": "About us",
+    "intro": "Photo Markt is a marketplace for sports event photography. We connect the photographers who capture race days, matches, and competitions with the athletes who want those photos of themselves — and we make finding, buying, and getting paid for them simple.",
+    "contactTitle": "Get in touch",
+    "contactBody": "Have a question, a partnership idea, or feedback? We would love to hear from you at",
+    "contactEmail": "hello@photomarkt.com",
+    "sections": [
+      {
+        "heading": "Our mission",
+        "body": "Sports photos used to be hard to find and harder to buy. Photographers shot thousands of frames and athletes rarely saw the ones of themselves. Photo Markt closes that gap: we give photographers a place to publish their work and get paid fairly, and we give athletes a fast way to find and own their moment.",
+        "bullets": []
+      },
+      {
+        "heading": "What we do",
+        "body": "Photographers create an event, upload their photos, and set a price. Athletes browse the event, find the photos they appear in, and buy high-resolution copies. We handle the storage, the watermarked previews, the payments, and the payouts — so both sides can focus on the photo, not the logistics.",
+        "bullets": []
+      },
+      {
+        "heading": "For photographers",
+        "body": "Turn your event shoots into a storefront in minutes.",
+        "bullets": [
+          "Create public or private events and upload your photos in bulk.",
+          "Let athletes find themselves instantly with AI-powered face search.",
+          "Set your own price per photo and keep most of every sale.",
+          "Get paid directly to your bank through Stripe, with no payout minimums."
+        ]
+      },
+      {
+        "heading": "For athletes",
+        "body": "Find the photos of your big day without scrolling through thousands of frames.",
+        "bullets": [
+          "Browse the events you took part in.",
+          "Upload a selfie to instantly surface the photos you appear in.",
+          "Buy clean, high-resolution copies — yours to keep and share.",
+          "Keep every purchase organized in your library."
+        ]
+      }
+    ]
+  },
   "termsOfService": {
     "title": "Terms of Service",
     "lastUpdated": "Last updated: June 2026",

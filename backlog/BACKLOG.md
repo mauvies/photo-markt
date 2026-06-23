@@ -11,11 +11,10 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-028 | Completar y traducir la página "Sobre nosotros" (`/about`) | — | todo |
-| 2 | P2 | T-029 | Completar y traducir la página "Contacto" (`/contact`) | T-028 | todo |
-| 3 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | todo |
-| 4 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
-| 5 | P3 | T-037 | Centralizar estructura de base de datos (`supabase/` raíz vs `src/database/`) | — | todo |
+| 1 | P2 | T-029 | Completar y traducir la página "Contacto" (`/contact`) | — | todo |
+| 2 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | todo |
+| 3 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
+| 4 | P3 | T-037 | Centralizar estructura de base de datos (`supabase/` raíz vs `src/database/`) | — | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
@@ -60,6 +59,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 - **T-030** · Congruencia pricing↔lógica: free AI quota 100→10, fee de fuente única, badges coming-soon, test de guardia — PR #86
 - **T-036** · Quitar cuota mensual de búsqueda IA a medias + drop `ai_search_usage` huérfano (rediseño en T-034) — PR #87
 - **T-035** · Consolidar el flujo de backlog/tickets en `backlog/` (un solo dir) + separar `done/`; README único del flujo — PR #88
+- **T-028** · Página "Sobre nosotros" (`/about`) production-ready + i18n (es+en), bloque `aboutPage` + test de paridad — PR #89
 
 <!-- Los tickets completados se mueven aquí con su nº de PR. -->
 
