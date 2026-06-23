@@ -1,11 +1,11 @@
 # T-035 · Consolidar el flujo de backlog/tickets en un solo directorio
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `chore/consolidate-backlog-workflow`
 - **OpenSpec change:** —  (reorg mecánico de archivos + actualizar referencias; sin BD/pagos/auth)
-- **PR:** —
+- **PR:** #88
 
 ## Requerimiento
 Hoy todo lo relacionado con tickets/backlog/flujo está **disperso**: `BACKLOG.md` en la raíz, `tickets/` en la
