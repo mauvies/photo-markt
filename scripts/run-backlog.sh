@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 
 max="${1:-5}"
 for ((i = 1; i <= max; i++)); do
-  if ! grep -qE '\|\s*todo\s*\|' BACKLOG.md; then
+  if ! grep -qE '\|\s*todo\s*\|' backlog/BACKLOG.md; then
     echo "Backlog sin tickets ejecutables. Fin."
     exit 0
   fi

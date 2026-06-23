@@ -45,4 +45,4 @@ aparezcan con mayor prioridad en los resultados de búsqueda.
 5. Commit (Conventional Commits, **sin** `Co-Authored-By`).
 6. `git push -u origin feat/search-result-priority`.
 7. `gh pr create --draft` a `main`. Título y cuerpo en inglés.
-8. Marcar `done`, archivar en `BACKLOG.md`.
+8. Marcar `done`, archivar en `backlog/BACKLOG.md`.

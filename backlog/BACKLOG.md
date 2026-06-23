@@ -1,24 +1,20 @@
 # Backlog
 
-Cola ordenada por **orden de ejecución** (`#`): se ejecuta de arriba hacia abajo. El orden respeta
-prioridad y dependencias, de modo que ningún ticket bloquea al siguiente si se ejecutan en este orden.
-Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecutar con `/work-next`.
+Cola ordenada por **orden de ejecución** (`#`): se ejecuta de arriba hacia abajo, respetando prioridad
+y dependencias. **El flujo completo (comandos, prioridades, estados, archivado, regla anti-conflicto)
+vive en [`README.md`](./README.md).** Plantilla de ticket: [`TEMPLATE.md`](./TEMPLATE.md). Capturar con
+`/ticket`, ejecutar con `/work-next`; el loop en serie es `scripts/run-backlog.sh`.
 
-**Prioridad:** `P0` urgente · `P1` alta · `P2` normal · `P3` algún día.
-**Estado:** `todo` · `blocked` · `doing` · `done` (al terminar se mueve a la sección Archivo).
-**Dep:** ejecutar después de ese ticket (mismo archivo/área o dependencia lógica). Sin Dep = independiente.
-
-> **Regla anti-conflicto:** mergea (o rebasa) cada PR antes de arrancar el siguiente. Varios tickets
-> editan `en.json`/`es.json` y los mismos componentes; en serie con merge previo no hay conflicto.
-> El loop `scripts/run-backlog.sh` ya va en serie; respétalo, no lances ramas en paralelo sobre el mismo cluster.
+**Prioridad:** `P0` urgente · `P1` alta · `P2` normal · `P3` algún día. ·
+**Estado:** `todo` · `blocked` · `doing` · `done` (al archivar: a la sección Archivo, y el archivo del
+ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de ese ticket. Sin Dep = independiente.
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-035 | Consolidar flujo de backlog/tickets en un solo directorio (`backlog/`) + separar done | — | todo |
-| 2 | P2 | T-028 | Completar y traducir la página "Sobre nosotros" (`/about`) | — | todo |
-| 3 | P2 | T-029 | Completar y traducir la página "Contacto" (`/contact`) | T-028 | todo |
-| 4 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | todo |
-| 5 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
+| 1 | P2 | T-028 | Completar y traducir la página "Sobre nosotros" (`/about`) | — | todo |
+| 2 | P2 | T-029 | Completar y traducir la página "Contacto" (`/contact`) | T-028 | todo |
+| 3 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | todo |
+| 4 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
@@ -29,7 +25,6 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 - **Tabs:** T-004 (arregla el salto) → T-013 (restila todos los tabs, incluidos los de eventos destacados).
 - **Páginas i18n/producción:** T-014 → T-015 → T-016 (hechas). Mismo patrón pendiente: **T-028 (`/about`) → T-029 (`/contact`)** — placeholders `staticPages.preparing` por completar; comparten `en.json`/`es.json`, ejecutar en serie con merge previo para evitar conflictos de diccionario. (Contacto: no duplicar el formulario que ya vive en `/support`.)
 - **Independientes (sin cluster):** T-005, T-012, T-018, T-009, T-017, T-019, T-020. (T-018 reusa `pricing-section`/`lib/plans.ts`; T-019 es refactor de toda la raíz — ejecutar aislado, con el resto de la cola mergeada. T-020 es rename trivial.)
-- **T-035 (reorg backlog):** ejecutar **aislado** y con todo lo demás mergeado — reescribe la ubicación/estructura del propio `BACKLOG.md` y de `work-next.md`, así que choca con cualquier ticket que marque done/doing en `BACKLOG.md` (mismo cuidado que T-019).
 
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
@@ -63,6 +58,7 @@ Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecuta
 - **T-031** · Enlaces a Términos/Privacidad en aviso de `/signup` + corrige copy "Supabase"→Photo Markt — PR #85
 - **T-030** · Congruencia pricing↔lógica: free AI quota 100→10, fee de fuente única, badges coming-soon, test de guardia — PR #86
 - **T-036** · Quitar cuota mensual de búsqueda IA a medias + drop `ai_search_usage` huérfano (rediseño en T-034) — PR #87
+- **T-035** · Consolidar el flujo de backlog/tickets en `backlog/` (un solo dir) + separar `done/`; README único del flujo — PR #88
 
 <!-- Los tickets completados se mueven aquí con su nº de PR. -->
 
