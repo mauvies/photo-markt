@@ -15,6 +15,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | 2 | P2 | T-029 | Completar y traducir la página "Contacto" (`/contact`) | T-028 | todo |
 | 3 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | todo |
 | 4 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
+| 5 | P3 | T-037 | Centralizar estructura de base de datos (`supabase/` raíz vs `src/database/`) | — | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
