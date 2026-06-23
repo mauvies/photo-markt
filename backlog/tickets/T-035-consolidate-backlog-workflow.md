@@ -1,7 +1,7 @@
 # T-035 · Consolidar el flujo de backlog/tickets en un solo directorio
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `chore/consolidate-backlog-workflow`
 - **OpenSpec change:** —  (reorg mecánico de archivos + actualizar referencias; sin BD/pagos/auth)

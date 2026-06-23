@@ -1,20 +1,17 @@
 # Backlog
 
-Cola ordenada por **orden de ejecución** (`#`): se ejecuta de arriba hacia abajo. El orden respeta
-prioridad y dependencias, de modo que ningún ticket bloquea al siguiente si se ejecutan en este orden.
-Flujo de cada ticket: ver `tickets/TEMPLATE.md`. Capturar con `/ticket`, ejecutar con `/work-next`.
+Cola ordenada por **orden de ejecución** (`#`): se ejecuta de arriba hacia abajo, respetando prioridad
+y dependencias. **El flujo completo (comandos, prioridades, estados, archivado, regla anti-conflicto)
+vive en [`README.md`](./README.md).** Plantilla de ticket: [`TEMPLATE.md`](./TEMPLATE.md). Capturar con
+`/ticket`, ejecutar con `/work-next`; el loop en serie es `scripts/run-backlog.sh`.
 
-**Prioridad:** `P0` urgente · `P1` alta · `P2` normal · `P3` algún día.
-**Estado:** `todo` · `blocked` · `doing` · `done` (al terminar se mueve a la sección Archivo).
-**Dep:** ejecutar después de ese ticket (mismo archivo/área o dependencia lógica). Sin Dep = independiente.
-
-> **Regla anti-conflicto:** mergea (o rebasa) cada PR antes de arrancar el siguiente. Varios tickets
-> editan `en.json`/`es.json` y los mismos componentes; en serie con merge previo no hay conflicto.
-> El loop `scripts/run-backlog.sh` ya va en serie; respétalo, no lances ramas en paralelo sobre el mismo cluster.
+**Prioridad:** `P0` urgente · `P1` alta · `P2` normal · `P3` algún día. ·
+**Estado:** `todo` · `blocked` · `doing` · `done` (al archivar: a la sección Archivo, y el archivo del
+ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de ese ticket. Sin Dep = independiente.
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-035 | Consolidar flujo de backlog/tickets en un solo directorio (`backlog/`) + separar done | — | todo |
+| 1 | P2 | T-035 | Consolidar flujo de backlog/tickets en un solo directorio (`backlog/`) + separar done | — | doing |
 | 2 | P2 | T-028 | Completar y traducir la página "Sobre nosotros" (`/about`) | — | todo |
 | 3 | P2 | T-029 | Completar y traducir la página "Contacto" (`/contact`) | T-028 | todo |
 | 4 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | todo |

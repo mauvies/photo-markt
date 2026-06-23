@@ -43,4 +43,4 @@ posibilidad de que el atleta busque sus fotos por número de dorsal.
 5. Commit (Conventional Commits, **sin** `Co-Authored-By`).
 6. `git push -u origin feat/bib-number-recognition`.
 7. `gh pr create --draft` a `main`. Título y cuerpo en inglés.
-8. Marcar `done`, archivar en `BACKLOG.md`. `/opsx:archive`.
+8. Marcar `done`, archivar en `backlog/BACKLOG.md`. `/opsx:archive`.

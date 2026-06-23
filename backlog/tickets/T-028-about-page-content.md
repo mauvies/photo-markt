@@ -45,4 +45,4 @@ lista para producción. Mismo tratamiento que se dio a Terms (T-021) y Privacy (
 5. Commit (Conventional Commits, **sin** trailer `Co-Authored-By`).
 6. `git push -u origin feat/about-page-i18n-production`.
 7. `gh pr create --draft` a `main`. Título y cuerpo en inglés.
-8. Marcar ticket `done`, mover a Archivo en `BACKLOG.md` con el nº de PR.
+8. Marcar ticket `done`, mover a Archivo en `backlog/BACKLOG.md` con el nº de PR.

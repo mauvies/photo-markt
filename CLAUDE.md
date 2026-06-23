@@ -4,9 +4,11 @@ This file provides guidance to Claude Code when working with the Photo Markt cod
 
 ## Backlog workflow
 
-Work is tracked in `BACKLOG.md` (priority-ordered) with one file per ticket under `tickets/`.
+The whole backlog/ticket flow lives in one place — `backlog/` (see [`backlog/README.md`](./backlog/README.md)).
+Work is tracked in `backlog/BACKLOG.md` (priority-ordered); active tickets live under `backlog/tickets/`,
+completed/discarded ones under `backlog/tickets/done/`, and the ticket template is `backlog/TEMPLATE.md`.
 - `/ticket <req>` — capture a requirement as a ticket and file it priorized into the backlog (no code).
-- `/work-next [T-ID]` — execute the top unblocked ticket end-to-end: branch → (OpenSpec if >1 file) → regression test → typecheck/lint/test → commit (Conventional Commits, **no `Co-Authored-By`**) → push → draft PR → archive ticket.
+- `/work-next [T-ID]` — execute the top unblocked ticket end-to-end: branch → (OpenSpec if >1 file) → regression test → typecheck/lint/test → commit (Conventional Commits, **no `Co-Authored-By`**) → push → draft PR → archive ticket (move its file to `backlog/tickets/done/`).
 - `scripts/run-backlog.sh [n]` — loop `/work-next` until no `todo` tickets remain.
 
 One branch = one ticket = one draft PR.

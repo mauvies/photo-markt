@@ -29,5 +29,5 @@
 5. Commit (Conventional Commits, **sin** trailer `Co-Authored-By` — rompe Vercel Hobby).
 6. `git push -u origin <rama>`.
 7. `gh pr create --draft` apuntando a `main`.
-8. Marcar ticket `done`, mover a Archivo en `BACKLOG.md` con el nº de PR.
+8. Marcar ticket `done`, mover a Archivo en `backlog/BACKLOG.md` con el nº de PR, y mover el archivo del ticket a `backlog/tickets/done/`.
 9. Si había OpenSpec change, `/opsx:archive`.
