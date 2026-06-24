@@ -11,9 +11,15 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | todo |
-| 2 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
-| 3 | P3 | T-037 | Centralizar estructura de base de datos (`supabase/` raíz vs `src/database/`) | — | todo |
+| 1 | P2 | T-043 | Mobile: zoom-in fantasma al cargar descoloca la bottom nav y la toolbar de selección | — | todo |
+| 2 | P2 | T-038 | Ítems del carrito navegables: lightbox de la foto + enlaces a evento y fotógrafo | — | todo |
+| 3 | P2 | T-039 | Merge del carrito invitado→autenticado sin parpadeo (carrito ya fusionado al render) | T-038 | todo |
+| 4 | P2 | T-040 | Excluir fotos de eventos eliminados del carrito y de favoritos | T-039 | todo |
+| 5 | P2 | T-041 | Ocultar "Descargar" del modo selección en eventos con watermark (no descargables) | — | todo |
+| 6 | P2 | T-042 | "Agregar a favoritos" en lote: deduplicar las ya favoritas y reportar el conteo real | — | todo |
+| 7 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | todo |
+| 8 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
+| 9 | P3 | T-037 | Centralizar estructura de base de datos (`supabase/` raíz vs `src/database/`) | — | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
@@ -22,6 +28,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 - **Galería del evento (mobile):** T-007 → T-010 → T-008. T-007 reestructura la toolbar; los otros dos dependen de esa base.
 - **Header / nav:** T-002 → T-003 → T-006. T-003 reusa el borde de T-002; T-006 oculta el header en mobile (coordinar con T-003).
 - **Tabs:** T-004 (arregla el salto) → T-013 (restila todos los tabs, incluidos los de eventos destacados).
+- **Carrito:** T-038 → T-039 → T-040. Tocan archivos comunes (`cart-content.tsx`, `queries/carts.ts`, `guest-cart-*`); ejecutar contiguos y mergear entre cada uno. T-038 hace los ítems navegables (lightbox + enlaces); T-039 quita el parpadeo del merge invitado→autenticado post-login; T-040 excluye fotos de eventos eliminados del carrito y de favoritos (también toca `queries/talent-photo-tags.ts`).
 - **Páginas i18n/producción:** T-014 → T-015 → T-016 (hechas). Mismo patrón pendiente: **T-028 (`/about`) → T-029 (`/contact`)** — placeholders `staticPages.preparing` por completar; comparten `en.json`/`es.json`, ejecutar en serie con merge previo para evitar conflictos de diccionario. (Contacto: no duplicar el formulario que ya vive en `/support`.)
 - **Independientes (sin cluster):** T-005, T-012, T-018, T-009, T-017, T-019, T-020. (T-018 reusa `pricing-section`/`lib/plans.ts`; T-019 es refactor de toda la raíz — ejecutar aislado, con el resto de la cola mergeada. T-020 es rename trivial.)
 

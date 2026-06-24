@@ -77,8 +77,41 @@ export async function ensurePhotosBucket(client?: SupabaseClient): Promise<void>
   }
 }
 
+/**
+ * Memoized pre-flight: confirm the local stack granted the API roles DML on
+ * `public` tables before any integration test touches the DB. A Supabase CLI
+ * bump once stripped these grants, turning a single provisioning gap into ~135
+ * opaque `permission denied` failures (one per test, all in `beforeEach`).
+ *
+ * This probe runs once and, on the tell-tale `42501`, fails fast with the fix
+ * instead of letting the cascade obscure the cause. It lives here (not in the
+ * shared `setupFiles`) so it only fires for tests that actually hit the DB —
+ * unit tests never import this module and stay Docker-free.
+ */
+let dbProvisioned = false;
+export async function ensureDbProvisioned(client?: SupabaseClient): Promise<void> {
+  if (dbProvisioned) return;
+  const sb = client ?? createServiceClient();
+  const { error } = await sb.from('profiles').select('id', { head: true, count: 'exact' });
+  if (
+    error &&
+    (error.code === '42501' || error.message.toLowerCase().includes('permission denied'))
+  ) {
+    throw new Error(
+      'Local Supabase is not provisioned for tests: the API roles lack DML on ' +
+        'public tables (got "permission denied"). Run `pnpm db:reset` to apply ' +
+        'the grants in supabase/seed.sql, then re-run the integration suite.',
+    );
+  }
+  if (error) {
+    throw new Error(`ensureDbProvisioned: unexpected error probing profiles: ${error.message}`);
+  }
+  dbProvisioned = true;
+}
+
 export async function resetDatabase(client?: SupabaseClient): Promise<void> {
   const sb = client ?? createServiceClient();
+  await ensureDbProvisioned(sb);
 
   // 0. Wipe tables that (a) have `ON DELETE RESTRICT` FKs to auth.users —
   //    otherwise the auth-user delete in step 1 fails with a constraint
