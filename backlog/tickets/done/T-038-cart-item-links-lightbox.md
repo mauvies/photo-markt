@@ -1,11 +1,18 @@
 # T-038 · Ítems del carrito navegables: lightbox de la foto + enlaces a evento y fotógrafo
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/cart-item-links-lightbox`  (tipo = feat)
-- **OpenSpec change:** —  (se crea al ejecutar si toca >1 archivo; aquí toca varios → probable)
-- **PR:** —
+- **OpenSpec change:** —  (no aplicó: feature de UI + enriquecido de query de lectura, sin migración)
+- **PR:** #92
+
+> **Resuelto:** carrito de talento con foto→`PhotoLightbox` close-only (todas las props `show*` en
+> `false`), nombre de evento→`/events/[shareCode]` y fotógrafo→`/photographer/[slug]`. `getCartItemsWithDetails`
+> ahora devuelve `event_share_code` + slug del fotógrafo (keyed por `username`, porque la columna `slug` es
+> solo de prod y no está en el esquema local; la ruta resuelve `slug.eq OR username.eq`). Carrito invitado:
+> lightbox + enlace de evento (`GuestCartItem.eventShareCode` poblado al añadir); enlace de fotógrafo
+> diferido. Test de regresión en `test/integration/queries/carts.test.ts`.
 
 ## Requerimiento
 En el carrito de compras, para cada ítem (que muestra foto, nombre del evento y fotógrafo), el usuario
