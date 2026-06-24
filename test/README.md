@@ -62,6 +62,15 @@ The service-role and anon JWTs are the well-known local defaults; they're
 hardcoded in `test/helpers/supabase-test-client.ts` so contributors don't
 need a `.env.test`.
 
+> **Run `pnpm db:reset` once after pulling.** `supabase/seed.sql` grants the
+> API roles (`anon`/`authenticated`/`service_role`) DML on `public` tables.
+> A Supabase CLI bump once provisioned those tables without these grants, so
+> every supabase-js call failed with `permission denied for table …` and the
+> whole integration suite went red in `beforeEach`. The grants live in
+> `seed.sql` (local-only — never touches production) and apply on `db:reset`.
+> If the suite fails fast with "Local Supabase is not provisioned for tests",
+> that's the pre-flight in `supabase-test-client.ts` telling you to reset.
+
 ## Patterns
 
 ### Unit test
@@ -144,6 +153,8 @@ sign in with the credentials returned by `createTestUser()` — its
    ```bash
    pnpm db:reset
    ```
+6. **`permission denied for table …` on every test?** The local API roles are
+   missing their DML grants — run `pnpm db:reset` to re-apply `supabase/seed.sql`.
 
 ## CI
 
