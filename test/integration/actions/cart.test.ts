@@ -80,9 +80,11 @@ import {
   addPhotoToCartAction,
   clearCartAction,
   getCartItemCountAction,
+  mergeGuestCartAction,
   removePhotoFromCartAction,
 } from '@/app/[lang]/dashboard/talent/cart/actions';
 import { getOrCreateCart } from '@/database/queries/carts';
+import type { GuestCartItem } from '@/lib/guest-cart';
 import {
   createServiceClient,
   createTestEvent,
@@ -90,6 +92,20 @@ import {
   createTestUser,
   resetDatabase,
 } from '../../helpers/supabase-test-client';
+
+/** Minimal guest-cart item — `mergeGuestCartAction` re-reads price/owner from
+ * the DB, so only `photoId` actually drives the merge. */
+function guestItem(photoId: string): GuestCartItem {
+  return {
+    photoId,
+    photographerId: '00000000-0000-0000-0000-000000000000',
+    eventId: '00000000-0000-0000-0000-000000000000',
+    eventName: null,
+    eventDate: null,
+    unitPriceCents: 0,
+    previewUrl: null,
+  };
+}
 
 describe('cart Server Actions', () => {
   beforeEach(async () => {
@@ -228,6 +244,63 @@ describe('cart Server Actions', () => {
       const photographer = await createTestUser('PHOTOGRAPHER');
       mockSession.userId = photographer.id;
       expect(await getCartItemCountAction()).toBe(0);
+    });
+  });
+
+  // The post-login merge whose flash T-039 fixes: the data outcome must be the
+  // union of the guest items and the pre-existing cart, with no duplicate rows.
+  describe('mergeGuestCartAction', () => {
+    it('unions guest items with the existing cart and never duplicates a photo', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id, { price_per_photo: 5 });
+      const photoA = await createTestPhoto(event.id);
+      const photoB = await createTestPhoto(event.id);
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+
+      // The authenticated cart already holds photoA before the merge.
+      await addPhotoToCartAction(photoA.id);
+
+      // Guest cart carries photoA (a duplicate) + photoB (new).
+      const merged = await mergeGuestCartAction([guestItem(photoA.id), guestItem(photoB.id)]);
+      expect(merged).toBeGreaterThan(0);
+
+      const sb = createServiceClient();
+      const cart = await getOrCreateCart(sb, talent.id);
+      const { data: items } = await sb.from('cart_items').select('photo_id').eq('cart_id', cart.id);
+      const photoIds = (items ?? []).map((i) => i.photo_id).sort();
+      // Exactly two rows: A is not duplicated, B is added.
+      expect(photoIds).toEqual([photoA.id, photoB.id].sort());
+      expect(await getCartItemCountAction()).toBe(2);
+    });
+
+    it('re-prices each merged item from the event, ignoring the guest payload', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id, { price_per_photo: 9 });
+      const photo = await createTestPhoto(event.id);
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+
+      // Guest payload claims a bogus price; the action must use the DB price.
+      await mergeGuestCartAction([{ ...guestItem(photo.id), unitPriceCents: 1 }]);
+
+      const sb = createServiceClient();
+      const cart = await getOrCreateCart(sb, talent.id);
+      const { data: items } = await sb
+        .from('cart_items')
+        .select('unit_price_cents, photographer_id')
+        .eq('cart_id', cart.id);
+      expect(items).toHaveLength(1);
+      expect(items?.[0]?.unit_price_cents).toBe(900);
+      expect(items?.[0]?.photographer_id).toBe(photographer.id);
+    });
+
+    it('returns 0 for an unauthenticated caller (no merge)', async () => {
+      mockSession.userId = null;
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id, { price_per_photo: 5 });
+      const photo = await createTestPhoto(event.id);
+      expect(await mergeGuestCartAction([guestItem(photo.id)])).toBe(0);
     });
   });
 });

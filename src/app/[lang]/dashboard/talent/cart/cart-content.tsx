@@ -24,6 +24,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { cartView } from '@/lib/cart-view';
 import { GUEST_CART_KEY } from '@/lib/guest-cart';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
@@ -53,17 +54,29 @@ export function CartContent({ initialCartData }: CartContentProps) {
   // useLayoutEffect runs synchronously before the browser paints, preventing
   // the empty-cart flash on the post-login redirect.
   useLayoutEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     try {
       const stored = localStorage.getItem(GUEST_CART_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
           queryClient.setQueryData(CART_MERGE_STATE_KEY, true);
+          // Safety net: the skeleton now gates the whole cart (not just the
+          // empty state), so a flag that never clears would hide real items.
+          // GuestCartMerge clears it when the SIGNED_IN merge finishes; if that
+          // never fires (e.g. already authenticated with stale guest items),
+          // drop the flag after a few seconds so the cart still reveals.
+          timeoutId = setTimeout(() => {
+            queryClient.setQueryData(CART_MERGE_STATE_KEY, false);
+          }, 6000);
         }
       }
     } catch {
       // ignore
     }
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [queryClient]);
 
   // Cart items come from a client-side query so that invalidateQueries() after
@@ -169,29 +182,35 @@ export function CartContent({ initialCartData }: CartContentProps) {
 
   const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
-  if (cartData.items.length === 0) {
-    if (isMerging) {
-      return (
-        <div className="space-y-3">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="flex gap-4 rounded-lg border border-border bg-card p-3">
-              <Skeleton className="h-24 w-24 shrink-0 rounded-lg" />
-              <div className="flex flex-1 flex-col gap-2 justify-between py-1">
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-1/2" />
-                </div>
-                <div className="flex items-center justify-between">
-                  <Skeleton className="h-6 w-16" />
-                  <Skeleton className="h-8 w-20" />
-                </div>
+  const view = cartView(isMerging, cartData.items.length);
+
+  // While the guest→authenticated merge is in flight, show the skeleton for the
+  // WHOLE cart — even when the authenticated cart already has items — so the
+  // pre-merge items don't paint first and have the guest items pop in on top.
+  // (T-039)
+  if (view === 'merging') {
+    return (
+      <div className="space-y-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex gap-4 rounded-lg border border-border bg-card p-3">
+            <Skeleton className="h-24 w-24 shrink-0 rounded-lg" />
+            <div className="flex flex-1 flex-col gap-2 justify-between py-1">
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-3 w-1/2" />
+              </div>
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-6 w-16" />
+                <Skeleton className="h-8 w-20" />
               </div>
             </div>
-          ))}
-        </div>
-      );
-    }
+          </div>
+        ))}
+      </div>
+    );
+  }
 
+  if (view === 'empty') {
     return (
       <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
         <div className="relative mb-6">
