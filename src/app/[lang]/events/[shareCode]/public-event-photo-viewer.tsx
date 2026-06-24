@@ -235,6 +235,7 @@ export function PublicEventPhotoViewer({
           eventId,
           eventName,
           eventDate,
+          eventShareCode: shareCode ?? null,
           unitPriceCents: pricePerPhoto ? Math.round(pricePerPhoto * 100) : 0,
           previewUrl: photo.url,
         };
@@ -249,6 +250,7 @@ export function PublicEventPhotoViewer({
       eventId,
       eventName,
       eventDate,
+      shareCode,
       pricePerPhoto,
       guestCart,
       addAuthCart,

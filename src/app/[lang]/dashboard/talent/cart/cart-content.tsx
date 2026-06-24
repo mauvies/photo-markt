@@ -4,10 +4,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { Calendar, Image as ImageIcon, Loader2, ShoppingCart, Trash2, User, X } from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLayoutEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { CART_MERGE_STATE_KEY } from '@/components/guest-cart-merge';
+import { PhotoLightbox } from '@/components/photo-lightbox';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,6 +28,7 @@ import { GUEST_CART_KEY } from '@/lib/guest-cart';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
   type CartData,
+  type CartItemDetail,
   clearCartAction,
   createCheckoutSessionAction,
   getCurrentCart,
@@ -40,6 +43,8 @@ export function CartContent({ initialCartData }: CartContentProps) {
   const [isPending, startTransition] = useTransition();
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  // The cart item whose photo is open in the close-only lightbox (null = closed).
+  const [lightboxItem, setLightboxItem] = useState<CartItemDetail | null>(null);
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -94,6 +99,9 @@ export function CartContent({ initialCartData }: CartContentProps) {
     clearCartDesc: string;
     cancel: string;
     photoAlt: string;
+    viewPhoto: string;
+    viewEvent: string;
+    viewPhotographer: string;
     free: string;
     remove: string;
     subtotal: string;
@@ -243,8 +251,13 @@ export function CartContent({ initialCartData }: CartContentProps) {
                 key={item.photoId}
                 className="group flex gap-4 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/50 hover:shadow-md"
               >
-                <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-muted">
-                  {item.previewUrl ? (
+                {item.previewUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => setLightboxItem(item)}
+                    aria-label={t('viewPhoto')}
+                    className="relative h-24 w-24 shrink-0 cursor-zoom-in overflow-hidden rounded-lg bg-muted"
+                  >
                     <Image
                       src={item.previewUrl}
                       alt={item.eventTitle || t('photoAlt')}
@@ -252,27 +265,46 @@ export function CartContent({ initialCartData }: CartContentProps) {
                       className="object-cover transition-transform group-hover:scale-105"
                       sizes="80px"
                     />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                      <ImageIcon className="h-8 w-8" />
-                    </div>
-                  )}
-                </div>
+                  </button>
+                ) : (
+                  <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground">
+                    <ImageIcon className="h-8 w-8" />
+                  </div>
+                )}
 
                 <div className="flex flex-1 flex-col gap-2 min-w-0">
                   <div>
-                    {item.eventTitle && (
-                      <h4 className="font-semibold text-base text-foreground line-clamp-1">
-                        {item.eventTitle}
-                      </h4>
-                    )}
+                    {item.eventTitle &&
+                      (item.eventShareCode ? (
+                        <Link
+                          href={lp(`/events/${item.eventShareCode}`)}
+                          title={t('viewEvent')}
+                          className="font-semibold text-base text-foreground line-clamp-1 hover:underline"
+                        >
+                          {item.eventTitle}
+                        </Link>
+                      ) : (
+                        <h4 className="font-semibold text-base text-foreground line-clamp-1">
+                          {item.eventTitle}
+                        </h4>
+                      ))}
                     <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                      {item.photographerName && (
-                        <div className="flex items-center gap-1.5">
-                          <User className="h-3.5 w-3.5" />
-                          <span className="line-clamp-1">{item.photographerName}</span>
-                        </div>
-                      )}
+                      {item.photographerName &&
+                        (item.photographerSlug ? (
+                          <Link
+                            href={lp(`/photographer/${item.photographerSlug}`)}
+                            title={t('viewPhotographer')}
+                            className="flex items-center gap-1.5 hover:underline"
+                          >
+                            <User className="h-3.5 w-3.5" />
+                            <span className="line-clamp-1">{item.photographerName}</span>
+                          </Link>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <User className="h-3.5 w-3.5" />
+                            <span className="line-clamp-1">{item.photographerName}</span>
+                          </div>
+                        ))}
                       {item.eventDate && (
                         <div className="flex items-center gap-1.5">
                           <Calendar className="h-3.5 w-3.5" />
@@ -383,6 +415,21 @@ export function CartContent({ initialCartData }: CartContentProps) {
           </Button>
         </div>
       </div>
+
+      {/* Close-only lightbox: a bigger look at the cart photo, no actions. */}
+      {lightboxItem?.previewUrl && (
+        <PhotoLightbox
+          items={[
+            {
+              id: lightboxItem.photoId,
+              url: lightboxItem.previewUrl,
+              alt: lightboxItem.eventTitle ?? t('photoAlt'),
+            },
+          ]}
+          open={lightboxItem !== null}
+          onClose={() => setLightboxItem(null)}
+        />
+      )}
     </div>
   );
 }

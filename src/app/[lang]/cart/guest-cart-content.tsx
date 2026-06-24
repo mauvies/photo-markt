@@ -17,6 +17,7 @@ import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { createGuestCheckoutSessionAction } from '@/app/[lang]/cart/actions';
 import { useGuestCart } from '@/components/guest-cart-provider';
+import { PhotoLightbox } from '@/components/photo-lightbox';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,6 +32,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { useLoginHref, useSignupHref } from '@/hooks/use-login-href';
+import type { GuestCartItem } from '@/lib/guest-cart';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 
 export function GuestCartContent() {
@@ -43,6 +45,8 @@ export function GuestCartContent() {
   const canceled = searchParams.get('canceled') === 'true';
   const [isPending, startTransition] = useTransition();
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  // The guest cart item whose photo is open in the close-only lightbox.
+  const [lightboxItem, setLightboxItem] = useState<GuestCartItem | null>(null);
   const { t } = useTranslations<{
     browseEventsDesc: string;
     signInNudgeTitle: string;
@@ -67,6 +71,8 @@ export function GuestCartContent() {
     empty: string;
     browseEvents: string;
     photoAlt: string;
+    viewPhoto: string;
+    viewEvent: string;
   }>();
 
   const handleCheckout = () => {
@@ -162,8 +168,13 @@ export function GuestCartContent() {
               key={item.photoId}
               className="group flex gap-4 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/50 hover:shadow-md"
             >
-              <div className="relative h-32 w-32 shrink-0 overflow-hidden rounded-lg bg-muted">
-                {item.previewUrl ? (
+              {item.previewUrl ? (
+                <button
+                  type="button"
+                  onClick={() => setLightboxItem(item)}
+                  aria-label={t('viewPhoto')}
+                  className="relative h-32 w-32 shrink-0 cursor-zoom-in overflow-hidden rounded-lg bg-muted"
+                >
                   <Image
                     src={item.previewUrl}
                     alt={item.eventName ?? t('photoAlt')}
@@ -172,20 +183,29 @@ export function GuestCartContent() {
                     sizes="128px"
                     unoptimized
                   />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                    <ImageIcon className="h-8 w-8" />
-                  </div>
-                )}
-              </div>
+                </button>
+              ) : (
+                <div className="relative flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground">
+                  <ImageIcon className="h-8 w-8" />
+                </div>
+              )}
 
               <div className="flex flex-1 flex-col gap-2 min-w-0">
                 <div>
-                  {item.eventName && (
-                    <h4 className="font-semibold text-base text-foreground line-clamp-1">
-                      {item.eventName}
-                    </h4>
-                  )}
+                  {item.eventName &&
+                    (item.eventShareCode ? (
+                      <Link
+                        href={lp(`/events/${item.eventShareCode}`)}
+                        title={t('viewEvent')}
+                        className="font-semibold text-base text-foreground line-clamp-1 hover:underline"
+                      >
+                        {item.eventName}
+                      </Link>
+                    ) : (
+                      <h4 className="font-semibold text-base text-foreground line-clamp-1">
+                        {item.eventName}
+                      </h4>
+                    ))}
                   {item.eventDate && (
                     <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                       <Calendar className="h-3.5 w-3.5" />
@@ -273,6 +293,21 @@ export function GuestCartContent() {
           </Button>
         </div>
       </div>
+
+      {/* Close-only lightbox: a bigger look at the cart photo, no actions. */}
+      {lightboxItem?.previewUrl && (
+        <PhotoLightbox
+          items={[
+            {
+              id: lightboxItem.photoId,
+              url: lightboxItem.previewUrl,
+              alt: lightboxItem.eventName ?? t('photoAlt'),
+            },
+          ]}
+          open={lightboxItem !== null}
+          onClose={() => setLightboxItem(null)}
+        />
+      )}
     </div>
   );
 }
