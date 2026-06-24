@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Geist_Mono, Inter, Inter_Tight, Syne } from 'next/font/google';
 import './globals.css';
 import { getSiteUrl } from '@/lib/get-site-url';
@@ -24,6 +24,18 @@ const syne = Syne({
   subsets: ['latin'],
   weight: ['700', '800'],
 });
+
+// Explicit viewport. `viewportFit: 'cover'` is the part that matters: without
+// it iOS resolves every `env(safe-area-inset-*)` to 0, so the fixed bottom nav
+// and cart bars (which pad with `env(safe-area-inset-bottom)`) don't reserve
+// the home-indicator space and sit slightly off vertically. `initialScale: 1`
+// + `width: device-width` keep the page at 1:1 on load. User zoom is left
+// enabled on purpose (no `maximumScale` / `userScalable`) for accessibility. (T-043)
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+};
 
 export const metadata: Metadata = {
   // Absolute base for all relative OG/canonical URLs resolved by Next.js
