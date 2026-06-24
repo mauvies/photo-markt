@@ -1,11 +1,18 @@
 # T-043 · Mobile: zoom-in fantasma al cargar la página descoloca la bottom nav y la toolbar de selección
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/mobile-viewport-zoom`  (tipo = fix)
-- **OpenSpec change:** —  (se crea al ejecutar si toca >1 archivo o es ambiguo)
-- **PR:** —
+- **OpenSpec change:** —  (no aplicó: fix de UI)
+- **PR:** #91
+
+> **Resuelto:** causa raíz = `Main` aplicaba `w-screen` (100vw) en dashboard/auth, que ignora la
+> barra de scroll y desborda horizontalmente → zoom fantasma en mobile y barras fixed/sticky
+> descolocadas. Fix: `w-screen`→`w-full` en `src/components/main.tsx` + `export const viewport` con
+> `viewport-fit=cover` en `src/app/layout.tsx` (para que `env(safe-area-inset-*)` resuelva en iOS).
+> Tests de regresión: `test/unit/components/main.test.tsx` (nunca emite `w-screen`) y
+> `test/unit/components/root-viewport.test.ts` (viewport a 1:1 con cover).
 
 ## Requerimiento
 En **mobile**, al visitar o refrescar una página hay "un poquito de zoom" en la vista. Si se hace zoom-out
