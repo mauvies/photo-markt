@@ -1444,6 +1444,28 @@
       }
     ]
   },
+  "contactPage": {
+    "title": "Contact",
+    "intro": "Have a question, some feedback, or a partnership idea? Here is how to reach the Photo Markt team. We read every message and aim to reply within a couple of business days.",
+    "sections": [
+      {
+        "heading": "General inquiries",
+        "body": "For partnerships, press, or anything else about Photo Markt, email us at",
+        "email": "hello@photomarkt.com"
+      },
+      {
+        "heading": "Help and support",
+        "body": "Need a hand with your account, an event, an order, or a payout? Email our support team at",
+        "email": "support@photomarkt.com"
+      },
+      {
+        "heading": "Privacy and data",
+        "body": "For privacy questions or to exercise your data rights, contact",
+        "email": "privacy@photomarkt.com"
+      }
+    ],
+    "dashboardNote": "Already signed in? You can also send us a message directly from the support section of your dashboard."
+  },
   "termsOfService": {
     "title": "Terms of Service",
     "lastUpdated": "Last updated: June 2026",

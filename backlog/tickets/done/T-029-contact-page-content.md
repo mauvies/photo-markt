@@ -1,11 +1,11 @@
 # T-029 · Completar y traducir la página "Contacto" (`/contact`)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno (Dep lógico: T-028 — comparten `en.json`/`es.json`)
 - **Rama:** `feat/contact-page-i18n-production`
 - **OpenSpec change:** —  (contenido + i18n acotado, mismo patrón que T-021/T-016)
-- **PR:** —
+- **PR:** #90
 
 ## Requerimiento
 La página pública `/contact` ("Contacto") hoy es solo un placeholder (`dict.staticPages.preparing`).

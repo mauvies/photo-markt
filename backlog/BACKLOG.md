@@ -12,15 +12,14 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
 | 1 | P2 | T-043 | Mobile: zoom-in fantasma al cargar descoloca la bottom nav y la toolbar de selección | — | todo |
-| 2 | P2 | T-029 | Completar y traducir la página "Contacto" (`/contact`) | — | todo |
-| 3 | P2 | T-038 | Ítems del carrito navegables: lightbox de la foto + enlaces a evento y fotógrafo | — | todo |
-| 4 | P2 | T-039 | Merge del carrito invitado→autenticado sin parpadeo (carrito ya fusionado al render) | T-038 | todo |
-| 5 | P2 | T-040 | Excluir fotos de eventos eliminados del carrito y de favoritos | T-039 | todo |
-| 6 | P2 | T-041 | Ocultar "Descargar" del modo selección en eventos con watermark (no descargables) | — | todo |
-| 7 | P2 | T-042 | "Agregar a favoritos" en lote: deduplicar las ya favoritas y reportar el conteo real | — | todo |
-| 8 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | todo |
-| 9 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
-| 10 | P3 | T-037 | Centralizar estructura de base de datos (`supabase/` raíz vs `src/database/`) | — | todo |
+| 2 | P2 | T-038 | Ítems del carrito navegables: lightbox de la foto + enlaces a evento y fotógrafo | — | todo |
+| 3 | P2 | T-039 | Merge del carrito invitado→autenticado sin parpadeo (carrito ya fusionado al render) | T-038 | todo |
+| 4 | P2 | T-040 | Excluir fotos de eventos eliminados del carrito y de favoritos | T-039 | todo |
+| 5 | P2 | T-041 | Ocultar "Descargar" del modo selección en eventos con watermark (no descargables) | — | todo |
+| 6 | P2 | T-042 | "Agregar a favoritos" en lote: deduplicar las ya favoritas y reportar el conteo real | — | todo |
+| 7 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | todo |
+| 8 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
+| 9 | P3 | T-037 | Centralizar estructura de base de datos (`supabase/` raíz vs `src/database/`) | — | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
@@ -67,6 +66,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 - **T-036** · Quitar cuota mensual de búsqueda IA a medias + drop `ai_search_usage` huérfano (rediseño en T-034) — PR #87
 - **T-035** · Consolidar el flujo de backlog/tickets en `backlog/` (un solo dir) + separar `done/`; README único del flujo — PR #88
 - **T-028** · Página "Sobre nosotros" (`/about`) production-ready + i18n (es+en), bloque `aboutPage` + test de paridad — PR #89
+- **T-029** · Página "Contacto" (`/contact`) production-ready + i18n (es+en), bloque `contactPage` (emails mailto, sin duplicar `/support`) + test de paridad — PR #90
 
 <!-- Los tickets completados se mueven aquí con su nº de PR. -->
 

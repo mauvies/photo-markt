@@ -1444,6 +1444,28 @@
       }
     ]
   },
+  "contactPage": {
+    "title": "Contacto",
+    "intro": "¿Tienes una pregunta, comentarios o una idea de colaboración? Así puedes comunicarte con el equipo de Photo Markt. Leemos todos los mensajes y buscamos responder en un par de días hábiles.",
+    "sections": [
+      {
+        "heading": "Consultas generales",
+        "body": "Para colaboraciones, prensa o cualquier otra cosa sobre Photo Markt, escríbenos a",
+        "email": "hello@photomarkt.com"
+      },
+      {
+        "heading": "Ayuda y soporte",
+        "body": "¿Necesitas ayuda con tu cuenta, un evento, un pedido o una liquidación? Escribe a nuestro equipo de soporte a",
+        "email": "support@photomarkt.com"
+      },
+      {
+        "heading": "Privacidad y datos",
+        "body": "Para consultas de privacidad o para ejercer tus derechos sobre tus datos, contacta a",
+        "email": "privacy@photomarkt.com"
+      }
+    ],
+    "dashboardNote": "¿Ya iniciaste sesión? También puedes enviarnos un mensaje directamente desde la sección de soporte de tu panel."
+  },
   "termsOfService": {
     "title": "Términos del Servicio",
     "lastUpdated": "Última actualización: junio de 2026",
