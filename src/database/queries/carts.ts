@@ -24,8 +24,12 @@ export interface CartItem {
 export interface CartItemWithDetails extends CartItem {
   photo_url: string | null;
   photographer_name: string | null;
+  /** Public profile slug for the photographer link (`slug` ?? `username`). */
+  photographer_slug: string | null;
   event_name: string | null;
   event_date: string | null;
+  /** Public event share code for the `/events/[shareCode]` link. */
+  event_share_code: string | null;
 }
 
 /**
@@ -182,7 +186,8 @@ export async function getCartItemsWithDetails(
         original_url,
         events(
           name,
-          date
+          date,
+          share_code
         )
       )
     `,
@@ -194,19 +199,25 @@ export async function getCartItemsWithDetails(
     throw new Error(`Failed to get cart items: ${getErrorMessage(error)}`);
   }
 
-  // Fetch photographer names separately
+  // Fetch photographer name + public slug separately. We key the
+  // `/photographer/[slug]` link off `username`: the profile route resolves a
+  // param against `slug.eq OR username.eq`, and `username` is always present
+  // (unlike `slug`, which is prod-only and absent from the local schema).
   const photographerIds = [...new Set((data ?? []).map((item) => item.photographer_id))];
-  const photographerNamesMap: Record<string, string | null> = {};
+  const photographerProfilesMap: Record<string, { name: string | null; slug: string | null }> = {};
 
   if (photographerIds.length > 0) {
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, display_name')
+      .select('id, display_name, username')
       .in('id', photographerIds);
 
     if (profiles) {
       for (const profile of profiles) {
-        photographerNamesMap[profile.id] = profile.display_name;
+        photographerProfilesMap[profile.id] = {
+          name: profile.display_name,
+          slug: profile.username ?? null,
+        };
       }
     }
   }
@@ -220,6 +231,11 @@ export async function getCartItemsWithDetails(
         : null
       : photo?.events;
 
+    const photographer = photographerProfilesMap[item.photographer_id] ?? {
+      name: null,
+      slug: null,
+    };
+
     return {
       id: item.id,
       cart_id: item.cart_id,
@@ -228,9 +244,11 @@ export async function getCartItemsWithDetails(
       unit_price_cents: item.unit_price_cents,
       created_at: item.created_at,
       photo_url: photo?.original_url ?? null,
-      photographer_name: photographerNamesMap[item.photographer_id] ?? null,
+      photographer_name: photographer.name,
+      photographer_slug: photographer.slug,
       event_name: event?.name ?? null,
       event_date: event?.date ?? null,
+      event_share_code: event?.share_code ?? null,
     };
   }) as CartItemWithDetails[];
 }

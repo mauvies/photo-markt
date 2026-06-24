@@ -26,9 +26,13 @@ export interface CartItemDetail {
   previewUrl: string | null;
   photographerId: string;
   photographerName: string | null;
+  /** Public profile slug → `/photographer/[slug]` (null when unavailable). */
+  photographerSlug: string | null;
   unitPriceCents: number;
   eventTitle: string | null;
   eventDate: string | null;
+  /** Public event share code → `/events/[shareCode]` (null when unavailable). */
+  eventShareCode: string | null;
 }
 
 export interface CartData {
@@ -86,9 +90,11 @@ export async function getCurrentCart(): Promise<CartData> {
       previewUrl: item.photo_url ? (previewUrlsMap[item.photo_url] ?? null) : null,
       photographerId: item.photographer_id,
       photographerName: item.photographer_name,
+      photographerSlug: item.photographer_slug,
       unitPriceCents: item.unit_price_cents,
       eventTitle: item.event_name,
       eventDate: item.event_date,
+      eventShareCode: item.event_share_code,
     })),
     subtotalCents,
     itemCount: items.length,

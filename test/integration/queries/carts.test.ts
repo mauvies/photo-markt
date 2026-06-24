@@ -12,6 +12,7 @@ import {
   clearCart,
   getCart,
   getCartItemCount,
+  getCartItemsWithDetails,
   getOrCreateCart,
   isPhotoInCart,
   removePhotoFromCart,
@@ -125,6 +126,45 @@ describe('database/queries/carts', () => {
       const cart = await getOrCreateCart(sb, talent.id);
       // No insert — just attempt to remove.
       await expect(removePhotoFromCart(sb, cart.id, photo.id)).resolves.not.toThrow();
+    });
+  });
+
+  describe('getCartItemsWithDetails', () => {
+    it('returns the event share_code and photographer slug that drive the item links (T-038)', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER', { display_name: 'Jane Lens' });
+      const event = await createTestEvent(photographer.id, {
+        name: 'Spring Race',
+        share_code: 'SHARE123',
+      });
+      const photo = await createTestPhoto(event.id);
+      const talent = await createTestUser('TALENT');
+      const sb = createServiceClient();
+      const cart = await getOrCreateCart(sb, talent.id);
+      await addPhotoToCart(sb, cart.id, photo.id, photographer.id, 500);
+
+      const items = await getCartItemsWithDetails(sb, cart.id, talent.id);
+
+      expect(items).toHaveLength(1);
+      const item = items[0];
+      expect(item.event_name).toBe('Spring Race');
+      expect(item.event_share_code).toBe('SHARE123');
+      // The photographer link is keyed off username (the /photographer/[slug]
+      // route resolves slug.eq OR username.eq; username is always present).
+      expect(item.photographer_slug).toBe(photographer.username);
+      expect(item.photographer_name).toBe('Jane Lens');
+    });
+
+    it('only returns items for the requested cart', async () => {
+      const { photographer, event, talent } = await setupCartFixtures();
+      const other = await createTestUser('TALENT');
+      const sb = createServiceClient();
+      const myCart = await getOrCreateCart(sb, talent.id);
+      const theirCart = await getOrCreateCart(sb, other.id);
+      const photo = await createTestPhoto(event.id);
+      await addPhotoToCart(sb, theirCart.id, photo.id, photographer.id, 500);
+
+      const mine = await getCartItemsWithDetails(sb, myCart.id, talent.id);
+      expect(mine).toHaveLength(0);
     });
   });
 
