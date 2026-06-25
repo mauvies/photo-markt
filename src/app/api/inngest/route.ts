@@ -12,10 +12,12 @@
 
 import { serve } from 'inngest/next';
 import { inngest } from '@/lib/inngest/client';
+import { backfillEventBibDetection } from '@/lib/inngest/functions/backfill-event-bib-detection';
 import { backfillEventIndexing } from '@/lib/inngest/functions/backfill-event-indexing';
 import { cleanupOnEventDelete } from '@/lib/inngest/functions/cleanup-on-event-delete';
 import { cleanupOrphanedStorageFiles } from '@/lib/inngest/functions/cleanup-orphaned-storage';
 import { cleanupOrphanedStorageFromMigration } from '@/lib/inngest/functions/cleanup-orphaned-storage-from-migration';
+import { detectPhotoBibs } from '@/lib/inngest/functions/detect-photo-bibs';
 import { disableEventIndexing } from '@/lib/inngest/functions/disable-event-indexing';
 import { generatePhotoThumbnails } from '@/lib/inngest/functions/generate-photo-thumbnails';
 import { indexPhotoFaces } from '@/lib/inngest/functions/index-photo-faces';
@@ -25,7 +27,9 @@ export const { GET, POST, PUT } = serve({
   functions: [
     indexPhotoFaces,
     generatePhotoThumbnails,
+    detectPhotoBibs,
     backfillEventIndexing,
+    backfillEventBibDetection,
     disableEventIndexing,
     cleanupOnEventDelete,
     cleanupOrphanedStorageFiles,

@@ -19,15 +19,15 @@
 
 ## 3. Inngest detection job
 
-- [ ] 3.1 `src/lib/inngest/functions/detect-photo-bibs.ts`: subscribe to `photo.uploaded`; no-op unless the event has `bib_detection_enabled`; download + `DetectText` + filter inside one step (bytes never cross step boundaries); persist via the query layer; set per-photo `bib_detection_status`; `onFailure` → `failed`.
-- [ ] 3.2 Register the function at `src/app/api/inngest/route.ts` (parallel to `indexPhotoFaces` / `generatePhotoThumbnails`).
-- [ ] 3.3 Backfill path: enabling on a populated event fans out detection over existing photos (mirror `backfillEventIndexing`); event `bib_detection_status` transitions idle→detecting→ready.
-- [ ] 3.4 Integration test for the job flow with a fake `step` (mirror the face-job test): opted-in photo → rows persisted + status `detected`; non-opted-in → `not_applicable`, no AWS call.
+- [x] 3.1 `src/lib/inngest/functions/detect-photo-bibs.ts`: subscribes to `photo.uploaded` + `photo.bib-detect`; no-op (status stays NULL) unless the event has `bib_detection_enabled` (and not minors); download + `DetectText` + filter in one step (bytes never cross boundaries); persist; set per-photo `bib_detection_status`; `onFailure` → `failed`; `maybe-mark-event-ready`.
+- [x] 3.2 Registered both `detectPhotoBibs` and `backfillEventBibDetection` at `src/app/api/inngest/route.ts`.
+- [x] 3.3 Backfill: `backfill-event-bib-detection.ts` on `event.bib-detection-enabled` lists photos needing detection, resets to `pending`, fans out `photo.bib-detect` (bib-specific event → never re-runs face/thumbnail jobs); event status idle→detecting→ready.
+- [x] 3.4 `test/integration/inngest/detect-photo-bibs.test.ts` (pass-through step, AWS mocked, real Sharp prep): opted-in → rows persisted (sponsor text filtered) + status `detected`; nothing-passes → `no_bibs`; non-opted-in → skipped, no AWS call, status NULL.
 
 ## 4. Query layer + persistence
 
-- [ ] 4.1 `src/database/queries/bib-numbers.ts`: `persistPhotoBibs(...)`, `getPhotoIdsByBibInEvent(eventId, bib)` (join to photos, filter to visible/approved/non-minor), and a per-photo status updater. Export from `queries/index.ts`.
-- [ ] 4.2 Integration tests: persistence dedupe `(photo_id, bib_text)`; search returns only matching + visible photos in the event.
+- [x] 4.1 `src/database/queries/bib-numbers.ts`: event state read/update, `persistPhotoBibs` (idempotent upsert), per-photo + bulk status, in-flight count, backfill list, and `getPhotoIdsByBibInEvent(eventId, bib)` (event-scoped exact match). Exported from `queries/index.ts`.
+- [x] 4.2 `test/integration/queries/bib-numbers.test.ts`: state round-trip, persistence dedupe `(photo_id, bib_text)`, event-scoped exact search, in-flight count.
 
 ## 5. Photographer opt-in
 
