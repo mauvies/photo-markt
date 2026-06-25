@@ -166,6 +166,30 @@ describe('database/queries/carts', () => {
       const mine = await getCartItemsWithDetails(sb, myCart.id, talent.id);
       expect(mine).toHaveLength(0);
     });
+
+    it('excludes items whose event was soft-deleted, and keeps the count consistent (T-040)', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const liveEvent = await createTestEvent(photographer.id, { name: 'Live' });
+      const deadEvent = await createTestEvent(photographer.id, { name: 'Dead' });
+      const livePhoto = await createTestPhoto(liveEvent.id);
+      const deadPhoto = await createTestPhoto(deadEvent.id);
+      const talent = await createTestUser('TALENT');
+      const sb = createServiceClient();
+      const cart = await getOrCreateCart(sb, talent.id);
+      await addPhotoToCart(sb, cart.id, livePhoto.id, photographer.id, 500);
+      await addPhotoToCart(sb, cart.id, deadPhoto.id, photographer.id, 500);
+
+      // Soft-delete the second event after its photo is already in the cart.
+      await sb
+        .from('events')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', deadEvent.id);
+
+      const items = await getCartItemsWithDetails(sb, cart.id, talent.id);
+      expect(items.map((i) => i.photo_id)).toEqual([livePhoto.id]);
+      // The badge count must match the rendered cart (only the live item).
+      expect(await getCartItemCount(sb, talent.id)).toBe(1);
+    });
   });
 
   describe('clearCart', () => {

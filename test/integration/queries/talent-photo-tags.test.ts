@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   getTaggedPhotosCountForTalent,
+  getTaggedPhotosForTalent,
   isPhotoTaggedForTalent,
   tagPhotoForTalent,
   tagPhotosForTalent,
@@ -124,6 +125,29 @@ describe('database/queries/talent-photo-tags', () => {
     it('returns 0 when nothing is tagged', async () => {
       const talent = await createTestUser('TALENT');
       expect(await getTaggedPhotosCountForTalent(createServiceClient(), talent.id)).toBe(0);
+    });
+  });
+
+  describe('deleted events (T-040)', () => {
+    it('excludes tagged photos whose event was soft-deleted (list + count)', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const liveEvent = await createTestEvent(photographer.id, { name: 'Live' });
+      const deadEvent = await createTestEvent(photographer.id, { name: 'Dead' });
+      const livePhoto = await createTestPhoto(liveEvent.id);
+      const deadPhoto = await createTestPhoto(deadEvent.id);
+      const talent = await createTestUser('TALENT');
+      const sb = createServiceClient();
+      await tagPhotoForTalent(sb, livePhoto.id, talent.id, photographer.id);
+      await tagPhotoForTalent(sb, deadPhoto.id, talent.id, photographer.id);
+
+      await sb
+        .from('events')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', deadEvent.id);
+
+      const tagged = await getTaggedPhotosForTalent(sb, talent.id);
+      expect(tagged.map((t) => t.photo_id)).toEqual([livePhoto.id]);
+      expect(await getTaggedPhotosCountForTalent(sb, talent.id)).toBe(1);
     });
   });
 });
