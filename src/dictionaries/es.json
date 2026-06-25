@@ -1081,6 +1081,8 @@
     "photoAddedToProfile": "Foto añadida a tu perfil",
     "failedAddProfile": "No se pudo añadir la foto a tu perfil",
     "bulkFavorited": "{n} fotos añadidas a favoritos",
+    "bulkFavoritedOne": "1 foto añadida a favoritos",
+    "alreadyInFavorites": "Ya en favoritos",
     "bulkClaimed": "{n} fotos añadidas a tu perfil",
     "bulkClaimedSkipped": "{n} fotos añadidas a tu perfil, {m} omitidas",
     "failedBulkFavorite": "No se pudieron añadir las fotos a favoritos",

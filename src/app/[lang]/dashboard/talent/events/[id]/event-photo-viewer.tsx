@@ -32,6 +32,7 @@ import {
 } from '@/hooks/use-bulk-contributor-delete';
 import { useBulkPhotoDownload } from '@/hooks/use-bulk-photo-download';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
+import { filterNewIds } from '@/lib/bulk-select';
 import { shouldShowBulkDownload } from '@/lib/event-bulk-actions';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
@@ -122,6 +123,8 @@ export function EventPhotoViewer({
     photoAddedToProfile: string;
     failedAddProfile: string;
     bulkFavorited: string;
+    bulkFavoritedOne: string;
+    alreadyInFavorites: string;
     bulkClaimed: string;
     bulkClaimedSkipped: string;
     failedBulkFavorite: string;
@@ -258,18 +261,30 @@ export function EventPhotoViewer({
   const handleBulkFavorite = useCallback(
     async (ids: string[]) => {
       if (ids.length === 0 || isBulkFavoriting) return;
+      // Only act on photos that aren't already favorited — otherwise the toast
+      // reports the whole selection every time and we re-hit the server for
+      // no-ops (mirrors handleBulkAddToCart). (T-042)
+      const toAdd = filterNewIds(ids, myPhotos);
+      if (toAdd.length === 0) {
+        toast.info(t('alreadyInFavorites'));
+        return;
+      }
       setIsBulkFavoriting(true);
       try {
-        await addPhotosToMyPhotosAction(ids);
-        setMyPhotos((prev) => new Set([...prev, ...ids]));
-        toast.success(t('bulkFavorited').replace('{n}', String(ids.length)));
+        await addPhotosToMyPhotosAction(toAdd);
+        setMyPhotos((prev) => new Set([...prev, ...toAdd]));
+        toast.success(
+          toAdd.length === 1
+            ? t('bulkFavoritedOne')
+            : t('bulkFavorited').replace('{n}', String(toAdd.length)),
+        );
       } catch (error) {
         toast.error(error instanceof Error ? error.message : t('failedBulkFavorite'));
       } finally {
         setIsBulkFavoriting(false);
       }
     },
-    [isBulkFavoriting, t],
+    [isBulkFavoriting, myPhotos, t],
   );
 
   const handleBulkClaim = useCallback(
@@ -299,7 +314,7 @@ export function EventPhotoViewer({
   // not already purchased, then emits a single summary toast.
   const handleBulkAddToCart = useCallback(
     (ids: string[]) => {
-      const toAdd = ids.filter((id) => !photosInCart.has(id) && !purchasedPhotoIds.has(id));
+      const toAdd = filterNewIds(ids, photosInCart, purchasedPhotoIds);
       if (toAdd.length === 0) {
         toast.info(bulkDownload.alreadyInCart);
         return;
