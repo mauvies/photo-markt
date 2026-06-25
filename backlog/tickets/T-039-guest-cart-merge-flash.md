@@ -1,11 +1,18 @@
 # T-039 · Merge del carrito invitado→autenticado sin parpadeo (mostrar el carrito ya fusionado)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/guest-cart-merge-flash`  (tipo = fix)
-- **OpenSpec change:** —  (se crea al ejecutar si toca >1 archivo o es ambiguo; aquí probable)
-- **PR:** —
+- **OpenSpec change:** —  (no aplicó: fix de render en cliente)
+- **PR:** #93
+
+> **Resuelto (enfoque #1, mínimo/cliente):** el skeleton de merge ahora gatea **todo** el carrito, no solo
+> la rama vacía. Helper puro `cartView(isMerging, itemCount)` (`src/lib/cart-view.ts`) donde `merging` gana
+> sobre lista no-vacía → skeleton → carrito ya fusionado (nunca parcial→completo). Timeout de seguridad en
+> el `useLayoutEffect` por si el `SIGNED_IN` nunca llega (autenticado con localStorage rancio) → no deja el
+> skeleton pinchado ocultando ítems reales. No se tocó la lógica de merge. Tests: `cart-view.test.ts` +
+> `mergeGuestCartAction` (unión/dedup/re-precio/no-auth) en `cart.test.ts`.
 
 ## Requerimiento
 Sin estar autenticado, visito un evento y agrego fotos al carrito (carrito de invitado). En la página del
