@@ -333,6 +333,17 @@ The goal is **60% on lines, branches, functions, and statements**. Thresholds ar
 - **Rate limits**: the only limiter is a per-`(shareCode, IP)` cap of 10 searches/hour (`src/lib/rate-limit.ts`). There is **no per-plan monthly search quota** — a half-built version (the `ai_search_usage` table + an `AI_SEARCH_RATE_LIMITS` config) was removed in T-036 because face search is anonymous-friendly (the searcher isn't the plan owner), so a per-plan monthly meter never fit. An abuse-resistant, cost-controlled model is being re-designed under ticket T-034. Don't re-advertise a "N searches/month" number until that lands.
 - **Worker route:** all Inngest functions are registered at `/src/app/api/inngest/route.ts`.
 
+## BIB number recognition (T-032)
+
+Race **bib-number** detection, **per-event opt-in** (the cost gate, mirroring `ai_matching_enabled`). Shares the Rekognition client + Inngest + `safeCall` conventions with face matching.
+
+- **Opt-in:** `events.bib_detection_enabled` (default false) + `bib_detection_status`. Photographer toggles it on the event detail page (`enable/disableBibDetectionForEvent`, owner-only); enabling fires `event.bib-detection-enabled` → `backfillEventBibDetection`. Disabled for `contains_minors` events (parity with face search). Disabling **keeps** existing bib rows.
+- **Detection (job):** `detectPhotoBibs` (`src/lib/inngest/functions/detect-photo-bibs.ts`) on `photo.uploaded` + `photo.bib-detect`; no-ops (status stays NULL) unless the event opted in. Downloads the image, calls Rekognition `DetectText` (`src/lib/aws/bib-detection.ts`), filters to plausible bibs (`extractBibCandidates` in `src/lib/bib-numbers.ts` — confidence floor + digit-dominant pattern + dedupe + cap), persists to `photo_bib_numbers`. Bytes never cross Inngest step boundaries; AWS/Storage/Sharp wrapped in `safeCall`. Backfill fans out a **bib-specific** `photo.bib-detect` event so it never re-runs the face/thumbnail jobs.
+- **Persistence:** `photo_bib_numbers` (`photo_id`, `bib_text`, `confidence`, `bounding_box`, unique `(photo_id, bib_text)`) — RLS read like `photo_faces`, service-role writes only. Per-photo `photos.bib_detection_status`. Queries in `src/database/queries/bib-numbers.ts`.
+- **Search (talent):** `searchPhotosByBibInEvent(shareCode, bib)` (`events/[shareCode]/actions.ts`) — exact normalized match, rate-limited `(shareCode, IP)` 30/h, returns matching **public** photo ids. Surfaced via `BibSearchBar` on the public event gallery (`/events/[shareCode]`), gated on `bib_detection_enabled`; filters the grid client-side. (Talent-dashboard event view doesn't surface bib search yet — follow-up.)
+- **Privacy:** bib numbers are low-sensitivity race identifiers (not PII); selfies/faces unaffected. `contains_minors` parity keeps minors' photos no more exposed than face search already allows.
+- **Cost:** `DetectText` is billed per image on opted-in events — the per-event opt-in is the only throttle (no per-event cap yet). No new env vars (reuses `AWS_*`/`REKOGNITION_*`).
+
 ## Environment Variables
 
 ```bash
