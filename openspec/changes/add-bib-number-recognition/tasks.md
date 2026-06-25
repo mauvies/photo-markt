@@ -31,9 +31,9 @@
 
 ## 5. Photographer opt-in
 
-- [ ] 5.1 Event create/edit + settings: a "Detect bib numbers" toggle that sets `bib_detection_enabled` (owner-only server action; reuse the AI-matching gating pattern). Enabling triggers the backfill.
-- [ ] 5.2 i18n strings (en + es) for the toggle + helper copy.
-- [ ] 5.3 Test the toggle action: owner can flip it; non-owner is rejected; enabling on a populated event enqueues backfill.
+- [x] 5.1 `enableBibDetectionForEvent` / `disableBibDetectionForEvent` (owner-only, mirroring the AI actions; enable fires `event.bib-detection-enabled` for backfill, disable keeps existing rows) + a `BibDetectionToggle` card on the photographer event detail page (owner-only, disabled for minors events).
+- [x] 5.2 i18n `bibDetection` block in en + es (toggle title/description/states + the search strings used in phase 6).
+- [x] 5.3 `test/integration/actions/bib-detection-toggle.test.ts`: owner enables (flag + backfill enqueue), owner disables, non-owner rejected (no enqueue), minors event rejected.
 
 ## 6. Talent bib search
 

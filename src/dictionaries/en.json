@@ -1194,6 +1194,20 @@
       "netEarnings": "Net Earnings"
     }
   },
+  "bibDetection": {
+    "title": "Detect bib numbers",
+    "description": "Read race bib numbers in this event's photos so athletes can find their photos by bib. Detection runs on each photo (uses AI).",
+    "minorsDisabled": "Unavailable on events flagged as containing minors.",
+    "enableFailed": "Couldn't update bib detection. Please try again.",
+    "enabled": "On — new and existing photos are scanned for bib numbers.",
+    "disabled": "Off — bib numbers aren't detected for this event.",
+    "searchTitle": "Search by bib number",
+    "searchPlaceholder": "Enter a bib number",
+    "searchButton": "Search",
+    "searchClear": "Clear",
+    "searchEmpty": "No photos found with that bib number.",
+    "searchFailed": "Bib search failed. Please try again."
+  },
   "rekognition": {
     "cardTitle": "AI face matching",
     "statusIdle": "Idle",
