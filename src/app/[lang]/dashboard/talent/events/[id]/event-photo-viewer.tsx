@@ -32,6 +32,7 @@ import {
 } from '@/hooks/use-bulk-contributor-delete';
 import { useBulkPhotoDownload } from '@/hooks/use-bulk-photo-download';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
+import { shouldShowBulkDownload } from '@/lib/event-bulk-actions';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
   addPhotosToMyPhotosAction,
@@ -512,6 +513,10 @@ export function EventPhotoViewer({
         icon: Download,
         onRun: (ids) => downloadSelected(ids),
         isPending: isDownloading,
+        // Free events: anyone can download. Paid events: only when the user has
+        // purchased photos to download — otherwise hide the dead button instead
+        // of showing one that just errors (T-041).
+        visible: shouldShowBulkDownload(isFreeEvent, purchasedPhotoIds.size > 0),
       },
       {
         key: 'favorite',
@@ -544,6 +549,7 @@ export function EventPhotoViewer({
       showAddToCart,
       downloadSelected,
       isDownloading,
+      purchasedPhotoIds,
       menuLabels,
       handleBulkFavorite,
       isBulkFavoriting,
