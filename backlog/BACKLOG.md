@@ -11,10 +11,9 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | doing |
-| 2 | P2 | T-044 | Monitoreo de servicios externos: readiness endpoint + dashboard + monitor externo | — | todo |
-| 3 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
-| 4 | P3 | T-037 | Centralizar estructura de base de datos (`supabase/` raíz vs `src/database/`) | — | todo |
+| 1 | P2 | T-044 | Monitoreo de servicios externos: readiness endpoint + dashboard + monitor externo | — | todo |
+| 2 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
+| 3 | P3 | T-037 | Centralizar estructura de base de datos (`supabase/` raíz vs `src/database/`) | — | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
@@ -30,6 +29,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-032** · Reconocimiento de dorsal (BIB): opt-in por evento + Rekognition `DetectText` (Inngest) + `photo_bib_numbers` + búsqueda de talent por dorsal en la galería pública; badge "Coming soon" retirado. Diseño OpenSpec `add-bib-number-recognition` (24 tareas) — PR #97 (backend+opt-in+acción) + PR #98 (UI búsqueda+ship)
 
 - **T-042** · Bulk "Agregar a favoritos" deduplica las ya favoritas y reporta el conteo real (info "ya en favoritos" si ninguna es nueva); helper puro `filterNewIds` compartido con el bulk del carrito — PR #96
 
