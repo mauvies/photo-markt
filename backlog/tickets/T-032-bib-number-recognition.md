@@ -1,10 +1,10 @@
 # T-032 · Implementar reconocimiento de número de dorsal (BIB)
 
 - **Prioridad:** P3
-- **Estado:** todo
-- **Blockers:** ninguno (decisión de diseño: motor OCR/visión)
+- **Estado:** doing  (fase de **diseño OpenSpec**; sin implementación hasta aprobación)
+- **Blockers:** ninguno
 - **Rama:** `feat/bib-number-recognition`
-- **OpenSpec change:** **sí** — feature nuevo no trivial (pipeline de detección + búsqueda). `/opsx:propose` al ejecutar.
+- **OpenSpec change:** **en curso** — `/opsx:propose`. Decisiones tomadas por el usuario: motor **Rekognition `DetectText`**; coste **opt-in por evento** (el fotógrafo activa la detección).
 - **PR:** —
 
 ## Requerimiento

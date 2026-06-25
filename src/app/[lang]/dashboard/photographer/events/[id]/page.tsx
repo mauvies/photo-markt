@@ -21,6 +21,7 @@ import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
 import { getPhotoTags } from './actions';
 import { AiStatusCard } from './ai-status-card';
+import { BibDetectionToggle } from './bib-detection-toggle';
 import { EventActionsMenu } from './event-actions-menu';
 import { EventDetailsCard } from './event-details-card';
 import { EventPhotoAlbum } from './event-photo-album';
@@ -220,6 +221,7 @@ export default async function EventDetailPage({
   // that pre-date the migration; cast through `unknown` so TS doesn't object.
   const eventRecord = event as unknown as Record<string, unknown>;
   const aiMatchingEnabled = Boolean(eventRecord.ai_matching_enabled);
+  const bibDetectionEnabled = Boolean(eventRecord.bib_detection_enabled);
   const containsMinors = Boolean(eventRecord.contains_minors);
   const aiMatchingStatus =
     (eventRecord.ai_matching_status as AiMatchingStatus | undefined) ?? 'idle';
@@ -329,6 +331,23 @@ export default async function EventDetailPage({
         {aiStatusCard}
         {shareCard}
       </div>
+      {role === 'owner' ? (
+        <div className="mt-4">
+          <BibDetectionToggle
+            eventId={id}
+            initialEnabled={bibDetectionEnabled}
+            containsMinors={containsMinors}
+            labels={{
+              title: dict.bibDetection.title,
+              description: dict.bibDetection.description,
+              minorsDisabled: dict.bibDetection.minorsDisabled,
+              enableFailed: dict.bibDetection.enableFailed,
+              enabled: dict.bibDetection.enabled,
+              disabled: dict.bibDetection.disabled,
+            }}
+          />
+        </div>
+      ) : null}
       {event.type === 'organizer' && (
         <div className="mt-4">
           <TranslationsProvider translations={dict.organizerEvent}>

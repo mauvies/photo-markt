@@ -1194,6 +1194,20 @@
       "netEarnings": "Ingresos netos"
     }
   },
+  "bibDetection": {
+    "title": "Detectar números de dorsal",
+    "description": "Lee los números de dorsal en las fotos de este evento para que los atletas encuentren sus fotos por dorsal. La detección se ejecuta en cada foto (usa IA).",
+    "minorsDisabled": "No disponible en eventos marcados como que contienen menores.",
+    "enableFailed": "No se pudo actualizar la detección de dorsales. Inténtalo de nuevo.",
+    "enabled": "Activado: se escanean las fotos nuevas y existentes en busca de dorsales.",
+    "disabled": "Desactivado: no se detectan dorsales en este evento.",
+    "searchTitle": "Buscar por número de dorsal",
+    "searchPlaceholder": "Introduce un número de dorsal",
+    "searchButton": "Buscar",
+    "searchClear": "Limpiar",
+    "searchEmpty": "No se encontraron fotos con ese número de dorsal.",
+    "searchFailed": "La búsqueda por dorsal falló. Inténtalo de nuevo."
+  },
   "rekognition": {
     "cardTitle": "Coincidencia facial IA",
     "statusIdle": "Inactivo",

@@ -16,6 +16,7 @@ import {
   untagPhotoForTalent,
   updatePhotoUploadStatus,
 } from '@/database/queries';
+import { getEventBibDetectionState } from '@/database/queries/bib-numbers';
 import {
   type AiMatchingStatus,
   getEventAiIndexingProgress,
@@ -543,6 +544,61 @@ export async function disableAIMatchingForEvent(eventId: string): Promise<{ succ
   } catch (err) {
     console.error('[disableAIMatchingForEvent] failed to enqueue', err);
   }
+
+  revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
+  revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
+  return { success: true };
+}
+
+/**
+ * Opt an event into BIB-number detection. Owner-only. Enabling fires the
+ * backfill worker over existing photos; new uploads are picked up by the
+ * per-photo worker. Mirrors enableAIMatchingForEvent. (T-032)
+ */
+export async function enableBibDetectionForEvent(eventId: string): Promise<{ success: true }> {
+  const supabase = await createClient();
+  const userId = await requireEventOwner(supabase, eventId);
+
+  const state = await getEventBibDetectionState(supabase, eventId);
+  if (!state) throw new Error('Event not found.');
+  if (state.containsMinors) {
+    throw new Error("Bib detection can't be enabled on events that contain minors.");
+  }
+
+  await supabase
+    .from('events')
+    .update({ bib_detection_enabled: true })
+    .eq('id', eventId)
+    .eq('user_id', userId);
+
+  try {
+    await inngest.send({
+      name: 'event.bib-detection-enabled',
+      data: { eventId, userId },
+    });
+  } catch (err) {
+    console.error('[enableBibDetectionForEvent] failed to enqueue', err);
+    throw new Error("Couldn't enable bib detection. Please try again.");
+  }
+
+  revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
+  revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
+  return { success: true };
+}
+
+/**
+ * Disable BIB detection. Existing detected bibs are kept (re-enabling is then
+ * instant); detection and talent search just stop. Owner-only. (T-032)
+ */
+export async function disableBibDetectionForEvent(eventId: string): Promise<{ success: true }> {
+  const supabase = await createClient();
+  const userId = await requireEventOwner(supabase, eventId);
+
+  await supabase
+    .from('events')
+    .update({ bib_detection_enabled: false })
+    .eq('id', eventId)
+    .eq('user_id', userId);
 
   revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
   revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
