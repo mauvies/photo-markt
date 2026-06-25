@@ -1194,6 +1194,17 @@
       "netEarnings": "Net Earnings"
     }
   },
+  "adminStatus": {
+    "title": "Service status",
+    "description": "Readiness of external services for this deployment.",
+    "statusOk": "All systems operational",
+    "statusDegraded": "Degraded — a non-critical service is down",
+    "statusDown": "Down — a critical service is failing",
+    "environment": "Environment",
+    "checkOk": "Operational",
+    "checkDown": "Down",
+    "checkSkipped": "Not checked"
+  },
   "bibDetection": {
     "title": "Detect bib numbers",
     "description": "Read race bib numbers in this event's photos so athletes can find their photos by bib. Detection runs on each photo (uses AI).",

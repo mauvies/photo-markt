@@ -39,6 +39,8 @@ const TEST_ENV_DEFAULTS: Record<string, string> = {
   // tests mock `inngest.send()` when they care about emissions.
   INNGEST_EVENT_KEY: 'inngest-event-key-fake-for-tests',
   INNGEST_SIGNING_KEY: 'signkey-test-fake-for-tests',
+  // Readiness-endpoint token (T-044) — tests use this exact value.
+  HEALTH_CHECK_TOKEN: 'health-token-fake-for-tests',
 };
 
 for (const [key, value] of Object.entries(TEST_ENV_DEFAULTS)) {

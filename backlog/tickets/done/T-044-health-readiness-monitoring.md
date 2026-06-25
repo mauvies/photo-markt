@@ -1,11 +1,17 @@
 # T-044 · Monitoreo de servicios externos: readiness endpoint + dashboard + monitor externo
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/health-readiness-monitoring`
-- **OpenSpec change:** —  (se crea al ejecutar: toca >1 archivo — endpoint + dashboard + env.mjs + docs)
-- **PR:** —
+- **OpenSpec change:** —  (no aplicó: el ticket ya capturaba el spec completo; implementado directo + `/code-review`)
+- **PR:** #99
+
+> **Resuelto:** `GET /api/health/ready` con sondas read-only por servicio (Supabase/Stripe/AWS/Resend
+> críticas; Inngest no-crítica por presencia de keys; Sentry/Google skipped), timeout 3s, roll-up
+> ok/degraded/down, token (`HEALTH_CHECK_TOKEN`, compare constante-en-tiempo) + rate-limit, **sin filtrar
+> el error** de la sonda. Dashboard `/dashboard/admin/status` gated a `admin_users`. `docs/monitoring.md`
+> para el monitor externo. Reporte cacheado ~15s (fix de code-review: no martillear APIs de pago).
 
 ## Requerimiento
 Poder monitorear que **todos los servicios externos** estén vivos y con credenciales válidas, en **staging y production**. Hoy solo existe `GET /api/health` (liveness puro, PR #83 / T-025), cuyo propio comentario dice que los chequeos de dependencias deben ir en un **readiness endpoint** aparte. Tres piezas:
