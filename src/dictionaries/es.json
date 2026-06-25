@@ -1194,6 +1194,17 @@
       "netEarnings": "Ingresos netos"
     }
   },
+  "adminStatus": {
+    "title": "Estado de servicios",
+    "description": "Disponibilidad de los servicios externos para este despliegue.",
+    "statusOk": "Todos los sistemas operativos",
+    "statusDegraded": "Degradado: un servicio no crítico está caído",
+    "statusDown": "Caído: un servicio crítico está fallando",
+    "environment": "Entorno",
+    "checkOk": "Operativo",
+    "checkDown": "Caído",
+    "checkSkipped": "No comprobado"
+  },
   "bibDetection": {
     "title": "Detectar números de dorsal",
     "description": "Lee los números de dorsal en las fotos de este evento para que los atletas encuentren sus fotos por dorsal. La detección se ejecuta en cada foto (usa IA).",

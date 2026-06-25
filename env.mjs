@@ -39,6 +39,9 @@ export const env = createEnv({
     // SENTRY_PROJECT/SENTRY_AUTH_TOKEN are read directly by withSentryConfig at
     // build time and are not validated here.
     SENTRY_DSN: z.string().optional(),
+    // Shared secret guarding GET /api/health/ready (T-044). Optional: when
+    // unset the readiness endpoint stays locked (401), so absence is safe.
+    HEALTH_CHECK_TOKEN: z.string().optional(),
   },
   /*
    * Environment variables available on the client (and server).
@@ -86,5 +89,6 @@ export const env = createEnv({
     INNGEST_SIGNING_KEY: process.env.INNGEST_SIGNING_KEY,
     SENTRY_DSN: process.env.SENTRY_DSN,
     NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
+    HEALTH_CHECK_TOKEN: process.env.HEALTH_CHECK_TOKEN,
   },
 });
