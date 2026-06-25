@@ -1,11 +1,19 @@
 # T-040 · Excluir fotos de eventos eliminados del carrito y de favoritos
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/deleted-event-cart-favorites`  (tipo = fix)
-- **OpenSpec change:** —  (se crea al ejecutar si toca >1 archivo o es ambiguo)
-- **PR:** —
+- **OpenSpec change:** —  (no aplicó: filtros de query + validación, sin migración)
+- **PR:** #94
+
+> **Resuelto (capas 1+2):** filtro `events.deleted_at IS NULL` en lectura — `getCartItemsWithDetails` +
+> `getCartItemCount` (badge consistente) y `getTaggedPhotosForTalent` + `getTaggedPhotosCountForTalent`
+> (patrón nested embed `photos!inner(events!inner(...))` + `.is('photos.events.deleted_at', null)`). En
+> escritura: `addPhotoToCartAction` rechaza evento eliminado y `mergeGuestCartAction` lo salta. **No** se
+> tocó la biblioteca comprada/reclamada (el usuario las posee). **Diferido (capa 3):** cascada al borrar el
+> evento + prevención en el tag/favorito (la galería ya oculta fotos de eventos borrados). Tests de
+> regresión (fallan antes/pasan después) en `carts.test.ts`, `talent-photo-tags.test.ts`, `cart.test.ts`.
 
 ## Requerimiento
 Bug detectado: en el carrito de compras aparece una foto de un evento **que ya no existe** (evento
