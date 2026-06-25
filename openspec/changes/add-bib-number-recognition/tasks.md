@@ -37,10 +37,10 @@
 
 ## 6. Talent bib search
 
-- [ ] 6.1 Event-gallery server action `searchPhotosByBib(eventId, bib)` mirroring `searchFacesInEvent` (validate/normalize input, rate-limit per `(event, IP)`, return matched photo IDs).
-- [ ] 6.2 Bib-search input on the event detail gallery, shown only when `bib_detection_enabled`; filter the gallery to matches; empty-state on no matches.
-- [ ] 6.3 i18n strings (en + es) for the search input + empty state.
-- [ ] 6.4 Tests for the search action (match, no-match empty, unavailable when detection off).
+- [x] 6.1 `searchPhotosByBibInEvent(shareCode, bib)` in `events/[shareCode]/actions.ts` (mirrors `searchFacesInEvent`): resolve event, require detection enabled, rate-limit `(shareCode, IP)` 30/h, normalize input, return matched PUBLIC photo ids (cross-referenced against `getEventPhotosPublic`).
+- [ ] 6.2 Bib-search input on the event gallery, shown only when `bib_detection_enabled`; filter the gallery to matches; empty-state on no matches. (UI integration into the face-search gallery — remaining.)
+- [x] 6.3 i18n strings (en + es) — included in the `bibDetection` block (search title/placeholder/button/clear/empty/failed).
+- [x] 6.4 `test/integration/actions/bib-search.test.ts`: match, normalized query, no-match empty, throws when detection off.
 
 ## 7. Ship + docs
 

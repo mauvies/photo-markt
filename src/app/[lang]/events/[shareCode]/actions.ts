@@ -11,6 +11,7 @@ import {
   getPhotoForDownload,
   type SupabaseServerClient,
 } from '@/database/queries';
+import { getEventBibDetectionState, getPhotoIdsByBibInEvent } from '@/database/queries/bib-numbers';
 import { getPurchasedPhotoIdsForEvent } from '@/database/queries/orders';
 import {
   getEventAiIndexingProgress,
@@ -21,6 +22,7 @@ import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { searchFacesByImage } from '@/lib/aws/face-indexing';
 import { prepareImageForRekognition } from '@/lib/aws/image-prep';
+import { normalizeBibToken } from '@/lib/bib-numbers';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { validatePhotoUpload } from '@/lib/photo-upload';
 import { getClientIp, rateLimit } from '@/lib/rate-limit';
@@ -318,6 +320,57 @@ export async function searchFacesInEvent(
     totalSearched: progress.totalApplicable,
     eventIndexingComplete: progress.pending === 0,
   };
+}
+
+// ─── BIB number search (T-032) ───────────────────────────────────────────────
+
+export const BIB_SEARCH_RATE_LIMIT_PREFIX = 'bib-search-rate-limit';
+
+export interface SearchPhotosByBibResult {
+  /** Photo ids (public/visible only) whose detected bib matches. */
+  photoIds: string[];
+}
+
+/**
+ * Search an event's gallery by bib number. Anonymous-friendly (mirrors face
+ * search): resolves the event by share code, requires bib detection to be
+ * enabled, rate-limits by `(shareCode, IP)`, and returns the matching PUBLIC
+ * photo ids (cross-referenced against the public photo set so unapproved /
+ * deleted / minors photos never leak). It's a DB lookup — no AWS call.
+ */
+export async function searchPhotosByBibInEvent(
+  shareCode: string,
+  bib: string,
+): Promise<SearchPhotosByBibResult> {
+  if (!shareCode) throw new Error('Missing share code.');
+
+  const normalized = normalizeBibToken(bib ?? '');
+  if (!normalized) return { photoIds: [] };
+
+  const adminClient = supabaseAdmin as unknown as SupabaseServerClient;
+
+  const event = await getEventByShareCode(adminClient, shareCode);
+  if (!event) throw new Error('Event not found.');
+
+  const state = await getEventBibDetectionState(adminClient, event.id);
+  if (!state || !state.enabled || state.containsMinors) {
+    throw new Error('This event does not support bib search.');
+  }
+
+  const ip = getClientIp(await headers());
+  const rl = await rateLimit({ key: `bib-search:${shareCode}:${ip}`, limit: 30, windowSec: 3600 });
+  if (!rl.ok) {
+    throw new Error(`${BIB_SEARCH_RATE_LIMIT_PREFIX}:exhausted`);
+  }
+
+  const matchedIds = await getPhotoIdsByBibInEvent(adminClient, event.id, normalized);
+  if (matchedIds.length === 0) return { photoIds: [] };
+
+  // Cross-reference against the public photo set so unapproved / deleted /
+  // minors photos never leak through bib search.
+  const publicPhotos = await getEventPhotosPublic(adminClient, event.id);
+  const publicIds = new Set(publicPhotos.map((p) => p.id));
+  return { photoIds: matchedIds.filter((id) => publicIds.has(id)) };
 }
 
 // ─── Single-photo download ────────────────────────────────────────────────────
