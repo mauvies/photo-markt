@@ -27,6 +27,7 @@ import { isFeatureEnabled } from '@/lib/feature-flags';
 import { validatePhotoUpload } from '@/lib/photo-upload';
 import { getClientIp, rateLimit } from '@/lib/rate-limit';
 import { safeCall } from '@/lib/safe-call';
+import { BIB_SEARCH_RATE_LIMIT_PREFIX, type SearchPhotosByBibResult } from './bib-search-shared';
 import {
   FACE_SEARCH_RATE_LIMIT_PREFIX,
   type SearchFacesInEventResult,
@@ -323,13 +324,6 @@ export async function searchFacesInEvent(
 }
 
 // ─── BIB number search (T-032) ───────────────────────────────────────────────
-
-export const BIB_SEARCH_RATE_LIMIT_PREFIX = 'bib-search-rate-limit';
-
-export interface SearchPhotosByBibResult {
-  /** Photo ids (public/visible only) whose detected bib matches. */
-  photoIds: string[];
-}
 
 /**
  * Search an event's gallery by bib number. Anonymous-friendly (mirrors face
