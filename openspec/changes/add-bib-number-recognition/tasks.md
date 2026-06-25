@@ -38,12 +38,12 @@
 ## 6. Talent bib search
 
 - [x] 6.1 `searchPhotosByBibInEvent(shareCode, bib)` in `events/[shareCode]/actions.ts` (mirrors `searchFacesInEvent`): resolve event, require detection enabled, rate-limit `(shareCode, IP)` 30/h, normalize input, return matched PUBLIC photo ids (cross-referenced against `getEventPhotosPublic`).
-- [ ] 6.2 Bib-search input on the event gallery, shown only when `bib_detection_enabled`; filter the gallery to matches; empty-state on no matches. (UI integration into the face-search gallery — remaining.)
+- [x] 6.2 `BibSearchBar` on the **public** event gallery (`/events/[shareCode]`), gated on `bib_detection_enabled`; a bib-search context in `EventGalleryWithFaceSearch` filters the grid to matches with a bib-specific empty state. (Talent-dashboard event view not surfaced yet — documented follow-up.)
 - [x] 6.3 i18n strings (en + es) — included in the `bibDetection` block (search title/placeholder/button/clear/empty/failed).
 - [x] 6.4 `test/integration/actions/bib-search.test.ts`: match, normalized query, no-match empty, throws when detection off.
 
 ## 7. Ship + docs
 
-- [ ] 7.1 Remove the "Coming soon" badge from `freeFeature4`/`starterFeature4`/`proFeature4` in `src/lib/plan-features.ts` (and any guard test that asserts the badge).
-- [ ] 7.2 Update `CLAUDE.md` / `ARCHITECTURE.md`: document the bib pipeline alongside AI Photo Search; note the per-event opt-in and the privacy treatment.
-- [ ] 7.3 Full gate green: `pnpm typecheck && pnpm lint && pnpm test`; `/code-review` (touches DB/migration + jobs).
+- [x] 7.1 Removed the "Coming soon" badge from `freeFeature4`/`starterFeature4`/`proFeature4` in `src/lib/plan-features.ts`; updated the guard test `plan-features.test.ts` (BIB now un-badged; outfit-pattern/search-priority stay).
+- [x] 7.2 Documented the bib pipeline in `CLAUDE.md` (new "BIB number recognition" section): opt-in, job, persistence, search, privacy, cost.
+- [x] 7.3 Full gate (`typecheck`/`lint`/`test`/`build`) + `/code-review` on the diff.

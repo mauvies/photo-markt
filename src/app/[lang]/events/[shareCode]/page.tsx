@@ -566,6 +566,16 @@ export default async function EventPage({
               aiState={aiBannerState}
               bannerLabels={dict.aiSearch.banner}
               modalLabels={dict.aiSearch.modal}
+              bibDetectionEnabled={Boolean(
+                (event as unknown as Record<string, unknown>).bib_detection_enabled,
+              )}
+              bibSearchLabels={{
+                title: dict.bibDetection.searchTitle,
+                placeholder: dict.bibDetection.searchPlaceholder,
+                button: dict.bibDetection.searchButton,
+                clear: dict.bibDetection.searchClear,
+                failed: dict.bibDetection.searchFailed,
+              }}
               fullGallery={
                 <Suspense
                   key="event-gallery"
@@ -636,6 +646,7 @@ export default async function EventPage({
                     }}
                     resultsLabels={dict.aiSearch.results}
                     imageUnavailableLabel={dict.eventCard.imageUnavailable}
+                    bibSearchEmptyLabel={dict.bibDetection.searchEmpty}
                   />
                 </Suspense>
               }

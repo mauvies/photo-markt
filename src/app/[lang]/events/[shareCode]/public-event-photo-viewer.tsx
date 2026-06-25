@@ -9,7 +9,7 @@ import {
   removePhotoFromCartAction,
 } from '@/app/[lang]/dashboard/talent/cart/actions';
 import { ConfirmDialog } from '@/components/confirm-dialog';
-import { useFaceSearch } from '@/components/event-gallery-with-face-search';
+import { useBibSearch, useFaceSearch } from '@/components/event-gallery-with-face-search';
 import { type EventPhotoFilter, EventPhotoFilterTabs } from '@/components/event-photo-filter-tabs';
 import { FaceSearchResults } from '@/components/face-search-results';
 import { useGuestCart } from '@/components/guest-cart-provider';
@@ -107,6 +107,8 @@ interface PublicEventPhotoViewerProps {
   /** Localized copy for the selection toolbar + bulk download. */
   bulkDownload: BulkDownloadLabels;
   imageUnavailableLabel: string;
+  /** Empty-state copy when a bib search returns no matches (T-032). */
+  bibSearchEmptyLabel?: string;
 }
 
 export function PublicEventPhotoViewer({
@@ -134,6 +136,7 @@ export function PublicEventPhotoViewer({
   purchasedPhotoIds = new Set(),
   bulkDownload,
   imageUnavailableLabel,
+  bibSearchEmptyLabel,
 }: PublicEventPhotoViewerProps) {
   const router = useRouter();
   const guestCart = useGuestCart();
@@ -391,12 +394,19 @@ export function PublicEventPhotoViewer({
     [faceSearch.matches, photos],
   );
 
+  // ── BIB-number search filter (T-032) ───────────────────────────────────
+  const bibSearch = useBibSearch();
+
   // ── "All photos / My photos" filter ────────────────────────────────────
   const [filter, setFilter] = useState<EventPhotoFilter>('all');
-  const visiblePhotos = useMemo(
-    () => (filter === 'mine' ? photos.filter((p) => myPhotoIds.has(p.id)) : photos),
-    [filter, photos, myPhotoIds],
-  );
+  const visiblePhotos = useMemo(() => {
+    let result = filter === 'mine' ? photos.filter((p) => myPhotoIds.has(p.id)) : photos;
+    if (bibSearch.matchedPhotoIds !== null) {
+      const bibSet = new Set(bibSearch.matchedPhotoIds);
+      result = result.filter((p) => bibSet.has(p.id));
+    }
+    return result;
+  }, [filter, photos, myPhotoIds, bibSearch.matchedPhotoIds]);
 
   // ── Single-photo download (lightbox) ───────────────────────────────────
   const isPhotoDownloadable = useCallback(
@@ -621,7 +631,11 @@ export function PublicEventPhotoViewer({
           }
           emptyState={
             <div className="py-12 text-center">
-              <p className="text-muted-foreground">{filterLabels.empty}</p>
+              <p className="text-muted-foreground">
+                {bibSearch.matchedPhotoIds !== null
+                  ? (bibSearchEmptyLabel ?? filterLabels.empty)
+                  : filterLabels.empty}
+              </p>
             </div>
           }
         />
