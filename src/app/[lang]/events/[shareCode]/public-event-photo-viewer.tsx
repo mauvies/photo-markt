@@ -530,11 +530,13 @@ export function PublicEventPhotoViewer({
     return eventBulkActionKeys({
       canAddToCart: canBulkAddToCart,
       isFreeEvent,
+      hasPurchasedPhotos: purchasedPhotoIds.size > 0,
       canDeleteOwnPhotos,
     }).map((key) => byKey[key]);
   }, [
     canBulkAddToCart,
     isFreeEvent,
+    purchasedPhotoIds,
     canDeleteOwnPhotos,
     bulkDownload.addToCart,
     bulkDownload.download,

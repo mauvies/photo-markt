@@ -1,11 +1,17 @@
 # T-041 · Ocultar el botón "Descargar" del modo selección en eventos con watermark (no descargables)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/hide-bulk-download-watermarked`  (tipo = fix)
-- **OpenSpec change:** —  (se crea al ejecutar si toca >1 archivo o es ambiguo)
-- **PR:** —
+- **OpenSpec change:** —  (no aplicó: fix de UI)
+- **PR:** #95
+
+> **Resuelto:** helper compartido `shouldShowBulkDownload(isFreeEvent, hasPurchasedPhotos)` en
+> `event-bulk-actions.ts` (free ∨ tiene compradas). El visor de talento gatea su acción `download` con él
+> (`visible:`), y el visor público pasa `hasPurchasedPhotos` a `eventBulkActionKeys` → ambos deciden igual.
+> El visor del fotógrafo no cambia (dueño → descarga siempre válida). Test del helper (oculto en pago sin
+> compras, visible con compras, siempre en gratis) en `test/unit/lib/event-bulk-actions.test.ts`.
 
 ## Requerimiento
 Ya quedó (T-010 / PR #68) que descargar fotos con watermark de un evento público **no** es posible — la
