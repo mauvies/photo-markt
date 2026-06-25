@@ -11,11 +11,10 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-041 | Ocultar "Descargar" del modo selección en eventos con watermark (no descargables) | — | todo |
-| 2 | P2 | T-042 | "Agregar a favoritos" en lote: deduplicar las ya favoritas y reportar el conteo real | — | todo |
-| 3 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | todo |
-| 4 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
-| 5 | P3 | T-037 | Centralizar estructura de base de datos (`supabase/` raíz vs `src/database/`) | — | todo |
+| 1 | P2 | T-042 | "Agregar a favoritos" en lote: deduplicar las ya favoritas y reportar el conteo real | — | todo |
+| 2 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | todo |
+| 3 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
+| 4 | P3 | T-037 | Centralizar estructura de base de datos (`supabase/` raíz vs `src/database/`) | — | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
@@ -31,6 +30,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-041** · Ocultar el botón "Descargar" muerto del modo selección en eventos de pago sin compras: helper compartido `shouldShowBulkDownload` (free ∨ compradas) usado por visor de talento y público — PR #95
 
 - **T-040** · Excluir eventos soft-deleted del carrito y favoritos: filtro `events.deleted_at IS NULL` en `getCartItemsWithDetails`/count y `getTaggedPhotosForTalent`/count + rechazo al agregar/mergear; biblioteca comprada intacta — PR #94
 
