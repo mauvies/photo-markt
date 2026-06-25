@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | todo |
+| 1 | P3 | T-032 | Implementar reconocimiento de número de dorsal (BIB) | — | doing |
 | 2 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
 | 3 | P3 | T-037 | Centralizar estructura de base de datos (`supabase/` raíz vs `src/database/`) | — | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
