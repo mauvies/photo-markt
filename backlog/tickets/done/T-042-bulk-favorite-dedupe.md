@@ -1,11 +1,18 @@
 # T-042 · "Agregar a favoritos" en lote: deduplicar las ya favoritas y reportar el conteo real
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/bulk-favorite-dedupe`  (tipo = fix)
-- **OpenSpec change:** —  (se crea al ejecutar si toca >1 archivo o es ambiguo)
-- **PR:** —
+- **OpenSpec change:** —  (no aplicó: fix de UI + i18n)
+- **PR:** #96
+
+> **Resuelto:** `handleBulkFavorite` ahora filtra a las no-favoritas (`filterNewIds`), reporta el conteo
+> real (singular/plural `bulkFavoritedOne`/`bulkFavorited`), muestra info "ya en favoritos"
+> (`alreadyInFavorites`) sin llamar al servidor si ninguna es nueva, y añade `myPhotos` a las deps.
+> Helper puro `src/lib/bulk-select.ts::filterNewIds(ids, ...sets)` compartido también por el bulk del
+> carrito (`handleBulkAddToCart`). Strings nuevos en en+es. Test del helper en
+> `test/unit/lib/bulk-select.test.ts`.
 
 ## Requerimiento
 Al seleccionar varias fotos y pulsar "Agregar a favoritos", la app **no reconoce** las fotos que ya están
