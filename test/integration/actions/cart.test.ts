@@ -198,6 +198,28 @@ describe('cart Server Actions', () => {
         .eq('cart_id', cart.id);
       expect(items?.[0]?.unit_price_cents).toBe(0);
     });
+
+    it('rejects adding a photo whose event was soft-deleted (T-040)', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id, { price_per_photo: 5 });
+      const photo = await createTestPhoto(event.id);
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+
+      await createServiceClient()
+        .from('events')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', event.id);
+
+      await expect(addPhotoToCartAction(photo.id)).rejects.toThrow(/not found/i);
+
+      const cart = await getOrCreateCart(createServiceClient(), talent.id);
+      const { count } = await createServiceClient()
+        .from('cart_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('cart_id', cart.id);
+      expect(count).toBe(0);
+    });
   });
 
   describe('removePhotoFromCartAction', () => {
@@ -301,6 +323,29 @@ describe('cart Server Actions', () => {
       const event = await createTestEvent(photographer.id, { price_per_photo: 5 });
       const photo = await createTestPhoto(event.id);
       expect(await mergeGuestCartAction([guestItem(photo.id)])).toBe(0);
+    });
+
+    it('skips guest items whose event was soft-deleted (T-040)', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const liveEvent = await createTestEvent(photographer.id, { price_per_photo: 5 });
+      const deadEvent = await createTestEvent(photographer.id, { price_per_photo: 5 });
+      const livePhoto = await createTestPhoto(liveEvent.id);
+      const deadPhoto = await createTestPhoto(deadEvent.id);
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+
+      await createServiceClient()
+        .from('events')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', deadEvent.id);
+
+      const merged = await mergeGuestCartAction([guestItem(livePhoto.id), guestItem(deadPhoto.id)]);
+      expect(merged).toBe(1);
+
+      const sb = createServiceClient();
+      const cart = await getOrCreateCart(sb, talent.id);
+      const { data: items } = await sb.from('cart_items').select('photo_id').eq('cart_id', cart.id);
+      expect((items ?? []).map((i) => i.photo_id)).toEqual([livePhoto.id]);
     });
   });
 });

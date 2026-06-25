@@ -184,15 +184,19 @@ export async function getCartItemsWithDetails(
       created_at,
       photos!inner(
         original_url,
-        events(
+        events!inner(
           name,
           date,
-          share_code
+          share_code,
+          deleted_at
         )
       )
     `,
     )
     .eq('cart_id', cartId)
+    // Exclude items whose event was soft-deleted — they should never surface
+    // in the cart even if the row lingers (T-040).
+    .is('photos.events.deleted_at', null)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -279,8 +283,11 @@ export async function getCartItemCount(
 
   const { count, error } = await supabase
     .from('cart_items')
-    .select('*', { count: 'exact', head: true })
-    .in('cart_id', cartIds);
+    .select('id, photos!inner(events!inner(deleted_at))', { count: 'exact', head: true })
+    .in('cart_id', cartIds)
+    // Keep the badge consistent with the rendered cart: don't count items whose
+    // event was soft-deleted (T-040).
+    .is('photos.events.deleted_at', null);
 
   if (error) {
     throw new Error(`Failed to get cart item count: ${getErrorMessage(error)}`);

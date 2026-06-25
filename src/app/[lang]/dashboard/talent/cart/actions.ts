@@ -137,11 +137,13 @@ export async function addPhotoToCartAction(photoId: string): Promise<void> {
     throw new Error('Photo is not associated with an event.');
   }
 
-  // Get event using admin client to bypass RLS
+  // Get event using admin client to bypass RLS. Reject soft-deleted events so a
+  // photo from an event that no longer exists can't be added (T-040).
   const { data: event, error: eventError } = await supabaseAdmin
     .from('events')
     .select('id, price_per_photo')
     .eq('id', photo.event_id)
+    .is('deleted_at', null)
     .single();
 
   if (eventError || !event) {
@@ -366,8 +368,10 @@ export async function mergeGuestCartAction(items: GuestCartItem[]): Promise<numb
         .from('events')
         .select('id, price_per_photo')
         .eq('id', photo.event_id)
+        .is('deleted_at', null)
         .maybeSingle();
 
+      // Skip photos whose event was soft-deleted — never merge them in (T-040).
       if (!event) continue;
 
       const unitPriceCents = event.price_per_photo ? Math.round(event.price_per_photo * 100) : 0;

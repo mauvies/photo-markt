@@ -180,18 +180,21 @@ export async function getTaggedPhotosForTalent(
         original_url,
         taken_at,
         event_id,
-        events(
+        events!inner(
           id,
           name,
           date,
           city,
           country,
-          watermark_enabled
+          watermark_enabled,
+          deleted_at
         )
       )
     `,
     )
     .eq('talent_user_id', talentUserId)
+    // Hide tagged photos whose event was soft-deleted (T-040).
+    .is('photos.events.deleted_at', null)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -232,8 +235,10 @@ export async function getTaggedPhotosCountForTalent(
 ): Promise<number> {
   const { count, error } = await supabase
     .from('talent_photo_tags')
-    .select('*', { count: 'exact', head: true })
-    .eq('talent_user_id', talentUserId);
+    .select('id, photos!inner(events!inner(deleted_at))', { count: 'exact', head: true })
+    .eq('talent_user_id', talentUserId)
+    // Match getTaggedPhotosForTalent: don't count soft-deleted events (T-040).
+    .is('photos.events.deleted_at', null);
 
   if (error) {
     throw new Error(`Failed to get tagged photos count: ${getErrorMessage(error)}`);
