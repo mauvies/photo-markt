@@ -5,17 +5,17 @@
 
 ## 1. Database
 
-- [ ] 1.1 Migration: add `events.bib_detection_enabled boolean not null default false` and `events.bib_detection_status text not null default 'idle'` with a check constraint (`idle`/`detecting`/`ready`/`failed`), mirroring `ai_matching_status`.
-- [ ] 1.2 Migration: add `photos.bib_detection_status text` (values `pending`/`detecting`/`detected`/`no_bibs`/`failed`/`not_applicable`), mirroring `face_index_status`.
-- [ ] 1.3 Migration: create `photo_bib_numbers` (`id`, `photo_id` fk→photos on delete cascade, `bib_text`, `confidence`, `bounding_box jsonb`, `detected_at`), `unique (photo_id, bib_text)`, index on `bib_text`; enable RLS with no public policies (service-role only).
-- [ ] 1.4 Add the matching DML grants for the new table to `supabase/seed.sql` (local-grants convention); if any `SECURITY DEFINER` function is introduced, `revoke execute ... from anon, authenticated`.
-- [ ] 1.5 `pnpm db:reset` and confirm the schema/grants apply cleanly locally.
+- [x] 1.1 Migration: add `events.bib_detection_enabled boolean not null default false` and `events.bib_detection_status text not null default 'idle'` with a check constraint (`idle`/`detecting`/`ready`/`failed`), mirroring `ai_matching_status`. — `20260625000000_add_bib_detection_columns_to_events.sql`
+- [x] 1.2 Migration: add `photos.bib_detection_status text` (nullable; values `pending`/`detecting`/`detected`/`no_bibs`/`failed`/`not_applicable`), mirroring `face_index_status`. — `20260625000002_add_bib_detection_status_to_photos.sql`
+- [x] 1.3 Migration: create `photo_bib_numbers` (`id`, `photo_id` fk→photos on delete cascade, `bib_text`, `confidence`, `bounding_box jsonb`, `detected_at`), `unique (photo_id, bib_text)`, index on `bib_text`; RLS with a read policy (owner / public-event) and no write policies (service-role only). — `20260625000001_create_photo_bib_numbers.sql`
+- [x] 1.4 Grants: the new table is covered by the existing `grant ... on all tables` + `alter default privileges` in `supabase/seed.sql` (no edit needed); verified anon/authenticated/service_role hold DML and RLS gates writes. No `SECURITY DEFINER` function added.
+- [x] 1.5 `pnpm db:reset` applies the migrations + seed grants cleanly; all four schema objects confirmed.
 
 ## 2. AWS DetectText + filtering
 
-- [ ] 2.1 `src/lib/aws/bib-detection.ts`: call `DetectText` via `getRekognitionClient()`; return raw `WORD` detections (text, confidence, bounding box). Wrap in `safeCall`.
-- [ ] 2.2 Pure helper `extractBibCandidates(detections, opts)`: confidence threshold + digit-dominant pattern + dedupe + per-photo cap. Config lives in a small bib-config (thresholds/pattern).
-- [ ] 2.3 Unit tests for `extractBibCandidates` (sponsor text discarded, low-confidence discarded, dupes collapse, cap honored).
+- [x] 2.1 `src/lib/aws/bib-detection.ts`: `detectTextForPhoto` calls `DetectText` via `getRekognitionClient()`; returns `WORD` detections (text, confidence, bounding box). (`safeCall` wrapping happens at the Inngest call site in phase 3, matching the face job.)
+- [x] 2.2 Pure helper `extractBibCandidates(detections, opts)` in `src/lib/bib-numbers.ts`: confidence floor + digit-dominant pattern + dedupe + per-photo cap, with exported config constants.
+- [x] 2.3 Unit tests for `extractBibCandidates` (`test/unit/lib/bib-numbers.test.ts`): sponsor text discarded, low-confidence discarded, dupes collapse, cap honored, bounding box carried.
 
 ## 3. Inngest detection job
 
