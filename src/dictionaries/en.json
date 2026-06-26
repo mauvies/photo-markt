@@ -1142,14 +1142,12 @@
     "starterFeature4": "BIB number recognition",
     "starterFeature5": "Face recognition",
     "starterFeature6": "Advanced analytics",
-    "starterFeature7": "Priority in search results",
     "proFeature1": "5% sales fee",
     "proFeature2": "250 GB storage",
     "proFeature3": "Unlimited events",
     "proFeature4": "BIB number recognition",
     "proFeature5": "Face recognition",
-    "proFeature6": "Outfit pattern recognition",
-    "proFeature7": "Highest priority in search results"
+    "proFeature6": "Outfit pattern recognition"
   },
   "photoIconButtons": {
     "addToCart": "Add to cart",

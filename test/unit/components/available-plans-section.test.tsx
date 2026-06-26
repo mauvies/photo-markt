@@ -36,8 +36,8 @@ describe('AvailablePlansSection', () => {
     // Features unique to each plan surface in their cards (storage tiers differ).
     expect(screen.getByText(en.pricingSection.starterFeature2)).toBeTruthy(); // "50 GB storage"
     expect(screen.getByText(en.pricingSection.proFeature2)).toBeTruthy(); // "250 GB storage"
-    // "Coming soon" badges render alongside the not-yet-built features (BIB,
-    // outfit pattern, search priority) — there are several across the cards.
+    // "Coming soon" badges render alongside the not-yet-built features
+    // (outfit pattern) — at least one across the cards.
     expect(screen.getAllByText(en.pricingSection.comingSoon).length).toBeGreaterThan(0);
   });
 });

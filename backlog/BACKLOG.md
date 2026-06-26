@@ -11,8 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P3 | T-033 | Implementar prioridad en resultados de búsqueda por plan | — | todo |
-| 2 | P3 | T-037 | Centralizar estructura de base de datos (`supabase/` raíz vs `src/database/`) | — | todo |
+| 1 | P3 | T-037 | Centralizar estructura de base de datos (`supabase/` raíz vs `src/database/`) | — | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
@@ -28,6 +27,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-033** · ~~Prioridad en resultados de búsqueda por plan~~ — **descartado** (decisión de producto, 2026-06-26). No se implementará; las features anunciadas "Priority/Highest priority in search results" se retiraron del pricing (`pricingSection.*Feature7`), de `plan-features.ts` y de sus tests. Nunca hubo lógica de ranking por plan en las queries, así que no quedó código que limpiar.
 
 - **T-044** · Readiness endpoint `/api/health/ready` (sondas read-only por servicio, token + rate-limit, sin filtrar errores) + dashboard admin `/dashboard/admin/status` + `docs/monitoring.md` para monitor externo — PR #99
 
