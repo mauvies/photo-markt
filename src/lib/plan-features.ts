@@ -15,10 +15,9 @@ export function getPlanFeatures(
 ): Record<PlanId, PlanFeatureItem[]> {
   return {
     // `badge: t.comingSoon` marks features that are advertised but not yet
-    // built: outfit-pattern recognition (Pro) and plan-weighted search-result
-    // priority (Starter/Pro). BIB number recognition (`*Feature4`) shipped in
-    // T-032, so it no longer carries the badge. Keep the rest until their
-    // implementation ticket ships.
+    // built: outfit-pattern recognition (Pro). BIB number recognition
+    // (`*Feature4`) shipped in T-032, so it no longer carries the badge. Keep
+    // the rest until their implementation ticket ships.
     free: [
       { text: t.freeFeature1, bold: true },
       { text: t.freeFeature2 },
@@ -34,7 +33,6 @@ export function getPlanFeatures(
       { text: t.starterFeature4 },
       { text: t.starterFeature5 },
       { text: t.starterFeature6 },
-      { text: t.starterFeature7, badge: t.comingSoon },
     ],
     pro: [
       { text: t.proFeature1, bold: true },
@@ -43,7 +41,6 @@ export function getPlanFeatures(
       { text: t.proFeature4 },
       { text: t.proFeature5 },
       { text: t.proFeature6, badge: t.comingSoon },
-      { text: t.proFeature7, badge: t.comingSoon },
     ],
   };
 }

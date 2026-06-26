@@ -1,11 +1,17 @@
 # T-033 · Implementar prioridad en resultados de búsqueda por plan
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** descartado (2026-06-26)
 - **Blockers:** ninguno
 - **Rama:** `feat/search-result-priority`
 - **OpenSpec change:** **probable** — cambia ranking/orden de resultados (lógica de negocio). Evaluar `/opsx:propose`.
 - **PR:** —
+
+> **Descartado (decisión de producto, 2026-06-26).** No nos enfocaremos en priorizar resultados por plan.
+> Las features anunciadas "Priority in search results" (Starter) y "Highest priority in search results" (Pro)
+> se retiraron de toda la plataforma: cadenas `pricingSection.starterFeature7`/`proFeature7` (en+es), entradas en
+> `src/lib/plan-features.ts` y sus tests. Nunca hubo ranking por plan en las queries, así que no quedó código que
+> limpiar. El resto del ticket queda como registro histórico.
 
 ## Requerimiento
 Anunciamos "Priority in search results" (Starter) y "Highest priority in search results" (Pro), pero **no está

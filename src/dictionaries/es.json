@@ -1142,14 +1142,12 @@
     "starterFeature4": "Reconocimiento de dorsal",
     "starterFeature5": "Reconocimiento facial",
     "starterFeature6": "Analíticas avanzadas",
-    "starterFeature7": "Prioridad en resultados de búsqueda",
     "proFeature1": "5% de comisión por ventas",
     "proFeature2": "250 GB de almacenamiento",
     "proFeature3": "Eventos ilimitados",
     "proFeature4": "Reconocimiento de dorsal",
     "proFeature5": "Reconocimiento facial",
-    "proFeature6": "Reconocimiento de patrones de ropa",
-    "proFeature7": "Máxima prioridad en resultados de búsqueda"
+    "proFeature6": "Reconocimiento de patrones de ropa"
   },
   "photoIconButtons": {
     "addToCart": "Añadir al carrito",
