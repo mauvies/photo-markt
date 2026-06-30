@@ -1,0 +1,16 @@
+# pnpm settings live here as of pnpm v10+ — the `pnpm` field in package.json is
+# no longer read (https://pnpm.io/settings).
+#
+# Supply-chain allowlist: only these packages may run install/build scripts.
+# Keep it tight — every entry is a trusted package with a legitimate native
+# binary or postinstall step. `sharp` is load-bearing (server-side watermark +
+# thumbnail generation); without it production image processing breaks.
+onlyBuiltDependencies:
+  - '@biomejs/biome'
+  - '@sentry/cli'
+  - '@tailwindcss/oxide'
+  - esbuild
+  - protobufjs
+  - sharp
+  - supabase
+  - unrs-resolver

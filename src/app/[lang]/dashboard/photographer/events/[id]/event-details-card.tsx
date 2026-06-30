@@ -112,7 +112,7 @@ export function EventDetailsCard({
             '-mr-2 text-muted-foreground',
           )}
         >
-          <Pencil className="h-3.5 w-3.5" />
+          <Pencil className="h-3.5 w-3.5 mr-1" />
           {t.edit}
         </Link>
       </div>
