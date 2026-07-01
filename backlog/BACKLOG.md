@@ -14,7 +14,9 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | 1 | P1 | T-046 | Eliminar foto del preview de subida no debe causar salto de página | — | todo |
 | 2 | P1 | T-047 | Mover toggle de detección por dorsal al wizard de creación de evento (paso 1) | — | todo |
 | 3 | P1 | T-045 | Checkout de upgrade: manejar fallos de Stripe sin crash opaco (key expirada → error redactado) | — | todo |
-| 2 | P3 | T-037 | Centralizar estructura de base de datos (`supabase/` raíz vs `src/database/`) | — | todo |
+| 4 | P2 | T-048 | Tab activo incorrecto en `/settings/payout-profile` (marca "Perfil", debe ser "Pagos") | — | todo |
+| 5 | P2 | T-049 | Página de error "Something went wrong" hardcodeada en inglés (i18n del error boundary) | — | todo |
+| 6 | P3 | T-037 | Centralizar estructura de base de datos (`supabase/` raíz vs `src/database/`) | — | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
