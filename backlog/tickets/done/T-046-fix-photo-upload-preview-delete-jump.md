@@ -1,7 +1,7 @@
 # T-046 · Eliminar foto del preview de subida no debe causar salto de página
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `fix/photo-upload-preview-delete-jump`
 - **OpenSpec change:** —
