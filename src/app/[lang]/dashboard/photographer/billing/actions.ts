@@ -7,22 +7,32 @@ import type { BillingPeriod } from '@/lib/plans';
 import { stripe } from '@/lib/stripe/config';
 
 /**
+ * Domain error codes returned (never thrown as raw messages) by
+ * `createBillingCheckoutAction`. Returned instead of thrown because Next
+ * redacts thrown Server Action messages in production — call sites map these
+ * stable codes to translated, actionable toasts.
+ */
+export type BillingCheckoutError = 'checkout_failed' | 'yearly_unavailable';
+
+export type BillingCheckoutResult =
+  | { url: string }
+  | { updated: boolean }
+  | { error: BillingCheckoutError };
+
+/**
  * Resolve the Stripe Price ID for a (plan, period) pair. Yearly prices are
  * optional env vars — they only exist once the user has created the
- * corresponding Stripe yearly Prices and populated the env. Throws a clear
- * error in that case so the UI can surface a translated message rather
+ * corresponding Stripe yearly Prices and populated the env. Returns null in
+ * that case so the caller can surface a distinct, translated message rather
  * than 500-ing.
  */
-function priceIdFor(planId: 'starter' | 'pro', period: BillingPeriod): string {
+function priceIdFor(planId: 'starter' | 'pro', period: BillingPeriod): string | null {
   if (period === 'monthly') {
     return planId === 'starter' ? env.STRIPE_PRICE_AMATEUR : env.STRIPE_PRICE_PRO;
   }
-  const yearly =
-    planId === 'starter' ? env.STRIPE_PRICE_AMATEUR_YEARLY : env.STRIPE_PRICE_PRO_YEARLY;
-  if (!yearly) {
-    throw new Error("Yearly billing isn't available yet for this plan. Please contact support.");
-  }
-  return yearly;
+  return planId === 'starter'
+    ? (env.STRIPE_PRICE_AMATEUR_YEARLY ?? null)
+    : (env.STRIPE_PRICE_PRO_YEARLY ?? null);
 }
 
 /**
@@ -31,11 +41,17 @@ function priceIdFor(planId: 'starter' | 'pro', period: BillingPeriod): string {
  * `period` defaults to 'monthly' so existing call sites that don't pass it
  * keep the prior behavior. The settings page and home page pricing toggle
  * pass the selected period explicitly.
+ *
+ * User-facing failures (Stripe errors, yearly-not-configured) are *returned*
+ * as a `{ error }` code, not thrown, so the client can surface a controlled,
+ * translated message (Next redacts thrown Server Action messages in prod).
+ * The `Unauthorized`/`Invalid plan` guards below stay `throw`s — the UI never
+ * lets a signed-in photographer reach them, so they signal a bug/tampering.
  */
 export async function createBillingCheckoutAction(
   planId: 'starter' | 'pro',
   period: BillingPeriod = 'monthly',
-): Promise<{ url: string } | { updated: boolean }> {
+): Promise<BillingCheckoutResult> {
   const supabase = await createClient();
 
   // Get current user from Supabase Auth
@@ -52,10 +68,13 @@ export async function createBillingCheckoutAction(
     throw new Error('Invalid plan');
   }
 
-  // Resolve the right Stripe Price ID — throws if yearly is requested and
-  // the env var isn't populated yet. Lifted above the customer/subscription
-  // checks so the error surfaces before we touch Stripe.
+  // Resolve the right Stripe Price ID. Yearly may not be configured yet — a
+  // distinct, actionable error ("contact support") rather than the generic
+  // checkout failure. Resolved before we touch Stripe.
   const priceId = priceIdFor(planId, period);
+  if (!priceId) {
+    return { error: 'yearly_unavailable' };
+  }
 
   // Check if we already have a Stripe customer and active subscription
   const subscription = await getSubscription(supabase, user.id);
@@ -96,51 +115,71 @@ export async function createBillingCheckoutAction(
       };
     } catch (error) {
       console.error('Error updating subscription:', error);
-      throw new Error('Failed to update subscription');
+      // Return (don't throw) a domain error — Next redacts thrown Server Action
+      // messages in prod, so returning lets the client show a controlled,
+      // translated toast instead of the opaque "Server Components" message.
+      return { error: 'checkout_failed' };
     }
   }
 
-  // No active subscription - create new checkout session
-  if (!stripeCustomerId) {
-    const customer = await stripe.customers.create({
-      email: user.email ?? undefined,
+  // No active subscription - create new checkout session. Every Stripe call
+  // here (customer + checkout session creation) is wrapped so an expired/invalid
+  // API key, network failure, or misconfig degrades to a clean domain error
+  // instead of the opaque "Server Components render" message Next shows when a
+  // raw Stripe error escapes the action.
+  try {
+    if (!stripeCustomerId) {
+      const customer = await stripe.customers.create({
+        email: user.email ?? undefined,
+        metadata: {
+          supabase_user_id: user.id,
+        },
+      });
+
+      stripeCustomerId = customer.id;
+
+      // Insert initial row (status will be updated via webhook). Supabase
+      // returns `{ error }` instead of throwing, so check it explicitly —
+      // otherwise a failed insert would be silently ignored, leaving an
+      // orphaned Stripe customer with no local subscription row.
+      const { error: insertError } = await supabase.from('subscriptions').insert({
+        user_id: user.id,
+        stripe_customer_id: stripeCustomerId,
+        plan_id: planId,
+        status: 'incomplete',
+      });
+
+      if (insertError) {
+        console.error('Error inserting subscription row:', insertError);
+        return { error: 'checkout_failed' };
+      }
+    }
+
+    const baseUrl = env.SITE_URL;
+
+    const sessionStripe = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      customer: stripeCustomerId,
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      success_url: `${baseUrl}/dashboard/photographer/settings?status=success`,
+      cancel_url: `${baseUrl}/dashboard/photographer/settings?status=cancelled`,
       metadata: {
         supabase_user_id: user.id,
+        plan_id: planId,
+        billing_period: period,
       },
     });
 
-    stripeCustomerId = customer.id;
-
-    // Insert initial row (status will be updated via webhook)
-    await supabase.from('subscriptions').insert({
-      user_id: user.id,
-      stripe_customer_id: stripeCustomerId,
-      plan_id: planId,
-      status: 'incomplete',
-    });
+    return { url: sessionStripe.url ?? '' };
+  } catch (error) {
+    console.error('Error creating checkout session:', error);
+    return { error: 'checkout_failed' };
   }
-
-  const baseUrl = env.SITE_URL;
-
-  const sessionStripe = await stripe.checkout.sessions.create({
-    mode: 'subscription',
-    customer: stripeCustomerId,
-    line_items: [
-      {
-        price: priceId,
-        quantity: 1,
-      },
-    ],
-    success_url: `${baseUrl}/dashboard/photographer/settings?status=success`,
-    cancel_url: `${baseUrl}/dashboard/photographer/settings?status=cancelled`,
-    metadata: {
-      supabase_user_id: user.id,
-      plan_id: planId,
-      billing_period: period,
-    },
-  });
-
-  return { url: sessionStripe.url ?? '' };
 }
 
 /**

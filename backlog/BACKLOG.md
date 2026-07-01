@@ -11,7 +11,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 3 | P1 | T-045 | Checkout de upgrade: manejar fallos de Stripe sin crash opaco (key expirada → error redactado) | — | todo |
 | 4 | P2 | T-048 | Tab activo incorrecto en `/settings/payout-profile` (marca "Perfil", debe ser "Pagos") | — | todo |
 | 5 | P2 | T-049 | Página de error "Something went wrong" hardcodeada en inglés (i18n del error boundary) | — | todo |
 | 6 | P3 | T-037 | Centralizar estructura de base de datos (`supabase/` raíz vs `src/database/`) | — | todo |
@@ -30,6 +29,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-045** · Checkout de upgrade blindado: toda llamada a Stripe en `createBillingCheckoutAction` devuelve un código de dominio limpio (`checkout_failed` / `yearly_unavailable`) en vez de dejar propagar el error crudo (Next lo redacta en prod). Chequeo explícito del error de `insert` (evita customer huérfano), mensaje distinto y accionable para yearly-no-configurado, y toasts traducidos prop-drilled (el subárbol no tiene `TranslationsProvider`) — PR #104
 
 - **T-047** · Toggle de detección por dorsal movido al wizard paso 1 y formulario de edición; eliminado de la página de detalle — PR #103
 

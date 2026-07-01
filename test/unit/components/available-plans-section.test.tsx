@@ -24,6 +24,8 @@ const labels = {
   toggleBadge: '2 months free',
   billedYearlyPrefix: 'Billed yearly: $',
   billedYearlySuffix: '',
+  checkoutError: 'Checkout failed',
+  checkoutYearlyUnavailable: 'Yearly not available',
 };
 
 describe('AvailablePlansSection', () => {

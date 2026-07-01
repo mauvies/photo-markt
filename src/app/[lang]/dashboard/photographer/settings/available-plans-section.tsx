@@ -24,6 +24,9 @@ interface AvailablePlansSectionProps {
     /** Renders as "{prefix}{amount}{suffix}" under the yearly price card. */
     billedYearlyPrefix: string;
     billedYearlySuffix: string;
+    /** Translated toasts for the upgrade buttons. */
+    checkoutError: string;
+    checkoutYearlyUnavailable: string;
   };
 }
 
@@ -111,6 +114,8 @@ export function AvailablePlansSection({
                 <UpgradePlanButton
                   planId={plan.id}
                   period={billing}
+                  checkoutErrorLabel={labels.checkoutError}
+                  yearlyUnavailableLabel={labels.checkoutYearlyUnavailable}
                   className={
                     plan.popular
                       ? 'w-full bg-gradient-starter border-0 text-white hover:opacity-90'

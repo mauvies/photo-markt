@@ -1,11 +1,11 @@
 # T-045 · Checkout de upgrade: manejar fallos de Stripe sin crash opaco
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno (el deliverable de código no depende de nada; ver Nota operativa)
 - **Rama:** `fix/billing-checkout-stripe-error-handling`
-- **OpenSpec change:** —  (se crea al ejecutar si toca >1 archivo)
-- **PR:** —
+- **OpenSpec change:** — (implementado directo; UI + acción con requerimiento claro)
+- **PR:** #104
 
 ## Requerimiento
 Al intentar hacer upgrade al plan **Starter**, la app revienta con un error opaco:
@@ -27,24 +27,24 @@ uno traducido y accionable. Hay que blindar **toda** llamada a Stripe del flujo 
 para que cualquier fallo (key expirada/inválida, red, config) degrade con un mensaje claro.
 
 ## Criterio de aceptación (Definition of Done)
-- [ ] La ruta de creación de customer + checkout session en `createBillingCheckoutAction`
+- [x] La ruta de creación de customer + checkout session en `createBillingCheckoutAction`
       está envuelta en manejo de error: un fallo de Stripe lanza/devuelve un error de
       dominio limpio (p. ej. `throw new Error('checkout_failed')`), **nunca** deja propagar
       el error crudo de Stripe fuera del Server Action.
-- [ ] El usuario ve un mensaje **traducido** y accionable (toast) en lugar del genérico de
+- [x] El usuario ve un mensaje **traducido** y accionable (toast) en lugar del genérico de
       Server Components. `UpgradeHandler` (y el resto de call sites de
       `createBillingCheckoutAction`) ya hacen `try/catch` + toast — el mensaje que reciben
       debe ser uno controlado, no el `digest` redactado.
-- [ ] Auditar el resto de llamadas a Stripe del flujo de billing/settings por el mismo
+- [x] Auditar el resto de llamadas a Stripe del flujo de billing/settings por el mismo
       patrón (`cancelSubscriptionAction` ya está envuelto; revisar `payout-profile/actions.ts`
       `getStripeConnectStatusAction` y `earnings/actions.ts` `getStripeConnectBalanceAction`,
       que corren server-side y podrían tumbar el render si Stripe falla).
-- [ ] strings nuevos en `en.json` y `es.json` (mensaje de error de checkout)
-- [ ] test de regresión: mockear `stripe.customers.create` (o `checkout.sessions.create`)
+- [x] strings nuevos en `en.json` y `es.json` (mensaje de error de checkout)
+- [x] test de regresión: mockear `stripe.customers.create` (o `checkout.sessions.create`)
       para que lance `api_key_expired`/`StripeAuthenticationError` y assertear que la acción
       devuelve/lanza el error de dominio limpio (no filtra el mensaje crudo de Stripe). Falla
       antes del fix, pasa después.
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
 

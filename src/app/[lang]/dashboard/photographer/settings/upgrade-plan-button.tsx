@@ -15,6 +15,10 @@ interface UpgradePlanButtonProps {
   variant?: 'default' | 'outline';
   size?: 'sm' | 'lg';
   className?: string;
+  /** Translated messages, fed from the parent server component's dict (this
+   * subtree has no TranslationsProvider). */
+  checkoutErrorLabel: string;
+  yearlyUnavailableLabel: string;
 }
 
 export function UpgradePlanButton({
@@ -23,6 +27,8 @@ export function UpgradePlanButton({
   variant = 'default',
   size = 'sm',
   className,
+  checkoutErrorLabel,
+  yearlyUnavailableLabel,
 }: UpgradePlanButtonProps) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -32,7 +38,13 @@ export function UpgradePlanButton({
       try {
         const result = await createBillingCheckoutAction(planId, period);
 
-        if ('url' in result) {
+        if ('error' in result) {
+          // Controlled domain error — map the stable code to a translated,
+          // actionable toast (yearly-not-configured gets its own guidance).
+          toast.error(
+            result.error === 'yearly_unavailable' ? yearlyUnavailableLabel : checkoutErrorLabel,
+          );
+        } else if ('url' in result) {
           // Redirect to Stripe Checkout
           window.location.href = result.url;
         } else if (result.updated) {
@@ -40,9 +52,10 @@ export function UpgradePlanButton({
           toast.success('Subscription updated successfully');
           router.refresh();
         }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to start checkout';
-        toast.error(message);
+      } catch {
+        // Safety net for the internal Unauthorized/Invalid-plan guards (whose
+        // messages Next redacts in prod) — show the generic translated toast.
+        toast.error(checkoutErrorLabel);
       }
     });
   };

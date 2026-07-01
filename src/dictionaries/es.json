@@ -404,6 +404,8 @@
     "eventLimitDialogTitle": "Has alcanzado tu límite de eventos",
     "eventLimitDialogBody": "Tu plan {planName} permite {max} eventos. Has creado {current} de {max}. Mejora tu plan para crear más.",
     "upgradeCta": "Mejorar plan",
+    "checkoutError": "No pudimos iniciar el pago en este momento. Inténtalo de nuevo en un instante o contacta con soporte si el problema persiste.",
+    "checkoutYearlyUnavailable": "La facturación anual aún no está disponible para este plan. Contacta con soporte para mejorar tu plan.",
     "planFeatures": "Características del plan",
     "availablePlans": "Planes disponibles",
     "popular": "Popular",
