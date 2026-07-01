@@ -1,4 +1,15 @@
 {
+  "errorPage": {
+    "title": "Something went wrong",
+    "description": "An unexpected error occurred. Please try again.",
+    "retry": "Try again"
+  },
+  "notFound": {
+    "code": "404",
+    "title": "Page not found",
+    "description": "The page you're looking for doesn't exist.",
+    "goHome": "Go home"
+  },
   "common": {
     "loading": "Loading...",
     "cancel": "Cancel",
