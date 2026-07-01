@@ -111,6 +111,35 @@ Conventions enforced by this layout (see `CLAUDE.md`):
   (Stripe webhook writes, admin endpoints, watermark API, Inngest face-index writes).
   Every other path uses the user-scoped client so RLS catches mistakes.
 
+### 2.1 Database code layout — two deliberate layers
+
+Everything database-related lives in **two** places, on purpose. They are not
+one thing split by accident — they are two different layers with two different
+owners, and merging them into one physical directory fights a hard convention
+either way:
+
+| Layer | Location | Owner | What lives here |
+|-------|----------|-------|-----------------|
+| **Infrastructure** | `supabase/` (repo root) | Supabase CLI | `config.toml`, `migrations/`, `seed.sql`, `.branches`, `.temp`, `snippets/` |
+| **Application code** | `src/database/` | The app | `client.ts` / `server.ts` / `supabase-admin.ts` (the three clients) + `queries/` (the domain query layer) |
+
+Why they stay separate:
+
+- **`supabase/` must sit at the repo root.** The Supabase CLI (`supabase
+  start/reset/db push`, migration diffing, branching) resolves `supabase/`
+  relative to the project root. `--workdir` exists but is off-convention and
+  breaks the default `pnpm db:*` scripts. Moving it buys nothing and breaks the
+  migration flow.
+- **`src/database/` must stay under `src/`.** T-019 (PR #76) moved *all*
+  application source under `src/`. Pulling the DB code back out to the root to
+  sit next to `supabase/` would re-break that convention.
+
+So the split is intentional: **infra vs app code**, not "misplaced files". Each
+directory carries a `README.md` pointing at the other so the two halves are
+discoverable from either side. Editors looking for "the database stuff" should
+start at whichever layer matches the task — schema/migrations → `supabase/`;
+reads/writes from the app → `src/database/queries/`.
+
 ---
 
 ## 3. Database schema (ER diagram)
