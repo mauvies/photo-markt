@@ -11,7 +11,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 2 | P1 | T-047 | Mover toggle de detección por dorsal al wizard de creación de evento (paso 1) | — | todo |
 | 3 | P1 | T-045 | Checkout de upgrade: manejar fallos de Stripe sin crash opaco (key expirada → error redactado) | — | todo |
 | 4 | P2 | T-048 | Tab activo incorrecto en `/settings/payout-profile` (marca "Perfil", debe ser "Pagos") | — | todo |
 | 5 | P2 | T-049 | Página de error "Something went wrong" hardcodeada en inglés (i18n del error boundary) | — | todo |
@@ -31,6 +30,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-047** · Toggle de detección por dorsal movido al wizard paso 1 y formulario de edición; eliminado de la página de detalle — PR #103
 
 - **T-046** · Salto de página al eliminar foto del preview de subida: `filePreviews` como fuente de verdad; URLs creadas/revocadas por archivo (no regeneradas todas) — PR #102
 
