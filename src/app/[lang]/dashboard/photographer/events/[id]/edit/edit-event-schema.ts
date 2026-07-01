@@ -32,6 +32,7 @@ export const eventSchema = z.object({
   // purposes only — the server action rejects any change to it.
   ai_matching_enabled: z.boolean().default(false),
   contains_minors: z.boolean().default(false),
+  bib_detection_enabled: z.boolean().default(false),
 });
 
 export type FormValues = z.infer<typeof eventSchema>;

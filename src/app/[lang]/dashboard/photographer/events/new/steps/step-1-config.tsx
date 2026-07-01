@@ -181,12 +181,11 @@ export function Step1Config({ form }: Step1ConfigProps) {
 }
 
 /**
- * AI face-matching opt-in + "contains minors" compliance flag.
- *
- * The two toggles interact: flipping `contains_minors` ON forces
- * `ai_matching_enabled` to OFF and disables the AI switch (compliance —
- * we don't index faces of children). The minors toggle is editable here
- * during create; in the edit form it becomes read-only.
+ * AI face-matching + bib number detection opt-ins, plus the "contains minors"
+ * compliance flag. Enabling minors forces both AI matching and bib detection
+ * off (compliance — we don't index faces or scan bibs of children).
+ * The minors toggle is editable here during create; in the edit form it
+ * becomes read-only.
  */
 function AiMatchingSwitches({ form }: { form: EventForm }) {
   const { t } = useTranslations<NewEventT>();
@@ -219,6 +218,31 @@ function AiMatchingSwitches({ form }: { form: EventForm }) {
               </div>
             )}
           </form.Field>
+          <form.Field name="bib_detection_enabled">
+            {(field) => (
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
+                <div className="grid gap-1">
+                  <Label htmlFor="bib_detection_enabled">
+                    {t('bibDetectionLabel' as keyof NewEventT)}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {containsMinors
+                      ? t('bibDetectionDisabledByMinors' as keyof NewEventT)
+                      : t('bibDetectionDesc' as keyof NewEventT)}
+                  </p>
+                </div>
+                <Switch
+                  id="bib_detection_enabled"
+                  checked={!containsMinors && field.state.value}
+                  disabled={containsMinors}
+                  onCheckedChange={(checked) => {
+                    field.handleChange(checked);
+                    field.handleBlur();
+                  }}
+                />
+              </div>
+            )}
+          </form.Field>
           <form.Field name="contains_minors">
             {(field) => (
               <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
@@ -237,8 +261,9 @@ function AiMatchingSwitches({ form }: { form: EventForm }) {
                     field.handleChange(checked);
                     field.handleBlur();
                     if (checked) {
-                      // Hard-pair: enabling minors flag clears AI matching.
+                      // Hard-pair: enabling minors flag clears AI matching and bib detection.
                       form.setFieldValue('ai_matching_enabled', false);
+                      form.setFieldValue('bib_detection_enabled', false);
                     }
                   }}
                 />

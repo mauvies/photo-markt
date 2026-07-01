@@ -134,6 +134,10 @@ function readStoredState(): StoredWizardState | null {
         typeof candidateValues.contains_minors === 'boolean'
           ? candidateValues.contains_minors
           : false,
+      bib_detection_enabled:
+        typeof candidateValues.bib_detection_enabled === 'boolean'
+          ? candidateValues.bib_detection_enabled
+          : false,
     };
 
     const reachedStep: StepNumber =
@@ -391,6 +395,7 @@ export default function NewEventForm({
     formData.append('require_upload_approval', parsed.require_upload_approval ? 'true' : 'false');
     formData.append('ai_matching_enabled', parsed.ai_matching_enabled ? 'true' : 'false');
     formData.append('contains_minors', parsed.contains_minors ? 'true' : 'false');
+    formData.append('bib_detection_enabled', parsed.bib_detection_enabled ? 'true' : 'false');
     if (parsed.price_per_photo !== null && parsed.price_per_photo !== undefined) {
       const price =
         typeof parsed.price_per_photo === 'string'
@@ -543,12 +548,17 @@ export default function NewEventForm({
       });
     }
 
-    // AI face matching + minors compliance — shown for every event type
-    // since the toggles live in step 1 for all of them.
+    // AI face matching, bib detection + minors compliance — shown for every
+    // event type since the toggles live in step 1 for all of them.
     configRows.push({
       label: t('aiMatchingLabel' as keyof typeof t),
       value:
         v.contains_minors || !v.ai_matching_enabled ? t('summaryDisabled') : t('summaryEnabled'),
+    });
+    configRows.push({
+      label: t('bibDetectionLabel' as keyof typeof t),
+      value:
+        v.contains_minors || !v.bib_detection_enabled ? t('summaryDisabled') : t('summaryEnabled'),
     });
     configRows.push({
       label: t('containsMinorsLabel' as keyof typeof t),

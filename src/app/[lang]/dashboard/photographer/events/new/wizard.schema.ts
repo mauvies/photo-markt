@@ -52,6 +52,9 @@ export const eventSchema = z.object({
   // after event creation — enforcement of immutability lives in the edit
   // server action. When true, AI matching cannot be enabled.
   contains_minors: z.boolean().default(false),
+  // Bib number detection opt-in. Disabled for events with minors (parity
+  // with ai_matching_enabled). Photos are scanned via Rekognition DetectText.
+  bib_detection_enabled: z.boolean().default(false),
 });
 
 export type FormValues = z.infer<typeof eventSchema>;
