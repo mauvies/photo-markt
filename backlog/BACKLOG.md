@@ -27,6 +27,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 ## Archivo (done)
 
+- **T-050** · Ver saldo real de Stripe Connect (disponible / en camino) + próximo depósito — **ya implementado en `main`, sin PR nuevo**. La pestaña Ganancias (`/dashboard/photographer/sales?tab=earnings`) ya muestra "Stripe available" + "Stripe pending" (live vía `stripe.balance.retrieve`) y el payout schedule. Captura imprecisa; cerrado como already-done (ver commit `0317cb9`). Gap menor no perseguido: fecha exacta del próximo payout (hoy texto "every Monday" hardcodeado)
+
 - **T-037** · Estructura de DB: se documenta el split deliberado (infra `supabase/` CLI-bound en la raíz vs código de app `src/database/` bajo `src/` por T-019) en vez de mover archivos —mover choca con el CLI y con T-019—. `ARCHITECTURE.md` §2.1 + un `README.md` en cada dir que apunta al otro. Doc-only, sin mover nada — PR #108
 
 - **T-049** · Error/not-found boundaries traducidos (es/en): bloques `errorPage`/`notFound` en ambos diccionarios; `[lang]/error.tsx` y `[lang]/not-found.tsx` derivan locale del pathname (fuera del provider); `GlobalError` raíz y root `not-found` detectan locale por cookie `preferred-locale` (GlobalError post-mount para evitar hydration mismatch); helpers puros `localeFromPathname`/`localeFromCookie` + tests de paridad — PR #107
