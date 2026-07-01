@@ -20,6 +20,7 @@ const EMPTY_DEFAULTS: FormValues = {
   organizer_fee_per_photo: null,
   ai_matching_enabled: false,
   contains_minors: false,
+  bib_detection_enabled: false,
 };
 
 // Factory hook so the inferred form type can be exported via ReturnType.

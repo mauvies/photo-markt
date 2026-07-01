@@ -67,6 +67,10 @@ const eventSchema = z.object({
     .string()
     .default('false')
     .transform((val) => val === 'true'),
+  bib_detection_enabled: z
+    .string()
+    .default('false')
+    .transform((val) => val === 'true'),
   // Sent by the form for the immutability check below. Any change vs. the
   // current DB value is rejected — defense in depth.
   contains_minors: z
@@ -140,6 +144,7 @@ export async function updateEventAction(
     require_upload_approval: formData.get('require_upload_approval')?.toString() ?? 'false',
     price_per_photo: formData.get('price_per_photo')?.toString(),
     ai_matching_enabled: formData.get('ai_matching_enabled')?.toString() ?? 'false',
+    bib_detection_enabled: formData.get('bib_detection_enabled')?.toString() ?? 'false',
     contains_minors: formData.get('contains_minors')?.toString() ?? 'false',
   });
   if (!parsed.success) {
@@ -160,10 +165,14 @@ export async function updateEventAction(
   if (payload.contains_minors !== currentContainsMinors) {
     throw new Error('This setting cannot be changed after event creation.');
   }
-  // And: if the event contains minors, AI matching cannot be enabled.
+  // And: if the event contains minors, AI matching and bib detection cannot be enabled.
   const aiMatchingEnabled = currentContainsMinors ? false : payload.ai_matching_enabled;
+  const bibDetectionEnabled = currentContainsMinors ? false : payload.bib_detection_enabled;
   const currentAiEnabled = Boolean(
     (currentEvent as unknown as Record<string, unknown>).ai_matching_enabled,
+  );
+  const currentBibEnabled = Boolean(
+    (currentEvent as unknown as Record<string, unknown>).bib_detection_enabled,
   );
 
   // Collaborative events always need a share code (that's the entry point for
@@ -192,6 +201,7 @@ export async function updateEventAction(
     allow_guest_upload: payload.allow_guest_upload,
     require_upload_approval: payload.require_upload_approval,
     ai_matching_enabled: aiMatchingEnabled,
+    bib_detection_enabled: bibDetectionEnabled,
   });
 
   // AI matching state transitions — kick the Inngest worker on change.
@@ -213,6 +223,19 @@ export async function updateEventAction(
       });
     } catch (err) {
       console.error('[updateEventAction] failed to enqueue ai-matching-disabled', err);
+    }
+  }
+
+  // Bib detection transitions — only fire Inngest when enabling (backfill).
+  // Disabling only updates the DB column (no cleanup needed per spec).
+  if (bibDetectionEnabled && !currentBibEnabled) {
+    try {
+      await inngest.send({
+        name: 'event.bib-detection-enabled',
+        data: { eventId, userId: user.id },
+      });
+    } catch (err) {
+      console.error('[updateEventAction] failed to enqueue bib-detection-enabled', err);
     }
   }
 

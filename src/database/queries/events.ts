@@ -172,14 +172,21 @@ export async function createEvent(
     organizer_fee_per_photo_cents?: number | null;
     ai_matching_enabled?: boolean;
     contains_minors?: boolean;
+    bib_detection_enabled?: boolean;
   },
 ): Promise<{ id: string }> {
   // Only include the newer columns when they actually carry a value. Lets
   // the insert succeed against environments where the
   // `add_organizer_event_type` migration hasn't been applied yet, as long as
   // the event being created doesn't depend on those columns.
-  const { type, organizer_fee_per_photo_cents, ai_matching_enabled, contains_minors, ...rest } =
-    eventData;
+  const {
+    type,
+    organizer_fee_per_photo_cents,
+    ai_matching_enabled,
+    contains_minors,
+    bib_detection_enabled,
+    ...rest
+  } = eventData;
   const insertPayload: Record<string, unknown> = { user_id: userId, ...rest };
   if (type && type !== 'solo') insertPayload.type = type;
   if (organizer_fee_per_photo_cents !== null && organizer_fee_per_photo_cents !== undefined) {
@@ -190,6 +197,8 @@ export async function createEvent(
   // databases that haven't applied the migration.
   if (ai_matching_enabled !== undefined) insertPayload.ai_matching_enabled = ai_matching_enabled;
   if (contains_minors !== undefined) insertPayload.contains_minors = contains_minors;
+  if (bib_detection_enabled !== undefined)
+    insertPayload.bib_detection_enabled = bib_detection_enabled;
 
   const { data, error } = await supabase.from('events').insert(insertPayload).select('id').single();
 
@@ -474,6 +483,7 @@ export async function updateEvent(
     allow_guest_upload?: boolean;
     require_upload_approval?: boolean;
     ai_matching_enabled?: boolean;
+    bib_detection_enabled?: boolean;
   },
 ): Promise<void> {
   // Verify event belongs to user and is not deleted

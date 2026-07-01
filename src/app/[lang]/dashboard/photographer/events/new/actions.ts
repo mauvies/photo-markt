@@ -75,6 +75,10 @@ const eventSchema = z.object({
     .string()
     .default('false')
     .transform((val) => val === 'true'),
+  bib_detection_enabled: z
+    .string()
+    .default('false')
+    .transform((val) => val === 'true'),
 });
 
 // --- Types ---
@@ -176,6 +180,7 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     // silently never persists — regression from the upload refactor.
     ai_matching_enabled: formData.get('ai_matching_enabled')?.toString() ?? 'false',
     contains_minors: formData.get('contains_minors')?.toString() ?? 'false',
+    bib_detection_enabled: formData.get('bib_detection_enabled')?.toString() ?? 'false',
   });
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? 'Invalid event data provided.');
@@ -200,9 +205,10 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
   const organizerFeeCents =
     eventType === 'organizer' ? dollarsToCents(payload.organizer_fee_per_photo) : null;
 
-  // `contains_minors=true` forces AI matching off regardless of what the form
-  // sent — defense in depth in case the UI was bypassed.
+  // `contains_minors=true` forces AI matching and bib detection off regardless
+  // of what the form sent — defense in depth in case the UI was bypassed.
   const aiMatchingEnabled = payload.contains_minors ? false : payload.ai_matching_enabled;
+  const bibDetectionEnabled = payload.contains_minors ? false : payload.bib_detection_enabled;
   const containsMinors = payload.contains_minors;
 
   const event = await dbCreateEvent(supabase, user.id, {
@@ -224,6 +230,7 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     slug: null,
     ai_matching_enabled: aiMatchingEnabled,
     contains_minors: containsMinors,
+    bib_detection_enabled: bibDetectionEnabled,
   });
 
   if (isPublic) {
@@ -248,6 +255,17 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
       });
     } catch (err) {
       console.error('[createEvent] failed to enqueue event.ai-matching-enabled', err);
+    }
+  }
+
+  if (bibDetectionEnabled && !containsMinors) {
+    try {
+      await inngest.send({
+        name: 'event.bib-detection-enabled',
+        data: { eventId: event.id, userId: user.id },
+      });
+    } catch (err) {
+      console.error('[createEvent] failed to enqueue event.bib-detection-enabled', err);
     }
   }
 

@@ -59,6 +59,9 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
   const eventContainsMinors = Boolean(
     (event as unknown as Record<string, unknown>).contains_minors,
   );
+  const eventBibDetectionEnabled = Boolean(
+    (event as unknown as Record<string, unknown>).bib_detection_enabled,
+  );
 
   const defaultValues: FormValues = {
     name: event.name,
@@ -73,6 +76,7 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
     price_per_photo: event.price_per_photo,
     ai_matching_enabled: eventAiEnabled,
     contains_minors: eventContainsMinors,
+    bib_detection_enabled: eventBibDetectionEnabled,
   };
 
   const handleDeletePhoto = (photoId: string) => {
@@ -144,6 +148,7 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
           parsed.require_upload_approval ? 'true' : 'false',
         );
         formData.append('ai_matching_enabled', parsed.ai_matching_enabled ? 'true' : 'false');
+        formData.append('bib_detection_enabled', parsed.bib_detection_enabled ? 'true' : 'false');
         // `contains_minors` is read-only post-creation. We still send the
         // current value so the server-side guard can compare and reject any
         // tampering. The form input is disabled either way.
@@ -249,7 +254,7 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
           </div>
         </div>
 
-        {/* AI matching block */}
+        {/* AI matching + bib detection block */}
         <div className="grid gap-3 md:grid-cols-2">
           <form.Subscribe selector={(state) => state.values.contains_minors}>
             {(containsMinors) => (
@@ -269,6 +274,31 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
                       </div>
                       <Switch
                         id="edit_ai_matching_enabled"
+                        checked={!containsMinors && field.state.value}
+                        disabled={containsMinors}
+                        onCheckedChange={(checked) => {
+                          field.handleChange(checked);
+                          field.handleBlur();
+                        }}
+                      />
+                    </div>
+                  )}
+                </form.Field>
+                <form.Field name="bib_detection_enabled">
+                  {(field) => (
+                    <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
+                      <div className="grid gap-1">
+                        <Label htmlFor="edit_bib_detection_enabled">
+                          {t('bibDetectionLabel' as keyof Dictionary['newEvent'])}
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          {containsMinors
+                            ? t('bibDetectionDisabledByMinors' as keyof Dictionary['newEvent'])
+                            : t('bibDetectionDesc' as keyof Dictionary['newEvent'])}
+                        </p>
+                      </div>
+                      <Switch
+                        id="edit_bib_detection_enabled"
                         checked={!containsMinors && field.state.value}
                         disabled={containsMinors}
                         onCheckedChange={(checked) => {

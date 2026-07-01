@@ -1,7 +1,7 @@
 # T-047 · Mover toggle de detección por dorsal al wizard de creación de evento (paso 1)
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/bib-detection-toggle-wizard`
 - **OpenSpec change:** —
