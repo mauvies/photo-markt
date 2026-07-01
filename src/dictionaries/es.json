@@ -1,4 +1,15 @@
 {
+  "errorPage": {
+    "title": "Algo salió mal",
+    "description": "Ocurrió un error inesperado. Inténtalo de nuevo.",
+    "retry": "Reintentar"
+  },
+  "notFound": {
+    "code": "404",
+    "title": "Página no encontrada",
+    "description": "La página que buscas no existe.",
+    "goHome": "Ir al inicio"
+  },
   "common": {
     "loading": "Cargando...",
     "cancel": "Cancelar",

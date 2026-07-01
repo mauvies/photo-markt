@@ -1,11 +1,11 @@
 # T-049 · Página de error "Something went wrong" hardcodeada en inglés (i18n del error boundary)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno (el fallo de Connect que la dispara es operativo + T-045; ver Notas)
 - **Rama:** `fix/i18n-error-boundary`
 - **OpenSpec change:** —
-- **PR:** —
+- **PR:** #107
 
 ## Requerimiento
 Cuando algo falla (p. ej. "Conectar con Stripe" en payout-profile), la app redirige a una
@@ -21,14 +21,14 @@ Strings hardcodeadas en inglés en los error boundaries:
 - `src/app/not-found.tsx` / `src/app/[lang]/not-found.tsx` — revisar de paso por el mismo patrón.
 
 ## Criterio de aceptación (Definition of Done)
-- [ ] `/[lang]/error.tsx` muestra título, descripción y botón "Reintentar" **traducidos** según el
+- [x] `/[lang]/error.tsx` muestra título, descripción y botón "Reintentar" **traducidos** según el
       locale (bloque nuevo `errorPage.*` en `en.json` y `es.json`).
-- [ ] strings nuevas en `en.json` y `es.json`.
-- [ ] `not-found` (`/[lang]/`) traducida igual (o dejado explícitamente fuera de alcance con razón).
-- [ ] Decidir y documentar el trato del `GlobalError` raíz (mantener EN mínimo, o detectar locale
+- [x] strings nuevas en `en.json` y `es.json`.
+- [x] `not-found` (`/[lang]/`) traducida igual (o dejado explícitamente fuera de alcance con razón).
+- [x] Decidir y documentar el trato del `GlobalError` raíz (mantener EN mínimo, o detectar locale
       por cookie `preferred-locale`) — no debe romper por no tener acceso al dictionary.
-- [ ] test que verifique paridad de claves `errorPage.*` en ambos diccionarios.
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] test que verifique paridad de claves `errorPage.*` en ambos diccionarios.
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
 - **Por qué se ve esta página en el flujo de Connect:** el fallo de "Conectar con Stripe" lanza
