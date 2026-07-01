@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { resolveActiveSlug } from './resolve-active-slug';
 
 /**
  * Allowed section slugs across photographer + talent settings. The icon is
@@ -42,7 +43,7 @@ interface Props {
  */
 export function SettingsShell({ sections, children }: Props) {
   const pathname = usePathname();
-  const activeSlug = sections.find((s) => pathname === s.href)?.slug ?? sections[0]?.slug;
+  const activeSlug = resolveActiveSlug(pathname, sections);
 
   return (
     <div className="flex flex-1 flex-col gap-4 sm:gap-6">
