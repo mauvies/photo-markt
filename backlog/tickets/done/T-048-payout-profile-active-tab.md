@@ -1,11 +1,11 @@
 # T-048 · Tab activo incorrecto en `/settings/payout-profile` (marca "Perfil", debe ser "Pagos")
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/payout-profile-active-tab`
 - **OpenSpec change:** —
-- **PR:** —
+- **PR:** #106
 
 ## Requerimiento
 Al editar el perfil de cobros en `/dashboard/photographer/settings/payout-profile`, el tab
@@ -23,14 +23,14 @@ devuelve `undefined` y cae al fallback `sections[0]` = **`profile`**. Además `p
 captaría solo.
 
 ## Criterio de aceptación (Definition of Done)
-- [ ] En `/settings/payout-profile` el tab activo es **Pagos** (`payouts`), no Perfil.
-- [ ] Las subpáginas de una sección resaltan su tab padre (p. ej. cualquier `/payouts/...`
+- [x] En `/settings/payout-profile` el tab activo es **Pagos** (`payouts`), no Perfil.
+- [x] Las subpáginas de una sección resaltan su tab padre (p. ej. cualquier `/payouts/...`
       marca Pagos); no se cae al `sections[0]` para subrutas no exactas.
-- [ ] No rompe el resto de tabs (profile/billing/payouts/language) ni el shell de talent que
+- [x] No rompe el resto de tabs (profile/billing/payouts/language) ni el shell de talent que
       reusa `SettingsShell`.
-- [ ] test de regresión del helper de "sección activa" (pathname → slug), incluyendo el caso
+- [x] test de regresión del helper de "sección activa" (pathname → slug), incluyendo el caso
       `payout-profile → payouts`. Falla antes, pasa después.
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
 - Considerar extraer la lógica de match a un helper puro testeable (`resolveActiveSlug(pathname, sections)`)
