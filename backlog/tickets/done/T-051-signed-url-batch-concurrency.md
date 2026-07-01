@@ -1,11 +1,11 @@
 # T-051 · Bug: subida de evento con 258 fotos falla con "The related resource does not exist"
 
 - **Prioridad:** P1
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/signed-url-batch-concurrency`
 - **OpenSpec change:** — (bug fix localizado, implementar directo)
-- **PR:** —
+- **PR:** #109
 
 ## Requerimiento
 

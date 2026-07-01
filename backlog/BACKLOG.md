@@ -11,7 +11,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-051 | [Bug] Subida de evento con 258 fotos falla con "The related resource does not exist" (concurrencia descontrolada en `createSignedUploadUrls`) | — | doing |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
@@ -27,6 +26,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-051** · Bug: subida de evento con 258 fotos fallaba con "The related resource does not exist"; `createSignedUploadUrls` limitado a 10 concurrentes con `runWithConcurrency` — PR #109
 
 - **T-050** · Ver saldo real de Stripe Connect (disponible / en camino) + próximo depósito — **ya implementado en `main`, sin PR nuevo**. La pestaña Ganancias (`/dashboard/photographer/sales?tab=earnings`) ya muestra "Stripe available" + "Stripe pending" (live vía `stripe.balance.retrieve`) y el payout schedule. Captura imprecisa; cerrado como already-done (ver commit `0317cb9`). Gap menor no perseguido: fecha exacta del próximo payout (hoy texto "every Monday" hardcodeado)
 
