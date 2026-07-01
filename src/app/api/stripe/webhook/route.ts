@@ -51,17 +51,8 @@ import { env } from '@/env.mjs';
 import { sendGuestPurchaseEmail } from '@/lib/email/send-guest-purchase-email';
 import { getPhotographerNetCents } from '@/lib/plans';
 import { stripe } from '@/lib/stripe/config';
-import { createTransfer } from '@/lib/stripe/connect';
+import { createTransfer, deriveConnectStatus } from '@/lib/stripe/connect';
 import { STRIPE_PRICE_TO_PLAN } from '@/lib/stripe/plans-stripe';
-
-/**
- * Determine Stripe Connect account status from account fields.
- */
-function deriveConnectStatus(account: Stripe.Account): 'pending' | 'active' | 'restricted' {
-  if (account.charges_enabled && account.payouts_enabled) return 'active';
-  if (account.details_submitted) return 'restricted';
-  return 'pending';
-}
 
 /**
  * Create Stripe transfers for all active-connect photographers in an order.

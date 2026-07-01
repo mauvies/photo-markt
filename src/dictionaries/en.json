@@ -1172,7 +1172,7 @@
       "restricted": "Action required"
     },
     "notConnectedDescription": "Connect your bank account to receive automatic weekly payouts for your photo sales.",
-    "pendingDescription": "Your Stripe account is under review. This usually takes 1–2 business days. You'll receive an email when approved.",
+    "pendingDescription": "Your Stripe setup isn't complete yet. Click the button below to return to Stripe and finish the process, including identity verification.",
     "activeDescription": "Your bank account is connected. You will receive automatic weekly payouts every Monday.",
     "restrictedDescription": "Stripe requires additional information to enable payouts. Please update your account.",
     "connectButton": "Connect with Stripe",
@@ -1180,8 +1180,8 @@
     "updateAccountButton": "Update on Stripe",
     "poweredByStripe": "Secure payouts powered by Stripe",
     "onboarding": {
-      "successBanner": "Bank account connected — Stripe is verifying your account. This usually takes 1–2 business days.",
-      "refreshBanner": "Please complete your Stripe account setup to start receiving payouts."
+      "successBanner": "Bank account connected! You'll receive automatic payouts for your photo sales.",
+      "refreshBanner": "Your Stripe setup isn't complete yet. Click 'Complete setup' below to continue."
     },
     "banner": {
       "connectAccount": "Connect your bank account to start selling photos and receiving payouts.",
