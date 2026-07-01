@@ -52,7 +52,10 @@ export default async function PhotographerSettingsBillingPage({
 
   return (
     <>
-      <UpgradeHandler />
+      <UpgradeHandler
+        checkoutErrorMessage={dict.photographerDashboard.checkoutError}
+        yearlyUnavailableMessage={dict.photographerDashboard.checkoutYearlyUnavailable}
+      />
       <Card>
         <CardHeader className="p-4 sm:p-6">
           <div className="flex items-center gap-2">
@@ -73,6 +76,8 @@ export default async function PhotographerSettingsBillingPage({
             {nextPlanId && (
               <UpgradePlanButton
                 planId={nextPlanId}
+                checkoutErrorLabel={dict.photographerDashboard.checkoutError}
+                yearlyUnavailableLabel={dict.photographerDashboard.checkoutYearlyUnavailable}
                 className="w-full bg-gradient-starter border-0 text-white hover:opacity-90 sm:w-auto"
               />
             )}
@@ -134,6 +139,8 @@ export default async function PhotographerSettingsBillingPage({
               toggleBadge: dict.pricingSection.twoMonthsFree,
               billedYearlyPrefix: dict.pricingSection.billedYearlyPrefix,
               billedYearlySuffix: dict.pricingSection.billedYearlySuffix,
+              checkoutError: dict.photographerDashboard.checkoutError,
+              checkoutYearlyUnavailable: dict.photographerDashboard.checkoutYearlyUnavailable,
             }}
           />
         </CardContent>

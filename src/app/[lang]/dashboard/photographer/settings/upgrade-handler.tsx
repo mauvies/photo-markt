@@ -6,13 +6,23 @@ import { toast } from 'sonner';
 import type { BillingPeriod } from '@/lib/plans';
 import { createBillingCheckoutAction } from '../billing/actions';
 
+interface UpgradeHandlerProps {
+  /** Translated messages, fed from the parent server component's dict (this
+   * subtree has no TranslationsProvider). */
+  checkoutErrorMessage: string;
+  yearlyUnavailableMessage: string;
+}
+
 /**
  * Client component to handle upgrade query parameter
  * Automatically triggers upgrade when ?upgrade=plan (with optional ?period=)
  * is in the URL — used after the post-signup redirect from the home page
  * pricing CTA so the right billing period is preserved.
  */
-export function UpgradeHandler() {
+export function UpgradeHandler({
+  checkoutErrorMessage,
+  yearlyUnavailableMessage,
+}: UpgradeHandlerProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const upgradePlan = searchParams.get('upgrade');
@@ -31,7 +41,15 @@ export function UpgradeHandler() {
           // Remove query parameter from URL
           router.replace('/dashboard/photographer/settings', { scroll: false });
 
-          if ('url' in result) {
+          if ('error' in result) {
+            // Controlled domain error — map the stable code to a translated,
+            // actionable toast (yearly-not-configured gets its own guidance).
+            toast.error(
+              result.error === 'yearly_unavailable'
+                ? yearlyUnavailableMessage
+                : checkoutErrorMessage,
+            );
+          } else if ('url' in result) {
             // Redirect to Stripe Checkout
             window.location.href = result.url;
           } else if (result.updated) {
@@ -39,9 +57,10 @@ export function UpgradeHandler() {
             toast.success('Subscription updated successfully');
             router.refresh();
           }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Failed to start checkout';
-          toast.error(message);
+        } catch {
+          // Safety net for the internal Unauthorized/Invalid-plan guards (whose
+          // messages Next redacts in prod) — show the generic translated toast.
+          toast.error(checkoutErrorMessage);
           // Remove query parameter even on error
           router.replace('/dashboard/photographer/settings', { scroll: false });
         }
@@ -49,7 +68,7 @@ export function UpgradeHandler() {
 
       void handleUpgrade();
     }
-  }, [upgradePlan, period, router]);
+  }, [upgradePlan, period, router, checkoutErrorMessage, yearlyUnavailableMessage]);
 
   return null;
 }

@@ -73,7 +73,12 @@ export function PricingPlanButton({
     startTransition(async () => {
       try {
         const result = await createBillingCheckoutAction(planId as 'starter' | 'pro', period);
-        if ('url' in result) {
+        if ('error' in result) {
+          // Checkout couldn't start (Stripe failure or yearly not configured).
+          // Fall back to the signup flow preserving plan/period — same as the
+          // prior behavior when these failures threw.
+          router.push(`/signup?plan=${planId}&period=${period}`);
+        } else if ('url' in result) {
           window.location.href = result.url;
         } else if (result.updated) {
           router.push('/dashboard/photographer/settings?updated=true');
