@@ -94,10 +94,34 @@ export async function createSignedUploadUrl(
 }
 
 /**
+ * Run `fn` over `items` with at most `limit` concurrent executions at once.
+ * Processes in sequential pools of `limit`; waits for each pool before starting
+ * the next. Prevents thundering-herd against APIs with per-connection limits.
+ */
+async function runWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = [];
+  for (let i = 0; i < items.length; i += limit) {
+    const pool = items.slice(i, i + limit);
+    const poolResults = await Promise.all(pool.map(fn));
+    results.push(...poolResults);
+  }
+  return results;
+}
+
+const SIGNED_UPLOAD_URL_CONCURRENCY = 10;
+
+/**
  * Batch variant of `createSignedUploadUrl`. Fails the whole batch on any
  * per-path failure — partial success would force callers to track which
  * subset of files to re-mint URLs for, which is a footgun. Loud-and-retry
  * is the better default.
+ *
+ * Concurrency is capped at SIGNED_UPLOAD_URL_CONCURRENCY (10) to avoid
+ * saturating the Supabase Storage API when called with large batches.
  */
 export async function createSignedUploadUrls(
   supabase: SupabaseServerClient,
@@ -108,7 +132,9 @@ export async function createSignedUploadUrls(
   if (paths.length === 0) {
     return [];
   }
-  return Promise.all(paths.map((p) => createSignedUploadUrl(supabase, bucket, p, options)));
+  return runWithConcurrency(paths, SIGNED_UPLOAD_URL_CONCURRENCY, (p) =>
+    createSignedUploadUrl(supabase, bucket, p, options),
+  );
 }
 
 /**
