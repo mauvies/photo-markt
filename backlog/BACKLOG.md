@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-046 | Eliminar foto del preview de subida no debe causar salto de página | — | todo |
+| 1 | P1 | T-046 | Eliminar foto del preview de subida no debe causar salto de página | — | doing |
 | 2 | P1 | T-047 | Mover toggle de detección por dorsal al wizard de creación de evento (paso 1) | — | todo |
 | 3 | P1 | T-045 | Checkout de upgrade: manejar fallos de Stripe sin crash opaco (key expirada → error redactado) | — | todo |
 | 4 | P2 | T-048 | Tab activo incorrecto en `/settings/payout-profile` (marca "Perfil", debe ser "Pagos") | — | todo |

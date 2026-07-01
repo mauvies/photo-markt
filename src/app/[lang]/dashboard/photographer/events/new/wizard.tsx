@@ -2,7 +2,7 @@
 
 import { format } from 'date-fns';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { Button } from '@/components/ui/button';
 import { UploadProgressDialog } from '@/components/upload-progress-dialog';
@@ -20,6 +20,7 @@ import { Step2Details } from './steps/step-2-details';
 import { Step3Photos } from './steps/step-3-photos';
 import { type ReviewSection, Step4Review } from './steps/step-4-review';
 import { eventSchema, type FormValues } from './wizard.schema';
+import { mergeFilePreviews, removeFileFromPreviews } from './wizard-file-utils';
 import { type FilePreview, useEventForm } from './wizard-types';
 
 type NewEventT = Dictionary['newEvent'];
@@ -173,8 +174,12 @@ export default function NewEventForm({
 
   const currentStep = parseStepParam(searchParams.get('step'));
 
-  const [files, setFiles] = useState<File[]>([]);
   const [filePreviews, setFilePreviews] = useState<FilePreview[]>([]);
+  // Always points at the latest filePreviews so the unmount cleanup can
+  // revoke all object URLs without listing filePreviews as an effect dep.
+  const filePreviewsRef = useRef<FilePreview[]>([]);
+  filePreviewsRef.current = filePreviews;
+  const files = useMemo(() => filePreviews.map((p) => p.file), [filePreviews]);
   const [isPending, startTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [photosError, setPhotosError] = useState<string | null>(null);
@@ -262,19 +267,15 @@ export default function NewEventForm({
     };
   }, [form, hydratedFromStorage, reachedStep, returnToStep]);
 
-  // Generate object URLs for the file previews; revoke them on cleanup so we
-  // don't leak memory when the user removes/reselects.
+  // Revoke all object URLs when the wizard unmounts to avoid memory leaks.
+  // filePreviewsRef always holds the latest list so we don't need to list
+  // filePreviews in the dep array (which would re-register the cleanup on
+  // every change instead of running it once on unmount).
   useEffect(() => {
-    const previews = files.map((file) => ({
-      id: `preview-${file.name}-${file.lastModified}`,
-      url: URL.createObjectURL(file),
-      file,
-    }));
-    setFilePreviews(previews);
     return () => {
-      for (const p of previews) URL.revokeObjectURL(p.url);
+      for (const p of filePreviewsRef.current) URL.revokeObjectURL(p.url);
     };
-  }, [files]);
+  }, []);
 
   const goToStep = useCallback(
     (step: StepNumber, opts?: { remember?: StepNumber }) => {
@@ -300,7 +301,7 @@ export default function NewEventForm({
   useEffect(() => {
     if (!hydratedFromStorage) return;
     try {
-      if (files.length > 0) {
+      if (filePreviews.length > 0) {
         sessionStorage.setItem(HAD_FILES_KEY, 'true');
         if (photosLost) setPhotosLost(false);
       } else if (sessionStorage.getItem(HAD_FILES_KEY) === 'true' && !photosLost) {
@@ -310,22 +311,10 @@ export default function NewEventForm({
     } catch {
       // Ignore.
     }
-  }, [files.length, hydratedFromStorage, photosLost]);
+  }, [filePreviews.length, hydratedFromStorage, photosLost]);
 
   const handleFiles = (incoming: File[]) => {
-    setFiles((prev) => {
-      const next = [...prev];
-      for (const file of incoming) {
-        const exists = next.some(
-          (item) =>
-            item.name === file.name &&
-            item.size === file.size &&
-            item.lastModified === file.lastModified,
-        );
-        if (!exists) next.push(file);
-      }
-      return next;
-    });
+    setFilePreviews((prev) => mergeFilePreviews(prev, incoming, URL.createObjectURL));
     if (incoming.length > 0) {
       setPhotosError(null);
       setPhotosLost(false);
@@ -333,7 +322,7 @@ export default function NewEventForm({
   };
 
   const removeFile = (target: File) => {
-    setFiles((prev) => prev.filter((f) => f !== target));
+    setFilePreviews((prev) => removeFileFromPreviews(prev, target, URL.revokeObjectURL));
   };
 
   const validateAndAdvance = useCallback(async () => {
