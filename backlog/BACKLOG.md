@@ -11,7 +11,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 5 | P2 | T-049 | Página de error "Something went wrong" hardcodeada en inglés (i18n del error boundary) | — | todo |
 | 6 | P3 | T-037 | Centralizar estructura de base de datos (`supabase/` raíz vs `src/database/`) | — | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
@@ -28,6 +27,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-049** · Error/not-found boundaries traducidos (es/en): bloques `errorPage`/`notFound` en ambos diccionarios; `[lang]/error.tsx` y `[lang]/not-found.tsx` derivan locale del pathname (fuera del provider); `GlobalError` raíz y root `not-found` detectan locale por cookie `preferred-locale` (GlobalError post-mount para evitar hydration mismatch); helpers puros `localeFromPathname`/`localeFromCookie` + tests de paridad — PR #107
 
 - **T-048** · Tab activo correcto en `/settings/payout-profile`: helper puro `resolveActiveSlug(pathname, sections)` (match exacto → subruta anidada → mapa de rutas hermanas `payout-profile → payouts`, con guard para el shell de talent) reemplaza el match por igualdad exacta que caía a `sections[0]` (Perfil) — PR #106
 
