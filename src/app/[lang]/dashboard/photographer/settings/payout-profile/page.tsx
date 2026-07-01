@@ -1,9 +1,10 @@
 import { DashboardHeader } from '@/components/dashboard-header';
-import { getProfile } from '@/database/queries/profiles';
+import { getProfile, updateProfileStripeConnect } from '@/database/queries/profiles';
 import { createClient } from '@/database/server';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
+import { deriveConnectStatus, retrieveConnectAccount } from '@/lib/stripe/connect';
 import { PayoutProfileForm } from './payout-profile-form';
 
 export default async function PayoutProfilePage({
@@ -25,9 +26,26 @@ export default async function PayoutProfilePage({
   let connectStatus: 'not_connected' | 'pending' | 'active' | 'restricted' = 'not_connected';
 
   if (user) {
-    [existingProfile] = await Promise.all([getProfile(supabase, user.id)]);
+    existingProfile = await getProfile(supabase, user.id);
     connectStatus = (existingProfile?.stripe_connect_status ??
       'not_connected') as typeof connectStatus;
+
+    // Live check from Stripe to avoid stale DB-cached status (the webhook
+    // can lag or miss events). Only applies when an account ID is stored.
+    const accountId = existingProfile?.stripe_connect_account_id;
+    if (accountId) {
+      const account = await retrieveConnectAccount(accountId);
+      if (account) {
+        const liveStatus = deriveConnectStatus(account);
+        if ((liveStatus as string) !== (connectStatus as string)) {
+          connectStatus = liveStatus;
+          // Sync the stale value in the background — non-blocking.
+          updateProfileStripeConnect(supabase, user.id, {
+            stripe_connect_status: liveStatus,
+          }).catch((err) => console.error('[payout-profile] failed to sync connect status:', err));
+        }
+      }
+    }
   }
 
   return (
@@ -37,15 +55,16 @@ export default async function PayoutProfilePage({
         <p className="text-sm text-muted-foreground">{dict.payoutProfile.pageDesc}</p>
       </div>
 
-      {connectParam === 'success' && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
-          <p className="text-sm text-blue-800 dark:text-blue-200">
+      {connectParam === 'success' && connectStatus === 'active' && (
+        <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950">
+          <p className="text-sm text-green-800 dark:text-green-200">
             {dict.stripeConnect.onboarding.successBanner}
           </p>
         </div>
       )}
 
-      {connectParam === 'refresh' && (
+      {(connectParam === 'refresh' ||
+        (connectParam === 'success' && connectStatus !== 'active')) && (
         <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-950">
           <p className="text-sm text-yellow-800 dark:text-yellow-200">
             {dict.stripeConnect.onboarding.refreshBanner}

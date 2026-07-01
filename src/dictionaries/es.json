@@ -1172,7 +1172,7 @@
       "restricted": "Acción requerida"
     },
     "notConnectedDescription": "Conecta tu cuenta bancaria para recibir pagos automáticos semanales por tus ventas de fotos.",
-    "pendingDescription": "Tu cuenta de Stripe está en revisión. Esto suele tardar 1–2 días hábiles. Recibirás un email cuando sea aprobada.",
+    "pendingDescription": "Tu configuración de Stripe no está completa. Haz clic en el botón de abajo para volver a Stripe y terminar el proceso, incluyendo la verificación de identidad.",
     "activeDescription": "Tu cuenta bancaria está conectada. Recibirás pagos automáticos semanales cada lunes.",
     "restrictedDescription": "Stripe requiere información adicional para habilitar los pagos. Por favor actualiza tu cuenta.",
     "connectButton": "Conectar con Stripe",
@@ -1180,8 +1180,8 @@
     "updateAccountButton": "Actualizar en Stripe",
     "poweredByStripe": "Pagos seguros gestionados por Stripe",
     "onboarding": {
-      "successBanner": "Cuenta bancaria conectada — Stripe está verificando tu cuenta. Esto suele tardar 1–2 días hábiles.",
-      "refreshBanner": "Por favor completa la configuración de tu cuenta de Stripe para empezar a recibir pagos."
+      "successBanner": "¡Cuenta bancaria conectada! Recibirás pagos automáticos por tus ventas de fotos.",
+      "refreshBanner": "Tu configuración en Stripe aún no está completa. Haz clic en 'Completar configuración' para continuar."
     },
     "banner": {
       "connectAccount": "Conecta tu cuenta bancaria para empezar a vender fotos y recibir pagos.",
