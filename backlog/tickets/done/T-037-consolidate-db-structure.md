@@ -1,11 +1,11 @@
 # T-037 · Centralizar todo lo de base de datos en un solo lugar
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno duro (ver constraint de Supabase CLI en Notas — puede acabar siendo solo doc/decisión)
 - **Rama:** `refactor/consolidate-db-structure`
-- **OpenSpec change:** —  (se crea al ejecutar; toca >1 archivo y tiene una decisión de por medio)
-- **PR:** —
+- **OpenSpec change:** — (implementado directo; decisión ya recomendada en el ticket, doc-only)
+- **PR:** #108
 
 ## Requerimiento
 Igual que se hizo con backlog/tickets (T-035), centralizar lo relacionado con la base de datos.
@@ -14,11 +14,11 @@ Hoy está repartido: el dir `supabase/` cuelga de la raíz (config.toml, migrati
 quiere tenerlo todo junto/centralizado si es posible.
 
 ## Criterio de aceptación (Definition of Done)
-- [ ] Decisión documentada de QUÉ se puede centralizar y qué no (ver constraint CLI), en `backlog`/`ARCHITECTURE.md` o README de DB
-- [ ] La parte que sí se mueva queda en un único lugar coherente, con imports/paths actualizados
-- [ ] `pnpm db:start && pnpm db:reset && pnpm db:seed` siguen funcionando (migrations + seed)
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
-- [ ] Si se mueve `supabase/seed.sql`, actualizar el script `db:seed` en `package.json`
+- [x] Decisión documentada de QUÉ se puede centralizar y qué no (ver constraint CLI), en `backlog`/`ARCHITECTURE.md` o README de DB
+- [x] La parte que sí se mueva queda en un único lugar coherente, con imports/paths actualizados
+- [x] `pnpm db:start && pnpm db:reset && pnpm db:seed` siguen funcionando (migrations + seed)
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] Si se mueve `supabase/seed.sql`, actualizar el script `db:seed` en `package.json`
 
 ## Notas
 **Tensión clave:** son dos capas distintas, no una sola cosa mal puesta:

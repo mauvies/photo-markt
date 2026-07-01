@@ -11,7 +11,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 6 | P3 | T-037 | Centralizar estructura de base de datos (`supabase/` raíz vs `src/database/`) | — | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
@@ -27,6 +26,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-037** · Estructura de DB: se documenta el split deliberado (infra `supabase/` CLI-bound en la raíz vs código de app `src/database/` bajo `src/` por T-019) en vez de mover archivos —mover choca con el CLI y con T-019—. `ARCHITECTURE.md` §2.1 + un `README.md` en cada dir que apunta al otro. Doc-only, sin mover nada — PR #108
 
 - **T-049** · Error/not-found boundaries traducidos (es/en): bloques `errorPage`/`notFound` en ambos diccionarios; `[lang]/error.tsx` y `[lang]/not-found.tsx` derivan locale del pathname (fuera del provider); `GlobalError` raíz y root `not-found` detectan locale por cookie `preferred-locale` (GlobalError post-mount para evitar hydration mismatch); helpers puros `localeFromPathname`/`localeFromCookie` + tests de paridad — PR #107
 
