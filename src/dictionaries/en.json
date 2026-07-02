@@ -893,6 +893,7 @@
     "watermarkDisabled": "Disabled",
     "photosRequired": "Add at least one photo to continue.",
     "submitError": "Something went wrong. Please try again.",
+    "createFailedEventDiscarded": "We couldn't create your event, so it was discarded — nothing was saved. Please try again.",
     "storageLimitReached": "Storage limit reached — upgrade your plan to upload more photos.",
     "eventLimitReachedShort": "Event limit reached — upgrade your plan to create more.",
     "nPhotosUploadedSomeSkipped": "{uploaded} photo(s) uploaded, {skipped} skipped (storage limit reached). Upgrade to upload more.",
