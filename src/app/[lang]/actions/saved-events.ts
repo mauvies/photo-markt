@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { userHasRole } from '@/app/[lang]/actions/roles';
 import {
   createSignedUrl,
+  getEventsCoverPaths,
   getPhotosForEvents,
   getSavedEventIdsForTalent,
   getSavedEventsCountForTalent,
@@ -115,7 +116,11 @@ async function enrichSavedEvents(rows: SavedEventRow[]): Promise<SavedEventCard[
   if (rows.length === 0) return [];
 
   const eventIds = rows.map((r) => r.event_id);
-  const photoRows = await getPhotosForEvents(supabaseAdmin, eventIds);
+  // Photos and cover paths are independent reads — fetch in parallel.
+  const [photoRows, coverOverride] = await Promise.all([
+    getPhotosForEvents(supabaseAdmin, eventIds),
+    getEventsCoverPaths(supabaseAdmin, eventIds),
+  ]);
 
   const stats = new Map<string, { count: number; coverPath: string | null }>();
   for (const row of photoRows ?? []) {
@@ -124,6 +129,13 @@ async function enrichSavedEvents(rows: SavedEventRow[]): Promise<SavedEventCard[
     current.count += 1;
     if (!current.coverPath && row.original_url) current.coverPath = row.original_url;
     stats.set(row.event_id, current);
+  }
+
+  // Prefer the dedicated cover image (T-055), including for events with no photos.
+  for (const [id, path] of coverOverride) {
+    const current = stats.get(id) ?? { count: 0, coverPath: null };
+    current.coverPath = path;
+    stats.set(id, current);
   }
 
   const coverUrls = new Map<string, string>();

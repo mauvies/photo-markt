@@ -5,6 +5,7 @@ import { EventCard } from '@/components/event-card';
 import { Button } from '@/components/ui/button';
 import {
   createSignedUrl,
+  getEventsCoverPaths,
   getPendingInvitationsForPhotographer,
   getPhotosForEvents,
   getUserEvents,
@@ -50,7 +51,11 @@ async function getCachedEventsData(userId: string): Promise<{
   };
   if (eventIds.length === 0) return empty;
 
-  const photoRows = await getPhotosForEvents(supabaseAdmin, eventIds);
+  // Photos and cover paths are independent reads — fetch in parallel.
+  const [photoRows, coverOverride] = await Promise.all([
+    getPhotosForEvents(supabaseAdmin, eventIds),
+    getEventsCoverPaths(supabaseAdmin, eventIds),
+  ]);
 
   const stats = new Map<string, PhotoStat>();
 
@@ -78,6 +83,13 @@ async function getCachedEventsData(userId: string): Promise<{
       stats.set(event.id, { count: 0, coverPath: null, firstTakenAt: null, lastTakenAt: null });
     }
   });
+
+  // Prefer the dedicated cover image (T-055) over the first photo.
+  for (const [id, path] of coverOverride) {
+    const current = stats.get(id);
+    if (current) current.coverPath = path;
+    else stats.set(id, { count: 0, coverPath: path, firstTakenAt: null, lastTakenAt: null });
+  }
 
   // Sign cover URLs inside the cache so repeated navigations skip this entirely
   const coverUrls = new Map<string, string>();

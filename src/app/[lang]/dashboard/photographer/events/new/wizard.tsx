@@ -13,7 +13,7 @@ import { useTranslations } from '@/lib/i18n/translations-provider';
 import { getPlanLimitType, isPlanLimitError } from '@/lib/plan-limits';
 import { usePhotoUpload } from '@/lib/use-photo-upload';
 import { deleteEventAction } from '../actions';
-import { createEvent } from './actions';
+import { createEvent, uploadEventCoverAction } from './actions';
 import { activityOptions, activityValues } from './activity-options';
 import { ShareCodeDialog } from './components/share-code-dialog';
 import { type StepNumber, WizardSteps } from './components/wizard-steps';
@@ -194,6 +194,12 @@ export default function NewEventForm({
   // rather than leave an event the user never meant to keep (T-054).
   const [pendingEventId, setPendingEventId] = useState<string | null>(null);
   const [attachedCount, setAttachedCount] = useState(0);
+  // Optional dedicated cover image (T-055). Held as a File (not serializable,
+  // so not part of the persisted draft) and uploaded after the event exists.
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
+  const coverPreviewUrlRef = useRef<string | null>(null);
+  coverPreviewUrlRef.current = coverPreviewUrl;
   const [submitAttemptedStep2, setSubmitAttemptedStep2] = useState(false);
   const [createdShareCode, setCreatedShareCode] = useState<string | null>(null);
   const [createdEventName, setCreatedEventName] = useState<string | null>(null);
@@ -285,7 +291,18 @@ export default function NewEventForm({
   useEffect(() => {
     return () => {
       for (const p of filePreviewsRef.current) URL.revokeObjectURL(p.url);
+      if (coverPreviewUrlRef.current) URL.revokeObjectURL(coverPreviewUrlRef.current);
     };
+  }, []);
+
+  // Select / replace / clear the optional cover image, keeping a preview URL in
+  // sync and revoking the previous one so object URLs don't leak.
+  const handleCoverChange = useCallback((file: File | null) => {
+    setCoverPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return file ? URL.createObjectURL(file) : null;
+    });
+    setCoverFile(file);
   }, []);
 
   const goToStep = useCallback(
@@ -441,6 +458,19 @@ export default function NewEventForm({
         setPendingEventId(result.eventId);
         setAttachedCount(0);
 
+        // Upload the optional dedicated cover image. Best-effort: a cover
+        // failure must NOT discard the event — keep it with no cover and warn.
+        if (coverFile) {
+          try {
+            const coverData = new FormData();
+            coverData.append('cover', coverFile);
+            await uploadEventCoverAction(result.eventId, coverData);
+          } catch (coverErr) {
+            console.error('[wizard] cover upload failed', coverErr);
+            toast.error(t('coverUploadFailed' as keyof NewEventT));
+          }
+        }
+
         const dashboardPath = lp(`/dashboard/photographer/events/${result.eventId}`);
         const goToEvent = (succeededCount: number) => {
           // Navigating to the event = we're keeping it; clear the discard latch.
@@ -512,7 +542,7 @@ export default function NewEventForm({
         toast.error(error instanceof Error ? error.message : t('submitError'));
       }
     });
-  }, [files, form.state.values, goToStep, isPending, lp, router, t, upload]);
+  }, [coverFile, files, form.state.values, goToStep, isPending, lp, router, t, upload]);
 
   const reviewSections: ReviewSection[] = useMemo(() => {
     const v = form.state.values;
@@ -622,7 +652,14 @@ export default function NewEventForm({
 
         <div className="min-w-0">
           {currentStep === 1 && <Step1Config form={form} />}
-          {currentStep === 2 && <Step2Details form={form} submitAttempted={submitAttemptedStep2} />}
+          {currentStep === 2 && (
+            <Step2Details
+              form={form}
+              submitAttempted={submitAttemptedStep2}
+              coverPreviewUrl={coverPreviewUrl}
+              onCoverChange={handleCoverChange}
+            />
+          )}
           {currentStep === 3 && (
             <Step3Photos
               previews={filePreviews}

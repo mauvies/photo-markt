@@ -1,7 +1,11 @@
 'use server';
 
 import { cacheLife, cacheTag } from 'next/cache';
-import { getEventsCreatedCount, getUserEvents } from '@/database/queries/events';
+import {
+  getEventsCoverPaths,
+  getEventsCreatedCount,
+  getUserEvents,
+} from '@/database/queries/events';
 import {
   getPhotosForEvents,
   getPhotosUploadedCount,
@@ -229,9 +233,13 @@ async function getCachedDashboardData(userId: string): Promise<DashboardData> {
   // Build recent events list (5 most recent) with cover URLs from existing photos.
   const recentEventSlice = allEvents.slice(0, 5);
   const recentEventIds = recentEventSlice.map((e) => e.id);
-  const photoRows = recentEventIds.length
-    ? await getPhotosForEvents(supabaseAdmin, recentEventIds)
-    : [];
+  // Photos and cover paths are independent reads — fetch them in parallel.
+  const [photoRows, coverOverride] = recentEventIds.length
+    ? await Promise.all([
+        getPhotosForEvents(supabaseAdmin, recentEventIds),
+        getEventsCoverPaths(supabaseAdmin, recentEventIds),
+      ])
+    : [[], new Map<string, string>()];
   const coverPathByEvent = new Map<string, string>();
   const photoCountByEvent = new Map<string, number>();
   for (const row of photoRows) {
@@ -241,6 +249,10 @@ async function getCachedDashboardData(userId: string): Promise<DashboardData> {
       coverPathByEvent.set(row.event_id, row.original_url);
     }
   }
+  // Prefer the dedicated cover image (T-055) over the first photo. Overlaying
+  // the map also covers events that have a cover but no photos yet.
+  for (const [id, path] of coverOverride) coverPathByEvent.set(id, path);
+
   const coverUrlByEvent = new Map<string, string>();
   await Promise.all(
     Array.from(coverPathByEvent.entries()).map(async ([eventId, path]) => {

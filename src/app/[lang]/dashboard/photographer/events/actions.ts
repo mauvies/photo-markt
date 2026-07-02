@@ -7,6 +7,7 @@ import {
   deleteEventPhotos,
   deleteStorageFiles,
   getEvent,
+  getEventCoverPath,
   getPhoto,
   getPhotoStoragePaths,
   getSoldPhotoIdsForEvent,
@@ -51,12 +52,17 @@ export const deleteEventAction = async (eventId: string) => {
   // Get storage paths before deleting photos (excluding purchased ones)
   const storagePaths = await getPhotoStoragePaths(supabase, eventId, user.id, purchasedPhotoIds);
 
+  // The dedicated cover image (T-055) has no `photos` row, so it isn't in
+  // storagePaths — remove it explicitly or it lingers in storage forever.
+  const coverPath = await getEventCoverPath(supabase, eventId);
+
   // Delete photos from database (excluding purchased ones)
   await deleteEventPhotos(supabase, eventId, user.id, purchasedPhotoIds);
 
   // Delete files from storage
-  if (storagePaths.length > 0) {
-    await deleteStorageFiles(supabase, 'photos', storagePaths);
+  const pathsToRemove = coverPath ? [...storagePaths, coverPath] : storagePaths;
+  if (pathsToRemove.length > 0) {
+    await deleteStorageFiles(supabase, 'photos', pathsToRemove);
   }
 
   // Delete event

@@ -563,3 +563,67 @@ export async function deleteEvent(
     throw new Error(`Failed to delete event: ${getErrorMessage(error)}`);
   }
 }
+
+/**
+ * Read the current dedicated cover image path for an event (or null).
+ * Not owner-scoped — callers that need ownership must check separately.
+ */
+export async function getEventCoverPath(
+  supabase: SupabaseServerClient,
+  eventId: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('events')
+    .select('cover_path')
+    .eq('id', eventId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to get event cover path: ${getErrorMessage(error)}`);
+  }
+  return (data?.cover_path as string | null) ?? null;
+}
+
+/**
+ * Set (or clear, with null) an event's dedicated cover image path. Owner-scoped.
+ */
+export async function setEventCoverPath(
+  supabase: SupabaseServerClient,
+  eventId: string,
+  userId: string,
+  path: string | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from('events')
+    .update({ cover_path: path })
+    .eq('id', eventId)
+    .eq('user_id', userId)
+    .is('deleted_at', null);
+
+  if (error) {
+    throw new Error(`Failed to set event cover path: ${getErrorMessage(error)}`);
+  }
+}
+
+/**
+ * Map eventId → dedicated cover path for a set of events (null covers omitted).
+ * Used by the cover-URL builders to prefer the chosen cover over the first photo.
+ */
+export async function getEventsCoverPaths(
+  supabase: SupabaseServerClient,
+  eventIds: string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (eventIds.length === 0) return out;
+
+  const { data, error } = await supabase.from('events').select('id, cover_path').in('id', eventIds);
+
+  if (error) {
+    throw new Error(`Failed to get event cover paths: ${getErrorMessage(error)}`);
+  }
+  for (const row of data ?? []) {
+    const path = (row as { id: string; cover_path: string | null }).cover_path;
+    if (path) out.set((row as { id: string }).id, path);
+  }
+  return out;
+}
