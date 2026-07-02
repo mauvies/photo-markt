@@ -893,6 +893,7 @@
     "watermarkDisabled": "Desactivada",
     "photosRequired": "Añade al menos una foto para continuar.",
     "submitError": "Algo salió mal. Por favor, inténtalo de nuevo.",
+    "createFailedEventDiscarded": "No pudimos crear tu evento, así que se descartó — no se guardó nada. Inténtalo de nuevo.",
     "storageLimitReached": "Límite de almacenamiento alcanzado — mejora tu plan para subir más fotos.",
     "eventLimitReachedShort": "Límite de eventos alcanzado — mejora tu plan para crear más.",
     "nPhotosUploadedSomeSkipped": "{uploaded} foto(s) subida(s), {skipped} omitida(s) (límite de almacenamiento alcanzado). Mejora tu plan para subir más.",

@@ -3,6 +3,7 @@
 import { format } from 'date-fns';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { toast } from 'sonner';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { Button } from '@/components/ui/button';
 import { UploadProgressDialog } from '@/components/upload-progress-dialog';
@@ -11,10 +12,12 @@ import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { getPlanLimitType, isPlanLimitError } from '@/lib/plan-limits';
 import { usePhotoUpload } from '@/lib/use-photo-upload';
+import { deleteEventAction } from '../actions';
 import { createEvent } from './actions';
 import { activityOptions, activityValues } from './activity-options';
 import { ShareCodeDialog } from './components/share-code-dialog';
 import { type StepNumber, WizardSteps } from './components/wizard-steps';
+import { shouldDiscardCreatedEvent } from './orphan-cleanup';
 import { Step1Config } from './steps/step-1-config';
 import { Step2Details } from './steps/step-2-details';
 import { Step3Photos } from './steps/step-3-photos';
@@ -185,8 +188,12 @@ export default function NewEventForm({
   filePreviewsRef.current = filePreviews;
   const files = useMemo(() => filePreviews.map((p) => p.file), [filePreviews]);
   const [isPending, startTransition] = useTransition();
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [photosError, setPhotosError] = useState<string | null>(null);
+  // The event is created before photos upload (we need its id to mint signed
+  // URLs). Track it so a failed/cancelled upload can soft-delete the orphan
+  // rather than leave an event the user never meant to keep (T-054).
+  const [pendingEventId, setPendingEventId] = useState<string | null>(null);
+  const [attachedCount, setAttachedCount] = useState(0);
   const [submitAttemptedStep2, setSubmitAttemptedStep2] = useState(false);
   const [createdShareCode, setCreatedShareCode] = useState<string | null>(null);
   const [createdEventName, setCreatedEventName] = useState<string | null>(null);
@@ -370,7 +377,7 @@ export default function NewEventForm({
       parsed = eventSchema.parse(form.state.values);
     } catch (error) {
       console.error(error);
-      setSubmitError(t('submitError'));
+      toast.error(t('submitError'));
       return;
     }
 
@@ -429,10 +436,15 @@ export default function NewEventForm({
       try {
         const result = await createEvent(formData);
         if (!result?.eventId) throw new Error('Event could not be created');
-        setSubmitError(null);
+        // Remember the just-created event so a failed/cancelled upload can
+        // discard it. Reset the attached counter for this attempt.
+        setPendingEventId(result.eventId);
+        setAttachedCount(0);
 
         const dashboardPath = lp(`/dashboard/photographer/events/${result.eventId}`);
         const goToEvent = (succeededCount: number) => {
+          // Navigating to the event = we're keeping it; clear the discard latch.
+          setPendingEventId(null);
           try {
             sessionStorage.removeItem(DRAFT_KEY);
             sessionStorage.removeItem(HAD_FILES_KEY);
@@ -471,32 +483,33 @@ export default function NewEventForm({
             eventId: result.eventId,
             files,
           });
-          // If everything succeeded (or partial-failed but user dismisses
-          // the modal), redirect with the attached count.
+          // Record how many photos actually landed so the dialog's onClose can
+          // tell a real event (keep) from an empty orphan (discard).
+          setAttachedCount(uploadResult.attached.length);
+          // If everything succeeded, redirect with the attached count. The
+          // partial-failed path is handled by the modal: the user clicks Retry
+          // or Close, and Close navigates to the event (it has real photos).
           if (uploadResult.failed.length === 0) {
             goToEvent(uploadResult.attached.length);
           }
-          // Partial-failed path is handled by the modal: the user clicks
-          // Retry or Close. Close calls upload.reset() and triggers the
-          // redirect via the modal's onClose callback below.
         } catch (uploadErr) {
-          // run() threw — modal will show error stage and the user can
-          // close it; we still navigated to the event after they dismiss.
+          // run() threw — the modal shows the error stage with Retry/Close.
+          // attachedCount stays 0, so closing on that stage discards the
+          // orphan event (see UploadProgressDialog onClose below).
           console.error(uploadErr);
         }
       } catch (error) {
         console.error(error);
-        // Plan-limit errors carry a parseable prefix in their message so we
-        // can distinguish them from generic failures and surface the upgrade
-        // copy the user expects.
+        // createEvent itself failed → no event was persisted, nothing to
+        // discard. Surface the reason as a toast (not inline red text).
         if (isPlanLimitError(error)) {
           const limitType = getPlanLimitType(error);
-          setSubmitError(
+          toast.error(
             limitType === 'maxEvents' ? t('eventLimitReachedShort') : t('storageLimitReached'),
           );
           return;
         }
-        setSubmitError(error instanceof Error ? error.message : t('submitError'));
+        toast.error(error instanceof Error ? error.message : t('submitError'));
       }
     });
   }, [files, form.state.values, goToStep, isPending, lp, router, t, upload]);
@@ -635,9 +648,6 @@ export default function NewEventForm({
             sits above the mobile bottom nav and aligns with the desktop sidebar. */}
         <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 z-50 border-t border-border bg-background/95 shadow-lg backdrop-blur supports-backdrop-filter:bg-background/80 md:bottom-0 md:left-(--sidebar-width)">
           <div className="mx-auto flex w-full max-w-full flex-col items-end gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-end sm:px-6">
-            {submitError ? (
-              <p className="text-sm text-destructive text-right sm:text-left">{submitError}</p>
-            ) : null}
             <div className="flex gap-3">
               {currentStep === 1 ? (
                 <Button
@@ -739,18 +749,41 @@ export default function NewEventForm({
         onCancel={() => void upload.cancel()}
         onRetryFailed={() => void upload.retryFailed()}
         onClose={() => {
-          // On any terminal stage, push to the event with the attached count
-          // so the destination's RejectedToast can fire when the worker
-          // rejects some photos. We use the running `completedCount-failedCount`
-          // as the succeeded count.
-          const succeeded = upload.completedCount - upload.failedCount;
-          // Find the eventId from the just-created flow. The wizard already
-          // navigated for the success path; the close handler covers the
-          // partial-failed / error / cancelled paths. We can't restore the
-          // eventId here without lifting it to state, but the user can always
-          // re-navigate from the events list. Simplest: reset and stay.
+          // The success path already navigated. This handler covers the
+          // partial-failed / error / cancelled terminal stages.
+          const orphanId = pendingEventId;
+          const terminalStage = upload.stage;
+          const attached = attachedCount;
           upload.reset();
-          void succeeded;
+
+          if (orphanId && shouldDiscardCreatedEvent(terminalStage, attached)) {
+            // The create+upload flow failed/was cancelled with nothing saved:
+            // soft-delete the orphan event so it never surfaces in the list.
+            // The user's form values stay in memory so they can retry.
+            setPendingEventId(null);
+            startTransition(async () => {
+              try {
+                await deleteEventAction(orphanId);
+              } catch (err) {
+                console.error('[wizard] failed to discard orphan event', err);
+              }
+            });
+            toast.error(t('createFailedEventDiscarded' as keyof NewEventT));
+            return;
+          }
+
+          // Partial success (some photos attached): keep the event and go to it
+          // so the destination's RejectedToast can flag any worker rejections.
+          if (orphanId && attached > 0) {
+            setPendingEventId(null);
+            try {
+              sessionStorage.removeItem(DRAFT_KEY);
+              sessionStorage.removeItem(HAD_FILES_KEY);
+            } catch {
+              // Ignore.
+            }
+            router.push(`${lp(`/dashboard/photographer/events/${orphanId}`)}?uploaded=${attached}`);
+          }
         }}
       />
     </div>
