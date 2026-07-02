@@ -11,8 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-056 | [Bug] Tras reintentar una foto fallida, el wizard deja al usuario atascado en el paso 4 (no navega al evento) | — | doing |
-| 3 | P2 | T-057 | [Bug] El conteo de fotos en la tarjeta del evento (dashboard fotógrafo) crece durante el procesamiento (debería mostrar el total subido) | — | todo |
+| 1 | P2 | T-057 | [Bug] El conteo de fotos en la tarjeta del evento (dashboard fotógrafo) crece durante el procesamiento (debería mostrar el total subido) | — | todo |
 | 4 | P2 | T-058 | [Bug] El estado de IA del evento dice "ready" mientras las fotos aún se indexan (debería decir "indexing") | — | todo |
 | 5 | P2 | T-059 | Al crear evento: modal "continuar borrador en progreso" o "empezar de cero" (gestión del draft) | T-052 | todo |
 | 6 | P2 | T-060 | Paginar la galería del detalle del evento (load more, ~50) en las 3 vistas — hoy firma/renderiza todas | — | todo |
@@ -31,6 +30,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-056** · Bug: tras reintentar una foto fallida el wizard quedaba atascado en el paso 4 (no navegaba al evento). `onRetryFailed` descartaba el resultado con `void`; ahora await-ea la respuesta, acumula `attachedCount` con `resolveRetryOutcome` (helper puro + 5 tests) y navega vía `goToEventRef` si no quedan fallos — PR #114
 
 - **T-052** · Bug: config del paso 1 del wizard (AI matching / BIB) se pierde al refrescar. `form.reset(values)` modificaba `options.defaultValues`, que TanStack Form sobreescribía con `EMPTY_DEFAULTS` en el siguiente render; reemplazado por `form.setFieldValue()` por campo con `dontUpdateMeta/dontValidate/dontRunListeners`; `readStoredState` extraída a `wizard-storage.ts` para testabilidad + 8 tests de regresión — PR #113
 
