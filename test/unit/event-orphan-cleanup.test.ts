@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { shouldDiscardCreatedEvent } from '@/app/[lang]/dashboard/photographer/events/new/orphan-cleanup';
+import {
+  resolveRetryOutcome,
+  shouldDiscardCreatedEvent,
+} from '@/app/[lang]/dashboard/photographer/events/new/orphan-cleanup';
 
 /**
  * Regression test for T-054: an event created by the wizard was left behind
@@ -40,5 +43,46 @@ describe('shouldDiscardCreatedEvent', () => {
     expect(shouldDiscardCreatedEvent('preparing', 0)).toBe(false);
     expect(shouldDiscardCreatedEvent('uploading', 0)).toBe(false);
     expect(shouldDiscardCreatedEvent('finalizing', 0)).toBe(false);
+  });
+});
+
+/**
+ * Regression tests for T-056: after retrying failed photos the wizard didn't
+ * navigate to the event. The onRetryFailed handler now uses resolveRetryOutcome
+ * to accumulate the attached count and decide whether to navigate.
+ */
+describe('resolveRetryOutcome', () => {
+  it('navigates and sums counts when retry clears all failures (regression: T-056)', () => {
+    // All photos failed on first run (attachedCount=0); retry attaches 3,
+    // none remain failed.
+    const result = resolveRetryOutcome(0, 3, 0);
+    expect(result.totalAttached).toBe(3);
+    expect(result.shouldNavigate).toBe(true);
+  });
+
+  it('accumulates counts from initial run + retry and navigates on full success', () => {
+    // Initial run attached 1, retry attaches 2 more, no failures left.
+    const result = resolveRetryOutcome(1, 2, 0);
+    expect(result.totalAttached).toBe(3);
+    expect(result.shouldNavigate).toBe(true);
+  });
+
+  it('does not navigate when some photos still failed after retry', () => {
+    const result = resolveRetryOutcome(1, 1, 1);
+    expect(result.totalAttached).toBe(2);
+    expect(result.shouldNavigate).toBe(false);
+  });
+
+  it('does not navigate when retry attached nothing and failures remain', () => {
+    const result = resolveRetryOutcome(0, 0, 2);
+    expect(result.totalAttached).toBe(0);
+    expect(result.shouldNavigate).toBe(false);
+  });
+
+  it('handles retry that attached nothing but cleared all failures (edge case)', () => {
+    // Unlikely but: retry ran, failed list is now empty, nothing new attached.
+    const result = resolveRetryOutcome(5, 0, 0);
+    expect(result.totalAttached).toBe(5);
+    expect(result.shouldNavigate).toBe(true);
   });
 });
