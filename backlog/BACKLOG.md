@@ -12,7 +12,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
 | 1 | P1 | T-052 | [Bug] Configuración del paso 1 del wizard (AI matching / BIB) se pierde tras error de subida y refresh | — | todo |
-| 2 | P1 | T-055 | Foto de presentación / portada del evento, configurable al crear (hoy se auto-toma la primera foto) | — | todo |
+| 2 | P1 | T-055 | Foto de presentación / portada del evento, configurable al crear (hoy se auto-toma la primera foto) | — | doing |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
