@@ -76,6 +76,8 @@ async function getCachedEventData(
   signed: Record<string, string>;
   /** Profile lookup for `uploaded_by` ids, for the contributor badge. */
   uploaderProfiles: Record<string, { display_name: string | null; username: string }>;
+  /** Signed URL for the dedicated cover image (T-055), if the event has one. */
+  coverSignedUrl: string | null;
 } | null> {
   'use cache';
   cacheTag(`event-${param}`, 'events-public');
@@ -167,7 +169,19 @@ async function getCachedEventData(
     }
   }
 
-  return { event, photos, signed, uploaderProfiles };
+  // Sign the dedicated cover image (T-055), if any, so the JSON-LD structured
+  // data can prefer it over the first photo. Un-watermarked: it's a chosen
+  // presentation image, not a for-sale photo.
+  let coverSignedUrl: string | null = null;
+  const coverPath = (event as { cover_path?: string | null }).cover_path ?? null;
+  if (coverPath) {
+    const { data: coverSigned } = await supabaseAdmin.storage
+      .from('photos')
+      .createSignedUrl(coverPath, 60 * 60);
+    coverSignedUrl = coverSigned?.signedUrl ?? null;
+  }
+
+  return { event, photos, signed, uploaderProfiles, coverSignedUrl };
 }
 
 // ─── Static Params (pre-render top 50 public events) ─────────────────────────
@@ -217,18 +231,25 @@ export async function generateMetadata({
   const description = `Browse ${activityLabel} photos from ${event.name} in ${location} on ${formattedDate}. Find yourself in professional high-resolution event photos and download your best shots.`;
 
   const ogImages: { url: string; width: number; height: number; alt: string }[] = [];
-  const { data: firstPhotoRow } = await supabaseAdmin
-    .from('photos')
-    .select('original_url')
-    .eq('event_id', event.id)
-    .is('deleted_at', null)
-    .limit(1)
-    .maybeSingle();
+  // Prefer the dedicated cover image (T-055) — this is the presentation image
+  // the photographer chose, and social/SEO previews are exactly where it
+  // matters most. Fall back to the first photo when no cover is set.
+  let ogImagePath = (event as { cover_path?: string | null }).cover_path ?? null;
+  if (!ogImagePath) {
+    const { data: firstPhotoRow } = await supabaseAdmin
+      .from('photos')
+      .select('original_url')
+      .eq('event_id', event.id)
+      .is('deleted_at', null)
+      .limit(1)
+      .maybeSingle();
+    ogImagePath = firstPhotoRow?.original_url ?? null;
+  }
 
-  if (firstPhotoRow?.original_url) {
+  if (ogImagePath) {
     const { data: signedData } = await supabaseAdmin.storage
       .from('photos')
-      .createSignedUrl(firstPhotoRow.original_url, 60 * 60 * 24);
+      .createSignedUrl(ogImagePath, 60 * 60 * 24);
     if (signedData?.signedUrl) {
       ogImages.push({ url: signedData.signedUrl, width: 1200, height: 630, alt: title });
     }
@@ -275,7 +296,7 @@ export default async function EventPage({
 
   const cached = await getCachedEventData(param, baseUrl);
   if (!cached) notFound();
-  const { event, photos, signed, uploaderProfiles } = cached;
+  const { event, photos, signed, uploaderProfiles, coverSignedUrl } = cached;
 
   // Permanent redirect: UUID visitors with a slug get sent to the canonical slug URL.
   if (UUID_REGEX.test(param) && event.slug) {
@@ -424,7 +445,9 @@ export default async function EventPage({
   const siteUrl = getSiteUrl();
   const canonicalPath = event.slug ?? event.id;
   const eventUrl = `${siteUrl}/${lang}/events/${canonicalPath}`;
-  const coverUrl = photoItems[0]?.url ?? null;
+  // Prefer the dedicated cover image (T-055) for structured data; fall back to
+  // the first photo.
+  const coverUrl = coverSignedUrl ?? photoItems[0]?.url ?? null;
 
   const jsonLd = {
     '@context': 'https://schema.org',

@@ -4,6 +4,7 @@ import { cacheLife, cacheTag } from 'next/cache';
 import {
   createSignedUrl,
   getEventFilterOptions,
+  getEventsCoverPaths,
   getPhotosForEvents,
   type PhotographerSearchResult,
   searchPublicEvents,
@@ -53,7 +54,11 @@ export async function searchEventsAction(filters: {
 
   // Get cover photos for events
   const eventIds = result.events.map((e) => e.id);
-  const photoRows = await getPhotosForEvents(supabaseAdmin, eventIds);
+  // Photos and cover paths are independent reads — fetch in parallel.
+  const [photoRows, coverOverride] = await Promise.all([
+    getPhotosForEvents(supabaseAdmin, eventIds),
+    getEventsCoverPaths(supabaseAdmin, eventIds),
+  ]);
 
   const stats = new Map<
     string,
@@ -77,6 +82,15 @@ export async function searchEventsAction(filters: {
       current.coverThumbReady = row.thumbnail_status === 'ready';
     }
     stats.set(row.event_id, current);
+  }
+
+  // Prefer the dedicated cover image (T-055) over the first photo — including
+  // for events with no photos. A dedicated cover has no thumbnail.
+  for (const [id, path] of coverOverride) {
+    const current = stats.get(id) ?? { count: 0, coverPath: null, coverThumbReady: false };
+    current.coverPath = path;
+    current.coverThumbReady = false;
+    stats.set(id, current);
   }
 
   // Sign cover URLs

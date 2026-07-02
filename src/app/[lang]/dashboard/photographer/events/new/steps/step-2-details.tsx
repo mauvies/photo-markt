@@ -30,9 +30,18 @@ type Step2DetailsProps = {
   // True once the user attempted to advance from this step. Toggles the
   // "show errors before any field has been touched" behavior.
   submitAttempted: boolean;
+  // Optional dedicated cover image (T-055). Object-URL preview + change handler
+  // owned by the wizard shell (the File isn't a serializable form field).
+  coverPreviewUrl: string | null;
+  onCoverChange: (file: File | null) => void;
 };
 
-export function Step2Details({ form, submitAttempted }: Step2DetailsProps) {
+export function Step2Details({
+  form,
+  submitAttempted,
+  coverPreviewUrl,
+  onCoverChange,
+}: Step2DetailsProps) {
   const { t } = useTranslations<NewEventT>();
   const dateInputId = useId();
   const [datePopoverOpen, setDatePopoverOpen] = useState(false);
@@ -333,6 +342,51 @@ export function Step2Details({ form, submitAttempted }: Step2DetailsProps) {
             )
           }
         </form.Subscribe>
+      </div>
+
+      {/* Optional dedicated cover/presentation image (T-055). Shown on the
+          event card; falls back to the first photo when left empty. */}
+      <div className="grid gap-2">
+        <Label htmlFor="cover-image">{t('coverLabel')}</Label>
+        <p className="text-xs text-muted-foreground">{t('coverDesc')}</p>
+        {coverPreviewUrl ? (
+          <div className="relative w-full max-w-xs overflow-hidden rounded-lg border border-input">
+            {/* biome-ignore lint/performance/noImgElement: local object-URL preview — next/image can't optimize blob: URLs */}
+            <img
+              src={coverPreviewUrl}
+              alt={t('coverLabel')}
+              className="aspect-video w-full object-cover"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="absolute right-2 top-2"
+              onClick={() => onCoverChange(null)}
+            >
+              {t('coverRemove')}
+            </Button>
+          </div>
+        ) : (
+          <label
+            htmlFor="cover-image"
+            className="flex w-full max-w-xs cursor-pointer items-center justify-center rounded-lg border border-dashed border-input p-6 text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/40"
+          >
+            {t('coverSelect')}
+            <input
+              id="cover-image"
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                if (file) onCoverChange(file);
+                // Allow re-selecting the same file after removing it.
+                event.target.value = '';
+              }}
+            />
+          </label>
+        )}
       </div>
     </div>
   );

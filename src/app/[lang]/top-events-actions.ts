@@ -1,5 +1,10 @@
 import { cacheLife, cacheTag } from 'next/cache';
-import { createSignedUrl, getPhotosForEvents, getTopEvents } from '@/database/queries';
+import {
+  createSignedUrl,
+  getEventsCoverPaths,
+  getPhotosForEvents,
+  getTopEvents,
+} from '@/database/queries';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { type EventStatus, getEventStatus } from '@/lib/event-status';
 import { thumbRelativeUrl } from '@/lib/thumbnails';
@@ -55,6 +60,11 @@ export async function getCachedTopEvents(): Promise<TopEventItem[]> {
 
   const now = Date.now();
   const scored = candidates
+    // Featured/top events require ≥1 photo on purpose: a home-page card that
+    // leads to an event with nothing to browse is bad UX. So a cover-only,
+    // zero-photo event is intentionally NOT featured here (unlike the talent
+    // search / profile lists, which do surface cover-only events). The cover
+    // override below only restyles events that already qualify.
     .filter((e) => (stats.get(e.id)?.count ?? 0) >= 1)
     .map((e) => {
       const photoCount = stats.get(e.id)?.count ?? 0;
@@ -78,6 +88,20 @@ export async function getCachedTopEvents(): Promise<TopEventItem[]> {
   const upcoming = scored.filter((e) => e.status === 'upcoming').slice(0, PER_STATUS_LIMIT);
   const completed = scored.filter((e) => e.status === 'completed').slice(0, PER_STATUS_LIMIT);
   const selected = [...upcoming, ...completed];
+
+  // Prefer the dedicated cover image (T-055). A dedicated cover has no
+  // thumbnail, so force the thumb off so the card uses the full signed cover.
+  const coverOverride = await getEventsCoverPaths(
+    supabaseAdmin,
+    selected.map((e) => e.id),
+  );
+  for (const e of selected) {
+    const override = coverOverride.get(e.id);
+    if (override) {
+      e.coverPath = override;
+      e.coverThumbReady = false;
+    }
+  }
 
   const coverUrls = new Map<string, string>();
   await Promise.all(

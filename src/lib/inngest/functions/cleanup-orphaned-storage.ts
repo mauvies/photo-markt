@@ -57,15 +57,38 @@ export const cleanupOrphanedStorageFiles = inngest.createFunction(
 
     const orphans = await step.run('filter-orphans', async () => {
       const paths = candidates.map((c: { path: string }) => c.path);
-      const { data } = await supabaseAdmin
-        .from('photos')
-        .select('original_url')
-        .in('original_url', paths);
-      const attached = new Set(
-        (data ?? [])
-          .map((r: { original_url: string | null }) => r.original_url)
-          .filter((p: string | null): p is string => typeof p === 'string'),
-      );
+      // A path is in-use if it backs a photo row OR is a live event's dedicated
+      // cover image. Covers have no `photos` row, so without the second check
+      // the sweep would delete them (T-055). `deleted_at is null` so a cover
+      // left behind by a failed event-delete can still be reclaimed later.
+      const [photoRows, coverRows] = await Promise.all([
+        supabaseAdmin.from('photos').select('original_url').in('original_url', paths),
+        supabaseAdmin
+          .from('events')
+          .select('cover_path')
+          .is('deleted_at', null)
+          .in('cover_path', paths),
+      ]);
+      // Fail SAFE: if either in-use lookup errors, delete nothing this tick.
+      // A null `data` from a failed query would otherwise be read as "nothing
+      // is in use" and could permanently remove live photos or covers. The
+      // cron runs again in 30 min, so skipping a tick is harmless.
+      if (photoRows.error || coverRows.error) {
+        console.error(
+          '[cleanup-orphaned-storage] in-use lookup failed; skipping deletion this tick',
+          { photoError: photoRows.error?.message, coverError: coverRows.error?.message },
+        );
+        return [];
+      }
+      const attached = new Set<string>();
+      for (const r of photoRows.data ?? []) {
+        const p = (r as { original_url: string | null }).original_url;
+        if (typeof p === 'string') attached.add(p);
+      }
+      for (const r of coverRows.data ?? []) {
+        const p = (r as { cover_path: string | null }).cover_path;
+        if (typeof p === 'string') attached.add(p);
+      }
       return candidates.filter((c: { path: string }) => !attached.has(c.path));
     });
 

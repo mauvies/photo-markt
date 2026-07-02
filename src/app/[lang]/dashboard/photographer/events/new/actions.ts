@@ -3,8 +3,11 @@
 import { revalidatePath, revalidateTag, updateTag } from 'next/cache';
 import { z } from 'zod';
 import { createEvent as dbCreateEvent } from '@/database/queries';
+import { setEventCoverPath } from '@/database/queries/events';
+import { deleteStorageFiles, uploadFile } from '@/database/queries/storage';
 import { createClient } from '@/database/server';
 import { inngest } from '@/lib/inngest/client';
+import { validatePhotoUpload } from '@/lib/photo-upload';
 import { assertCanCreateEvent } from '@/lib/plan-limits';
 import { generateEventSlug } from '@/lib/slugify';
 import { activityValues } from './activity-options';
@@ -275,4 +278,97 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     eventId: event.id,
     shareCode,
   };
+};
+
+/**
+ * Upload (or replace) an event's dedicated cover/presentation image. Owner-only.
+ *
+ * The image is validated (magic bytes, 50 MB cap) and stored in the private
+ * `photos` bucket under the event folder. It is a standalone presentation
+ * image — NOT one of the for-sale photos — so it is served un-watermarked and
+ * has no `photos` row. Because of that, its lifecycle is handled explicitly:
+ * the orphan-cleanup cron skips paths referenced by `events.cover_path`, and
+ * event deletion removes the object.
+ */
+export const uploadEventCoverAction = async (
+  eventId: string,
+  formData: FormData,
+): Promise<void> => {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('You must be signed in.');
+  if (!eventId) throw new Error('Missing event id.');
+
+  const { data: eventRow } = await supabase
+    .from('events')
+    .select('id, user_id, cover_path')
+    .eq('id', eventId)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (!eventRow || eventRow.user_id !== user.id) {
+    throw new Error('Event not found or access denied.');
+  }
+
+  const file = formData.get('cover');
+  if (!(file instanceof File) || file.size === 0) {
+    throw new Error('No cover image provided.');
+  }
+
+  // Never trust the client MIME/extension — derive from magic bytes.
+  const { buffer, contentType, extension } = await validatePhotoUpload(file);
+  const path = `${user.id}/${eventId}/cover-${crypto.randomUUID()}.${extension}`;
+  await uploadFile(supabase, 'photos', path, buffer, { contentType, upsert: false });
+
+  await setEventCoverPath(supabase, eventId, user.id, path);
+
+  // Best-effort removal of the previous cover object on replace — the row now
+  // points at the new one regardless.
+  const previous = (eventRow as { cover_path: string | null }).cover_path;
+  if (previous && previous !== path) {
+    try {
+      await deleteStorageFiles(supabase, 'photos', [previous]);
+    } catch (err) {
+      console.error('[uploadEventCoverAction] failed to remove previous cover', err);
+    }
+  }
+
+  await revalidateAfterEventCreate(supabase, user.id, eventId);
+};
+
+/**
+ * Remove an event's dedicated cover, reverting the card to the first-photo
+ * fallback. Owner-only. Deletes the stored object best-effort.
+ */
+export const removeEventCoverAction = async (eventId: string): Promise<void> => {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('You must be signed in.');
+  if (!eventId) throw new Error('Missing event id.');
+
+  const { data: eventRow } = await supabase
+    .from('events')
+    .select('id, user_id, cover_path')
+    .eq('id', eventId)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (!eventRow || eventRow.user_id !== user.id) {
+    throw new Error('Event not found or access denied.');
+  }
+
+  await setEventCoverPath(supabase, eventId, user.id, null);
+
+  const previous = (eventRow as { cover_path: string | null }).cover_path;
+  if (previous) {
+    try {
+      await deleteStorageFiles(supabase, 'photos', [previous]);
+    } catch (err) {
+      console.error('[removeEventCoverAction] failed to remove cover', err);
+    }
+  }
+
+  await revalidateAfterEventCreate(supabase, user.id, eventId);
 };
