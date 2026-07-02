@@ -1,11 +1,19 @@
 # T-054 · Bug: el evento se crea igual aunque la subida falle (eventos huérfanos) + UX de error
 
 - **Prioridad:** P1
-- **Estado:** doing
-- **Blockers:** ninguno (hay una decisión de diseño a tomar al ejecutar — ver Notas — pero no bloquea)
+- **Estado:** done
+- **Blockers:** ninguno
 - **Rama:** `fix/event-creation-orphan-on-error`
-- **OpenSpec change:** **probable** — hay que decidir la estrategia (borrar huérfano vs. estado draft vs. diferir creación); capturarla antes de implementar.
-- **PR:** —
+- **OpenSpec change:** — (implementado directo; se resolvió por la Opción A — limpieza del huérfano, sin cambio de esquema)
+- **PR:** #111
+
+## Resolución (2026-07-02)
+Opción A implementada. El wizard sigue creando el evento primero (necesita `eventId` para las signed URLs),
+pero si la subida termina en estado terminal duro (`error`/`cancelled`) **sin nada adjuntado**, se soft-borra
+el evento huérfano vía el `deleteEventAction` existente, conservando el form en memoria para reintentar.
+Errores de creación/plan-limit ahora se emiten como **toasts** (sonner) en vez de texto rojo inline. La decisión
+de descarte vive en un helper puro y testeado `shouldDiscardCreatedEvent(stage, attachedCount)`
+(`events/new/orphan-cleanup.ts`, `test/unit/event-orphan-cleanup.test.ts`). Sin migración/esquema nuevo.
 
 ## Requerimiento
 Al crear un evento con fotos, si ocurre un error durante el proceso (p. ej. la subida falla), el usuario ve el

@@ -12,8 +12,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
 | 1 | P1 | T-052 | [Bug] Configuración del paso 1 del wizard (AI matching / BIB) se pierde tras error de subida y refresh | — | todo |
-| 2 | P1 | T-054 | [Bug] El evento se crea aunque la subida falle (eventos huérfanos) + error como toast, no texto rojo inline | — | doing |
-| 3 | P1 | T-055 | Foto de presentación / portada del evento, configurable al crear (hoy se auto-toma la primera foto) | — | todo |
+| 2 | P1 | T-055 | Foto de presentación / portada del evento, configurable al crear (hoy se auto-toma la primera foto) | — | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
@@ -29,6 +28,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-054** · Bug: el evento se creaba igual aunque la subida fallara (eventos huérfanos). El wizard persiste el evento antes de subir (necesita el `eventId` para las signed URLs); si la subida terminaba en `error`/`cancelled` sin nada adjuntado, el evento quedaba huérfano. Ahora se soft-borra vía `deleteEventAction` (helper puro `shouldDiscardCreatedEvent` + test) conservando el form en memoria para reintentar; errores de creación/plan pasan a toasts (sonner) en vez de texto rojo inline — PR #111
 
 - **T-051** · Bug: subida de evento con 258 fotos fallaba con "The related resource does not exist"; `createSignedUploadUrls` limitado a 10 concurrentes con `runWithConcurrency` — PR #109
 
