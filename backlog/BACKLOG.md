@@ -12,7 +12,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
 | 1 | P1 | T-052 | [Bug] Configuración del paso 1 del wizard (AI matching / BIB) se pierde tras error de subida y refresh | — | todo |
-| 2 | P1 | T-055 | Foto de presentación / portada del evento, configurable al crear (hoy se auto-toma la primera foto) | — | doing |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
@@ -28,6 +27,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-055** · Foto de presentación / portada del evento (configurable al crear). Imagen **dedicada** (subida aparte de las fotos a la venta) → `events.cover_path`; subida owner-only validada al bucket `photos`, servida sin watermark vía signed URL; campo en el paso 2 del wizard (best-effort, no descarta el evento si falla — respeta T-054); los 6 builders + OG/JSON-LD de la página pública prefieren la portada con fallback a la primera foto; cron de limpieza excluye portadas (fail-safe) y el borrado de evento la elimina. OpenSpec `add-event-cover-image`; `/code-review high` aplicado — PR #112
 
 - **T-054** · Bug: el evento se creaba igual aunque la subida fallara (eventos huérfanos). El wizard persiste el evento antes de subir (necesita el `eventId` para las signed URLs); si la subida terminaba en `error`/`cancelled` sin nada adjuntado, el evento quedaba huérfano. Ahora se soft-borra vía `deleteEventAction` (helper puro `shouldDiscardCreatedEvent` + test) conservando el form en memoria para reintentar; errores de creación/plan pasan a toasts (sonner) en vez de texto rojo inline — PR #111
 

@@ -1,11 +1,22 @@
 # T-055 · Foto de presentación / portada del evento (configurable al crear)
 
 - **Prioridad:** P1
-- **Estado:** todo
-- **Blockers:** ninguno (hay una decisión de diseño a tomar al ejecutar — ver Notas — pero no bloquea)
+- **Estado:** done
+- **Blockers:** ninguno
 - **Rama:** `feat/event-cover-photo`
-- **OpenSpec change:** **sí** — toca BD (nueva columna en `events`) + UI del wizard + cadena de `coverUrl`. `/opsx:propose` al ejecutar.
-- **PR:** —
+- **OpenSpec change:** `add-event-cover-image` (proposal/specs/design/tasks). Archivar con `/opsx:archive` tras mergear #112.
+- **PR:** #112
+
+## Resolución (2026-07-02)
+Decisión del usuario: **imagen de portada dedicada** (subida aparte de las fotos a la venta), no elegir una foto
+del evento. Implementado: columna `events.cover_path`, subida owner-only validada (`validatePhotoUpload`) al
+bucket `photos` (`${owner}/${event}/cover-<uuid>`), servida sin watermark vía signed URL; campo de portada en el
+paso 2 del wizard (subida tras crear el evento, best-effort — un fallo de portada no descarta el evento, respeta
+T-054); los 6 builders de `coverUrl` + la imagen OG/JSON-LD de la página pública del evento prefieren `cover_path`
+con fallback a la primera foto; el cron de limpieza excluye portadas vivas (y ahora falla-seguro ante error de
+lookup + ignora portadas de eventos borrados) y el borrado de evento elimina la portada. `/code-review high`
+pasado y findings reales corregidos. Fuera de alcance (follow-up): cambiar/quitar la portada desde la edición del
+evento tras crearlo.
 
 ## Requerimiento
 El fotógrafo quiere poder **elegir la foto de presentación/portada** de cada evento (la imagen principal que
