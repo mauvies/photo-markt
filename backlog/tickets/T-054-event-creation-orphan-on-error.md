@@ -1,7 +1,7 @@
 # T-054 · Bug: el evento se crea igual aunque la subida falle (eventos huérfanos) + UX de error
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno (hay una decisión de diseño a tomar al ejecutar — ver Notas — pero no bloquea)
 - **Rama:** `fix/event-creation-orphan-on-error`
 - **OpenSpec change:** **probable** — hay que decidir la estrategia (borrar huérfano vs. estado draft vs. diferir creación); capturarla antes de implementar.
