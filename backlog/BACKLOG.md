@@ -16,6 +16,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | 3 | P2 | T-057 | [Bug] El conteo de fotos en la tarjeta del evento (dashboard fotógrafo) crece durante el procesamiento (debería mostrar el total subido) | — | todo |
 | 4 | P2 | T-058 | [Bug] El estado de IA del evento dice "ready" mientras las fotos aún se indexan (debería decir "indexing") | — | todo |
 | 5 | P2 | T-059 | Al crear evento: modal "continuar borrador en progreso" o "empezar de cero" (gestión del draft) | T-052 | todo |
+| 6 | P2 | T-060 | Paginar la galería del detalle del evento (load more, ~50) en las 3 vistas — hoy firma/renderiza todas | — | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
