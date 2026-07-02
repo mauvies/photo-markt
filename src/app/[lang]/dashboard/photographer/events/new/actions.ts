@@ -5,7 +5,9 @@ import { z } from 'zod';
 import { createEvent as dbCreateEvent } from '@/database/queries';
 import { setEventCoverPath } from '@/database/queries/events';
 import { deleteStorageFiles, uploadFile } from '@/database/queries/storage';
+import type { SupabaseServerClient } from '@/database/queries/types';
 import { createClient } from '@/database/server';
+import { supabaseAdmin } from '@/database/supabase-admin';
 import { inngest } from '@/lib/inngest/client';
 import { validatePhotoUpload } from '@/lib/photo-upload';
 import { assertCanCreateEvent } from '@/lib/plan-limits';
@@ -319,7 +321,11 @@ export const uploadEventCoverAction = async (
   // Never trust the client MIME/extension — derive from magic bytes.
   const { buffer, contentType, extension } = await validatePhotoUpload(file);
   const path = `${user.id}/${eventId}/cover-${crypto.randomUUID()}.${extension}`;
-  await uploadFile(supabase, 'photos', path, buffer, { contentType, upsert: false });
+  // Use the admin client for the upload: the `photos` bucket has no user-level
+  // INSERT policy that covers direct uploads (only signed-URL uploads bypass
+  // RLS via the token). Ownership + file validation are already enforced above.
+  const adminClient = supabaseAdmin as unknown as SupabaseServerClient;
+  await uploadFile(adminClient, 'photos', path, buffer, { contentType, upsert: false });
 
   await setEventCoverPath(supabase, eventId, user.id, path);
 

@@ -1,4 +1,4 @@
-# T-052 · Bug: configuración del paso 1 del wizard (AI matching / BIB) se pierde tras error de subida
+# T-052 · Bug: configuración del paso 1 del wizard (AI matching / BIB) se pierde al refrescar
 
 - **Prioridad:** P1
 - **Estado:** todo
@@ -9,9 +9,28 @@
 
 ## Requerimiento
 
-Al crear un evento, si durante la subida de fotos (paso 3) o el envío final (paso 4) ocurre un error, y el usuario refresca la página y vuelve a subir las fotos, al llegar al paso 4 (resumen) ha perdido lo que eligió en el paso 1: reconocimiento facial (`ai_matching_enabled`) y por dorsal (`bib_detection_enabled`) aparecen desactivados aunque los hubiera activado.
+Al crear un evento, si el usuario activa en el **paso 1** el reconocimiento facial (`ai_matching_enabled`) y/o por
+dorsal (`bib_detection_enabled`) y **refresca la página**, esas opciones se **pierden** (los switches vuelven a
+off). Deben mantenerse para el evento que se está creando.
 
-El usuario estuvo a punto de crear el evento con la configuración incorrecta sin darse cuenta.
+## Repro CONFIRMADO (verificado en navegador, 2026-07-02)
+
+**Reproduce con un refresh normal, sin necesidad de error de subida:** estar en el paso 1, activar los switches
+de AI/BIB, refrescar la pestaña → los switches vuelven a off. Esto **descarta** que dependa del error/unmount de
+T-051 y apunta a un fallo directo en la persistencia/restauración del draft. (El síntoma original —descubrirlo al
+llegar al paso 4 tras un error de subida— es el mismo bug visto más tarde en el flujo.)
+
+Nota: en una revisión estática previa el código de persistencia/restauración *parecía* correcto para un refresh
+normal (`readStoredState` restaura `ai/bib=true`, `form.reset(stored.values)`, sin `form.reset()` sin args). Dado
+que el navegador demuestra que SÍ se pierde, el fallo está en algo no visible en estático — sospechas: (a)
+`form.reset(stored.values)` no propaga a los `form.Field` del paso 1 **ya montados** (los switches quedan con el
+default aunque el store tenga el valor restaurado); (b) la escritura del draft pisa el valor con defaults en algún
+tick del mount. Reproducir en navegador y confirmar cuál es antes de arreglar.
+
+## Requerimiento original (mismo bug, visto tras error de subida)
+
+Si durante la subida (paso 3) o el envío (paso 4) ocurre un error, el usuario refresca y vuelve a subir, al llegar
+al paso 4 (resumen) ha perdido lo del paso 1 — y estuvo a punto de crear el evento con la config incorrecta.
 
 ## Causa raíz a investigar
 
@@ -29,6 +48,7 @@ Hipótesis probables (en orden de verosimilitud):
 
 ## Criterio de aceptación (Definition of Done)
 
+- [ ] **Repro mínimo (prioritario):** paso 1 → activar AI matching y BIB → **refrescar** → los switches del paso 1 siguen activados (sin pasar por subida ni error).
 - [ ] Reproducir el escenario: paso 1 con AI matching y BIB habilitados → paso 3 con fotos → simular error de subida → refrescar → re-subir fotos → paso 4 muestra AI matching y BIB correctamente activados
 - [ ] El review (paso 4) siempre refleja fielmente el estado del paso 1, incluso tras un ciclo error → refresh → re-subida
 - [ ] El draft en sessionStorage nunca se sobreescribe con valores por defecto mientras la restauración esté en curso
