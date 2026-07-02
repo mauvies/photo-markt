@@ -1,7 +1,7 @@
 # T-057 · Bug: el conteo de fotos en la tarjeta del evento (dashboard fotógrafo) crece durante el procesamiento
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `fix/event-card-total-photo-count`
 - **OpenSpec change:** — (bug fix, implementar directo)

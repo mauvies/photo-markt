@@ -15,6 +15,7 @@ import {
   getEventPhotos,
   getEventPhotosPublic,
   getPhoto,
+  getPhotoCountsForEvents,
   getPhotoStoragePaths,
   getPhotosForEvents,
   getPhotosUploadedCount,
@@ -336,6 +337,63 @@ describe('database/queries/photos', () => {
         .eq('id', id);
 
       expect(count).toBe(0);
+    });
+  });
+
+  // Regression: T-057 — the photographer event card showed a growing count
+  // because getPhotosForEvents filtered to approved-only and photos start as
+  // approved (default) before the Inngest worker re-tags them as pending during
+  // processing. The fix adds getPhotoCountsForEvents which counts
+  // pending+approved, giving a stable total from the moment of upload.
+  describe('getPhotoCountsForEvents (regression T-057)', () => {
+    it('counts pending + approved, excludes rejected (regression: T-057)', async () => {
+      const owner = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(owner.id);
+      const sb = createServiceClient();
+
+      // approved photo (default)
+      const approved = await createTestPhoto(event.id);
+      // pending photo — simulate what happens when Inngest re-tags the photo
+      // back to pending during processing
+      const pending = await createTestPhoto(event.id);
+      await updatePhotoUploadStatus(sb, {
+        photoId: pending.id,
+        eventId: event.id,
+        status: 'pending',
+      });
+      // rejected photo — should never count
+      const rejected = await createTestPhoto(event.id);
+      await updatePhotoUploadStatus(sb, {
+        photoId: rejected.id,
+        eventId: event.id,
+        status: 'rejected',
+      });
+
+      const counts = await getPhotoCountsForEvents(sb, [event.id]);
+      // Total = approved + pending (2), not 1 (approved-only) or 3 (all).
+      expect(counts.get(event.id)).toBe(2);
+
+      // Confirm the old query still returns only approved (so cover path logic
+      // is unaffected), demonstrating the divergence this ticket fixes.
+      const approvedRows = await getPhotosForEvents(sb, [event.id]);
+      const approvedForEvent = approvedRows.filter((r) => r.event_id === event.id);
+      expect(approvedForEvent).toHaveLength(1);
+      expect(approvedForEvent[0].original_url).toBe(
+        (await sb.from('photos').select('original_url').eq('id', approved.id).single()).data
+          ?.original_url,
+      );
+    });
+
+    it('returns empty map for empty eventIds', async () => {
+      const counts = await getPhotoCountsForEvents(createServiceClient(), []);
+      expect(counts.size).toBe(0);
+    });
+
+    it('returns 0 when an event has no photos', async () => {
+      const owner = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(owner.id);
+      const counts = await getPhotoCountsForEvents(createServiceClient(), [event.id]);
+      expect(counts.has(event.id)).toBe(false);
     });
   });
 });

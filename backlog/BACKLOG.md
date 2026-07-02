@@ -11,7 +11,9 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-057 | [Bug] El conteo de fotos en la tarjeta del evento (dashboard fotógrafo) crece durante el procesamiento (debería mostrar el total subido) | — | todo |
+| 1 | P1 | T-062 | [Bug] Búsqueda por dorsal y facial falla con "Event not found" en eventos públicos abiertos por slug (share_code null) | — | todo |
+| 1 | P1 | T-061 | [Bug] El logo lleva al fotógrafo al dashboard de talento (que revienta) en vez de al overview de fotógrafo | — | todo |
+| 2 | P2 | T-057 | [Bug] El conteo de fotos en la tarjeta del evento (dashboard fotógrafo) crece durante el procesamiento (debería mostrar el total subido) | — | doing |
 | 4 | P2 | T-058 | [Bug] El estado de IA del evento dice "ready" mientras las fotos aún se indexan (debería decir "indexing") | — | todo |
 | 5 | P2 | T-059 | Al crear evento: modal "continuar borrador en progreso" o "empezar de cero" (gestión del draft) | T-052 | todo |
 | 6 | P2 | T-060 | Paginar la galería del detalle del evento (load more, ~50) en las 3 vistas — hoy firma/renderiza todas | — | todo |
