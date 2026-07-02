@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-052 | [Bug] Config del paso 1 del wizard (AI matching / BIB) se pierde al refrescar (repro confirmado sin error de subida) | — | todo |
+| 1 | P1 | T-052 | [Bug] Config del paso 1 del wizard (AI matching / BIB) se pierde al refrescar (repro confirmado sin error de subida) | — | doing |
 | 2 | P1 | T-056 | [Bug] Tras reintentar una foto fallida, el wizard deja al usuario atascado en el paso 4 (no navega al evento) | — | todo |
 | 3 | P2 | T-057 | [Bug] El conteo de fotos en la tarjeta del evento (dashboard fotógrafo) crece durante el procesamiento (debería mostrar el total subido) | — | todo |
 | 4 | P2 | T-058 | [Bug] El estado de IA del evento dice "ready" mientras las fotos aún se indexan (debería decir "indexing") | — | todo |
