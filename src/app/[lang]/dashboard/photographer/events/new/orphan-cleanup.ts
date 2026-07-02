@@ -17,3 +17,23 @@ export function shouldDiscardCreatedEvent(stage: UploadStage, attachedCount: num
   if (attachedCount > 0) return false;
   return stage === 'error' || stage === 'cancelled';
 }
+
+/**
+ * Compute the accumulated attachment count and navigation decision after a
+ * retry-failed run (T-056).
+ *
+ * `prevAttachedCount` is the count from all prior runs (initial + any earlier
+ * retries). `retryAttached` and `retryFailed` come from the latest retry result.
+ * Returns the new running total and whether the wizard should navigate to the
+ * event immediately (all remaining failures resolved).
+ */
+export function resolveRetryOutcome(
+  prevAttachedCount: number,
+  retryAttached: number,
+  retryFailed: number,
+): { totalAttached: number; shouldNavigate: boolean } {
+  return {
+    totalAttached: prevAttachedCount + retryAttached,
+    shouldNavigate: retryFailed === 0,
+  };
+}

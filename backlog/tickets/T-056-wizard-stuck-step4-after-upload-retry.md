@@ -1,7 +1,7 @@
 # T-056 · Bug: tras reintentar una foto fallida, el wizard deja al usuario atascado en el paso 4 (no navega al evento)
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `fix/wizard-navigate-after-upload-retry`
 - **OpenSpec change:** — (bug fix del wizard, implementar directo)

@@ -17,7 +17,7 @@ import { createEvent, uploadEventCoverAction } from './actions';
 import { activityOptions } from './activity-options';
 import { ShareCodeDialog } from './components/share-code-dialog';
 import { type StepNumber, WizardSteps } from './components/wizard-steps';
-import { shouldDiscardCreatedEvent } from './orphan-cleanup';
+import { resolveRetryOutcome, shouldDiscardCreatedEvent } from './orphan-cleanup';
 import { Step1Config } from './steps/step-1-config';
 import { Step2Details } from './steps/step-2-details';
 import { Step3Photos } from './steps/step-3-photos';
@@ -78,6 +78,10 @@ export default function NewEventForm({
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const coverPreviewUrlRef = useRef<string | null>(null);
   coverPreviewUrlRef.current = coverPreviewUrl;
+  // Retains a reference to the goToEvent function created inside the submit
+  // closure so the retry handler can trigger navigation after a successful
+  // retryFailed() without needing to re-derive all the captured variables.
+  const goToEventRef = useRef<((count: number) => void) | null>(null);
   const [submitAttemptedStep2, setSubmitAttemptedStep2] = useState(false);
   const [createdShareCode, setCreatedShareCode] = useState<string | null>(null);
   const [createdEventName, setCreatedEventName] = useState<string | null>(null);
@@ -367,6 +371,7 @@ export default function NewEventForm({
         const goToEvent = (succeededCount: number) => {
           // Navigating to the event = we're keeping it; clear the discard latch.
           setPendingEventId(null);
+          goToEventRef.current = null;
           try {
             sessionStorage.removeItem(DRAFT_KEY);
             sessionStorage.removeItem(HAD_FILES_KEY);
@@ -394,6 +399,10 @@ export default function NewEventForm({
             router.push(target);
           }
         };
+        // Make goToEvent reachable from the retry handler (T-056): after a
+        // successful retryFailed() the submit closure is gone, but this ref
+        // still holds the function with all the right captured variables.
+        goToEventRef.current = goToEvent;
 
         if (files.length === 0) {
           goToEvent(0);
@@ -676,7 +685,20 @@ export default function NewEventForm({
           retryFailedButton: t('uploadRetryFailedButton' as keyof NewEventT),
         }}
         onCancel={() => void upload.cancel()}
-        onRetryFailed={() => void upload.retryFailed()}
+        onRetryFailed={async () => {
+          const retryResult = await upload.retryFailed();
+          if (!retryResult) return;
+          // Accumulate and decide — pure helper keeps this testable.
+          const { totalAttached, shouldNavigate } = resolveRetryOutcome(
+            attachedCount,
+            retryResult.attached.length,
+            retryResult.failed.length,
+          );
+          setAttachedCount(totalAttached);
+          if (shouldNavigate) {
+            goToEventRef.current?.(totalAttached);
+          }
+        }}
         onClose={() => {
           // The success path already navigated. This handler covers the
           // partial-failed / error / cancelled terminal stages.
