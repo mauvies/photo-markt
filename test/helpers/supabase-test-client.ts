@@ -65,9 +65,11 @@ export async function signInAs(email: string): Promise<SupabaseClient> {
  * sufficient for between-test isolation.
  */
 /**
- * Ensure the `photos` storage bucket exists. The migration set doesn't
- * create buckets (they're managed via Supabase Studio in prod), so tests
- * that exercise signed-URL helpers need this. Idempotent.
+ * Ensure the `photos` storage bucket exists. Since migration
+ * `20260702000000_create_photos_bucket.sql` the bucket is provisioned by the
+ * migration set in every environment (prod, staging, local/CI), so this is now
+ * a redundant safety net for tests that don't run a full `db reset`. Kept and
+ * idempotent so signed-URL helper tests never depend on setup ordering.
  */
 export async function ensurePhotosBucket(client?: SupabaseClient): Promise<void> {
   const sb = client ?? createServiceClient();
