@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 /**
- * Regression test for T-051: createSignedUploadUrls was using Promise.all over
- * all paths at once, which saturated the Supabase Storage API (100 concurrent
- * requests per chunk) and produced "The related resource does not exist" errors.
+ * T-051 capped createSignedUploadUrls concurrency at 10 (it previously used
+ * Promise.all over every path at once). NOTE: concurrency was NOT the cause of
+ * the "The related resource does not exist" errors — that was a missing
+ * `photos` storage bucket in production (a foreign-key violation, 23503),
+ * fixed by a migration. Capping concurrency is still worth keeping as a
+ * defensive measure against hammering the Storage API on large batches.
  *
  * We test the internal concurrency shape by replacing createSignedUploadUrl
  * with a spy that records the peak concurrent call count.
