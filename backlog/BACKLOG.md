@@ -11,8 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-052 | [Bug] Config del paso 1 del wizard (AI matching / BIB) se pierde al refrescar (repro confirmado sin error de subida) | — | todo |
-| 2 | P1 | T-056 | [Bug] Tras reintentar una foto fallida, el wizard deja al usuario atascado en el paso 4 (no navega al evento) | — | todo |
+| 1 | P1 | T-056 | [Bug] Tras reintentar una foto fallida, el wizard deja al usuario atascado en el paso 4 (no navega al evento) | — | todo |
 | 3 | P2 | T-057 | [Bug] El conteo de fotos en la tarjeta del evento (dashboard fotógrafo) crece durante el procesamiento (debería mostrar el total subido) | — | todo |
 | 4 | P2 | T-058 | [Bug] El estado de IA del evento dice "ready" mientras las fotos aún se indexan (debería decir "indexing") | — | todo |
 | 5 | P2 | T-059 | Al crear evento: modal "continuar borrador en progreso" o "empezar de cero" (gestión del draft) | T-052 | todo |
@@ -32,6 +31,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-052** · Bug: config del paso 1 del wizard (AI matching / BIB) se pierde al refrescar. `form.reset(values)` modificaba `options.defaultValues`, que TanStack Form sobreescribía con `EMPTY_DEFAULTS` en el siguiente render; reemplazado por `form.setFieldValue()` por campo con `dontUpdateMeta/dontValidate/dontRunListeners`; `readStoredState` extraída a `wizard-storage.ts` para testabilidad + 8 tests de regresión — PR #113
 
 - **T-055** · Foto de presentación / portada del evento (configurable al crear). Imagen **dedicada** (subida aparte de las fotos a la venta) → `events.cover_path`; subida owner-only validada al bucket `photos`, servida sin watermark vía signed URL; campo en el paso 2 del wizard (best-effort, no descarta el evento si falla — respeta T-054); los 6 builders + OG/JSON-LD de la página pública prefieren la portada con fallback a la primera foto; cron de limpieza excluye portadas (fail-safe) y el borrado de evento la elimina. OpenSpec `add-event-cover-image`; `/code-review high` aplicado — PR #112
 

@@ -1,7 +1,7 @@
 # T-052 · Bug: configuración del paso 1 del wizard (AI matching / BIB) se pierde al refrescar
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `fix/wizard-step1-state-persistence`
 - **OpenSpec change:** — (bug fix, implementar directo)
