@@ -17,6 +17,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | 8 | P2 | T-060 | Paginar la galería del detalle del evento (load more, ~50) en las 3 vistas — hoy firma/renderiza todas | — | todo |
 | 9 | P2 | T-065 | Unificar "Encontrar mis fotos": botones face matching + dorsal lado a lado (responsive mobile) | T-064 | todo |
 | 10 | P2 | T-066 | Modal de detalle de foto a dos paneles (imagen + panel de info/CTA de compra) | — | todo |
+| 11 | P2 | T-067 | Rediseñar el watermark: patrón en mosaico regular y limpio (Sharp) | — | todo |
+| 12 | P2 | T-068 | Difuminar caras detectadas en las previews con watermark (2ª capa anti-robo) | T-067 | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
@@ -27,6 +29,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 - **Tabs:** T-004 (arregla el salto) → T-013 (restila todos los tabs, incluidos los de eventos destacados).
 - **Carrito:** ✅ completado — ~~T-038~~ (PR #92, ítems navegables/lightbox) → ~~T-039~~ (PR #93, sin parpadeo del merge) → ~~T-040~~ (PR #94, excluye eventos eliminados de carrito y favoritos). No quedan tickets de este cluster.
 - **Páginas i18n/producción:** T-014 → T-015 → T-016 (hechas). Mismo patrón pendiente: **T-028 (`/about`) → T-029 (`/contact`)** — placeholders `staticPages.preparing` por completar; comparten `en.json`/`es.json`, ejecutar en serie con merge previo para evitar conflictos de diccionario. (Contacto: no duplicar el formulario que ya vive en `/support`.)
+- **Preview con watermark:** T-067 (rediseño del patrón) → T-068 (blur de caras). Ambos tocan la generación de la preview con watermark (Sharp); mergear T-067 antes de empezar T-068 para que el blur componga sobre el patrón nuevo sin conflictos.
 - **Independientes (sin cluster):** T-005, T-012, T-018, T-009, T-017, T-019, T-020. (T-018 reusa `pricing-section`/`lib/plans.ts`; T-019 es refactor de toda la raíz — ejecutar aislado, con el resto de la cola mergeada. T-020 es rename trivial.)
 
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
