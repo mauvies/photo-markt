@@ -61,4 +61,22 @@ describe('searchPhotosByBibInEvent (T-032)', () => {
     await seedEvent({ shareCode: 'BIBD', enabled: false });
     await expect(searchPhotosByBibInEvent('BIBD', '1432')).rejects.toThrow(/does not support/i);
   });
+
+  // Regression (T-062): public-only events have share_code = null and are
+  // opened by their SEO slug. The action used to resolve strictly by share
+  // code, so slug lookups threw "Event not found." It must now resolve by slug.
+  it('resolves a public event by slug when it has no share code', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const sb = createServiceClient();
+    const event = await createTestEvent(owner.id, { slug: 'bib-public-slug', is_public: true });
+    // Model a public-only event: no share code, opened by slug.
+    await sb.from('events').update({ share_code: null }).eq('id', event.id);
+    await updateEventBibDetectionState(sb, event.id, { enabled: true });
+
+    const match = await createTestPhoto(event.id);
+    await persistPhotoBibs(sb, match.id, [{ bibText: '1432', confidence: 99 }]);
+
+    const res = await searchPhotosByBibInEvent('bib-public-slug', '1432');
+    expect(res.photoIds).toEqual([match.id]);
+  });
 });

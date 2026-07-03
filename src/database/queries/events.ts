@@ -263,6 +263,49 @@ export async function getEventBySlug(
   return data as Event;
 }
 
+const EVENT_UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Resolve a public event page's route parameter to its event row.
+ *
+ * The `/events/[shareCode]` route parameter is a misnomer: it can be a UUID,
+ * an SEO slug, OR a share code, so the resolution order mirrors the page
+ * (`getCachedEventData` in `page.tsx`):
+ *   1. UUID  → public event by primary key
+ *   2. slug  → public event by SEO slug
+ *   3. share code → private/collaborative event
+ *
+ * Public-only events have `share_code = null` and are opened by slug/UUID, so
+ * looking them up by share code alone (the old search-action behaviour) never
+ * found them. Centralized here so search actions and the page stay in sync.
+ */
+export async function resolveEventByParam(
+  supabase: SupabaseServerClient,
+  param: string,
+): Promise<Event | null> {
+  if (!param) return null;
+
+  // 1. UUID → public event by primary key
+  if (EVENT_UUID_REGEX.test(param)) {
+    const { data, error } = await supabase
+      .from('events')
+      .select('*')
+      .eq('id', param)
+      .eq('is_public', true)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as Event;
+  }
+
+  // 2. slug (public events only)
+  const bySlug = await getEventBySlug(supabase, param);
+  if (bySlug) return bySlug;
+
+  // 3. share code (private / collaborative events)
+  return getEventByShareCode(supabase, param);
+}
+
 /**
  * Search public events with filters
  */
