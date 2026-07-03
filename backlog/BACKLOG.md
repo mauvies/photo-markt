@@ -11,7 +11,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-062 | [Bug] Búsqueda por dorsal y facial falla con "Event not found" en eventos públicos abiertos por slug (share_code null) | — | todo |
 | 1 | P1 | T-061 | [Bug] El logo lleva al fotógrafo al dashboard de talento (que revienta) en vez de al overview de fotógrafo | — | todo |
 | 4 | P2 | T-058 | [Bug] El estado de IA del evento dice "ready" mientras las fotos aún se indexan (debería decir "indexing") | — | todo |
 | 5 | P2 | T-059 | Al crear evento: modal "continuar borrador en progreso" o "empezar de cero" (gestión del draft) | T-052 | todo |
@@ -31,6 +30,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-062** · Bug: la búsqueda por dorsal y facial fallaba con "Event not found" en eventos públicos abiertos por slug. El param de ruta `shareCode` puede ser UUID/slug/share_code, pero `searchPhotosByBibInEvent` y `searchFacesInEvent` resolvían solo por share code (`getEventByShareCode`) → los eventos públicos-solo (`share_code = null`, URL por slug) nunca se encontraban. Añadido `resolveEventByParam` (UUID → slug → share_code, mismo orden que la página) en `queries/events.ts`, usado por ambas acciones; visibilidad, gating de minors/AI/bib y rate-limits intactos. Tests de regresión en ambas acciones (evento público solo-slug) — PR #116
 
 - **T-057** · Bug: el conteo de fotos en la tarjeta del evento del dashboard del fotógrafo crecía durante el procesamiento de Inngest. `getPhotosForEvents` filtraba `approved`-only; añadida `getPhotoCountsForEvents` (`pending+approved`, excluye `rejected`) para el contador de la tarjeta; `getPhotosForEvents` sigue siendo `approved`-only para la imagen de portada. Ambas queries en paralelo en el listado de eventos y en el overview del dashboard — PR #115
 
