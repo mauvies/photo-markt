@@ -583,6 +583,9 @@ export async function enableBibDetectionForEvent(eventId: string): Promise<{ suc
 
   revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
   revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
+  // Bust the public / talent event caches (keyed by UUID, slug, or share_code)
+  // so the bib search bar appears immediately instead of after the 55-min TTL.
+  await revalidateEventPhotoCacheTags(eventId);
   return { success: true };
 }
 
@@ -602,6 +605,9 @@ export async function disableBibDetectionForEvent(eventId: string): Promise<{ su
 
   revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
   revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
+  // Bust the public / talent event caches so the bib search bar disappears
+  // immediately instead of lingering until the 55-min TTL.
+  await revalidateEventPhotoCacheTags(eventId);
   return { success: true };
 }
 
