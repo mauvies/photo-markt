@@ -10,9 +10,13 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { StepNumber } from '@/app/[lang]/dashboard/photographer/events/new/components/wizard-steps';
+import type { FormValues } from '@/app/[lang]/dashboard/photographer/events/new/wizard.schema';
 import {
   DRAFT_KEY,
+  isResumableDraft,
   readStoredState,
+  type StoredWizardState,
 } from '@/app/[lang]/dashboard/photographer/events/new/wizard-storage';
 
 // Minimal valid payload — only fields the tests care about need to be present;
@@ -111,5 +115,87 @@ describe('readStoredState', () => {
     sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
     const result = readStoredState();
     expect(result!.reachedStep).toBe(3);
+  });
+});
+
+/**
+ * T-059: only a genuine in-progress draft should trigger the "continue or
+ * start fresh" prompt — never the empty-defaults draft the persist effect
+ * writes on a fresh visit.
+ */
+const PRISTINE_VALUES: FormValues = {
+  name: '',
+  activity: 'OTHER',
+  date: '',
+  country: '',
+  state: '',
+  city: '',
+  event_type: 'solo',
+  is_public: true,
+  watermark_enabled: true,
+  is_collaborative: false,
+  allow_guest_upload: true,
+  require_upload_approval: false,
+  price_per_photo: null,
+  organizer_fee_per_photo: null,
+  ai_matching_enabled: false,
+  contains_minors: false,
+  bib_detection_enabled: false,
+};
+
+function draft(
+  valueOverrides: Partial<FormValues> = {},
+  reachedStep: StepNumber = 1,
+): StoredWizardState {
+  return {
+    values: { ...PRISTINE_VALUES, ...valueOverrides },
+    reachedStep,
+    returnToStep: null,
+  };
+}
+
+describe('isResumableDraft', () => {
+  it('is false with no stored draft and no picked files (fresh visitor)', () => {
+    expect(isResumableDraft(null, false)).toBe(false);
+  });
+
+  it('is false for a pristine empty-defaults draft on step 1 (no false prompt)', () => {
+    expect(isResumableDraft(draft(), false)).toBe(false);
+  });
+
+  it('is true when the user had picked photos, even with empty values', () => {
+    expect(isResumableDraft(null, true)).toBe(true);
+    expect(isResumableDraft(draft(), true)).toBe(true);
+  });
+
+  it('is true once the user advanced past step 1', () => {
+    expect(isResumableDraft(draft({}, 2), false)).toBe(true);
+    expect(isResumableDraft(draft({}, 4), false)).toBe(true);
+  });
+
+  it('is true when a text field was filled', () => {
+    expect(isResumableDraft(draft({ name: 'Marathon' }), false)).toBe(true);
+    expect(isResumableDraft(draft({ date: '2026-08-01' }), false)).toBe(true);
+    expect(isResumableDraft(draft({ city: 'Madrid' }), false)).toBe(true);
+    expect(isResumableDraft(draft({ activity: 'SURF' }), false)).toBe(true);
+  });
+
+  it('is true when a step-1 toggle diverges from its default', () => {
+    expect(isResumableDraft(draft({ ai_matching_enabled: true }), false)).toBe(true);
+    expect(isResumableDraft(draft({ bib_detection_enabled: true }), false)).toBe(true);
+    expect(isResumableDraft(draft({ contains_minors: true }), false)).toBe(true);
+    expect(isResumableDraft(draft({ is_public: false }), false)).toBe(true);
+    expect(isResumableDraft(draft({ watermark_enabled: false }), false)).toBe(true);
+  });
+
+  it('is true when a different event type or price was chosen', () => {
+    expect(isResumableDraft(draft({ event_type: 'collaborative' }), false)).toBe(true);
+    expect(isResumableDraft(draft({ event_type: 'organizer' }), false)).toBe(true);
+    expect(isResumableDraft(draft({ price_per_photo: 10 }), false)).toBe(true);
+    expect(isResumableDraft(draft({ organizer_fee_per_photo: 2 }), false)).toBe(true);
+  });
+
+  it('ignores whitespace-only text as pristine', () => {
+    expect(isResumableDraft(draft({ name: '   ' }), false)).toBe(false);
   });
 });
