@@ -11,7 +11,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 7 | P2 | T-059 | Al crear evento: modal "continuar borrador en progreso" o "empezar de cero" (gestión del draft) | T-052 | todo |
 | 8 | P2 | T-060 | Paginar la galería del detalle del evento (load more, ~50) en las 3 vistas — hoy firma/renderiza todas | — | todo |
 | 9 | P2 | T-065 | Unificar "Encontrar mis fotos": botones face matching + dorsal lado a lado (responsive mobile) | T-064 | todo |
 | 10 | P2 | T-066 | Modal de detalle de foto a dos paneles (imagen + panel de info/CTA de compra) | — | todo |
@@ -33,6 +32,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-059** · UX: al volver al wizard de crear evento, restauraba el borrador en silencio (con banners de "fotos perdidas") y no había forma clara de empezar de cero. Ahora, al detectar un borrador en progreso real en el mount, un modal bloqueante ofrece "Continuar borrador" o "Empezar un evento nuevo". Helper puro `isResumableDraft` (testeado): un borrador es restaurable solo si el usuario eligió fotos, avanzó del paso 1, o algún campo diverge de los defaults — así el borrador de defaults vacíos que la persistencia escribe en visita fresca **no** dispara el modal. La hidratación difiere la restauración mientras el modal decide (persistencia pausada, no pisa el draft); Continuar restaura como antes, Empezar de cero limpia `DRAFT_KEY`+`HAD_FILES_KEY`, resetea a paso 1 limpio y nunca muestra el banner de fotos perdidas. Nuevo `DraftResumeDialog` + strings en/es. Tests de regresión de `isResumableDraft` — PR #122
 
 - **T-058** · Bug: la card de estado de IA del evento mostraba "ready" mientras las fotos aún se indexaban. La página lee `status` de la columna cruda `ai_matching_status`, pero `pending`/`indexed` de un conteo real por foto (`getEventAiIndexingProgress`) — lecturas no atómicas que pueden discrepar (`status='ready'` con `pending>0`). Peor: `shouldPoll` no trataba ese caso como "procesando" → la card dejaba de hacer poll y quedaba atascada en "ready" para siempre. Añadido helper puro `displayedAiStatus`/`shouldPollAiStatus` (`lib/ai-indexing-status.ts`): nunca confía en `'ready'` mientras `pending>0`, muestra `'indexing'` y sigue el poll hasta que drene a 0. Aplicado al label, badge, gating del botón reindex y al tracker de la transición del flash de éxito (compara estado *mostrado*, no crudo). Test de regresión del helper puro — PR #121
 

@@ -1,11 +1,11 @@
 # T-059 · Al crear evento: ofrecer "continuar borrador en progreso" o "empezar de cero" (gestión del draft)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/event-wizard-resume-or-restart`
 - **OpenSpec change:** — (UX del wizard; implementar directo, pero validar el diseño del modal)
-- **PR:** —
+- **PR:** #122
 
 ## Requerimiento
 Cuando un usuario deja a medias la creación de un evento y luego vuelve (misma pestaña) e intenta crear un evento,
