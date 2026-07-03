@@ -16,6 +16,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import type { ComponentProps } from 'react';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { dashboardHomeForRole } from '@/lib/auth/dashboard-home';
 import { NavMains } from './nav-main';
 import { NavSecondary } from './nav-secondary';
 import { Sidebar, SidebarContent, SidebarHeader } from './ui/sidebar';
@@ -84,7 +85,10 @@ export function AppSidebar({
     <Sidebar collapsible="icon" className="h-svh" {...props}>
       <SidebarHeader>
         <div className="relative flex items-center py-1">
-          <Link href={lp('/')} className="flex items-center gap-1 px-2">
+          <Link
+            href={lp(dashboardHomeForRole(activeRole))}
+            className="flex items-center gap-1 px-2"
+          >
             <Image
               src="/logo.svg"
               alt="Photo Markt"

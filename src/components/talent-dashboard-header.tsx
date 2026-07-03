@@ -10,6 +10,7 @@ import { CartLinkButton } from '@/components/cart-link-button';
 import { DashboardUserMenu } from '@/components/dashboard-user-menu';
 import { useCartItemCount } from '@/hooks/use-cart-item-count';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { dashboardHomeForRole } from '@/lib/auth/dashboard-home';
 import type { RoleSlug } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 
@@ -72,7 +73,10 @@ export function TalentDashboardHeader({
       <header className="sticky top-0 z-50 hidden w-full border-b bg-background/80 backdrop-blur supports-backdrop-filter:bg-background/80 md:block">
         <div className="mx-auto flex h-(--header-height) max-w-screen-2xl items-center justify-between px-4 md:px-6">
           {/* Left: Logo */}
-          <Link href={lp('/')} className="flex shrink-0 items-center gap-2">
+          <Link
+            href={lp(dashboardHomeForRole(activeRole))}
+            className="flex shrink-0 items-center gap-2"
+          >
             <Image
               src="/logo.svg"
               alt="Photo Markt"

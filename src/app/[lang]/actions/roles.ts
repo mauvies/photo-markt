@@ -219,6 +219,28 @@ export async function userHasRole(slug: RoleSlug): Promise<boolean> {
 }
 
 /**
+ * Read both the active role preference and the set of *held* roles in a single
+ * auth round-trip. Use this for routing decisions that need to reconcile the
+ * two (e.g. the `/dashboard` disambiguator) instead of calling
+ * `getActiveRoleOrNull` + `userHasRole` separately, which re-authenticates and
+ * re-queries `user_roles` per call. Pure read.
+ */
+export async function getRoleContext(): Promise<{
+  activeRole: RoleSlug | null;
+  heldRoles: RoleSlug[];
+}> {
+  const { supabase, user } = await getAuthenticatedClient();
+  const [activeRole, roles] = await Promise.all([
+    getProfileActiveRole(supabase, user.id),
+    getUserRoles(supabase, user.id),
+  ]);
+  return {
+    activeRole: activeRole ? roleEnumToSlug(activeRole) : null,
+    heldRoles: roles.map(roleEnumToSlug),
+  };
+}
+
+/**
  * Return the active role for the current user, falling back to photographer if
  * none is set.
  *

@@ -46,16 +46,12 @@ export default async function OnboardingRolePage({
     return redirectToLogin();
   }
 
-  const { getProfileActiveRole, getUserRole, getSuggestedUsername } = await import(
-    '@/database/queries'
-  );
+  const { getUserRole, getSuggestedUsername } = await import('@/database/queries');
 
-  const activeRole = await getProfileActiveRole(supabase, user.id);
-  if (activeRole) {
-    const dashboardPath = await getDashboardPath();
-    return localizedRedirect(lang, dashboardPath);
-  }
-
+  // Gate on a *held* role (capability), not `active_role`. A user whose
+  // `active_role` is set but who holds no role (e.g. a partial onboarding
+  // write) must stay here to (re)complete onboarding — redirecting them to a
+  // dashboard would bounce back through `/dashboard` forever (T-061 loop).
   const existingRole = await getUserRole(supabase, user.id);
 
   if (existingRole) {

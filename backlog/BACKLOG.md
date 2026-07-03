@@ -11,7 +11,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-061 | [Bug] El logo lleva al fotógrafo al dashboard de talento (que revienta) en vez de al overview de fotógrafo | — | todo |
 | 4 | P2 | T-058 | [Bug] El estado de IA del evento dice "ready" mientras las fotos aún se indexan (debería decir "indexing") | — | todo |
 | 5 | P2 | T-059 | Al crear evento: modal "continuar borrador en progreso" o "empezar de cero" (gestión del draft) | T-052 | todo |
 | 6 | P2 | T-060 | Paginar la galería del detalle del evento (load more, ~50) en las 3 vistas — hoy firma/renderiza todas | — | todo |
@@ -30,6 +29,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-061** · Bug: el logo del dashboard llevaba al home público, y el middleware redirigía por `active_role`; como los layouts gatean por **capacidad** (no por `active_role`), un fotógrafo con `active_role=talent` desincronizado acababa en el dashboard de talento, que además podía entrar en bucle de redirección (`ERR_TOO_MANY_REDIRECTS`). El logo ahora apunta al home del rol actual vía `dashboardHomeForRole(activeRole)` (independiente de `active_role`); `/dashboard` desambigua por roles **realmente poseídos** (`resolveDashboardHome`, con fallback a un rol poseído para romper el bucle); onboarding gatea por rol poseído (no por `active_role`) para no rebotar a usuarios con onboarding parcial; `getRoleContext` lee rol activo + poseídos en un solo auth. Helper puro + tests de href del logo (fallan antes/pasan después) + casos de desincronía de `getRoleContext`. `/code-review high` aplicado (bucle de onboarding + round-trips redundantes) — PR #117
 
 - **T-062** · Bug: la búsqueda por dorsal y facial fallaba con "Event not found" en eventos públicos abiertos por slug. El param de ruta `shareCode` puede ser UUID/slug/share_code, pero `searchPhotosByBibInEvent` y `searchFacesInEvent` resolvían solo por share code (`getEventByShareCode`) → los eventos públicos-solo (`share_code = null`, URL por slug) nunca se encontraban. Añadido `resolveEventByParam` (UUID → slug → share_code, mismo orden que la página) en `queries/events.ts`, usado por ambas acciones; visibilidad, gating de minors/AI/bib y rate-limits intactos. Tests de regresión en ambas acciones (evento público solo-slug) — PR #116
 
