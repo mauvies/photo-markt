@@ -1,11 +1,11 @@
 # T-063 · Bug: los previews de fotos no se ven en la página de edición del evento ("No preview")
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/event-edit-photo-previews`
 - **OpenSpec change:** — (bug fix; implementar directo)
-- **PR:** —
+- **PR:** #119
 
 ## Requerimiento
 En `/dashboard/photographer/events/[id]/edit`, la grilla de fotos existentes **no muestra los previews**:

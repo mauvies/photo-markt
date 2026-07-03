@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 5 | P2 | T-063 | [Bug] Los previews de fotos no se ven en la edición del evento ("No preview") | — | todo |
+| 4 | P1 | T-069 | [Bug] La búsqueda por dorsal en el dashboard de talento no filtra el grid (+ diagnóstico + empty-state) | — | todo |
 | 6 | P2 | T-058 | [Bug] El estado de IA del evento dice "ready" mientras las fotos aún se indexan (debería decir "indexing") | — | todo |
 | 7 | P2 | T-059 | Al crear evento: modal "continuar borrador en progreso" o "empezar de cero" (gestión del draft) | T-052 | todo |
 | 8 | P2 | T-060 | Paginar la galería del detalle del evento (load more, ~50) en las 3 vistas — hoy firma/renderiza todas | — | todo |
@@ -35,6 +35,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-063** · Bug: la grilla de fotos de la edición del evento mostraba "No preview" en todas las celdas. La página firmaba `original_url` con el cliente **user-scoped**, pero el bucket `photos` es privado sin RLS de storage para `authenticated` → firma null. Extraídos `getEditEventPhotos` (fetch+firma) y el mapper puro `toDisplayPhotos` a `edit/photo-data.ts`; la página ahora firma con `supabaseAdmin` (ownership ya validado por `getEvent` user-scoped, mismo patrón que las otras vistas). "No preview" internacionalizado (`newEvent.noPreview`, en+es). Test unit del fallback del mapper + integración que prueba firma admin→URL vs anon→null (la rotura pre-fix) — PR #119
 
 - **T-064** · Bug: el buscador por dorsal no aparecía ni en la vista de talento ni en la pública pese a estar habilitado. Dos causas: (1) `dashboard/talent/events/[id]/page.tsx` renderizaba `EventGalleryWithFaceSearch` sin pasar `bibDetectionEnabled`/`bibSearchLabels` (default false) → ahora los pasa como la pública; (2) `enable/disableBibDetectionForEvent` solo revalidaban la ruta del dashboard del fotógrafo, no los tags de caché `event-${id|slug|share_code}` (TTL 55 min) de las páginas pública/talento → ahora llaman `revalidateEventPhotoCacheTags` para que el bar aparezca/desaparezca al instante. Tests de regresión de revalidación (fallan antes/pasan después) + nota de CLAUDE.md actualizada — PR #118
 
