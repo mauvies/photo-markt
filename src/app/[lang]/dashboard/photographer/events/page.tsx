@@ -7,6 +7,7 @@ import {
   createSignedUrl,
   getEventsCoverPaths,
   getPendingInvitationsForPhotographer,
+  getPhotoCountsForEvents,
   getPhotosForEvents,
   getUserEvents,
 } from '@/database/queries';
@@ -51,8 +52,13 @@ async function getCachedEventsData(userId: string): Promise<{
   };
   if (eventIds.length === 0) return empty;
 
-  // Photos and cover paths are independent reads — fetch in parallel.
-  const [photoRows, coverOverride] = await Promise.all([
+  // Fetch total counts (pending+approved), cover candidates (approved-only),
+  // and explicit cover overrides in parallel. The count uses all non-rejected
+  // statuses so the card number is stable from upload and doesn't grow as the
+  // Inngest worker promotes photos; cover selection stays approved-only so we
+  // always serve a displayable image.
+  const [totalCounts, photoRows, coverOverride] = await Promise.all([
+    getPhotoCountsForEvents(supabaseAdmin, eventIds),
     getPhotosForEvents(supabaseAdmin, eventIds),
     getEventsCoverPaths(supabaseAdmin, eventIds),
   ]);
@@ -67,7 +73,6 @@ async function getCachedEventsData(userId: string): Promise<{
       firstTakenAt: null,
       lastTakenAt: null,
     };
-    current.count += 1;
     if (!current.coverPath && row.original_url) {
       current.coverPath = row.original_url;
     }
@@ -77,6 +82,18 @@ async function getCachedEventsData(userId: string): Promise<{
     }
     stats.set(row.event_id, current);
   });
+
+  // Apply total counts (stable from upload).
+  for (const [eventId, total] of totalCounts) {
+    const current = stats.get(eventId) ?? {
+      count: 0,
+      coverPath: null,
+      firstTakenAt: null,
+      lastTakenAt: null,
+    };
+    current.count = total;
+    stats.set(eventId, current);
+  }
 
   events.forEach((event) => {
     if (!stats.has(event.id)) {

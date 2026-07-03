@@ -201,6 +201,42 @@ export async function getPhotosForEvents(
 }
 
 /**
+ * Return the total uploaded photo count per event for the photographer's
+ * own dashboard cards. Counts `pending + approved` photos (= everything the
+ * photographer submitted) so the number is stable from the moment of upload
+ * and doesn't grow as the Inngest worker promotes photos from `pending` to
+ * `approved`. Rejected photos are excluded — they failed validation and are
+ * not real content the photographer owns.
+ *
+ * Public-facing surfaces should continue to show approved-only counts; this
+ * function is intentionally scoped to owner-only dashboard contexts.
+ */
+export async function getPhotoCountsForEvents(
+  supabase: SupabaseServerClient,
+  eventIds: string[],
+): Promise<Map<string, number>> {
+  if (eventIds.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from('photos')
+    .select('event_id')
+    .in('event_id', eventIds)
+    .in('upload_status', ['pending', 'approved'])
+    .throwOnError();
+
+  if (error) {
+    throw new Error(`Failed to get photo counts for events: ${getErrorMessage(error)}`);
+  }
+
+  const counts = new Map<string, number>();
+  for (const row of data ?? []) {
+    if (!row.event_id) continue;
+    counts.set(row.event_id, (counts.get(row.event_id) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
  * Get photos for a single event (owner-scoped). Defaults to approved only;
  * pass `status: 'pending'` to fetch the moderation queue.
  *
