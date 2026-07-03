@@ -1,11 +1,11 @@
 # T-069 · Diagnosticar y arreglar la búsqueda por dorsal en el dashboard de talento
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/bib-search-talent-dashboard`  (tipo = fix)
 - **OpenSpec change:** —  (probablemente directo; se crea al ejecutar si el arreglo + empty-state + diagnóstico tocan >1 archivo de forma no trivial)
-- **PR:** —
+- **PR:** #120
 
 ## Requerimiento
 El reconocimiento de dorsal está implementado en todas las capas (UI, server actions, queries, esquema DB, OCR AWS Rekognition `DetectText`, workers de Inngest), pero introducir un dorsal claramente visible **no devuelve match**. Una auditoría de estado (investigación previa) identificó **un bug de código confirmado** + **dos posibles condiciones de datos**. Este ticket corre primero queries de diagnóstico para determinar cuál aplica, luego aplica el arreglo confirmado y cualquier otro que revele el diagnóstico.
