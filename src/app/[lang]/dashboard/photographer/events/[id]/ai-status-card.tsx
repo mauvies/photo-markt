@@ -17,6 +17,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { AiMatchingStatus } from '@/database/queries/rekognition';
+import { displayedAiStatus, shouldPollAiStatus } from '@/lib/ai-indexing-status';
 import { getEventIndexingProgress, reindexEvent } from './actions';
 
 /**
@@ -78,13 +79,6 @@ interface IndexingState {
   lastIndexedAt: string | null;
 }
 
-/** True while the worker is making progress and the UI should keep polling. */
-function shouldPoll(state: IndexingState): boolean {
-  if (state.status === 'indexing') return true;
-  if (state.status === 'idle' && state.pending > 0) return true;
-  return false;
-}
-
 export function AiStatusCard({
   eventId,
   status,
@@ -114,7 +108,10 @@ export function AiStatusCard({
 
   // Refs the polling effect reads without re-subscribing on every tick.
   const consecutiveErrors = useRef(0);
-  const previousStatus = useRef<AiMatchingStatus>(status);
+  // Tracks the *displayed* status (not the raw column) so the success flash
+  // fires on the transition the user actually sees — including when the raw
+  // status was already (incorrectly) 'ready' while photos were still pending.
+  const previousDisplayedStatus = useRef<AiMatchingStatus>(displayedAiStatus({ status, pending }));
 
   useEffect(() => {
     // Re-seed state whenever the parent re-renders this card with fresh
@@ -122,14 +119,14 @@ export function AiStatusCard({
     // between events). Without this the counters would carry stale values
     // from a different event.
     setState({ status, indexed, totalApplicable, failed, pending, lastIndexedAt });
-    previousStatus.current = status;
+    previousDisplayedStatus.current = displayedAiStatus({ status, pending });
     consecutiveErrors.current = 0;
     setHasPollError(false);
     setShowSuccessFlash(false);
   }, [status, indexed, totalApplicable, failed, pending, lastIndexedAt]);
 
   useEffect(() => {
-    if (!shouldPoll(state)) return;
+    if (!shouldPollAiStatus(state)) return;
 
     let cancelled = false;
     const tick = async () => {
@@ -141,9 +138,13 @@ export function AiStatusCard({
         consecutiveErrors.current = 0;
         setHasPollError(false);
 
-        const previous = previousStatus.current;
-        previousStatus.current = next.status;
-        if (previous === 'indexing' && next.status === 'ready') {
+        const previous = previousDisplayedStatus.current;
+        const nextDisplayed = displayedAiStatus({
+          status: next.status,
+          pending: next.pendingCount,
+        });
+        previousDisplayedStatus.current = nextDisplayed;
+        if (previous === 'indexing' && nextDisplayed === 'ready') {
           // Flash a success banner; auto-dismiss after a few seconds.
           setShowSuccessFlash(true);
         }
@@ -185,16 +186,20 @@ export function AiStatusCard({
     return () => window.clearTimeout(timeoutId);
   }, [showSuccessFlash]);
 
+  // Corrects for the raw `status` column reporting 'ready' before every
+  // applicable photo has actually reached a terminal state (T-058).
+  const displayed = displayedAiStatus(state);
+
   const statusLabel =
-    state.status === 'idle'
+    displayed === 'idle'
       ? labels.statusIdle
-      : state.status === 'indexing'
+      : displayed === 'indexing'
         ? labels.statusIndexing
-        : state.status === 'ready'
+        : displayed === 'ready'
           ? labels.statusReady
           : labels.statusFailed;
 
-  const reindexEnabled = state.status === 'ready' || state.status === 'failed';
+  const reindexEnabled = displayed === 'ready' || displayed === 'failed';
 
   const triggerReindex = () => {
     setDialogOpen(false);
@@ -202,7 +207,7 @@ export function AiStatusCard({
       try {
         await reindexEvent(eventId);
         // Reset the previous-status ref so the next ready transition flashes.
-        previousStatus.current = 'indexing';
+        previousDisplayedStatus.current = 'indexing';
       } catch (err) {
         toast.error(err instanceof Error ? err.message : labels.reindexFailed);
       }
@@ -214,7 +219,7 @@ export function AiStatusCard({
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <h2 className="text-sm font-semibold">{labels.title}</h2>
-          <Badge variant={state.status === 'failed' ? 'destructive' : 'secondary'}>
+          <Badge variant={displayed === 'failed' ? 'destructive' : 'secondary'}>
             {statusLabel}
           </Badge>
           {isFetching ? (
