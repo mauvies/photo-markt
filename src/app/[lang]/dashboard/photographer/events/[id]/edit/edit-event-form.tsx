@@ -335,6 +335,7 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
             newFiles={newFiles}
             onDeletePhoto={handleDeletePhoto}
             onRemoveFile={removeFile}
+            noPreviewLabel={t('noPreview' as keyof Dictionary['newEvent'])}
           />
         </div>
 
