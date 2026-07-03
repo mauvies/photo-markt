@@ -1238,6 +1238,8 @@
     "searchButton": "Search",
     "searchClear": "Clear",
     "searchEmpty": "No photos found with that bib number.",
+    "searchEmptyNoMatch": "No photos found with that bib number.",
+    "searchEmptyPending": "Bib numbers are still being detected for this event, or none were found yet. Check back soon.",
     "searchFailed": "Bib search failed. Please try again."
   },
   "rekognition": {

@@ -212,3 +212,24 @@ export async function getPhotoIdsByBibInEvent(
   }
   return [...new Set((data ?? []).map((row) => row.photo_id as string))];
 }
+
+/**
+ * Whether the event has ANY detected bib numbers yet. Lets the UI tell apart
+ * "detection hasn't produced results (still processing / found nothing)" from
+ * "this specific bib didn't match" in the empty state (T-069). Cheap existence
+ * probe — selects a single row.
+ */
+export async function eventHasAnyBibNumbers(
+  supabase: SupabaseServerClient,
+  eventId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('photo_bib_numbers')
+    .select('photo_id, photos!inner(event_id)')
+    .eq('photos.event_id', eventId)
+    .limit(1);
+  if (error) {
+    throw new Error(`Failed to check event bib numbers: ${getErrorMessage(error)}`);
+  }
+  return (data ?? []).length > 0;
+}

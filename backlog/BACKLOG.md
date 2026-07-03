@@ -11,7 +11,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 4 | P1 | T-069 | [Bug] La búsqueda por dorsal en el dashboard de talento no filtra el grid (+ diagnóstico + empty-state) | — | todo |
 | 6 | P2 | T-058 | [Bug] El estado de IA del evento dice "ready" mientras las fotos aún se indexan (debería decir "indexing") | — | todo |
 | 7 | P2 | T-059 | Al crear evento: modal "continuar borrador en progreso" o "empezar de cero" (gestión del draft) | T-052 | todo |
 | 8 | P2 | T-060 | Paginar la galería del detalle del evento (load more, ~50) en las 3 vistas — hoy firma/renderiza todas | — | todo |
@@ -35,6 +34,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-069** · Bug: el grid del dashboard de talento no filtraba en búsqueda por dorsal (gap dejado por T-064). `event-photo-viewer.tsx` solo consumía `useFaceSearch` y su `visiblePhotos` ignoraba `matchedPhotoIds` de dorsal. Extraído helper compartido `filterEventPhotos` (compone `'mine'` + dorsal), usado por el viewer de talento y el público (refactor sin cambio de comportamiento). Empty-state consciente del procesamiento: `eventHasAnyBibNumbers` distingue "detección aún procesando/sin datos" de "sin match" (`bibSearchEmptyKind`) + strings en/es. **Diagnóstico (prod, evento b5b4a5ee "Marathon Madrid 2026"):** `bib_detection_enabled` true pero status 'idle', 0 bib rows, todas las fotos `bib_detection_status` NULL → **Condición A variante** (la detección nunca corrió; operacional, no bug de wiring del código — create+edit sí disparan el backfill). El evento necesita re-disparar detección (acción de datos, aparte). Tests unit (filter + empty-kind) + integración (`eventHasAnyBibNumbers`) — PR #120
 
 - **T-063** · Bug: la grilla de fotos de la edición del evento mostraba "No preview" en todas las celdas. La página firmaba `original_url` con el cliente **user-scoped**, pero el bucket `photos` es privado sin RLS de storage para `authenticated` → firma null. Extraídos `getEditEventPhotos` (fetch+firma) y el mapper puro `toDisplayPhotos` a `edit/photo-data.ts`; la página ahora firma con `supabaseAdmin` (ownership ya validado por `getEvent` user-scoped, mismo patrón que las otras vistas). "No preview" internacionalizado (`newEvent.noPreview`, en+es). Test unit del fallback del mapper + integración que prueba firma admin→URL vs anon→null (la rotura pre-fix) — PR #119
 
