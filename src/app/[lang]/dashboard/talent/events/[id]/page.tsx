@@ -378,6 +378,16 @@ export default async function ExploreEventDetailPage({
             aiState={aiBannerState}
             bannerLabels={dict.aiSearch.banner}
             modalLabels={dict.aiSearch.modal}
+            bibDetectionEnabled={Boolean(
+              (event as unknown as Record<string, unknown>).bib_detection_enabled,
+            )}
+            bibSearchLabels={{
+              title: dict.bibDetection.searchTitle,
+              placeholder: dict.bibDetection.searchPlaceholder,
+              button: dict.bibDetection.searchButton,
+              clear: dict.bibDetection.searchClear,
+              failed: dict.bibDetection.searchFailed,
+            }}
             fullGallery={
               <TranslationsProvider translations={dict.eventPhotoViewer}>
                 <EventPhotoViewer

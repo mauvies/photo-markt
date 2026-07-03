@@ -40,6 +40,7 @@ vi.mock('@/lib/inngest/client', () => ({
   inngest: { send: (...a: unknown[]) => inngestSend(...a) },
 }));
 
+import { revalidateTag } from 'next/cache';
 import {
   disableBibDetectionForEvent,
   enableBibDetectionForEvent,
@@ -57,6 +58,7 @@ describe('bib-detection opt-in actions (T-032)', () => {
     await resetDatabase();
     mockSession.userId = null;
     inngestSend.mockReset();
+    vi.mocked(revalidateTag).mockClear();
   });
 
   it('owner enables: flips the flag and enqueues the backfill event', async () => {
@@ -85,6 +87,37 @@ describe('bib-detection opt-in actions (T-032)', () => {
     const state = await getEventBibDetectionState(createServiceClient(), event.id);
     expect(state?.enabled).toBe(false);
     expect(inngestSend).not.toHaveBeenCalled();
+  });
+
+  // Regression (T-064): enabling/disabling must bust the public + talent event
+  // caches (keyed by UUID, slug, or share_code) so the bib search bar appears /
+  // disappears immediately instead of after the 55-min cache TTL.
+  it('owner enables: revalidates the event cache tags (uuid + slug + share_code)', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    mockSession.userId = owner.id;
+
+    await enableBibDetectionForEvent(event.id);
+
+    const tags = vi.mocked(revalidateTag).mock.calls.map((c) => c[0]);
+    expect(tags).toContain(`event-${event.id}`);
+    expect(tags).toContain(`event-${event.slug}`);
+    expect(tags).toContain(`event-${event.share_code}`);
+  });
+
+  it('owner disables: revalidates the event cache tags (uuid + slug + share_code)', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    mockSession.userId = owner.id;
+    await enableBibDetectionForEvent(event.id);
+    vi.mocked(revalidateTag).mockClear();
+
+    await disableBibDetectionForEvent(event.id);
+
+    const tags = vi.mocked(revalidateTag).mock.calls.map((c) => c[0]);
+    expect(tags).toContain(`event-${event.id}`);
+    expect(tags).toContain(`event-${event.slug}`);
+    expect(tags).toContain(`event-${event.share_code}`);
   });
 
   it('rejects a non-owner', async () => {

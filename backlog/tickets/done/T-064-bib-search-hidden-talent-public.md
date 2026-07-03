@@ -1,11 +1,11 @@
 # T-064 · Bug: la búsqueda por dorsal no aparece en la vista de talento ni en la pública, aunque el evento la tiene habilitada
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/bib-search-visibility`
 - **OpenSpec change:** — (bug fix; implementar directo)
-- **PR:** —
+- **PR:** #118
 
 ## Requerimiento
 Para un evento con **reconocimiento por dorsal habilitado** por el fotógrafo, al visitar el evento desde
