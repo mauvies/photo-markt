@@ -209,6 +209,42 @@ describe('searchFacesInEvent', () => {
     expect(result.matches.find((m) => m.photoId === undefined)).toBeUndefined();
   });
 
+  // Regression (T-062): public-only events have share_code = null and are
+  // opened by their SEO slug. `searchFacesInEvent` used to resolve strictly by
+  // share code, so slug lookups threw "Event not found." It must now resolve by
+  // slug, exactly like the public event page does.
+  it('resolves a public event by slug when it has no share code', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id, {
+      slug: 'face-public-slug',
+      is_public: true,
+    });
+    // Model a public-only event: no share code, opened by slug.
+    const sb = createServiceClient();
+    await sb.from('events').update({ share_code: null }).eq('id', event.id);
+
+    const collectionId = 'photomarkt-test-slug';
+    await enableAiMatchingOnEvent(event.id, collectionId);
+
+    const match = await insertPhotoWithFace({
+      eventId: event.id,
+      ownerId: owner.id,
+      awsFaceId: 'aws-face-slug',
+      awsCollectionId: collectionId,
+    });
+
+    mockSearchFacesByImage.mockResolvedValueOnce([{ awsFaceId: 'aws-face-slug', similarity: 97 }]);
+
+    const formData = new FormData();
+    formData.append('selfie', await makeSelfieJpeg());
+
+    const result = await searchFacesInEvent('face-public-slug', formData);
+    expect(result.reason).toBeUndefined();
+    expect(result.matches).toHaveLength(1);
+    expect(result.matches[0]?.photoId).toBe(match.photoId);
+    expect(result.matches[0]?.bucket).toBe('very-likely');
+  });
+
   it('returns empty matches array when AWS returns nothing', async () => {
     const owner = await createTestUser('PHOTOGRAPHER');
     const event = await createTestEvent(owner.id, { share_code: 'SHARE002' });

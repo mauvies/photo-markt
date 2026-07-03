@@ -1,11 +1,11 @@
 # T-062 · Bug: búsqueda por dorsal (y facial) falla con "Event not found" en eventos públicos abiertos por slug
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/ai-search-resolve-event-by-slug`
 - **OpenSpec change:** — (bug fix; implementar directo)
-- **PR:** —
+- **PR:** #116
 
 ## Requerimiento
 La búsqueda por **dorsal** en la galería pública del evento falla con `Error: Event not found.` (digest

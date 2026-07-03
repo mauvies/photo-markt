@@ -9,6 +9,7 @@ import {
   getEventPhotosPublic,
   getPhotoForContributorDelete,
   getPhotoForDownload,
+  resolveEventByParam,
   type SupabaseServerClient,
 } from '@/database/queries';
 import { getEventBibDetectionState, getPhotoIdsByBibInEvent } from '@/database/queries/bib-numbers';
@@ -164,8 +165,10 @@ export async function searchFacesInEvent(
 
   const adminClient = supabaseAdmin as unknown as SupabaseServerClient;
 
-  // 1. Resolve event by share code.
-  const event = await getEventByShareCode(adminClient, shareCode);
+  // 1. Resolve the event. The route param may be a UUID, an SEO slug, or a
+  //    share code (public-only events have no share code), so use the same
+  //    multi-identifier resolution as the public page.
+  const event = await resolveEventByParam(adminClient, shareCode);
   if (!event) {
     throw new Error('Event not found.');
   }
@@ -343,7 +346,9 @@ export async function searchPhotosByBibInEvent(
 
   const adminClient = supabaseAdmin as unknown as SupabaseServerClient;
 
-  const event = await getEventByShareCode(adminClient, shareCode);
+  // The route param may be a UUID, an SEO slug, or a share code (public-only
+  // events have no share code), so resolve it the same way the public page does.
+  const event = await resolveEventByParam(adminClient, shareCode);
   if (!event) throw new Error('Event not found.');
 
   const state = await getEventBibDetectionState(adminClient, event.id);
