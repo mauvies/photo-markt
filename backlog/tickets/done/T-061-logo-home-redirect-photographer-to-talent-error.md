@@ -1,11 +1,11 @@
 # T-061 · Bug: el logo lleva al fotógrafo al dashboard de talento (y esa página revienta) en vez de al overview de fotógrafo
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/logo-home-redirect-by-role`
 - **OpenSpec change:** — (bug fix de routing/rol; implementar directo)
-- **PR:** —
+- **PR:** #117
 
 ## Requerimiento
 Estando en el rol de **fotógrafo**, en `/dashboard/photographer/events/[id]`, al hacer clic en el **logo de
