@@ -10,6 +10,7 @@ type EventPhotoGridProps = {
   newFiles: File[];
   onDeletePhoto: (id: string) => void;
   onRemoveFile: (file: File) => void;
+  noPreviewLabel: string;
 };
 
 export function EventPhotoGrid({
@@ -18,6 +19,7 @@ export function EventPhotoGrid({
   newFiles,
   onDeletePhoto,
   onRemoveFile,
+  noPreviewLabel,
 }: EventPhotoGridProps) {
   if (visiblePhotos.length === 0) {
     return (
@@ -53,7 +55,7 @@ export function EventPhotoGrid({
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-                  No preview
+                  {noPreviewLabel}
                 </div>
               )}
             </div>

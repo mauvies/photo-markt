@@ -865,6 +865,7 @@
   "newEvent": {
     "title": "Create Event",
     "subtitle": "Fill the details and add your photos.",
+    "noPreview": "No preview",
     "nameLabel": "Event",
     "namePlaceholder": "Enter the event name",
     "nameRequired": "Name is required.",

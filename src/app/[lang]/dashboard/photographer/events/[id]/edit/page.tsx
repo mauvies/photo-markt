@@ -1,12 +1,15 @@
 import { DashboardHeader } from '@/components/dashboard-header';
-import { createSignedUrls, getEvent, getEventPhotos } from '@/database/queries';
+import { getEvent } from '@/database/queries';
+import type { SupabaseServerClient } from '@/database/queries/types';
 import { createClient } from '@/database/server';
+import { supabaseAdmin } from '@/database/supabase-admin';
 import { redirectToLogin } from '@/lib/auth/redirect-to-login';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { EditEventForm } from './edit-event-form';
+import { getEditEventPhotos } from './photo-data';
 
 export default async function EditEventPage({
   params,
@@ -23,39 +26,23 @@ export default async function EditEventPage({
     return redirectToLogin();
   }
 
+  // Ownership gate via the user-scoped client. `getEvent` filters by user_id,
+  // so a non-owner gets `null` and is bounced out.
   const event = await getEvent(supabase, id, user.id);
 
   if (!event) {
     localizedRedirect(lang, '/dashboard/photographer/events');
   }
 
-  // Get existing photos
-  const photos = await getEventPhotos(supabase, id, user.id);
-
-  // Generate signed URLs for photos
-  const paths = photos.map((p) => p.original_url).filter((url): url is string => url !== null);
-  const signedUrls: Record<string, string> = {};
-
-  if (paths.length > 0) {
-    const signed = await createSignedUrls(
-      supabase,
-      'photos',
-      paths,
-      60 * 60, // 1 hour
-    );
-    for (const item of signed) {
-      if (item.signedUrl) {
-        signedUrls[item.path] = item.signedUrl;
-      }
-    }
-  }
-
-  // Map photos with signed URLs
-  const photosWithUrls = photos.map((photo) => ({
-    id: photo.id,
-    url: photo.original_url ? signedUrls[photo.original_url] : null,
-    original_url: photo.original_url,
-  }));
+  // Fetch + sign the existing photos with the service-role client. The `photos`
+  // bucket is private with no storage RLS for `authenticated`, so signing with
+  // the user-scoped client returns null URLs → "No preview" for every photo
+  // (T-063). Ownership was already verified above.
+  const photosWithUrls = await getEditEventPhotos(
+    supabaseAdmin as unknown as SupabaseServerClient,
+    id,
+    user.id,
+  );
 
   return (
     <div>
