@@ -30,6 +30,7 @@ import {
 import { useBulkPhotoDownload } from '@/hooks/use-bulk-photo-download';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
 import { type EventBulkActionKey, eventBulkActionKeys } from '@/lib/event-bulk-actions';
+import { filterEventPhotos } from '@/lib/event-photo-filter';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import { getEventPhotoDownloadUrlAction } from './actions';
 import { buildBuckets, type FaceSearchResultsLabels } from './face-search-shared';
@@ -399,14 +400,15 @@ export function PublicEventPhotoViewer({
 
   // ── "All photos / My photos" filter ────────────────────────────────────
   const [filter, setFilter] = useState<EventPhotoFilter>('all');
-  const visiblePhotos = useMemo(() => {
-    let result = filter === 'mine' ? photos.filter((p) => myPhotoIds.has(p.id)) : photos;
-    if (bibSearch.matchedPhotoIds !== null) {
-      const bibSet = new Set(bibSearch.matchedPhotoIds);
-      result = result.filter((p) => bibSet.has(p.id));
-    }
-    return result;
-  }, [filter, photos, myPhotoIds, bibSearch.matchedPhotoIds]);
+  const visiblePhotos = useMemo(
+    () =>
+      filterEventPhotos(photos, {
+        filter,
+        myPhotoIds,
+        bibMatchedIds: bibSearch.matchedPhotoIds,
+      }),
+    [filter, photos, myPhotoIds, bibSearch.matchedPhotoIds],
+  );
 
   // ── Single-photo download (lightbox) ───────────────────────────────────
   const isPhotoDownloadable = useCallback(

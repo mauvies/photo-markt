@@ -15,6 +15,7 @@ import {
   getEventPhotosPublic,
   getPhotoIdsInCart,
 } from '@/database/queries';
+import { eventHasAnyBibNumbers } from '@/database/queries/bib-numbers';
 import { getPurchasedPhotoIdsForEvent } from '@/database/queries/orders';
 import {
   getEventAiIndexingProgress,
@@ -181,6 +182,24 @@ export default async function ExploreEventDetailPage({
       }
     } catch {
       // Best-effort; banner just won't render on failure.
+    }
+  }
+
+  // Whether the event has any detected bib numbers yet — drives the bib search
+  // empty state ("still processing" vs "no match"). Only relevant when bib
+  // detection is enabled; best-effort (defaults to false).
+  let bibHasData = false;
+  const bibDetectionEnabled = Boolean(
+    (event as unknown as Record<string, unknown>).bib_detection_enabled,
+  );
+  if (bibDetectionEnabled) {
+    try {
+      bibHasData = await eventHasAnyBibNumbers(
+        supabaseAdmin as unknown as SupabaseServerClient,
+        event.id,
+      );
+    } catch {
+      // Best-effort; empty state just defaults to the "processing" copy.
     }
   }
 
@@ -416,6 +435,11 @@ export default async function ExploreEventDetailPage({
                     all: dict.collaborativeEvent.myPhotosAll,
                     mine: dict.collaborativeEvent.myPhotosMine,
                     empty: dict.collaborativeEvent.myPhotosEmpty,
+                  }}
+                  bibHasData={bibHasData}
+                  bibEmptyLabels={{
+                    pending: dict.bibDetection.searchEmptyPending,
+                    noMatch: dict.bibDetection.searchEmptyNoMatch,
                   }}
                   menuLabels={{
                     trigger: dict.events.moreOptions,

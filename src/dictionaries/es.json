@@ -1238,6 +1238,8 @@
     "searchButton": "Buscar",
     "searchClear": "Limpiar",
     "searchEmpty": "No se encontraron fotos con ese número de dorsal.",
+    "searchEmptyNoMatch": "No se encontraron fotos con ese número de dorsal.",
+    "searchEmptyPending": "Todavía se están detectando los dorsales de este evento, o aún no se encontró ninguno. Vuelve a comprobarlo pronto.",
     "searchFailed": "La búsqueda por dorsal falló. Inténtalo de nuevo."
   },
   "rekognition": {

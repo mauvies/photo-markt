@@ -14,7 +14,7 @@ import {
   type FaceSearchResultsLabels,
 } from '@/app/[lang]/events/[shareCode]/face-search-shared';
 import { ConfirmDialog } from '@/components/confirm-dialog';
-import { useFaceSearch } from '@/components/event-gallery-with-face-search';
+import { useBibSearch, useFaceSearch } from '@/components/event-gallery-with-face-search';
 import { type EventPhotoFilter, EventPhotoFilterTabs } from '@/components/event-photo-filter-tabs';
 import { FaceSearchResults } from '@/components/face-search-results';
 import {
@@ -34,6 +34,7 @@ import { useBulkPhotoDownload } from '@/hooks/use-bulk-photo-download';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
 import { filterNewIds } from '@/lib/bulk-select';
 import { shouldShowBulkDownload } from '@/lib/event-bulk-actions';
+import { bibSearchEmptyKind, filterEventPhotos } from '@/lib/event-photo-filter';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
   addPhotosToMyPhotosAction,
@@ -75,6 +76,11 @@ type EventPhotoViewerProps = {
   bulkDeleteLabels: BulkContributorDeleteLabels;
   /** Labels for the "All photos / My photos" filter (collaborative events). */
   filterLabels: { all: string; mine: string; empty: string };
+  /** Whether the event has any detected bib numbers yet — drives the bib
+   * search empty state ("still processing" vs "no match"). */
+  bibHasData?: boolean;
+  /** Empty-state copy for a bib search that returned nothing (T-069). */
+  bibEmptyLabels?: { pending: string; noMatch: string };
   /** Labels for the per-photo "more options" dropdown. */
   menuLabels: PhotoMenuLabels;
   /** Labels for the AI face-search results view. */
@@ -100,6 +106,8 @@ export function EventPhotoViewer({
   uploadedPhotoIds = new Set(),
   bulkDeleteLabels,
   filterLabels,
+  bibHasData = false,
+  bibEmptyLabels,
   menuLabels,
   resultsLabels,
   purchasedPhotoIds = new Set(),
@@ -377,11 +385,25 @@ export function EventPhotoViewer({
     [faceSearch.matches, items],
   );
 
+  // ── BIB-number search filter (T-069) ───────────────────────────────────
+  const bibSearch = useBibSearch();
+
   // ── "All photos / My photos" filter ────────────────────────────────────
   const [filter, setFilter] = useState<EventPhotoFilter>('all');
   const visiblePhotos = useMemo(
-    () => (filter === 'mine' ? items.filter((i) => uploadedPhotoIds.has(i.id)) : items),
-    [filter, items, uploadedPhotoIds],
+    () =>
+      filterEventPhotos(items, {
+        filter,
+        myPhotoIds: uploadedPhotoIds,
+        bibMatchedIds: bibSearch.matchedPhotoIds,
+      }),
+    [filter, items, uploadedPhotoIds, bibSearch.matchedPhotoIds],
+  );
+
+  const bibEmptyKind = bibSearchEmptyKind(
+    bibSearch.matchedPhotoIds,
+    visiblePhotos.length,
+    bibHasData,
   );
 
   // ── Per-photo download (lightbox) ──────────────────────────────────────
@@ -675,7 +697,13 @@ export function EventPhotoViewer({
           ) : undefined
         }
         emptyState={
-          filter === 'mine' ? (
+          bibEmptyKind !== null && bibEmptyLabels ? (
+            <div className="py-12 text-center">
+              <p className="text-muted-foreground">
+                {bibEmptyKind === 'pending' ? bibEmptyLabels.pending : bibEmptyLabels.noMatch}
+              </p>
+            </div>
+          ) : filter === 'mine' ? (
             <div className="py-12 text-center">
               <p className="text-muted-foreground">{filterLabels.empty}</p>
             </div>
