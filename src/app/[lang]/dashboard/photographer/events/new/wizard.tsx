@@ -15,6 +15,7 @@ import { usePhotoUpload } from '@/lib/use-photo-upload';
 import { deleteEventAction } from '../actions';
 import { createEvent, uploadEventCoverAction } from './actions';
 import { activityOptions } from './activity-options';
+import { DraftResumeDialog } from './components/draft-resume-dialog';
 import { ShareCodeDialog } from './components/share-code-dialog';
 import { type StepNumber, WizardSteps } from './components/wizard-steps';
 import { resolveRetryOutcome, shouldDiscardCreatedEvent } from './orphan-cleanup';
@@ -27,6 +28,7 @@ import { mergeFilePreviews, removeFileFromPreviews } from './wizard-file-utils';
 import {
   DRAFT_KEY,
   HAD_FILES_KEY,
+  isResumableDraft,
   readStoredState,
   type StoredWizardState,
 } from './wizard-storage';
@@ -93,6 +95,14 @@ export default function NewEventForm({
   // refresh mid-edit still respects the user's intent.
   const [returnToStep, setReturnToStep] = useState<StepNumber | null>(null);
   const [hydratedFromStorage, setHydratedFromStorage] = useState(false);
+  // A genuine in-progress draft was found at mount: hold it and let the user
+  // choose "continue" vs "start fresh" before restoring anything (T-059).
+  // Hydration/persistence stay paused while the prompt is open so the stored
+  // draft isn't overwritten before the user decides.
+  const [resumePrompt, setResumePrompt] = useState<{
+    draft: StoredWizardState | null;
+    hadFiles: boolean;
+  } | null>(null);
 
   // True after a refresh-with-photos: the user had files in memory, the page
   // reloaded, files are gone — flag so step 3 / step 4 can show a banner.
@@ -101,22 +111,16 @@ export default function NewEventForm({
   const form = useEventForm();
   const upload = usePhotoUpload();
 
-  // Mount-time hydration. Reads sessionStorage once and seeds form values,
-  // reachedStep, and any pending returnToStep memo (so a refresh mid-edit
-  // still jumps back to the review on Next). No mid-render re-hydration
-  // effect — the TanStack form instance is stable across renders, so once
-  // values are seeded here they persist for the lifetime of the wizard.
-  useEffect(() => {
-    const stored = readStoredState();
-    if (stored) {
-      // Use setFieldValue instead of form.reset() to restore draft values.
-      // form.reset(values) sets this.options.defaultValues = values; TanStack
-      // Form then calls update({ defaultValues: EMPTY_DEFAULTS }) on the next
-      // render (via useIsomorphicLayoutEffect with no deps), sees the mismatch,
-      // and resets the form back to EMPTY_DEFAULTS — erasing the restoration.
-      // setFieldValue only patches state.values, leaving options.defaultValues
-      // pointing at the original EMPTY_DEFAULTS constant, so the next update()
-      // call sees no change and leaves the form alone.
+  // Seed the form + step state from a stored draft. Uses setFieldValue instead
+  // of form.reset() to restore draft values: form.reset(values) sets
+  // this.options.defaultValues = values; TanStack Form then calls
+  // update({ defaultValues: EMPTY_DEFAULTS }) on the next render (via
+  // useIsomorphicLayoutEffect with no deps), sees the mismatch, and resets the
+  // form back to EMPTY_DEFAULTS — erasing the restoration. setFieldValue only
+  // patches state.values, leaving options.defaultValues pointing at the
+  // original EMPTY_DEFAULTS constant, so the next update() call is a no-op.
+  const restoreDraft = useCallback(
+    (stored: StoredWizardState, hadFiles: boolean) => {
       for (const [key, value] of Object.entries(stored.values)) {
         form.setFieldValue(key as keyof FormValues, value as never, {
           dontUpdateMeta: true,
@@ -128,19 +132,68 @@ export default function NewEventForm({
       // earlier steps as completed/clickable after a refresh.
       setReachedStep((prev) => (stored.reachedStep > prev ? stored.reachedStep : prev));
       if (stored.returnToStep !== null) setReturnToStep(stored.returnToStep);
-    }
-    // If the user had picked photos in a previous session (flag set on first
-    // selection) and we're back without an in-memory File[], surface the
-    // "photos lost" banner so they re-pick. Don't fire on a fresh visit.
+      // If the user had picked photos earlier and we're back without an
+      // in-memory File[], surface the "photos lost" banner so they re-pick.
+      if (hadFiles) setPhotosLost(true);
+    },
+    [form],
+  );
+
+  // Mount-time hydration. Reads sessionStorage once. When a genuine in-progress
+  // draft exists, defer restoration and prompt the user to continue or start
+  // fresh (T-059) — hydration/persistence stay paused until they choose so the
+  // stored draft isn't clobbered. Otherwise (fresh visit / empty draft),
+  // restore inline (a no-op for empty values) and start persisting.
+  useEffect(() => {
+    const stored = readStoredState();
+    let hadFiles = false;
     try {
-      if (sessionStorage.getItem(HAD_FILES_KEY) === 'true') {
-        setPhotosLost(true);
-      }
+      hadFiles = sessionStorage.getItem(HAD_FILES_KEY) === 'true';
     } catch {
       // Ignore.
     }
+
+    if (isResumableDraft(stored, hadFiles)) {
+      setResumePrompt({ draft: stored, hadFiles });
+      return; // hold hydration until the user decides
+    }
+
+    if (stored) restoreDraft(stored, hadFiles);
     setHydratedFromStorage(true);
-  }, [form]);
+  }, [restoreDraft]);
+
+  // Resume the in-progress draft: restore it as a normal refresh would, then
+  // let persistence take over from the restored state.
+  const handleResumeContinue = useCallback(() => {
+    const prompt = resumePrompt;
+    setResumePrompt(null);
+    if (prompt?.draft) restoreDraft(prompt.draft, prompt.hadFiles);
+    setHydratedFromStorage(true);
+  }, [resumePrompt, restoreDraft]);
+
+  // Discard the draft and start a brand-new event: clear storage, reset step
+  // state to a pristine step 1 (form values are already untouched EMPTY_DEFAULTS
+  // because restoration was deferred), and never show the "photos lost" banner.
+  const handleResumeStartFresh = useCallback(() => {
+    try {
+      sessionStorage.removeItem(DRAFT_KEY);
+      sessionStorage.removeItem(HAD_FILES_KEY);
+    } catch {
+      // Ignore.
+    }
+    setResumePrompt(null);
+    setReachedStep(1);
+    setReturnToStep(null);
+    setPhotosLost(false);
+    // If the URL points past step 1 (e.g. refresh on ?step=3), go back to 1.
+    if (currentStep !== 1) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('step', '1');
+      router.push(`?${params.toString()}`);
+    }
+    // Resume persistence — writes a fresh empty-defaults draft.
+    setHydratedFromStorage(true);
+  }, [currentStep, router, searchParams]);
 
   // Persist the entire wizard state on every change (post-hydration).
   //
@@ -640,6 +693,18 @@ export default function NewEventForm({
           </div>
         </div>
       </div>
+
+      <DraftResumeDialog
+        open={resumePrompt !== null}
+        onContinue={handleResumeContinue}
+        onStartFresh={handleResumeStartFresh}
+        labels={{
+          title: t('draftResumeTitle' as keyof NewEventT),
+          description: t('draftResumeDescription' as keyof NewEventT),
+          continueDraft: t('draftResumeContinue' as keyof NewEventT),
+          startFresh: t('draftResumeStartFresh' as keyof NewEventT),
+        }}
+      />
 
       <ShareCodeDialog
         open={createdShareCode !== null && createdEventName !== null}

@@ -23,6 +23,51 @@ export type StoredWizardState = {
   returnToStep: StepNumber | null;
 };
 
+/**
+ * Whether the stored form values differ from a pristine wizard (matching
+ * `EMPTY_DEFAULTS` in `wizard-types.ts`). Kept in sync with those defaults —
+ * any field that isn't at its default means the user typed/toggled something.
+ * `is_collaborative` is derived from `event_type`, so it's covered by that
+ * check and intentionally omitted here.
+ */
+function draftHasUserInput(v: FormValues): boolean {
+  return (
+    v.name.trim() !== '' ||
+    v.activity !== 'OTHER' ||
+    v.date !== '' ||
+    v.city.trim() !== '' ||
+    v.country.trim() !== '' ||
+    v.state.trim() !== '' ||
+    v.event_type !== 'solo' ||
+    v.is_public !== true ||
+    v.watermark_enabled !== true ||
+    v.allow_guest_upload !== true ||
+    v.require_upload_approval !== false ||
+    v.price_per_photo !== null ||
+    v.organizer_fee_per_photo !== null ||
+    v.ai_matching_enabled !== false ||
+    v.contains_minors !== false ||
+    v.bib_detection_enabled !== false
+  );
+}
+
+/**
+ * Whether a stored draft represents genuine in-progress work worth offering to
+ * resume — as opposed to the empty-defaults draft the persist effect writes on
+ * a fresh visit. Drives the "continue or start fresh" prompt (T-059):
+ *   - `hadFiles` (the user picked photos earlier) → always resumable;
+ *   - advanced past step 1 → resumable;
+ *   - any form field diverges from the pristine defaults → resumable.
+ * A pristine draft sitting on step 1 with no picked files is NOT resumable, so
+ * a fresh visitor never sees the prompt.
+ */
+export function isResumableDraft(stored: StoredWizardState | null, hadFiles: boolean): boolean {
+  if (hadFiles) return true;
+  if (!stored) return false;
+  if (stored.reachedStep > 1) return true;
+  return draftHasUserInput(stored.values);
+}
+
 export function readStoredState(): StoredWizardState | null {
   if (typeof window === 'undefined') return null;
   try {
