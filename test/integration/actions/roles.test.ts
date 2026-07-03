@@ -71,6 +71,7 @@ vi.mock('@/lib/i18n/get-lang-from-headers', () => ({
 import {
   completeOnboarding,
   enableTalentRole,
+  getRoleContext,
   switchRole,
   userHasRole,
 } from '@/app/[lang]/actions/roles';
@@ -101,6 +102,43 @@ describe('roles Server Actions', () => {
       mockSession.userId = photographer.id;
       expect(await userHasRole('talent')).toBe(false);
       expect(await userHasRole('photographer')).toBe(true);
+    });
+  });
+
+  describe('getRoleContext', () => {
+    it('returns the active role and the set of held roles in one call', async () => {
+      const user = await createTestUser('PHOTOGRAPHER');
+      mockSession.userId = user.id;
+
+      const ctx = await getRoleContext();
+      expect(ctx.activeRole).toBe('photographer');
+      expect(ctx.heldRoles).toEqual(['photographer']);
+    });
+
+    // Regression (T-061): active_role can point at a role the user does not
+    // hold. getRoleContext must report the held role so the `/dashboard`
+    // disambiguator can avoid the redirect loop (it sends them to the role
+    // they actually hold, not the stale active_role).
+    it('reports held roles even when active_role is desynced', async () => {
+      const sb = createServiceClient();
+      const user = await createTestUser('PHOTOGRAPHER');
+      // Desync: prefer TALENT, but the user only holds PHOTOGRAPHER.
+      await sb.from('profiles').update({ active_role: 'TALENT' }).eq('id', user.id);
+      mockSession.userId = user.id;
+
+      const ctx = await getRoleContext();
+      expect(ctx.activeRole).toBe('talent');
+      expect(ctx.heldRoles).toEqual(['photographer']);
+    });
+
+    it('returns no held roles when the user holds none (partial onboarding)', async () => {
+      const sb = createServiceClient();
+      const user = await createTestUser('PHOTOGRAPHER');
+      await sb.from('user_role_memberships').delete().eq('user_id', user.id);
+      mockSession.userId = user.id;
+
+      const ctx = await getRoleContext();
+      expect(ctx.heldRoles).toEqual([]);
     });
   });
 
