@@ -11,12 +11,12 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-064 | [Bug] La búsqueda por dorsal no aparece en la vista de talento ni en la pública, aunque el evento la tiene habilitada | — | todo |
 | 5 | P2 | T-063 | [Bug] Los previews de fotos no se ven en la edición del evento ("No preview") | — | todo |
 | 6 | P2 | T-058 | [Bug] El estado de IA del evento dice "ready" mientras las fotos aún se indexan (debería decir "indexing") | — | todo |
 | 7 | P2 | T-059 | Al crear evento: modal "continuar borrador en progreso" o "empezar de cero" (gestión del draft) | T-052 | todo |
 | 8 | P2 | T-060 | Paginar la galería del detalle del evento (load more, ~50) en las 3 vistas — hoy firma/renderiza todas | — | todo |
 | 9 | P2 | T-065 | Unificar "Encontrar mis fotos": botones face matching + dorsal lado a lado (responsive mobile) | T-064 | todo |
+| 10 | P2 | T-066 | Modal de detalle de foto a dos paneles (imagen + panel de info/CTA de compra) | — | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
@@ -32,6 +32,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-064** · Bug: el buscador por dorsal no aparecía ni en la vista de talento ni en la pública pese a estar habilitado. Dos causas: (1) `dashboard/talent/events/[id]/page.tsx` renderizaba `EventGalleryWithFaceSearch` sin pasar `bibDetectionEnabled`/`bibSearchLabels` (default false) → ahora los pasa como la pública; (2) `enable/disableBibDetectionForEvent` solo revalidaban la ruta del dashboard del fotógrafo, no los tags de caché `event-${id|slug|share_code}` (TTL 55 min) de las páginas pública/talento → ahora llaman `revalidateEventPhotoCacheTags` para que el bar aparezca/desaparezca al instante. Tests de regresión de revalidación (fallan antes/pasan después) + nota de CLAUDE.md actualizada — PR #118
 
 - **T-061** · Bug: el logo del dashboard llevaba al home público, y el middleware redirigía por `active_role`; como los layouts gatean por **capacidad** (no por `active_role`), un fotógrafo con `active_role=talent` desincronizado acababa en el dashboard de talento, que además podía entrar en bucle de redirección (`ERR_TOO_MANY_REDIRECTS`). El logo ahora apunta al home del rol actual vía `dashboardHomeForRole(activeRole)` (independiente de `active_role`); `/dashboard` desambigua por roles **realmente poseídos** (`resolveDashboardHome`, con fallback a un rol poseído para romper el bucle); onboarding gatea por rol poseído (no por `active_role`) para no rebotar a usuarios con onboarding parcial; `getRoleContext` lee rol activo + poseídos en un solo auth. Helper puro + tests de href del logo (fallan antes/pasan después) + casos de desincronía de `getRoleContext`. `/code-review high` aplicado (bucle de onboarding + round-trips redundantes) — PR #117
 
