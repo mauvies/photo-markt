@@ -1,11 +1,11 @@
 # T-058 · Bug: el estado de IA del evento dice "ready" mientras las fotos aún se están indexando
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/ai-status-ready-while-indexing`
 - **OpenSpec change:** — (bug fix, implementar directo)
-- **PR:** —
+- **PR:** #121
 
 ## Requerimiento
 En el **detalle del evento**, la card de estado de IA muestra el conteo "N indexadas de M" (que sí debe ir

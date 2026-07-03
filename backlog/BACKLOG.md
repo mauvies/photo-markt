@@ -11,7 +11,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 6 | P2 | T-058 | [Bug] El estado de IA del evento dice "ready" mientras las fotos aún se indexan (debería decir "indexing") | — | todo |
 | 7 | P2 | T-059 | Al crear evento: modal "continuar borrador en progreso" o "empezar de cero" (gestión del draft) | T-052 | todo |
 | 8 | P2 | T-060 | Paginar la galería del detalle del evento (load more, ~50) en las 3 vistas — hoy firma/renderiza todas | — | todo |
 | 9 | P2 | T-065 | Unificar "Encontrar mis fotos": botones face matching + dorsal lado a lado (responsive mobile) | T-064 | todo |
@@ -34,6 +33,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-058** · Bug: la card de estado de IA del evento mostraba "ready" mientras las fotos aún se indexaban. La página lee `status` de la columna cruda `ai_matching_status`, pero `pending`/`indexed` de un conteo real por foto (`getEventAiIndexingProgress`) — lecturas no atómicas que pueden discrepar (`status='ready'` con `pending>0`). Peor: `shouldPoll` no trataba ese caso como "procesando" → la card dejaba de hacer poll y quedaba atascada en "ready" para siempre. Añadido helper puro `displayedAiStatus`/`shouldPollAiStatus` (`lib/ai-indexing-status.ts`): nunca confía en `'ready'` mientras `pending>0`, muestra `'indexing'` y sigue el poll hasta que drene a 0. Aplicado al label, badge, gating del botón reindex y al tracker de la transición del flash de éxito (compara estado *mostrado*, no crudo). Test de regresión del helper puro — PR #121
 
 - **T-069** · Bug: el grid del dashboard de talento no filtraba en búsqueda por dorsal (gap dejado por T-064). `event-photo-viewer.tsx` solo consumía `useFaceSearch` y su `visiblePhotos` ignoraba `matchedPhotoIds` de dorsal. Extraído helper compartido `filterEventPhotos` (compone `'mine'` + dorsal), usado por el viewer de talento y el público (refactor sin cambio de comportamiento). Empty-state consciente del procesamiento: `eventHasAnyBibNumbers` distingue "detección aún procesando/sin datos" de "sin match" (`bibSearchEmptyKind`) + strings en/es. **Diagnóstico (prod, evento b5b4a5ee "Marathon Madrid 2026"):** `bib_detection_enabled` true pero status 'idle', 0 bib rows, todas las fotos `bib_detection_status` NULL → **Condición A variante** (la detección nunca corrió; operacional, no bug de wiring del código — create+edit sí disparan el backfill). El evento necesita re-disparar detección (acción de datos, aparte). Tests unit (filter + empty-kind) + integración (`eventHasAnyBibNumbers`) — PR #120
 
