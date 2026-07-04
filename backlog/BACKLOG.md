@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 8 | P2 | T-060 | Paginar la galería del detalle del evento (load more, ~50) en las 3 vistas — hoy firma/renderiza todas | — | todo |
+| 8 | P2 | T-060 | Paginar la galería del detalle del evento (load more, ~50) en las 3 vistas — hoy firma/renderiza todas | — | doing |
 | 9 | P2 | T-065 | Unificar "Encontrar mis fotos": botones face matching + dorsal lado a lado (responsive mobile) | T-064 | todo |
 | 10 | P2 | T-066 | Modal de detalle de foto a dos paneles (imagen + panel de info/CTA de compra) | — | todo |
 | 11 | P2 | T-067 | Rediseñar el watermark: patrón en mosaico regular y limpio (Sharp) | — | todo |
