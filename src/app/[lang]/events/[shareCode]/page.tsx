@@ -548,17 +548,23 @@ export default async function EventPage({
               shareCode={event.share_code ?? event.id}
               aiSearchEligible={aiSearchEligible}
               aiState={aiBannerState}
-              bannerLabels={dict.aiSearch.banner}
               modalLabels={dict.aiSearch.modal}
               bibDetectionEnabled={Boolean(
                 (event as unknown as Record<string, unknown>).bib_detection_enabled,
               )}
-              bibSearchLabels={{
-                title: dict.bibDetection.searchTitle,
-                placeholder: dict.bibDetection.searchPlaceholder,
-                button: dict.bibDetection.searchButton,
-                clear: dict.bibDetection.searchClear,
-                failed: dict.bibDetection.searchFailed,
+              findLabels={{
+                titleReady: dict.aiSearch.banner.titleReady,
+                titleIndexing: dict.aiSearch.banner.titleIndexing,
+                descriptionReady: dict.aiSearch.banner.descriptionReady,
+                descriptionIndexing: dict.aiSearch.banner.descriptionIndexing,
+                faceButton: dict.aiSearch.banner.faceButton,
+                bibOnlyTitle: dict.bibDetection.searchTitle,
+                bibOnlyDescription: dict.bibDetection.findDescription,
+                bibButton: dict.bibDetection.bibButton,
+                bibPlaceholder: dict.bibDetection.searchPlaceholder,
+                bibSearch: dict.bibDetection.searchButton,
+                bibClear: dict.bibDetection.searchClear,
+                bibFailed: dict.bibDetection.searchFailed,
               }}
               fullGallery={
                 <Suspense

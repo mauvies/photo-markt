@@ -1240,6 +1240,8 @@
     "enabled": "On — new and existing photos are scanned for bib numbers.",
     "disabled": "Off — bib numbers aren't detected for this event.",
     "searchTitle": "Search by bib number",
+    "findDescription": "Search this event by your race bib number.",
+    "bibButton": "Bib search",
     "searchPlaceholder": "Enter a bib number",
     "searchButton": "Search",
     "searchClear": "Clear",
@@ -1314,7 +1316,7 @@
       "titleIndexing": "Processing photos…",
       "descriptionReady": "Upload a selfie and we'll surface the photos with you in them.",
       "descriptionIndexing": "You can still search what's ready now — more matches may appear once indexing completes.",
-      "cta": "Find my photos"
+      "faceButton": "Face search"
     },
     "modal": {
       "title": "Find your photos",

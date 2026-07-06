@@ -1,7 +1,7 @@
 # T-065 · Unificar "Encontrar mis fotos": botones de face matching y dorsal lado a lado (responsive)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno (Dep de T-064 para que el dorsal ya aparezca en ambas vistas)
 - **Rama:** `feat/find-photos-dual-search-buttons`
 - **OpenSpec change:** —  (UI; implementar directo)

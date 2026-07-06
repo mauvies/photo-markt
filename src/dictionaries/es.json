@@ -1240,6 +1240,8 @@
     "enabled": "Activado: se escanean las fotos nuevas y existentes en busca de dorsales.",
     "disabled": "Desactivado: no se detectan dorsales en este evento.",
     "searchTitle": "Buscar por número de dorsal",
+    "findDescription": "Busca en este evento por tu número de dorsal.",
+    "bibButton": "Búsqueda por dorsal",
     "searchPlaceholder": "Introduce un número de dorsal",
     "searchButton": "Buscar",
     "searchClear": "Limpiar",
@@ -1314,7 +1316,7 @@
       "titleIndexing": "Procesando fotos…",
       "descriptionReady": "Sube una selfie y te mostraremos las fotos en las que apareces.",
       "descriptionIndexing": "Aún puedes buscar lo que ya está listo — pueden aparecer más coincidencias cuando termine la indexación.",
-      "cta": "Encontrar mis fotos"
+      "faceButton": "Búsqueda facial"
     },
     "modal": {
       "title": "Encuentra tus fotos",
