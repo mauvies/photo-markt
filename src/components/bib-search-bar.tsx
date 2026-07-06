@@ -4,6 +4,7 @@ import { ScanText, X } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { searchPhotosByBibInEvent } from '@/app/[lang]/events/[shareCode]/actions';
+import type { BibSearchResult } from '@/components/event-gallery-with-face-search';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -29,7 +30,7 @@ export function BibSearchBar({
 }: {
   shareCode: string;
   labels: BibSearchBarLabels;
-  onResults: (photoIds: string[] | null) => void;
+  onResults: (result: BibSearchResult | null) => void;
   hasResults: boolean;
 }) {
   const [value, setValue] = useState('');
@@ -41,7 +42,7 @@ export function BibSearchBar({
     startTransition(async () => {
       try {
         const result = await searchPhotosByBibInEvent(shareCode, bib);
-        onResults(result.photoIds);
+        onResults({ photoIds: result.photoIds, matchedPhotos: result.matchedPhotos });
       } catch {
         // Includes the rate-limit signal — a single generic message is fine here.
         toast.error(labels.failed);

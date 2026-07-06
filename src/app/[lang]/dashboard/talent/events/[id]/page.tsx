@@ -3,17 +3,23 @@ import { cacheLife, cacheTag } from 'next/cache';
 import { notFound } from 'next/navigation';
 import { userHasRole } from '@/app/[lang]/actions/roles';
 import { ContributeDialog } from '@/app/[lang]/events/[shareCode]/contribute-dialog';
+import {
+  buildPublicPhotoAlbumItem,
+  type UploaderProfileMap,
+} from '@/app/[lang]/events/[shareCode]/photo-album-item';
 import { UploadProgressProvider } from '@/app/[lang]/events/[shareCode]/upload-progress-provider';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { EventGalleryWithFaceSearch } from '@/components/event-gallery-with-face-search';
 import { EventSaveButton } from '@/components/event-save-button';
 import { MarkEventSeen } from '@/components/mark-event-seen';
 import {
-  createPhotoUrls,
+  createPhotoUrlMap,
   getEventByShareCode,
   getEventBySlug,
-  getEventPhotosPublic,
+  getEventPhotosPublicPage,
   getPhotoIdsInCart,
+  getProfilesByIds,
+  getUploadedPhotoIdsForUserInEvent,
 } from '@/database/queries';
 import { eventHasAnyBibNumbers } from '@/database/queries/bib-numbers';
 import { getPurchasedPhotoIdsForEvent } from '@/database/queries/orders';
@@ -25,13 +31,13 @@ import { getClaimedPhotoIdsForTalent } from '@/database/queries/talent-library';
 import type { SupabaseServerClient } from '@/database/queries/types';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
 import { getEventStatus, isCollaborativeUploadOpen } from '@/lib/event-status';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { getBaseUrl } from '@/lib/get-base-url';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
-import { thumbRelativeUrl } from '@/lib/thumbnails';
 import { EventPhotoViewer } from './event-photo-viewer';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -88,8 +94,12 @@ async function getCachedTalentEventData(param: string, baseUrl: string, viewerIs
 
   if (!event) return null;
 
-  const photos = await getEventPhotosPublic(supabaseAdmin, event.id);
-  const signed: Record<string, string> = {};
+  // Only the first gallery page is fetched + signed up front; "Load more"
+  // fetches the rest via a Server Action.
+  const { photos, hasMore } = await getEventPhotosPublicPage(supabaseAdmin, event.id, {
+    limit: EVENT_GALLERY_PAGE_SIZE,
+    offset: 0,
+  });
 
   // Watermark only when BOTH the photographer opted in (`watermark_enabled`)
   // AND the viewer is a talent. Photographers viewing their own events
@@ -98,21 +108,17 @@ async function getCachedTalentEventData(param: string, baseUrl: string, viewerIs
   const useWatermark = viewerIsTalent && event.watermark_enabled === true;
 
   const eventStatusInside = getEventStatus(event.date);
-  if (eventStatusInside !== 'upcoming') {
-    const paths = photos.map((p) => p.original_url).filter((url): url is string => url !== null);
-    if (paths.length > 0) {
-      const photoUrls = await createPhotoUrls(supabaseAdmin, 'photos', paths, {
-        expiresIn: 60 * 60,
-        useWatermark,
-        baseUrl,
-      });
-      for (const item of photoUrls) {
-        if (item.signedUrl) signed[item.path] = item.signedUrl;
-      }
-    }
-  }
+  const paths = photos.map((p) => p.original_url).filter((url): url is string => url !== null);
+  const signed =
+    eventStatusInside === 'upcoming'
+      ? {}
+      : await createPhotoUrlMap(supabaseAdmin, 'photos', paths, {
+          expiresIn: 60 * 60,
+          useWatermark,
+          baseUrl,
+        });
 
-  return { event, photos, signed };
+  return { event, photos, hasMore, signed };
 }
 
 export default async function ExploreEventDetailPage({
@@ -143,7 +149,7 @@ export default async function ExploreEventDetailPage({
 
   const cached = await getCachedTalentEventData(param, baseUrl, viewerIsTalent);
   if (!cached) notFound();
-  const { event, photos, signed } = cached;
+  const { event, photos, hasMore, signed } = cached;
 
   const eventStatus = getEventStatus(event.date);
 
@@ -232,78 +238,35 @@ export default async function ExploreEventDetailPage({
     }
   }
 
-  // Resolve display names for collaborative-event uploader attribution so the
-  // per-photo "Uploaded by" menu row shows the same names as the public page.
-  const uploaderProfiles: Record<string, { display_name: string | null; username: string }> = {};
-  if (event.is_collaborative) {
-    const uploaderUserIds = Array.from(
-      new Set([
-        event.user_id,
-        ...photos
-          .map((p) => (p as { uploaded_by?: string | null }).uploaded_by)
-          .filter((v): v is string => Boolean(v)),
-      ]),
-    );
-    if (uploaderUserIds.length > 0) {
-      const { data: profilesData } = await supabaseAdmin
-        .from('profiles')
-        .select('id, display_name, username')
-        .in('id', uploaderUserIds);
-      for (const row of profilesData ?? []) {
-        uploaderProfiles[row.id as string] = {
-          display_name: (row.display_name as string | null) ?? null,
-          username: row.username as string,
-        };
-      }
-    }
-  }
+  // Uploader display names (collaborative attribution) and the talent's own
+  // uploaded-photo ids are independent — resolve them together. `uploadedPhotoIds`
+  // must be the COMPLETE set (not first-page-derived) so a "My photos" match
+  // beyond the loaded grid still resolves (R5).
+  const [uploaderProfiles, uploadedPhotoIds] = await Promise.all([
+    event.is_collaborative
+      ? getProfilesByIds(
+          supabaseAdmin,
+          Array.from(
+            new Set([
+              event.user_id,
+              ...photos
+                .map((p) => (p as { uploaded_by?: string | null }).uploaded_by)
+                .filter((v): v is string => Boolean(v)),
+            ]),
+          ),
+        )
+      : Promise.resolve<UploaderProfileMap>({}),
+    user
+      ? getUploadedPhotoIdsForUserInEvent(supabaseAdmin, event.id, user.id)
+      : Promise.resolve<string[]>([]),
+  ]);
 
+  const galleryAlt = `Photo from ${event.name}`;
   const photoItems = photos
-    .map((p) => {
-      const url = p.original_url ? signed[p.original_url] : null;
-      if (!url) return null;
-      const uploadedBy = (p as { uploaded_by?: string | null }).uploaded_by ?? null;
-      const guestName = (p as { guest_name?: string | null }).guest_name ?? null;
-      let uploader: { name: string; isAuthenticated: boolean } | undefined;
-      if (event.is_collaborative) {
-        if (uploadedBy) {
-          const profile = uploaderProfiles[uploadedBy];
-          const name = profile?.display_name ?? profile?.username ?? guestName ?? '';
-          if (name) uploader = { name, isAuthenticated: true };
-        } else if (guestName) {
-          uploader = { name: guestName, isAuthenticated: false };
-        } else {
-          // No contributor/guest attribution on a collaborative event means
-          // the photo is the event photographer's own upload.
-          const ownerProfile = uploaderProfiles[event.user_id];
-          const name = ownerProfile?.display_name ?? ownerProfile?.username ?? '';
-          if (name) uploader = { name, isAuthenticated: true };
-        }
-      }
-      const thumbsReady = (p as { thumbnail_status?: string }).thumbnail_status === 'ready';
-      return {
-        id: p.id,
-        url,
-        thumbSmall:
-          thumbsReady && p.original_url ? thumbRelativeUrl(p.original_url, 'small') : undefined,
-        thumbMedium:
-          thumbsReady && p.original_url ? thumbRelativeUrl(p.original_url, 'medium') : undefined,
-        alt: p.original_url || `Photo from ${event.name}`,
-        uploader,
-        width: p.width ?? undefined,
-        height: p.height ?? undefined,
-      };
-    })
+    .map((p) => buildPublicPhotoAlbumItem(p, { signed, event, uploaderProfiles, alt: galleryAlt }))
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
-  // Photo IDs the current talent uploaded — backs the "My photos" filter on
-  // collaborative events. Check user_id first (set for all photos) and fall
-  // back to uploaded_by (only set for guest-uploaded photos).
-  const myUploadedPhotoIds = new Set<string>(
-    user
-      ? photos.filter((p) => p.user_id === user.id || p.uploaded_by === user.id).map((p) => p.id)
-      : [],
-  );
+  const myUploadedPhotoIds = new Set<string>(uploadedPhotoIds);
 
   const isFreeEvent = event.price_per_photo === null;
   const bulkDownloadLabels = {
@@ -462,6 +425,9 @@ export default async function ExploreEventDetailPage({
                   photosClaimedToProfile={new Set(photosClaimedToProfile)}
                   iconTooltips={dict.photoIconButtons}
                   imageUnavailableLabel={dict.eventCard.imageUnavailable}
+                  initialHasMore={hasMore}
+                  loadMoreLabel={dict.events.loadMore}
+                  loadMoreErrorLabel={dict.events.loadMoreFailed}
                 />
               </TranslationsProvider>
             }

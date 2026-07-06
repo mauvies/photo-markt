@@ -1,7 +1,7 @@
 # T-060 · Paginar la galería de fotos del detalle del evento (load more) en las 3 vistas
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `feat/event-gallery-pagination`
 - **OpenSpec change:** — (perf/UX; implementar directo, validar el enfoque de paginación)

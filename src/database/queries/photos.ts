@@ -70,6 +70,42 @@ export interface GetEventPhotosOptions {
   includePending?: boolean;
 }
 
+/** Pagination window for the `*Page` variants. */
+export interface EventPhotoPageOptions {
+  limit: number;
+  offset: number;
+}
+
+/**
+ * Deterministic gallery order shared by every paginated event-photo query so
+ * successive pages never overlap or skip a row. `taken_at` orders the grid the
+ * way viewers expect (chronological); `id` is the tiebreaker so photos sharing
+ * the same `taken_at` (bulk uploads with identical EXIF) keep a stable total
+ * order across `.range()` windows. Both ascending — matches the legacy
+ * `.order('taken_at')` the un-paginated queries used.
+ */
+function applyEventPhotoOrder<
+  T extends { order(column: string, options: { ascending: boolean }): T },
+>(query: T): T {
+  return query.order('taken_at', { ascending: true }).order('id', { ascending: true });
+}
+
+/**
+ * Column list for public gallery reads — includes `user_id` (row owner) for
+ * client-side ownership checks, omits the owner-only `guest_email`. Shared by
+ * {@link getEventPhotosPublic} and its paginated variant so the two can't drift.
+ */
+const EVENT_PHOTO_PUBLIC_COLUMNS =
+  'id, original_url, taken_at, city, country, user_id, uploaded_by, guest_name, width, height, thumbnail_status';
+
+/**
+ * Column list for owner/dashboard gallery reads — includes `guest_email` and
+ * `upload_status` (both owner-only). Shared by {@link getEventPhotos} and its
+ * paginated variant.
+ */
+const EVENT_PHOTO_OWNER_COLUMNS =
+  'id, original_url, taken_at, city, country, uploaded_by, guest_name, guest_email, upload_status, width, height, thumbnail_status';
+
 /**
  * Count photos uploaded by a user that are attached to a non-soft-deleted
  * event. Backs the photographer dashboard "photos uploaded" metric.
@@ -253,26 +289,20 @@ export async function getEventPhotos(
   userId: string,
   options?: GetEventPhotosOptions,
 ): Promise<PhotoDetail[]> {
-  let query = supabase
-    .from('photos')
-    .select(
-      'id, original_url, taken_at, city, country, uploaded_by, guest_name, guest_email, upload_status, width, height, thumbnail_status',
-    )
-    .eq('event_id', eventId);
+  let query = supabase.from('photos').select(EVENT_PHOTO_OWNER_COLUMNS).eq('event_id', eventId);
 
   if (options?.includePending) {
-    // Owner-side widening: show photos still mid-validation in the grid so
-    // the photographer sees their upload-in-progress state, not a phantom
-    // gap. Rejected photos stay hidden — they're surfaced via the toast.
+    // Owner-side widening: show photos still mid-validation in the grid so the
+    // photographer sees their upload-in-progress state, not a phantom gap.
+    // Rejected photos stay hidden — they're surfaced via the toast.
     query = query.in('upload_status', ['approved', 'pending']);
   } else {
-    const status = options?.status ?? 'approved';
-    query = query.eq('upload_status', status);
+    query = query.eq('upload_status', options?.status ?? 'approved');
   }
-
   if (!options?.skipUserIdFilter) {
     query = query.eq('user_id', userId);
   }
+
   const { data, error } = await query.order('taken_at', { ascending: true }).throwOnError();
 
   if (error) {
@@ -294,9 +324,7 @@ export async function getEventPhotosPublic(
 ): Promise<PhotoDetail[]> {
   const { data, error } = await supabase
     .from('photos')
-    .select(
-      'id, original_url, taken_at, city, country, user_id, uploaded_by, guest_name, width, height, thumbnail_status',
-    )
+    .select(EVENT_PHOTO_PUBLIC_COLUMNS)
     .eq('event_id', eventId)
     .eq('upload_status', 'approved')
     .order('taken_at', { ascending: true });
@@ -306,6 +334,126 @@ export async function getEventPhotosPublic(
   }
 
   return (data ?? []) as PhotoDetail[];
+}
+
+/**
+ * Paginated variant of {@link getEventPhotosPublic}. Fetches one gallery page
+ * (approved photos only) in the deterministic `(taken_at, id)` order and
+ * reports whether more remain. Over-fetches one row (`limit + 1`) so `hasMore`
+ * is exact without a separate count query.
+ */
+export async function getEventPhotosPublicPage(
+  supabase: SupabaseServerClient,
+  eventId: string,
+  { limit, offset }: EventPhotoPageOptions,
+): Promise<{ photos: PhotoDetail[]; hasMore: boolean }> {
+  const query = supabase
+    .from('photos')
+    .select(EVENT_PHOTO_PUBLIC_COLUMNS)
+    .eq('event_id', eventId)
+    .eq('upload_status', 'approved');
+
+  // Inclusive range → fetches limit+1 rows; the extra row proves `hasMore`.
+  const { data, error } = await applyEventPhotoOrder(query).range(offset, offset + limit);
+
+  if (error) {
+    throw new Error(`Failed to get event photos page: ${getErrorMessage(error)}`);
+  }
+
+  const rows = (data ?? []) as PhotoDetail[];
+  const hasMore = rows.length > limit;
+  return { photos: hasMore ? rows.slice(0, limit) : rows, hasMore };
+}
+
+/**
+ * Paginated, owner-scoped variant of {@link getEventPhotos}. Mirrors its
+ * filter semantics (`includePending` / `status` / `skipUserIdFilter`) and adds
+ * the same deterministic order + `limit + 1` over-fetch as
+ * {@link getEventPhotosPublicPage}.
+ */
+export async function getEventPhotosPage(
+  supabase: SupabaseServerClient,
+  eventId: string,
+  userId: string,
+  options: GetEventPhotosOptions & EventPhotoPageOptions,
+): Promise<{ photos: PhotoDetail[]; hasMore: boolean }> {
+  let query = supabase.from('photos').select(EVENT_PHOTO_OWNER_COLUMNS).eq('event_id', eventId);
+
+  if (options.includePending) {
+    query = query.in('upload_status', ['approved', 'pending']);
+  } else {
+    query = query.eq('upload_status', options.status ?? 'approved');
+  }
+  if (!options.skipUserIdFilter) {
+    query = query.eq('user_id', userId);
+  }
+
+  const { data, error } = await applyEventPhotoOrder(query).range(
+    options.offset,
+    options.offset + options.limit,
+  );
+
+  if (error) {
+    throw new Error(`Failed to get event photos page: ${getErrorMessage(error)}`);
+  }
+
+  const rows = (data ?? []) as PhotoDetail[];
+  const hasMore = rows.length > options.limit;
+  return { photos: hasMore ? rows.slice(0, options.limit) : rows, hasMore };
+}
+
+/**
+ * Count an event's photos by upload status (defaults to approved-only). Backs
+ * the "real total" the paginated gallery shows even though it renders only the
+ * first page — the public JSON-LD `numberOfItems` and the like.
+ *
+ * NOTE: distinct from {@link countEventPhotos}, which counts approved + pending
+ * for the upload-cap check. This one is status-parameterized and defaults to
+ * the public (approved-only) total.
+ */
+export async function countEventPhotosByStatus(
+  supabase: SupabaseServerClient,
+  eventId: string,
+  statuses: UploadStatus[] = ['approved'],
+): Promise<number> {
+  const { count, error } = await supabase
+    .from('photos')
+    .select('id', { count: 'exact', head: true })
+    .eq('event_id', eventId)
+    .in('upload_status', statuses);
+
+  if (error) {
+    throw new Error(`Failed to count event photos by status: ${getErrorMessage(error)}`);
+  }
+
+  return count ?? 0;
+}
+
+/**
+ * Photo ids in an event uploaded by a given user — either as the row owner
+ * (`user_id`, authenticated uploads) or as a guest contributor later linked to
+ * the account (`uploaded_by`). Backs the talent "My photos" filter, which must
+ * see the COMPLETE set of the viewer's uploads regardless of gallery
+ * pagination (a match on page 3 still belongs under "My photos"). Must be
+ * called with the service-role client for collaborative events, where guest
+ * rows live outside the caller's RLS scope.
+ */
+export async function getUploadedPhotoIdsForUserInEvent(
+  supabase: SupabaseServerClient,
+  eventId: string,
+  userId: string,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('photos')
+    .select('id')
+    .eq('event_id', eventId)
+    .or(`user_id.eq.${userId},uploaded_by.eq.${userId}`);
+
+  if (error) {
+    throw new Error(`Failed to get uploaded photo ids: ${getErrorMessage(error)}`);
+  }
+
+  return (data ?? []).map((row) => row.id as string);
 }
 
 /**

@@ -2,10 +2,13 @@ import { DashboardHeader } from '@/components/dashboard-header';
 import { EventShareCode } from '@/components/event-share-code';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  createSignedUrls,
+  countEventPhotos,
+  createPhotoUrlMap,
   getEvent,
   getEventPhotographers,
   getEventPhotos,
+  getEventPhotosPage,
+  getProfilesByIds,
   isApprovedEventPhotographer,
   type SupabaseServerClient,
 } from '@/database/queries';
@@ -13,6 +16,8 @@ import { type AiMatchingStatus, getEventAiIndexingProgress } from '@/database/qu
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { redirectToLogin } from '@/lib/auth/redirect-to-login';
+import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
+import { eventUsesModerationQueue } from '@/lib/event-status';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedPath } from '@/lib/i18n/localized-path';
@@ -25,6 +30,7 @@ import { EventActionsMenu } from './event-actions-menu';
 import { EventDetailsCard } from './event-details-card';
 import { EventPhotoAlbum } from './event-photo-album';
 import { OrganizerUploadSection } from './organizer-upload-section';
+import { buildOwnerPhotoAlbumItem } from './owner-album-item';
 import { PendingPhotosTab } from './pending-photos-tab';
 import { PhotographersSection } from './photographers-section';
 import { RejectedToast } from './rejected-toast';
@@ -103,104 +109,45 @@ export default async function EventDetailPage({
   // tab queue. For everything else, `includePending: true` widens the main
   // grid to show owner uploads still being validated by the worker, so the
   // photographer sees their in-flight uploads instead of a phantom gap.
-  const showPendingTab =
-    (event.is_collaborative || event.type === 'organizer') && event.require_upload_approval;
+  const showPendingTab = eventUsesModerationQueue(event);
 
-  const photos = showPendingTab
-    ? await getEventPhotos(adminClient, id, user.id, { skipUserIdFilter: true })
-    : await getEventPhotos(adminClient, id, user.id, {
-        skipUserIdFilter: true,
-        includePending: true,
-      });
+  // Round 1 — the first gallery page (only the first page is fetched + signed;
+  // "Load more" fetches the rest via `loadMoreOwnerEventPhotos`), the small
+  // un-paginated pending queue, the organizer photographers list, and the true
+  // non-rejected total (for `RejectedToast`) are all independent.
+  const [{ photos, hasMore }, pendingPhotos, eventPhotographers, visibleCount] = await Promise.all([
+    getEventPhotosPage(adminClient, id, user.id, {
+      skipUserIdFilter: true,
+      includePending: !showPendingTab,
+      limit: EVENT_GALLERY_PAGE_SIZE,
+      offset: 0,
+    }),
+    showPendingTab
+      ? getEventPhotos(adminClient, id, user.id, { status: 'pending', skipUserIdFilter: true })
+      : Promise.resolve([]),
+    event.type === 'organizer' ? getEventPhotographers(supabase, id) : Promise.resolve([]),
+    countEventPhotos(adminClient, id),
+  ]);
 
-  const pendingPhotos = showPendingTab
-    ? await getEventPhotos(adminClient, id, user.id, {
-        status: 'pending',
-        skipUserIdFilter: true,
-      })
-    : [];
-
-  // Organizer-event photographers list (membership). Empty array for other types.
-  const eventPhotographers =
-    event.type === 'organizer' ? await getEventPhotographers(supabase, id) : [];
-
-  // Generate signed URLs for private storage objects (approved + pending).
+  // Round 2 — signing (approved + pending originals), talent tags, and uploader
+  // profiles all depend only on the fetched photos, so run them together. Tags
+  // are cookie-authenticated (RLS-friendly); profiles resolve `uploaded_by`
+  // contributors (photographer's own uploads have no attribution row).
   const allPaths = [...photos, ...pendingPhotos]
     .map((p) => p.original_url)
     .filter((url): url is string => url !== null);
-  const signed: Record<string, string> = {};
-
-  if (allPaths.length > 0) {
-    const signedUrls = await createSignedUrls(adminClient, 'photos', allPaths, 60 * 60); // 1 hour
-    for (const item of signedUrls) {
-      if (item.signedUrl) {
-        signed[item.path] = item.signedUrl;
-      }
-    }
-  }
-
-  // Get tags for all approved photos (cookie-authenticated, RLS-friendly).
   const photoIds = photos.map((p) => p.id);
-  const photoTags = await getPhotoTags(photoIds);
-
-  // Resolve uploader display names. Photos with a populated `uploaded_by`
-  // (authed contributor) get their profile's display_name/username; photos
-  // with `guest_name` (unauthed contributor) use that directly. The
-  // photographer's own uploads have neither set and don't get a badge.
   const uploaderUserIds = Array.from(
     new Set(photos.map((p) => p.uploaded_by).filter((v): v is string => Boolean(v))),
   );
-  const uploaderProfiles: Record<string, { display_name: string | null; username: string }> = {};
-  if (uploaderUserIds.length > 0) {
-    const { data: profilesData } = await adminClient
-      .from('profiles')
-      .select('id, display_name, username')
-      .in('id', uploaderUserIds);
-    for (const row of profilesData ?? []) {
-      uploaderProfiles[row.id as string] = {
-        display_name: (row.display_name as string | null) ?? null,
-        username: row.username as string,
-      };
-    }
-  }
-
-  type UploaderInfo = {
-    name: string;
-    email?: string | null;
-    isAuthenticated: boolean;
-  };
-
-  const buildUploader = (p: (typeof photos)[number]): UploaderInfo | undefined => {
-    if (p.uploaded_by) {
-      const profile = uploaderProfiles[p.uploaded_by];
-      const name = profile?.display_name ?? profile?.username ?? p.guest_name ?? '';
-      if (!name) return undefined;
-      return { name, isAuthenticated: true };
-    }
-    if (p.guest_name) {
-      return {
-        name: p.guest_name,
-        email: p.guest_email ?? null,
-        isAuthenticated: false,
-      };
-    }
-    return undefined;
-  };
+  const [signed, photoTags, uploaderProfiles] = await Promise.all([
+    createPhotoUrlMap(adminClient, 'photos', allPaths, { expiresIn: 60 * 60 }),
+    getPhotoTags(photoIds),
+    getProfilesByIds(adminClient, uploaderUserIds),
+  ]);
 
   const albumItems = photos
-    .map((p) => {
-      const url = p.original_url ? signed[p.original_url] : null;
-      if (!url) return null;
-      return {
-        id: p.id,
-        url,
-        ...(p.original_url && { alt: p.original_url }),
-        tags: photoTags[p.id] || [],
-        uploader: buildUploader(p),
-        width: p.width ?? undefined,
-        height: p.height ?? undefined,
-      };
-    })
+    .map((p) => buildOwnerPhotoAlbumItem(p, { signed, uploaderProfiles, tags: photoTags }))
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
   const pendingItems = pendingPhotos
@@ -230,11 +177,10 @@ export default async function EventDetailPage({
 
   // Pull the upload-rejected toast copy from the existing newEvent
   // dictionary — shared with the wizard's "Upload rejected" messaging.
+  // `visibleCount` (computed above) is the TRUE non-rejected total — everything
+  // the worker approved or is still validating — not `albumItems.length` (now
+  // just the first page), so `RejectedToast` diffs against the real count.
   const rejectedToastLabel = dict.newEvent.uploadRejectedToast;
-  // For the count-mismatch check, "visible" means anything the worker has
-  // either approved or is still mid-validation. Rejected rows are filtered
-  // out by the queries above.
-  const visibleCount = albumItems.length;
 
   // The three sections above the gallery — "Event details", the live AI
   // indexing status and "Share event". AI and Share are conditional (`null`
@@ -359,6 +305,9 @@ export default async function EventDetailPage({
                   iconTooltips={dict.photoIconButtons}
                   items={albumItems}
                   imageUnavailableLabel={dict.eventCard.imageUnavailable}
+                  initialHasMore={hasMore}
+                  loadMoreLabel={dict.events.loadMore}
+                  loadMoreErrorLabel={dict.events.loadMoreFailed}
                 />
               </TabsContent>
               <TabsContent value="pending" className="mt-4">
@@ -387,6 +336,9 @@ export default async function EventDetailPage({
               iconTooltips={dict.photoIconButtons}
               items={albumItems}
               imageUnavailableLabel={dict.eventCard.imageUnavailable}
+              initialHasMore={hasMore}
+              loadMoreLabel={dict.events.loadMore}
+              loadMoreErrorLabel={dict.events.loadMoreFailed}
             />
           )}
         </TranslationsProvider>

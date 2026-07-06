@@ -40,7 +40,14 @@ export type PhotoAlbumItem = {
 };
 
 type PhotoAlbumViewerProps = {
-  items: PhotoAlbumItem[];
+  /** A flat gallery. Provide this OR `itemBatches`. */
+  items?: PhotoAlbumItem[];
+  /** Paginated load-more pages. When provided, each page is laid out as its own
+   * justified-rows segment so a "Load more" append never re-flows the photos
+   * already on screen (no scroll-jump). The flat item list (for the lightbox,
+   * dimensions, and selection) is derived from these — a single source of
+   * truth, so the segments can never drift out of sync with the flat list. */
+  itemBatches?: PhotoAlbumItem[][];
   selectionMode?: boolean;
   selectedIds?: string[];
   onToggleSelect?: (photoId: string) => void;
@@ -98,7 +105,8 @@ type PhotoAlbumViewerProps = {
 };
 
 export default function PhotoAlbumViewer({
-  items,
+  items: itemsProp,
+  itemBatches,
   selectionMode = false,
   selectedIds,
   onToggleSelect,
@@ -135,6 +143,11 @@ export default function PhotoAlbumViewer({
   canClaimToProfile,
   actionBarLabels,
 }: PhotoAlbumViewerProps) {
+  // Single source of truth: when the caller paginates via `itemBatches`, the
+  // flat list is their concatenation; otherwise it's the flat `items` prop.
+  // Everything below (lightbox, dimensions, selection) works off this — and the
+  // rendered segments are slices of it, so they can't drift out of sync.
+  const items = useMemo(() => itemBatches?.flat() ?? itemsProp ?? [], [itemBatches, itemsProp]);
   const { index, openAt, switchTo, close } = usePhotoLightboxUrl(items);
   const [dimensions, setDimensions] = useState<Record<string, { width: number; height: number }>>(
     {},
@@ -221,6 +234,22 @@ export default function PhotoAlbumViewer({
       }),
     [items, dimensions],
   );
+
+  // Split the mapped photos into contiguous load-more segments — one justified-
+  // rows album per page — so appending a new page never re-flows (or visually
+  // shifts) the pages already on screen. `photos` is derived from `itemBatches`,
+  // so the slice offsets always line up exactly; no page (or a single page)
+  // means one segment: the original single-album behavior.
+  const photoSegments = useMemo(() => {
+    if (!itemBatches || itemBatches.length <= 1) return [photos];
+    const segments: (typeof photos)[] = [];
+    let start = 0;
+    for (const batch of itemBatches) {
+      segments.push(photos.slice(start, start + batch.length));
+      start += batch.length;
+    }
+    return segments;
+  }, [photos, itemBatches]);
 
   const lightboxItems: PhotoLightboxItem[] = useMemo(
     () =>
@@ -360,112 +389,115 @@ export default function PhotoAlbumViewer({
 
   return (
     <>
-      <div className="w-full max-w-full min-w-0">
-        <RowsPhotoAlbum
-          photos={photos}
-          targetRowHeight={250}
-          rowConstraints={{ singleRowMaxHeight: 250 }}
-          spacing={8}
-          render={{
-            extras: renderExtras,
-            button: (props, { photo }) => {
-              const photoId = extractPhotoId(photo as Photo & { id?: string });
-              const isSelected = selectedSet.has(photoId);
-              const { onClick, className: propsClassName, ...restProps } = props;
-              return (
-                // biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons
-                <div
-                  {...(restProps as React.HTMLAttributes<HTMLDivElement>)}
-                  onClick={
-                    onClick
-                      ? (e: React.MouseEvent<HTMLDivElement>) => {
-                          onClick(e as unknown as React.MouseEvent<HTMLButtonElement>);
-                        }
-                      : undefined
-                  }
-                  tabIndex={0}
-                  role="button"
-                  data-selected={isSelected ? '' : undefined}
-                  className={cn(
-                    'group relative flex h-full w-full overflow-hidden rounded-lg bg-muted p-0 text-left focus:outline-none focus:ring-2 focus:ring-ring/30 selection:ring-0',
-                    canSelect ? 'cursor-pointer' : 'cursor-zoom-in',
-                    propsClassName,
-                  )}
-                  onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      onClick?.(event as unknown as React.MouseEvent<HTMLButtonElement>);
+      <div className="flex w-full max-w-full min-w-0 flex-col gap-2">
+        {photoSegments.map((segment, segmentIndex) => (
+          <RowsPhotoAlbum
+            key={segment[0]?.id ?? `segment-${segmentIndex}`}
+            photos={segment}
+            targetRowHeight={250}
+            rowConstraints={{ singleRowMaxHeight: 250 }}
+            spacing={8}
+            render={{
+              extras: renderExtras,
+              button: (props, { photo }) => {
+                const photoId = extractPhotoId(photo as Photo & { id?: string });
+                const isSelected = selectedSet.has(photoId);
+                const { onClick, className: propsClassName, ...restProps } = props;
+                return (
+                  // biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons
+                  <div
+                    {...(restProps as React.HTMLAttributes<HTMLDivElement>)}
+                    onClick={
+                      onClick
+                        ? (e: React.MouseEvent<HTMLDivElement>) => {
+                            onClick(e as unknown as React.MouseEvent<HTMLButtonElement>);
+                          }
+                        : undefined
                     }
-                  }}
-                />
-              );
-            },
-            link: (props, { photo }) => {
-              const photoId = extractPhotoId(photo as Photo & { id?: string });
-              const isSelected = selectedSet.has(photoId);
-              const { onClick, href, className: propsClassName, ...restProps } = props;
-              return (
-                // biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons
-                <div
-                  {...(restProps as React.HTMLAttributes<HTMLDivElement>)}
-                  onClick={
-                    onClick
-                      ? (e: React.MouseEvent<HTMLDivElement>) => {
-                          e.preventDefault();
-                          onClick(e as unknown as React.MouseEvent<HTMLAnchorElement>);
-                        }
-                      : undefined
-                  }
-                  tabIndex={0}
-                  role="link"
-                  data-selected={isSelected ? '' : undefined}
-                  aria-label={href}
-                  className={cn(
-                    'group relative flex h-full w-full overflow-hidden rounded-lg bg-muted p-0 text-left focus:outline-none focus:ring-2 focus:ring-ring/30 selection:ring-0',
-                    canSelect ? 'cursor-pointer' : 'cursor-zoom-in',
-                    propsClassName,
-                  )}
-                  onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      onClick?.(event as unknown as React.MouseEvent<HTMLAnchorElement>);
+                    tabIndex={0}
+                    role="button"
+                    data-selected={isSelected ? '' : undefined}
+                    className={cn(
+                      'group relative flex h-full w-full overflow-hidden rounded-lg bg-muted p-0 text-left focus:outline-none focus:ring-2 focus:ring-ring/30 selection:ring-0',
+                      canSelect ? 'cursor-pointer' : 'cursor-zoom-in',
+                      propsClassName,
+                    )}
+                    onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        onClick?.(event as unknown as React.MouseEvent<HTMLButtonElement>);
+                      }
+                    }}
+                  />
+                );
+              },
+              link: (props, { photo }) => {
+                const photoId = extractPhotoId(photo as Photo & { id?: string });
+                const isSelected = selectedSet.has(photoId);
+                const { onClick, href, className: propsClassName, ...restProps } = props;
+                return (
+                  // biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons
+                  <div
+                    {...(restProps as React.HTMLAttributes<HTMLDivElement>)}
+                    onClick={
+                      onClick
+                        ? (e: React.MouseEvent<HTMLDivElement>) => {
+                            e.preventDefault();
+                            onClick(e as unknown as React.MouseEvent<HTMLAnchorElement>);
+                          }
+                        : undefined
                     }
-                  }}
-                />
-              );
-            },
-          }}
-          componentsProps={{
-            image: ({ photo }) => {
+                    tabIndex={0}
+                    role="link"
+                    data-selected={isSelected ? '' : undefined}
+                    aria-label={href}
+                    className={cn(
+                      'group relative flex h-full w-full overflow-hidden rounded-lg bg-muted p-0 text-left focus:outline-none focus:ring-2 focus:ring-ring/30 selection:ring-0',
+                      canSelect ? 'cursor-pointer' : 'cursor-zoom-in',
+                      propsClassName,
+                    )}
+                    onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        onClick?.(event as unknown as React.MouseEvent<HTMLAnchorElement>);
+                      }
+                    }}
+                  />
+                );
+              },
+            }}
+            componentsProps={{
+              image: ({ photo }) => {
+                const photoId = extractPhotoId(photo as Photo & { id?: string });
+                const isSelected = selectedSet.has(photoId);
+                const state = loadStates[photoId] ?? 'loading';
+                return {
+                  className: cn(
+                    'h-full w-full object-cover transition-opacity duration-200',
+                    state === 'loaded' ? 'opacity-100' : 'opacity-0',
+                    state === 'loaded' && canSelect && isSelected && 'opacity-75',
+                  ),
+                  onLoad: () =>
+                    setLoadStates((prev) =>
+                      prev[photoId] === 'loaded' ? prev : { ...prev, [photoId]: 'loaded' },
+                    ),
+                  onError: () =>
+                    setLoadStates((prev) =>
+                      prev[photoId] === 'error' ? prev : { ...prev, [photoId]: 'error' },
+                    ),
+                };
+              },
+            }}
+            onClick={({ photo }) => {
               const photoId = extractPhotoId(photo as Photo & { id?: string });
-              const isSelected = selectedSet.has(photoId);
-              const state = loadStates[photoId] ?? 'loading';
-              return {
-                className: cn(
-                  'h-full w-full object-cover transition-opacity duration-200',
-                  state === 'loaded' ? 'opacity-100' : 'opacity-0',
-                  state === 'loaded' && canSelect && isSelected && 'opacity-75',
-                ),
-                onLoad: () =>
-                  setLoadStates((prev) =>
-                    prev[photoId] === 'loaded' ? prev : { ...prev, [photoId]: 'loaded' },
-                  ),
-                onError: () =>
-                  setLoadStates((prev) =>
-                    prev[photoId] === 'error' ? prev : { ...prev, [photoId]: 'error' },
-                  ),
-              };
-            },
-          }}
-          onClick={({ photo }) => {
-            const photoId = extractPhotoId(photo as Photo & { id?: string });
-            if (canSelect && selectionActive) {
-              handleToggleSelect(photoId);
-              return;
-            }
-            openAt(photoId);
-          }}
-        />
+              if (canSelect && selectionActive) {
+                handleToggleSelect(photoId);
+                return;
+              }
+              openAt(photoId);
+            }}
+          />
+        ))}
       </div>
       <PhotoLightbox
         items={lightboxItems}

@@ -5,6 +5,7 @@ import type {
   ClientSearchMatch,
   SearchFacesInEventResult,
 } from '@/app/[lang]/events/[shareCode]/face-search-shared';
+import type { PublicPhotoAlbumItem } from '@/app/[lang]/events/[shareCode]/photo-album-item';
 import {
   AIFindPhotosBanner,
   type AIFindPhotosBannerLabels,
@@ -15,6 +16,9 @@ import { FaceSearchModal, type FaceSearchModalLabels } from '@/components/face-s
 interface FaceSearchContextValue {
   /** null = no search performed; [] = searched, no matches; [...] = matches. */
   matches: ClientSearchMatch[] | null;
+  /** The matched photos, signed + complete — bucketed by the viewer instead of
+   * the paginated grid so a match beyond the loaded page still renders. */
+  matchedPhotos: PublicPhotoAlbumItem[];
   /** false when the event still had un-indexed photos at search time. */
   eventIndexingComplete: boolean;
   /** Clears matches → the viewer falls back to the full grid. */
@@ -41,9 +45,21 @@ export function useFaceSearch(): FaceSearchContextValue {
 interface BibSearchContextValue {
   /** null = no bib search active; [] = searched, no matches; [...] = matched photo ids. */
   matchedPhotoIds: string[] | null;
+  /** The matched photos, signed + complete — rendered directly by the viewer so
+   * a bib match beyond the loaded page still appears. */
+  matchedPhotos: PublicPhotoAlbumItem[];
 }
 
-const BibSearchContext = createContext<BibSearchContextValue>({ matchedPhotoIds: null });
+const BibSearchContext = createContext<BibSearchContextValue>({
+  matchedPhotoIds: null,
+  matchedPhotos: [],
+});
+
+/** The payload `BibSearchBar` forwards on a search, or `null` when cleared. */
+export interface BibSearchResult {
+  photoIds: string[];
+  matchedPhotos: PublicPhotoAlbumItem[];
+}
 
 /**
  * Bib-search match state for the gallery viewer. Safe to call outside a
@@ -95,32 +111,44 @@ export function EventGalleryWithFaceSearch({
 }: EventGalleryWithFaceSearchProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [matches, setMatches] = useState<ClientSearchMatch[] | null>(null);
+  const [matchedPhotos, setMatchedPhotos] = useState<PublicPhotoAlbumItem[]>([]);
   const [eventIndexingComplete, setEventIndexingComplete] = useState(true);
-  const [bibMatchedIds, setBibMatchedIds] = useState<string[] | null>(null);
+  const [bibMatched, setBibMatched] = useState<BibSearchResult | null>(null);
 
   const onSearchResult = useCallback((result: SearchFacesInEventResult) => {
     if (result.reason === 'collection-missing') {
       // The event lost AI support mid-flight — keep the full gallery.
       setMatches(null);
+      setMatchedPhotos([]);
       return;
     }
     setMatches(result.matches);
+    setMatchedPhotos(result.matchedPhotos);
     setEventIndexingComplete(result.eventIndexingComplete);
   }, []);
 
   const value = useMemo<FaceSearchContextValue>(
     () => ({
       matches,
+      matchedPhotos,
       eventIndexingComplete,
-      clearMatches: () => setMatches(null),
+      clearMatches: () => {
+        setMatches(null);
+        setMatchedPhotos([]);
+      },
       openSearch: () => setModalOpen(true),
     }),
-    [matches, eventIndexingComplete],
+    [matches, matchedPhotos, eventIndexingComplete],
   );
 
   return (
     <FaceSearchContext.Provider value={value}>
-      <BibSearchContext.Provider value={{ matchedPhotoIds: bibMatchedIds }}>
+      <BibSearchContext.Provider
+        value={{
+          matchedPhotoIds: bibMatched?.photoIds ?? null,
+          matchedPhotos: bibMatched?.matchedPhotos ?? [],
+        }}
+      >
         <div className="flex flex-col gap-4">
           {aiSearchEligible && matches === null ? (
             <AIFindPhotosBanner
@@ -135,8 +163,8 @@ export function EventGalleryWithFaceSearch({
               key="bib-search-bar"
               shareCode={shareCode}
               labels={bibSearchLabels}
-              hasResults={bibMatchedIds !== null}
-              onResults={setBibMatchedIds}
+              hasResults={bibMatched !== null}
+              onResults={setBibMatched}
             />
           ) : null}
           {fullGallery}

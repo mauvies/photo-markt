@@ -8,7 +8,10 @@ import {
   addPhotoToCartAction,
   removePhotoFromCartAction,
 } from '@/app/[lang]/dashboard/talent/cart/actions';
-import { getEventPhotoDownloadUrlAction } from '@/app/[lang]/events/[shareCode]/actions';
+import {
+  getEventPhotoDownloadUrlAction,
+  loadMoreEventPhotos,
+} from '@/app/[lang]/events/[shareCode]/actions';
 import {
   buildBuckets,
   type FaceSearchResultsLabels,
@@ -31,10 +34,15 @@ import {
   useBulkContributorDelete,
 } from '@/hooks/use-bulk-contributor-delete';
 import { useBulkPhotoDownload } from '@/hooks/use-bulk-photo-download';
+import { useLoadMorePhotos } from '@/hooks/use-load-more-photos';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
 import { filterNewIds } from '@/lib/bulk-select';
 import { shouldShowBulkDownload } from '@/lib/event-bulk-actions';
-import { bibSearchEmptyKind, filterEventPhotos } from '@/lib/event-photo-filter';
+import {
+  bibSearchEmptyKind,
+  filterEventPhotoPages,
+  filterEventPhotos,
+} from '@/lib/event-photo-filter';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
   addPhotosToMyPhotosAction,
@@ -95,6 +103,12 @@ type EventPhotoViewerProps = {
   photosClaimedToProfile?: Set<string>;
   iconTooltips?: Partial<PhotoIconTooltips>;
   imageUnavailableLabel: string;
+  /** Whether more photos exist beyond the first batch (drives "Load more"). */
+  initialHasMore?: boolean;
+  /** "Load more" button label. */
+  loadMoreLabel: string;
+  /** Toast shown when a "Load more" fetch fails. */
+  loadMoreErrorLabel: string;
 };
 
 export function EventPhotoViewer({
@@ -118,6 +132,9 @@ export function EventPhotoViewer({
   photosClaimedToProfile: initialClaimedPhotos = new Set(),
   iconTooltips,
   imageUnavailableLabel,
+  initialHasMore = false,
+  loadMoreLabel,
+  loadMoreErrorLabel,
 }: EventPhotoViewerProps) {
   const { t } = useTranslations<{
     addedToPhotos: string;
@@ -146,10 +163,20 @@ export function EventPhotoViewer({
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
   const [skippedDeleteCount, setSkippedDeleteCount] = useState(0);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const items = useMemo(
-    () => itemsProp.filter((i) => !deletedIds.has(i.id)),
-    [itemsProp, deletedIds],
-  );
+
+  // Paginated grid — server sends the first batch, "Load more" appends the rest.
+  const {
+    pages: gridPages,
+    hasMore,
+    isLoadingMore,
+    loadMore,
+  } = useLoadMorePhotos<PhotoAlbumItem>({
+    initialItems: itemsProp,
+    initialHasMore,
+    initialOffset: itemsProp.length,
+    fetchMore: (offset) => loadMoreEventPhotos(shareCode ?? eventId, offset),
+    onError: () => toast.error(loadMoreErrorLabel),
+  });
 
   // Favorites — optimistic, seeded from the server prop.
   const [myPhotos, setMyPhotos] = useState<Set<string>>(initialPhotosInMyPhotos);
@@ -379,30 +406,40 @@ export function EventPhotoViewer({
   const canDeleteOwnPhotos = isCollaborative && Boolean(shareCode) && uploadedPhotoIds.size > 0;
 
   // ── AI face-search results ─────────────────────────────────────────────
+  // Bucket the search's OWN signed matches (complete), not the paginated grid.
   const faceSearch = useFaceSearch();
   const bucketed = useMemo(
-    () => buildBuckets(faceSearch.matches, items),
-    [faceSearch.matches, items],
+    () => buildBuckets(faceSearch.matches, faceSearch.matchedPhotos),
+    [faceSearch.matches, faceSearch.matchedPhotos],
   );
 
   // ── BIB-number search filter (T-069) ───────────────────────────────────
   const bibSearch = useBibSearch();
+  const bibActive = bibSearch.matchedPhotoIds !== null;
 
-  // ── "All photos / My photos" filter ────────────────────────────────────
+  // ── "All photos / My photos" filter + bib search ────────────────────────
   const [filter, setFilter] = useState<EventPhotoFilter>('all');
-  const visiblePhotos = useMemo(
+
+  // Grid mode: one filtered batch per load-more page, laid out as independent
+  // segments (no reflow / scroll-jump on append). A bib search instead renders
+  // its own complete, signed matched set.
+  const gridBatches = useMemo(
+    () => filterEventPhotoPages(gridPages, { deletedIds, filter, myPhotoIds: uploadedPhotoIds }),
+    [gridPages, deletedIds, filter, uploadedPhotoIds],
+  );
+  const bibVisiblePhotos = useMemo(
     () =>
-      filterEventPhotos(items, {
+      filterEventPhotos(bibSearch.matchedPhotos, {
         filter,
         myPhotoIds: uploadedPhotoIds,
-        bibMatchedIds: bibSearch.matchedPhotoIds,
+        bibMatchedIds: null,
       }),
-    [filter, items, uploadedPhotoIds, bibSearch.matchedPhotoIds],
+    [bibSearch.matchedPhotos, filter, uploadedPhotoIds],
   );
 
   const bibEmptyKind = bibSearchEmptyKind(
     bibSearch.matchedPhotoIds,
-    visiblePhotos.length,
+    bibVisiblePhotos.length,
     bibHasData,
   );
 
@@ -679,13 +716,19 @@ export function EventPhotoViewer({
   return (
     <>
       <PhotoGallery
-        items={visiblePhotos}
+        items={bibActive ? bibVisiblePhotos : undefined}
+        itemBatches={bibActive ? undefined : gridBatches}
         galleryProps={galleryProps}
         bulkActions={bulkActions}
         labels={selectionLabels}
         selectionResetKey={selectionResetKey}
         toolbarClassName={toolbarClassName}
         gridClassName={gridClassName}
+        loadMore={
+          bibActive
+            ? undefined
+            : { hasMore, isLoading: isLoadingMore, onLoadMore: loadMore, label: loadMoreLabel }
+        }
         toolbarLeading={
           isCollaborative ? (
             <EventPhotoFilterTabs

@@ -1,16 +1,21 @@
 'use server';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
+import type { PhotoAlbumItem } from '@/components/photo-album-viewer';
 import {
+  createPhotoUrlMap,
   deletePhoto,
   deleteStorageFiles,
   eventExists,
   getEvent,
+  getEventPhotosPage,
   getPhoto,
+  getProfilesByIds,
   getTagsForPhotos,
   inviteEventPhotographer,
   isPhotoTaggedForTalent,
   revokeEventPhotographer,
+  type SupabaseServerClient,
   searchPhotographers,
   tagPhotosForTalent,
   untagPhotoForTalent,
@@ -23,7 +28,11 @@ import {
   getEventRekognitionState,
 } from '@/database/queries/rekognition';
 import { createClient } from '@/database/server';
+import { supabaseAdmin } from '@/database/supabase-admin';
+import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
+import { eventUsesModerationQueue } from '@/lib/event-status';
 import { inngest } from '@/lib/inngest/client';
+import { buildOwnerPhotoAlbumItem } from './owner-album-item';
 
 // Invalidates the `event-${param}` cache tag for every param a viewer might
 // have used to reach the event (UUID, slug, or share_code). Without this,
@@ -311,6 +320,57 @@ export async function getPhotoDownloadUrlAction(photoId: string, eventId: string
     throw new Error('Could not prepare the download.');
   }
   return data.signedUrl;
+}
+
+/**
+ * Fetch, sign, tag, and map the next page of an owner's event gallery for the
+ * "Load more" button. Owner-only: the full album renders only for the event
+ * owner, so ownership is verified via `getEvent`. Signs ORIGINALS (the owner
+ * sees un-watermarked photos) and mirrors the page's grid query — including
+ * pending photos only when the event doesn't route uploads through the
+ * moderation queue.
+ */
+export async function loadMoreOwnerEventPhotos(
+  eventId: string,
+  offset: number,
+): Promise<{ items: PhotoAlbumItem[]; hasMore: boolean; nextOffset: number }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('You must be signed in.');
+
+  const event = await getEvent(supabase, eventId, user.id);
+  if (!event) throw new Error('Event not found or access denied.');
+
+  const adminClient = supabaseAdmin as unknown as SupabaseServerClient;
+  const { photos, hasMore } = await getEventPhotosPage(adminClient, eventId, user.id, {
+    skipUserIdFilter: true,
+    includePending: !eventUsesModerationQueue(event),
+    limit: EVENT_GALLERY_PAGE_SIZE,
+    offset,
+  });
+
+  const paths = photos.map((p) => p.original_url).filter((url): url is string => url !== null);
+  const uploaderUserIds = photos.map((p) => p.uploaded_by).filter((v): v is string => Boolean(v));
+
+  // Signing (originals), tags, and uploader profiles are independent — run them
+  // together. Tags use the cookie client (RLS-friendly, matches the page);
+  // profiles use the admin client since guest rows sit outside the owner's RLS.
+  const [signed, tags, uploaderProfiles] = await Promise.all([
+    createPhotoUrlMap(adminClient, 'photos', paths, { expiresIn: 60 * 60 }),
+    getTagsForPhotos(
+      supabase,
+      photos.map((p) => p.id),
+    ),
+    getProfilesByIds(adminClient, uploaderUserIds),
+  ]);
+
+  const items = photos
+    .map((p) => buildOwnerPhotoAlbumItem(p, { signed, uploaderProfiles, tags }))
+    .filter((item): item is PhotoAlbumItem => item !== null);
+
+  return { items, hasMore, nextOffset: offset + photos.length };
 }
 
 /**

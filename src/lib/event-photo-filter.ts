@@ -28,6 +28,35 @@ export function filterEventPhotos<T extends { id: string }>(
 }
 
 /**
+ * Apply the grid's optimistic-delete filter and the "All / My photos" filter to
+ * each paginated load-more page independently, dropping any page that ends up
+ * empty. The result feeds the gallery as `itemBatches` so every load-more page
+ * is laid out as its own segment — appending never re-flows earlier pages (no
+ * scroll-jump). `bibMatchedIds` is intentionally not applied here: a bib search
+ * renders its own complete signed set, not a filter over the paginated grid.
+ *
+ * Shared by all three event viewers (public, talent, photographer) so the
+ * batching logic lives in one place.
+ */
+export function filterEventPhotoPages<T extends { id: string }>(
+  pages: T[][],
+  opts: {
+    deletedIds: Set<string>;
+    filter: 'all' | 'mine';
+    myPhotoIds: Set<string>;
+  },
+): T[][] {
+  return pages
+    .map((page) =>
+      filterEventPhotos(
+        page.filter((item) => !opts.deletedIds.has(item.id)),
+        { filter: opts.filter, myPhotoIds: opts.myPhotoIds, bibMatchedIds: null },
+      ),
+    )
+    .filter((batch) => batch.length > 0);
+}
+
+/**
  * Which bib-search empty state to show, or `null` when no empty state applies.
  *
  * - `null` — no active bib search, or the search has visible results.

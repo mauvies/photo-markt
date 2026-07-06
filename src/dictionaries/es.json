@@ -184,6 +184,8 @@
     "deleteEvent": "Eliminar evento",
     "eventActionsMenuLabel": "Más opciones",
     "galleryEmpty": "Aún no hay fotos en este evento.",
+    "loadMore": "Cargar más",
+    "loadMoreFailed": "No se pudieron cargar más fotos. Inténtalo de nuevo.",
     "deletePhoto": "Eliminar foto",
     "deletePhotoConfirmTitle": "¿Eliminar esta foto?",
     "deletePhotoConfirmDesc": "Esta acción es permanente y no se puede deshacer.",

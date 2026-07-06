@@ -1,6 +1,7 @@
 'use client';
 
-import { type ComponentProps, type ReactNode, useEffect, useMemo } from 'react';
+import { Loader2 } from 'lucide-react';
+import { type ComponentProps, type ReactNode, useEffect, useMemo, useRef } from 'react';
 import PhotoAlbumViewer, { type PhotoAlbumItem } from '@/components/photo-album-viewer';
 import { PhotoSelectionToolbar } from '@/components/photo-selection-toolbar';
 import { Button } from '@/components/ui/button';
@@ -44,6 +45,19 @@ interface PhotoGalleryProps {
   labels?: PhotoGallerySelectionLabels;
   /** Rendered when there are no photos. */
   emptyState?: ReactNode;
+  /** "Load more" footer for the paginated flat grid. Ignored on the `sections`
+   * (AI-results) path. Hidden when `hasMore` is false. */
+  loadMore?: {
+    hasMore: boolean;
+    isLoading: boolean;
+    onLoadMore: () => void;
+    label: string;
+  };
+  /** Paginated load-more pages for the flat grid — each is laid out as an
+   * independent segment so appending never re-flows on-screen photos. Provide
+   * this instead of `items` for a paginated grid; ignored on the `sections`
+   * (AI-results) path. */
+  itemBatches?: PhotoAlbumItem[][];
 }
 
 const EMPTY_SELECTION_LABELS: PhotoGallerySelectionLabels = {
@@ -75,6 +89,8 @@ export function PhotoGallery({
   gridClassName,
   labels = EMPTY_SELECTION_LABELS,
   emptyState,
+  loadMore,
+  itemBatches,
 }: PhotoGalleryProps) {
   const selection = usePhotoSelection();
 
@@ -83,9 +99,31 @@ export function PhotoGallery({
     selection.clear();
   }, [selectionResetKey, selection.clear]);
 
+  // Infinite scroll: auto-trigger "Load more" when its footer scrolls into view.
+  // A ref holds the latest callback so the observer isn't re-created on every
+  // render (the host passes a fresh `loadMore` object each time). The footer
+  // stays a clickable fallback. `rootMargin` prefetches ~300px early so the
+  // append feels seamless rather than stopping at the very bottom edge.
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const onLoadMoreRef = useRef(loadMore?.onLoadMore);
+  onLoadMoreRef.current = loadMore?.onLoadMore;
+  const autoLoadEnabled = !sections && Boolean(loadMore?.hasMore) && !loadMore?.isLoading;
+  useEffect(() => {
+    const node = loadMoreSentinelRef.current;
+    if (!node || !autoLoadEnabled) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) onLoadMoreRef.current?.();
+      },
+      { rootMargin: '300px 0px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [autoLoadEnabled]);
+
   const allItems = useMemo(
-    () => items ?? (sections ?? []).flatMap((s) => s.items),
-    [items, sections],
+    () => items ?? itemBatches?.flat() ?? (sections ?? []).flatMap((s) => s.items),
+    [items, itemBatches, sections],
   );
 
   const countLabel =
@@ -134,7 +172,12 @@ export function PhotoGallery({
       </section>
     ))
   ) : (
-    <PhotoAlbumViewer items={items ?? []} {...albumSelectionProps} {...galleryProps} />
+    <PhotoAlbumViewer
+      items={items}
+      itemBatches={itemBatches}
+      {...albumSelectionProps}
+      {...galleryProps}
+    />
   );
 
   // One sticky inline toolbar serves both states on every device — the "Select"
@@ -171,6 +214,23 @@ export function PhotoGallery({
       ) : (
         <div className={cn('flex flex-col gap-4', gridClassName)}>{grids}</div>
       )}
+
+      {/* "Load more" — flat grid only (never the AI-results `sections` path).
+          The sentinel div drives infinite-scroll auto-loading; the button is
+          the clickable fallback. */}
+      {!sections && loadMore?.hasMore ? (
+        <div ref={loadMoreSentinelRef} className="flex justify-center pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={loadMore.onLoadMore}
+            disabled={loadMore.isLoading}
+          >
+            {loadMore.isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {loadMore.label}
+          </Button>
+        </div>
+      ) : null}
 
       {selection.isSelecting && bulkButtons.length > 0 ? (
         // Mobile only: the bulk actions live in a fixed bar over the bottom nav

@@ -7,10 +7,13 @@ import { getActiveRole } from '@/app/[lang]/actions/roles';
 import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/activity-options';
 import { EventGalleryWithFaceSearch } from '@/components/event-gallery-with-face-search';
 import {
-  createPhotoUrls,
+  countEventPhotosByStatus,
+  createPhotoUrlMap,
   getEventByShareCode,
   getEventBySlug,
-  getEventPhotosPublic,
+  getEventPhotosPublicPage,
+  getProfilesByIds,
+  type PhotoDetail,
   type SupabaseServerClient,
 } from '@/database/queries';
 import { getPurchasedPhotoIdsForEvent } from '@/database/queries/orders';
@@ -20,6 +23,7 @@ import {
 } from '@/database/queries/rekognition';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
 import { getEventStatus, isCollaborativeUploadOpen } from '@/lib/event-status';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { getBaseUrl } from '@/lib/get-base-url';
@@ -30,8 +34,8 @@ import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { stringifyJsonLd } from '@/lib/json-ld';
-import { thumbRelativeUrl } from '@/lib/thumbnails';
 import { ContributeDialog } from './contribute-dialog';
+import { buildPublicPhotoAlbumItem, type UploaderProfileMap } from './photo-album-item';
 import { PublicEventPhotoViewer } from './public-event-photo-viewer';
 import { UploadProgressProvider } from './upload-progress-provider';
 
@@ -66,7 +70,13 @@ async function getCachedEventData(
   baseUrl: string,
 ): Promise<{
   event: EventRow;
-  photos: Awaited<ReturnType<typeof getEventPhotosPublic>>;
+  /** The first gallery page only — subsequent pages load via a Server Action. */
+  photos: PhotoDetail[];
+  /** Whether more approved photos exist beyond the first page. */
+  hasMore: boolean;
+  /** True total of approved photos — drives JSON-LD `numberOfItems` even though
+   * only the first page renders. */
+  totalCount: number;
   /**
    * Pre-signed photo URLs keyed by storage path, generated inside the cache
    * so they survive trivial re-renders. Without caching, every render produced
@@ -75,7 +85,7 @@ async function getCachedEventData(
    */
   signed: Record<string, string>;
   /** Profile lookup for `uploaded_by` ids, for the contributor badge. */
-  uploaderProfiles: Record<string, { display_name: string | null; username: string }>;
+  uploaderProfiles: UploaderProfileMap;
   /** Signed URL for the dedicated cover image (T-055), if the event has one. */
   coverSignedUrl: string | null;
 } | null> {
@@ -114,74 +124,54 @@ async function getCachedEventData(
 
   if (!event) return null;
 
-  const photos = await getEventPhotosPublic(
-    supabaseAdmin as unknown as SupabaseServerClient,
-    event.id,
-  );
-
-  // Sign storage paths once per cache window. Skip for upcoming events (the
-  // gallery isn't shown anyway).
-  const signed: Record<string, string> = {};
+  const adminForPhotos = supabaseAdmin as unknown as SupabaseServerClient;
   const eventStatusInside = getEventStatus(event.date);
-  if (eventStatusInside !== 'upcoming') {
-    const paths = photos.map((p) => p.original_url).filter((url): url is string => url !== null);
-    if (paths.length > 0) {
-      const photoUrls = await createPhotoUrls(
-        supabaseAdmin as unknown as SupabaseServerClient,
-        'photos',
-        paths,
-        {
-          expiresIn: 60 * 60,
-          useWatermark: event.watermark_enabled === true,
-          baseUrl,
-        },
-      );
-      for (const item of photoUrls) {
-        if (item.signedUrl) signed[item.path] = item.signedUrl;
-      }
-    }
-  }
+  // Dedicated cover image (T-055), if any — signed un-watermarked (it's a chosen
+  // presentation image, not a for-sale photo) so the JSON-LD can prefer it.
+  const coverPath = (event as { cover_path?: string | null }).cover_path ?? null;
 
-  // Resolve display names for authenticated contributors so the public
-  // uploader badge can render their name without an extra round-trip.
-  // The event owner is included so a collaborative event's photographer-
-  // uploaded photos (which carry no `uploaded_by`/`guest_name`) can still be
-  // attributed to them.
+  // Round 1 — the first gallery page (only the first page is fetched + signed;
+  // a 264-photo event used to sign all 264), the true approved count, and the
+  // cover signature are mutually independent (each needs only the event).
+  const [{ photos, hasMore }, totalCount, coverSignedUrl] = await Promise.all([
+    getEventPhotosPublicPage(adminForPhotos, event.id, {
+      limit: EVENT_GALLERY_PAGE_SIZE,
+      offset: 0,
+    }),
+    countEventPhotosByStatus(adminForPhotos, event.id, ['approved']),
+    coverPath
+      ? supabaseAdmin.storage
+          .from('photos')
+          .createSignedUrl(coverPath, 60 * 60)
+          .then((r) => r.data?.signedUrl ?? null)
+      : Promise.resolve<string | null>(null),
+  ]);
+
+  // Round 2 — signing the page and resolving uploader names both depend only on
+  // `photos`, so run them together. Signing is skipped for upcoming events (the
+  // gallery isn't shown). The owner profile is only read for collaborative
+  // attribution, so don't fetch it on non-collaborative events.
+  const paths = photos.map((p) => p.original_url).filter((url): url is string => url !== null);
   const uploaderUserIds = Array.from(
     new Set([
-      event.user_id,
+      ...(event.is_collaborative ? [event.user_id] : []),
       ...photos
         .map((p) => (p as { uploaded_by?: string | null }).uploaded_by)
         .filter((v): v is string => Boolean(v)),
     ]),
   );
-  const uploaderProfiles: Record<string, { display_name: string | null; username: string }> = {};
-  if (uploaderUserIds.length > 0) {
-    const { data: profilesData } = await supabaseAdmin
-      .from('profiles')
-      .select('id, display_name, username')
-      .in('id', uploaderUserIds);
-    for (const row of profilesData ?? []) {
-      uploaderProfiles[row.id as string] = {
-        display_name: (row.display_name as string | null) ?? null,
-        username: row.username as string,
-      };
-    }
-  }
+  const [signed, uploaderProfiles] = await Promise.all([
+    eventStatusInside !== 'upcoming'
+      ? createPhotoUrlMap(adminForPhotos, 'photos', paths, {
+          expiresIn: 60 * 60,
+          useWatermark: event.watermark_enabled === true,
+          baseUrl,
+        })
+      : Promise.resolve<Record<string, string>>({}),
+    getProfilesByIds(adminForPhotos, uploaderUserIds),
+  ]);
 
-  // Sign the dedicated cover image (T-055), if any, so the JSON-LD structured
-  // data can prefer it over the first photo. Un-watermarked: it's a chosen
-  // presentation image, not a for-sale photo.
-  let coverSignedUrl: string | null = null;
-  const coverPath = (event as { cover_path?: string | null }).cover_path ?? null;
-  if (coverPath) {
-    const { data: coverSigned } = await supabaseAdmin.storage
-      .from('photos')
-      .createSignedUrl(coverPath, 60 * 60);
-    coverSignedUrl = coverSigned?.signedUrl ?? null;
-  }
-
-  return { event, photos, signed, uploaderProfiles, coverSignedUrl };
+  return { event, photos, hasMore, totalCount, signed, uploaderProfiles, coverSignedUrl };
 }
 
 // ─── Static Params (pre-render top 50 public events) ─────────────────────────
@@ -296,7 +286,7 @@ export default async function EventPage({
 
   const cached = await getCachedEventData(param, baseUrl);
   if (!cached) notFound();
-  const { event, photos, signed, uploaderProfiles, coverSignedUrl } = cached;
+  const { event, photos, hasMore, totalCount, signed, uploaderProfiles, coverSignedUrl } = cached;
 
   // Permanent redirect: UUID visitors with a slug get sent to the canonical slug URL.
   if (UUID_REGEX.test(param) && event.slug) {
@@ -400,45 +390,16 @@ export default async function EventPage({
     activityOptions.find((o) => o.value === event.activity)?.label ?? event.activity;
   const location = [event.city, event.country].filter(Boolean).join(', ');
 
+  const galleryAlt = `${activityLabel} photo at ${event.name} in ${location}`;
   const photoItems = photos
-    .map((p) => {
-      const url = p.original_url ? signed[p.original_url] : null;
-      if (!url) return null;
-      const userId = (p as { user_id?: string | null }).user_id ?? null;
-      const uploadedBy = (p as { uploaded_by?: string | null }).uploaded_by ?? null;
-      const guestName = (p as { guest_name?: string | null }).guest_name ?? null;
-      let uploader: { name: string; isAuthenticated: boolean } | undefined;
-      if (uploadedBy) {
-        const profile = uploaderProfiles[uploadedBy];
-        const name = profile?.display_name ?? profile?.username ?? guestName ?? '';
-        if (name) uploader = { name, isAuthenticated: true };
-      } else if (guestName) {
-        uploader = { name: guestName, isAuthenticated: false };
-      } else if (event.is_collaborative) {
-        // No contributor/guest attribution on a collaborative event means the
-        // photo is the event photographer's own upload — attribute it to them
-        // so every photo on a collaborative event shows who uploaded it.
-        const ownerProfile = uploaderProfiles[event.user_id];
-        const name = ownerProfile?.display_name ?? ownerProfile?.username ?? '';
-        if (name) uploader = { name, isAuthenticated: true };
-      }
-      const thumbsReady = (p as { thumbnail_status?: string }).thumbnail_status === 'ready';
-      return {
-        id: p.id,
-        url,
-        thumbSmall:
-          thumbsReady && p.original_url ? thumbRelativeUrl(p.original_url, 'small') : undefined,
-        thumbMedium:
-          thumbsReady && p.original_url ? thumbRelativeUrl(p.original_url, 'medium') : undefined,
-        alt: `${activityLabel} photo at ${event.name} in ${location}`,
-        originalPath: p.original_url,
-        userId,
-        uploadedBy,
-        uploader,
-        width: p.width ?? undefined,
-        height: p.height ?? undefined,
-      };
-    })
+    .map((p) =>
+      buildPublicPhotoAlbumItem(p, {
+        signed,
+        event,
+        uploaderProfiles,
+        alt: galleryAlt,
+      }),
+    )
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
   // ─── Structured data (JSON-LD) ──────────────────────────────────────────────
@@ -492,7 +453,7 @@ export default async function EventPage({
         name: `${event.name} — Photo Gallery`,
         description: `${activityLabel} photos from ${event.name} in ${location}`,
         url: eventUrl,
-        numberOfItems: photoItems.length,
+        numberOfItems: totalCount,
         ...(coverUrl ? { thumbnailUrl: coverUrl } : {}),
       },
       {
@@ -670,6 +631,9 @@ export default async function EventPage({
                     resultsLabels={dict.aiSearch.results}
                     imageUnavailableLabel={dict.eventCard.imageUnavailable}
                     bibSearchEmptyLabel={dict.bibDetection.searchEmpty}
+                    initialHasMore={hasMore}
+                    loadMoreLabel={dict.events.loadMore}
+                    loadMoreErrorLabel={dict.events.loadMoreFailed}
                   />
                 </Suspense>
               }

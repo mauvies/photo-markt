@@ -209,6 +209,36 @@ describe('searchFacesInEvent', () => {
     expect(result.matches.find((m) => m.photoId === undefined)).toBeUndefined();
   });
 
+  it('returns signed matchedPhotos honoring watermark, in lockstep with matches (T-060)', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id, { share_code: 'SHAREWM' });
+    const collectionId = 'photomarkt-test-wm';
+    await enableAiMatchingOnEvent(event.id, collectionId);
+    const sb = createServiceClient();
+    // Watermark on → deterministic /api/watermark/ URLs regardless of storage.
+    await sb.from('events').update({ watermark_enabled: true }).eq('id', event.id);
+
+    const match = await insertPhotoWithFace({
+      eventId: event.id,
+      ownerId: owner.id,
+      awsFaceId: 'aws-face-wm',
+      awsCollectionId: collectionId,
+    });
+
+    mockSearchFacesByImage.mockResolvedValueOnce([{ awsFaceId: 'aws-face-wm', similarity: 97 }]);
+
+    const formData = new FormData();
+    formData.append('selfie', await makeSelfieJpeg());
+
+    const result = await searchFacesInEvent(event.share_code ?? '', formData);
+
+    expect(result.matchedPhotos).toHaveLength(1);
+    expect(result.matchedPhotos[0]?.id).toBe(match.photoId);
+    expect(result.matchedPhotos[0]?.url).toContain('/api/watermark/');
+    // matches and matchedPhotos stay in lockstep (R3).
+    expect(result.matches.map((m) => m.photoId)).toEqual(result.matchedPhotos.map((p) => p.id));
+  });
+
   // Regression (T-062): public-only events have share_code = null and are
   // opened by their SEO slug. `searchFacesInEvent` used to resolve strictly by
   // share code, so slug lookups threw "Event not found." It must now resolve by

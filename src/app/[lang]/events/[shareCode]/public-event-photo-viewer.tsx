@@ -21,36 +21,27 @@ import {
 } from '@/components/photo-gallery';
 import type { PhotoIconTooltips, PhotoMoreMenuConfig } from '@/components/photo-icon-buttons';
 import type { BulkDownloadLabels } from '@/components/photo-selection-toolbar';
-import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
 import { Button } from '@/components/ui/button';
 import {
   type BulkContributorDeleteLabels,
   useBulkContributorDelete,
 } from '@/hooks/use-bulk-contributor-delete';
 import { useBulkPhotoDownload } from '@/hooks/use-bulk-photo-download';
+import { useLoadMorePhotos } from '@/hooks/use-load-more-photos';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
 import { type EventBulkActionKey, eventBulkActionKeys } from '@/lib/event-bulk-actions';
-import { filterEventPhotos } from '@/lib/event-photo-filter';
+import { filterEventPhotoPages, filterEventPhotos } from '@/lib/event-photo-filter';
 import type { GuestCartItem } from '@/lib/guest-cart';
-import { getEventPhotoDownloadUrlAction } from './actions';
+import { getEventPhotoDownloadUrlAction, loadMoreEventPhotos } from './actions';
 import { buildBuckets, type FaceSearchResultsLabels } from './face-search-shared';
 import { readGuestUploads, removeGuestUpload } from './guest-uploads-storage';
+import type { PublicPhotoAlbumItem } from './photo-album-item';
 import { useOptionalUploadProgress } from './upload-progress-provider';
 
-interface PhotoItem {
-  id: string;
-  url: string;
-  alt: string;
-  originalPath: string | null;
-  /** Row owner — set for all photos regardless of upload path. */
-  userId?: string | null;
-  /** Set only for guest-uploaded photos; null for authenticated uploads. */
-  uploadedBy?: string | null;
-  uploader?: PhotoUploaderInfo;
-  /** Displayed pixel dimensions — drives the gallery's reserved-space layout. */
-  width?: number;
-  height?: number;
-}
+// The public viewer needs the row-ownership fields (`userId`/`uploadedBy`) and
+// the original path, so it renders the superset item shape end to end — the
+// same shape the load-more action and enriched search results return.
+type PhotoItem = PublicPhotoAlbumItem;
 
 interface PublicEventPhotoViewerProps {
   photos: PhotoItem[];
@@ -110,6 +101,12 @@ interface PublicEventPhotoViewerProps {
   imageUnavailableLabel: string;
   /** Empty-state copy when a bib search returns no matches (T-032). */
   bibSearchEmptyLabel?: string;
+  /** Whether more photos exist beyond the first batch (drives "Load more"). */
+  initialHasMore?: boolean;
+  /** "Load more" button label. */
+  loadMoreLabel: string;
+  /** Toast shown when a "Load more" fetch fails. */
+  loadMoreErrorLabel: string;
 }
 
 export function PublicEventPhotoViewer({
@@ -138,6 +135,9 @@ export function PublicEventPhotoViewer({
   bulkDownload,
   imageUnavailableLabel,
   bibSearchEmptyLabel,
+  initialHasMore = false,
+  loadMoreLabel,
+  loadMoreErrorLabel,
 }: PublicEventPhotoViewerProps) {
   const router = useRouter();
   const guestCart = useGuestCart();
@@ -166,10 +166,43 @@ export function PublicEventPhotoViewer({
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
   const [skippedDeleteCount, setSkippedDeleteCount] = useState(0);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  // Paginated grid — the server sends the first batch; "Load more" appends the
+  // next. Bound to the share code (or event id fallback), watermark following
+  // the event's setting exactly like the cached first batch.
+  const {
+    items: gridPhotos,
+    pages: gridPages,
+    hasMore,
+    isLoadingMore,
+    loadMore,
+  } = useLoadMorePhotos<PhotoItem>({
+    initialItems: photosProp,
+    initialHasMore,
+    initialOffset: photosProp.length,
+    fetchMore: (offset) => loadMoreEventPhotos(shareCode ?? eventId, offset),
+    onError: () => toast.error(loadMoreErrorLabel),
+  });
   const photos = useMemo(
-    () => photosProp.filter((p) => !deletedIds.has(p.id)),
-    [photosProp, deletedIds],
+    () => gridPhotos.filter((p) => !deletedIds.has(p.id)),
+    [gridPhotos, deletedIds],
   );
+
+  // Search state lives above cart/ownership so those resolve over the union of
+  // the loaded grid AND the (complete, signed) search matches — a match beyond
+  // page 1 must still support "Add to cart" and ownership checks.
+  const faceSearch = useFaceSearch();
+  const bibSearch = useBibSearch();
+
+  // grid ∪ face-matched ∪ bib-matched, keyed by id (grid wins on collision).
+  const displayablePhotos = useMemo(() => {
+    const map = new Map<string, PhotoItem>();
+    for (const p of photos) map.set(p.id, p);
+    for (const p of faceSearch.matchedPhotos) if (!map.has(p.id)) map.set(p.id, p);
+    for (const p of bibSearch.matchedPhotos) if (!map.has(p.id)) map.set(p.id, p);
+    return map;
+  }, [photos, faceSearch.matchedPhotos, bibSearch.matchedPhotos]);
+
   // Photo IDs the current browser owns (guest-upload tokens stored locally).
   const [guestOwnedPhotoIds, setGuestOwnedPhotoIds] = useState<Set<string>>(new Set());
   // Per-photo guest delete tokens, kept in sync with `guestOwnedPhotoIds` so a
@@ -203,7 +236,7 @@ export function PublicEventPhotoViewer({
   //   so photos from both identities are included (union).
   const myPhotoIds = useMemo(() => {
     const set = new Set<string>();
-    for (const p of photos) {
+    for (const p of displayablePhotos.values()) {
       if (currentUserId && (p.userId === currentUserId || p.uploadedBy === currentUserId)) {
         set.add(p.id);
       }
@@ -212,12 +245,16 @@ export function PublicEventPhotoViewer({
       }
     }
     return set;
-  }, [photos, currentUserId, shareCode, guestOwnedPhotoIds]);
+  }, [displayablePhotos, currentUserId, shareCode, guestOwnedPhotoIds]);
 
   const photosInCart = useMemo(() => {
     if (isAuthenticated) return authCartPhotos;
-    return new Set(photos.filter((p) => guestCart.hasItem(p.id)).map((p) => p.id));
-  }, [isAuthenticated, authCartPhotos, photos, guestCart]);
+    const set = new Set<string>();
+    for (const p of displayablePhotos.values()) {
+      if (guestCart.hasItem(p.id)) set.add(p.id);
+    }
+    return set;
+  }, [isAuthenticated, authCartPhotos, displayablePhotos, guestCart]);
 
   // Where the "View cart" toast action navigates — the authenticated cart for
   // signed-in viewers, the guest cart route for everyone else.
@@ -228,7 +265,7 @@ export function PublicEventPhotoViewer({
   // list. The toast is the caller's job, so a bulk add can emit one summary.
   const addPhotoToCart = useCallback(
     (photoId: string): boolean => {
-      const photo = photos.find((p) => p.id === photoId);
+      const photo = displayablePhotos.get(photoId);
       if (!photo) return false;
       if (isAuthenticated) {
         addAuthCart(photoId);
@@ -249,7 +286,7 @@ export function PublicEventPhotoViewer({
     },
     [
       isAuthenticated,
-      photos,
+      displayablePhotos,
       photographerId,
       eventId,
       eventName,
@@ -389,25 +426,27 @@ export function PublicEventPhotoViewer({
   });
 
   // ── AI face-search results ─────────────────────────────────────────────
-  const faceSearch = useFaceSearch();
+  // Bucket the search's OWN signed matches (complete), not the paginated grid,
+  // so a match beyond page 1 still renders.
   const bucketed = useMemo(
-    () => buildBuckets<PhotoAlbumItem>(faceSearch.matches, photos),
-    [faceSearch.matches, photos],
+    () => buildBuckets<PhotoAlbumItem>(faceSearch.matches, faceSearch.matchedPhotos),
+    [faceSearch.matches, faceSearch.matchedPhotos],
   );
 
-  // ── BIB-number search filter (T-032) ───────────────────────────────────
-  const bibSearch = useBibSearch();
-
-  // ── "All photos / My photos" filter ────────────────────────────────────
+  // ── "All photos / My photos" filter + bib search ────────────────────────
+  const bibActive = bibSearch.matchedPhotoIds !== null;
   const [filter, setFilter] = useState<EventPhotoFilter>('all');
-  const visiblePhotos = useMemo(
-    () =>
-      filterEventPhotos(photos, {
-        filter,
-        myPhotoIds,
-        bibMatchedIds: bibSearch.matchedPhotoIds,
-      }),
-    [filter, photos, myPhotoIds, bibSearch.matchedPhotoIds],
+
+  // Grid mode: one filtered batch per load-more page, laid out as independent
+  // segments (no reflow / scroll-jump on append). A bib search instead renders
+  // its own complete, signed matched set.
+  const gridBatches = useMemo(
+    () => filterEventPhotoPages(gridPages, { deletedIds, filter, myPhotoIds }),
+    [gridPages, deletedIds, filter, myPhotoIds],
+  );
+  const bibVisiblePhotos = useMemo(
+    () => filterEventPhotos(bibSearch.matchedPhotos, { filter, myPhotoIds, bibMatchedIds: null }),
+    [bibSearch.matchedPhotos, filter, myPhotoIds],
   );
 
   // ── Single-photo download (lightbox) ───────────────────────────────────
@@ -613,7 +652,8 @@ export function PublicEventPhotoViewer({
         />
       ) : (
         <PhotoGallery
-          items={visiblePhotos}
+          items={bibActive ? bibVisiblePhotos : undefined}
+          itemBatches={bibActive ? undefined : gridBatches}
           galleryProps={galleryProps}
           bulkActions={bulkActions}
           selectable={canSelect}
@@ -621,6 +661,11 @@ export function PublicEventPhotoViewer({
           selectionResetKey={selectionResetKey}
           toolbarClassName="sticky top-[var(--header-height)] -mx-4 px-3"
           gridClassName="-mx-3.5 sm:mx-0"
+          loadMore={
+            bibActive
+              ? undefined
+              : { hasMore, isLoading: isLoadingMore, onLoadMore: loadMore, label: loadMoreLabel }
+          }
           toolbarLeading={
             isCollaborative ? (
               <EventPhotoFilterTabs
