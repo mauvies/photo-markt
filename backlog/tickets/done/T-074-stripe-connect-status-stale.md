@@ -1,11 +1,11 @@
 # T-074 · Bug: el estado de Stripe Connect queda obsoleto ("en revisión") en el dashboard pese a que la conexión ya es activa
 
 - **Prioridad:** P1
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/stripe-connect-status-stale`  (tipo = fix)
 - **OpenSpec change:** —  (se decide al ejecutar; probablemente extraer la reconciliación live a un helper compartido — toca dashboard + webhook)
-- **PR:** —
+- **PR:** #125
 
 ## Requerimiento
 En `/dashboard/photographer` aparece la alerta *"Tu cuenta de Stripe está en revisión. Los pagos se habilitarán cuando sea aprobada. Ir a configuración de pagos"* **a pesar de que la conexión de Stripe Connect ya fue exitosa** (cuenta activa). La alerta no debería mostrarse cuando la cuenta está realmente activa, y el estado almacenado no debe quedar obsoleto.
