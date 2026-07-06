@@ -1,11 +1,11 @@
 # T-070 · Bug: la subida de la portada del evento falla con "mime type image/webp is not supported"
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/cover-upload-webp-mime-rejected`  (tipo = fix)
 - **OpenSpec change:** —  (probablemente directo; se decide al ejecutar según el enfoque — migración de bucket vs normalización a jpeg)
-- **PR:** —
+- **PR:** #124
 
 ## Requerimiento
 Al crear un evento, subir la foto de portada (cover shot) lanza un error de consola:

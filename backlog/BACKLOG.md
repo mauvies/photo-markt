@@ -12,7 +12,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
 | 3 | P1 | T-074 | [Bug] Estado de Stripe Connect obsoleto: banner "en revisión" con cuenta ya activa + retiene payouts | — | todo |
-| 4 | P1 | T-070 | [Bug] La subida de la portada del evento falla con "mime type image/webp is not supported" | — | todo |
 | 8 | P2 | T-060 | Paginar la galería del detalle del evento (load more, ~50) en las 3 vistas — hoy firma/renderiza todas | — | doing |
 | 9 | P2 | T-065 | Unificar "Encontrar mis fotos": botones face matching + dorsal lado a lado (responsive mobile) | T-064 | todo |
 | 10 | P2 | T-066 | Modal de detalle de foto a dos paneles (imagen + panel de info/CTA de compra) | — | todo |
@@ -37,6 +36,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-070** · Bug: la subida de la portada del evento (`.webp`) fallaba con "mime type image/webp is not supported". No era bug de código sino **drift de entorno no capturado en migraciones**: el bucket `photos` tenía `allowed_mime_types` restrictivo (sin webp) en algunos entornos —y Storage lo aplica incluso al service-role client que usa la portada—, y `storage.objects` acumulaba un set de policies divergente/duplicado (INSERT restrictivo de MIME/tamaño + 5 duplicadas `photos_*`/legacy) que un `db reset` recreaba. **Prod no tiene ninguna de esas**: solo 2 policies owner-scoped (delete+update) y bucket sin límite de MIME (validación app-side por diseño). Migración `20260706000000` codifica el estado canónico de prod (bucket sin `allowed_mime_types`/`file_size_limit` + `drop policy if exists` de las 6 divergentes; idempotente, no-op en prod) para que prod/staging/local queden idénticos y nunca reaparezca la restricción. Sin cambio de app (portadas sin re-encode). **Diagnóstico:** prod ya estaba limpio (alguien lo arregló a mano, sin codificar); staging seguía con las policies divergentes. Test de regresión de storage: sube webp por el path service-role (portada) sin restricción de MIME + clientes autenticados ya no pueden leer/escribir el bucket directo (falla antes vía las policies permisivas duplicadas, pasa después) — PR #124
 
 - **T-059** · UX: al volver al wizard de crear evento, restauraba el borrador en silencio (con banners de "fotos perdidas") y no había forma clara de empezar de cero. Ahora, al detectar un borrador en progreso real en el mount, un modal bloqueante ofrece "Continuar borrador" o "Empezar un evento nuevo". Helper puro `isResumableDraft` (testeado): un borrador es restaurable solo si el usuario eligió fotos, avanzó del paso 1, o algún campo diverge de los defaults — así el borrador de defaults vacíos que la persistencia escribe en visita fresca **no** dispara el modal. La hidratación difiere la restauración mientras el modal decide (persistencia pausada, no pisa el draft); Continuar restaura como antes, Empezar de cero limpia `DRAFT_KEY`+`HAD_FILES_KEY`, resetea a paso 1 limpio y nunca muestra el banner de fotos perdidas. Nuevo `DraftResumeDialog` + strings en/es. Tests de regresión de `isResumableDraft` — PR #122
 
