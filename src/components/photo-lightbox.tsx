@@ -1,18 +1,14 @@
 'use client';
 
-import { ArrowLeft, Loader2 } from 'lucide-react';
-import Image from 'next/image';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { LightboxActionLabels } from '@/components/lightbox-action-bar';
 import { LightboxToolbar } from '@/components/lightbox-toolbar';
-import { getLightboxWindow, slideOffset } from '@/components/photo-lightbox-window';
+import { PhotoCarousel } from '@/components/photo-carousel';
 import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
-
-// Radius of the preload window around the current photo — the current image
-// plus this many neighbours on each side are kept mounted so next/prev
-// navigation reveals an already-decoded image.
-const PRELOAD_RADIUS = 2;
+import { useCarouselNavigation } from '@/hooks/use-carousel-navigation';
+import { useImageLoad } from '@/hooks/use-image-load';
+import { useKeyboardNav } from '@/hooks/use-keyboard-nav';
 
 export type PhotoLightboxItem = {
   id: string;
@@ -108,47 +104,23 @@ export function PhotoLightbox({
   canClaimToProfile,
   actionBarLabels,
 }: PhotoLightboxProps) {
-  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const nav = useCarouselNavigation({ items, open, initialIndex, onIndexChange });
+  const { isLoaded, markLoaded } = useImageLoad();
+  const currentPhoto = nav.currentItem;
+
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [addedPhotos, setAddedPhotos] = useState<Set<string>>(new Set());
-  // Photo ids whose <Image> has finished loading — drives the loading spinner.
-  const [loadedIds, setLoadedIds] = useState<Set<string>>(new Set());
-  // Cart state is now owned by the parent via `useOptimisticPhotosInCart`,
-  // which flips `photosInCart` optimistically. We just read from it.
   const [controlsVisible, setControlsVisible] = useState(true);
-  const [isTouchDevice, setIsTouchDevice] = useState(false);
   // `createPortal` needs `document.body`, which isn't available during SSR.
   // Defer mounting until the first client render to avoid hydration issues.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const currentPhoto = useMemo(() => items[currentIndex], [items, currentIndex]);
-  // The current photo plus its ±PRELOAD_RADIUS neighbours — all kept mounted
-  // and eagerly loaded so navigating within the window is instant.
-  const windowIndices = useMemo(
-    () => getLightboxWindow(currentIndex, items.length, PRELOAD_RADIUS),
-    [currentIndex, items.length],
-  );
-
-  const markLoaded = useCallback((id: string) => {
-    setLoadedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
-  }, []);
-
-  // NOTE: We intentionally do NOT mirror `currentIndex` → URL via a
-  // useEffect. An effect with `items` in its deps would fire on every
-  // re-render where the parent rebuilds the array, emitting `onIndexChange`
-  // and causing the lightbox to auto-advance through photos. Instead, the
-  // emit happens in handlePrevious/handleNext below — i.e. only when the
-  // user actually navigates. Initial open already has the correct URL
-  // because the consumer called `openAt` before rendering the lightbox.
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    setIsTouchDevice(window.matchMedia('(hover: none) and (pointer: coarse)').matches);
-  }, []);
 
   const isInMyPhotos = useMemo(
     () =>
-      currentPhoto && (photosInMyPhotos.has(currentPhoto.id) || addedPhotos.has(currentPhoto.id)),
+      Boolean(
+        currentPhoto && (photosInMyPhotos.has(currentPhoto.id) || addedPhotos.has(currentPhoto.id)),
+      ),
     [currentPhoto, photosInMyPhotos, addedPhotos],
   );
 
@@ -182,122 +154,27 @@ export function PhotoLightbox({
     onTagTalent(currentPhoto.id);
   }, [currentPhoto, onTagTalent]);
 
-  // Reset index when opening and prevent body scroll
+  // Reset transient chrome + prevent body scroll while open. Index reset is
+  // owned by useCarouselNavigation.
   useEffect(() => {
     if (open) {
-      setCurrentIndex(initialIndex);
       setControlsVisible(true);
-      // Prevent body scroll
       document.body.style.overflow = 'hidden';
     } else {
-      // Restore body scroll
       document.body.style.overflow = '';
     }
-
     return () => {
       document.body.style.overflow = '';
     };
-  }, [open, initialIndex]);
+  }, [open]);
 
-  // Navigation handlers — explicitly emit `onIndexChange` for the NEW
-  // index so the consumer can update the URL. Emitting here (instead of
-  // via a useEffect on currentIndex) guarantees the URL only changes in
-  // response to user-initiated navigation, never as a side effect of a
-  // parent re-render.
-  const handlePrevious = useCallback(() => {
-    const next = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
-    setCurrentIndex(next);
-    const id = items[next]?.id;
-    if (id) onIndexChange?.(id);
-  }, [currentIndex, items, onIndexChange]);
-
-  const handleNext = useCallback(() => {
-    const next = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
-    setCurrentIndex(next);
-    const id = items[next]?.id;
-    if (id) onIndexChange?.(id);
-  }, [currentIndex, items, onIndexChange]);
-
-  // Keyboard navigation
-  useEffect(() => {
-    if (!open) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      } else if (e.key === 'ArrowLeft') {
-        handlePrevious();
-      } else if (e.key === 'ArrowRight') {
-        handleNext();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, onClose, handlePrevious, handleNext]);
-
-  // Touch/swipe support. The drag is driven imperatively on `trackRef` (the
-  // slide track) so the finger moves the photo live at 60fps with zero React
-  // re-renders mid-gesture; React only kicks in on release to snap.
-  const trackRef = useRef<HTMLDivElement>(null);
-  const dragStartX = useRef<number | null>(null);
-  const dragDeltaX = useRef(0);
-
-  // Past this many px a horizontal drag commits to next/prev; below TAP_PX a
-  // release is treated as a tap (toggle controls), not a swipe.
-  const SWIPE_COMMIT_PX = 50;
-  const TAP_PX = 10;
-
-  const onTouchStart = (e: React.TouchEvent) => {
-    dragStartX.current = e.touches[0].clientX;
-    dragDeltaX.current = 0;
-    // Disable the snap transition so the track follows the finger 1:1.
-    if (trackRef.current) trackRef.current.style.transition = 'none';
-  };
-
-  const onTouchMove = (e: React.TouchEvent) => {
-    if (dragStartX.current === null) return;
-    dragDeltaX.current = e.touches[0].clientX - dragStartX.current;
-    if (trackRef.current) {
-      trackRef.current.style.transform = `translateX(${dragDeltaX.current}px)`;
-    }
-  };
-
-  const onTouchEnd = (e: React.TouchEvent) => {
-    if (dragStartX.current === null) return;
-    const delta = dragDeltaX.current;
-    dragStartX.current = null;
-
-    // Restore the snap transition and animate the track back to rest. When we
-    // also advance the index, each slide's own transform animates by one slot;
-    // both tweens share duration/easing so the motion stays continuous from
-    // wherever the finger let go.
-    if (trackRef.current) {
-      trackRef.current.style.transition = '';
-      trackRef.current.style.transform = 'translateX(0px)';
-    }
-
-    if (Math.abs(delta) >= SWIPE_COMMIT_PX && items.length > 1) {
-      if (delta < 0) handleNext();
-      else handlePrevious();
-      return;
-    }
-
-    // Tap (no significant movement) — toggle controls on touch devices,
-    // unless the tap landed on an interactive control.
-    if (Math.abs(delta) >= TAP_PX) return; // small drag → just snapped back
-    if (!isTouchDevice) return;
-    const target = e.target as HTMLElement | null;
-    if (target?.closest('button, a, [role="button"]')) return;
-    setControlsVisible((v) => !v);
-  };
+  useKeyboardNav({ enabled: open, onPrevious: nav.previous, onNext: nav.next, onClose });
 
   // Fullscreen handling
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
     };
-
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
@@ -382,7 +259,6 @@ export function PhotoLightbox({
           url: currentPhoto.url,
         })
         .catch(() => {
-          // Fallback to copy
           navigator.clipboard.writeText(currentPhoto.url).catch(() => {});
         });
     } else {
@@ -410,8 +286,6 @@ export function PhotoLightbox({
   );
 
   if (!open || !currentPhoto || !mounted) return null;
-
-  const isCurrentLoaded = loadedIds.has(currentPhoto.id);
 
   // Render through a portal at `document.body` so the lightbox escapes any
   // stacking context (mobile bottom nav, sticky headers) created by the
@@ -455,9 +329,16 @@ export function PhotoLightbox({
         actionLabels={actionBarLabels}
       />
 
-      {/* Image Container */}
-      <div
-        className="relative flex items-center justify-center overflow-hidden"
+      <PhotoCarousel
+        items={items}
+        currentIndex={nav.currentIndex}
+        windowIndices={nav.windowIndices}
+        onPrevious={nav.previous}
+        onNext={nav.next}
+        isLoaded={isLoaded}
+        markLoaded={markLoaded}
+        controlsVisible={controlsVisible}
+        onTap={() => setControlsVisible((v) => !v)}
         style={{
           height: '100dvh',
           marginTop: 0,
@@ -466,89 +347,7 @@ export function PhotoLightbox({
           paddingLeft: isFullscreen ? '0.5rem' : '0',
           paddingRight: isFullscreen ? '0.5rem' : '0',
         }}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-      >
-        {/* Previous button */}
-        {items.length > 1 && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handlePrevious();
-            }}
-            className={`absolute left-4 z-20 hidden h-14 w-14 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition-opacity duration-200 hover:bg-white/15 md:left-8 md:flex cursor-pointer ${
-              controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
-            }`}
-            aria-label="Previous photo"
-          >
-            <ArrowLeft className="h-7 w-7" strokeWidth={1.5} />
-          </button>
-        )}
-
-        {/* Image stack — the current photo plus its ±PRELOAD_RADIUS window,
-            all kept mounted and eagerly fetched. Each slide sits at its slot
-            (current at 0, neighbours just off-screen left/right). The track
-            wrapping them is dragged live by the finger (see onTouchMove), and
-            on release the slides' own transforms animate by one slot while the
-            track eases back to 0 — a continuous carousel slide. Off-screen
-            slides are clipped by the container's overflow. */}
-        <div className="relative w-full h-full" style={{ minHeight: 0 }}>
-          <div
-            ref={trackRef}
-            className="absolute inset-0 transition-transform duration-300 ease-out will-change-transform"
-          >
-            {windowIndices.map((i) => {
-              const item = items[i];
-              if (!item) return null;
-              const offset = slideOffset(i, currentIndex, items.length);
-              return (
-                <Image
-                  key={item.id}
-                  src={item.thumbMedium ?? item.url}
-                  alt={item.alt || 'Photo'}
-                  fill
-                  className="object-contain pointer-events-none transition-transform duration-300 ease-out"
-                  style={{ transform: `translateX(${offset * 100}%)` }}
-                  loading="eager"
-                  sizes="100vw"
-                  draggable={false}
-                  onLoad={() => markLoaded(item.id)}
-                  unoptimized={
-                    (item.thumbMedium ?? item.url).includes('/api/') ||
-                    (item.thumbMedium ?? item.url).includes('localhost')
-                  }
-                />
-              );
-            })}
-          </div>
-          {/* Spinner for an unavoidable load — first open, or a jump beyond
-              the preload window. In-window navigation is already decoded. */}
-          {isCurrentLoaded ? null : (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-white/70" aria-hidden />
-            </div>
-          )}
-        </div>
-
-        {/* Next button */}
-        {items.length > 1 && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleNext();
-            }}
-            className={`absolute right-4 z-20 hidden h-14 w-14 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition-opacity duration-200 hover:bg-white/15 md:right-8 md:flex cursor-pointer ${
-              controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
-            }`}
-            aria-label="Next photo"
-          >
-            <ArrowLeft className="h-7 w-7 rotate-180" strokeWidth={1.5} />
-          </button>
-        )}
-      </div>
+      />
 
       {/* "Uploaded by" caption — info only (no tap targets), so the mobile
           browser's bottom chrome can't occlude anything actionable. */}

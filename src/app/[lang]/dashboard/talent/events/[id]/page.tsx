@@ -434,6 +434,9 @@ export default async function ExploreEventDetailPage({
                   initialHasMore={hasMore}
                   loadMoreLabel={dict.events.loadMore}
                   loadMoreErrorLabel={dict.events.loadMoreFailed}
+                  pricePerPhoto={event.price_per_photo}
+                  photoDetailLabels={dict.photoDetail}
+                  locale={lang}
                 />
               </TranslationsProvider>
             }

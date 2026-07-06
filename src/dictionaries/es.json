@@ -1310,6 +1310,15 @@
     "qrDescription": "Escanea este código QR para abrir el evento.",
     "qrFooter": "O comparte el código directamente"
   },
+  "photoDetail": {
+    "title": "Detalle de la foto",
+    "pricePerPhoto": "Precio por foto",
+    "addToCart": "Agregar al carrito",
+    "inCart": "Quitar del carrito",
+    "download": "Descargar",
+    "share": "Compartir",
+    "close": "Cerrar"
+  },
   "aiSearch": {
     "banner": {
       "titleReady": "Encuéntrate en este evento",

@@ -640,6 +640,8 @@ export default async function EventPage({
                     initialHasMore={hasMore}
                     loadMoreLabel={dict.events.loadMore}
                     loadMoreErrorLabel={dict.events.loadMoreFailed}
+                    photoDetailLabels={dict.photoDetail}
+                    locale={lang}
                   />
                 </Suspense>
               }

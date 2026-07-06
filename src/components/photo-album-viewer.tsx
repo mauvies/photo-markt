@@ -5,6 +5,11 @@ import { type KeyboardEvent, useCallback, useEffect, useMemo, useState } from 'r
 import { type Photo, type RenderPhotoContext, RowsPhotoAlbum } from 'react-photo-album';
 import type { LightboxActionLabels } from '@/components/lightbox-action-bar';
 import {
+  PhotoDetailModal,
+  type PhotoDetailModalItem,
+  type PhotoDetailModalLabels,
+} from '@/components/photo-detail-modal';
+import {
   PhotoIconButtons,
   type PhotoIconTooltips,
   type PhotoMoreMenuConfig,
@@ -37,6 +42,10 @@ export type PhotoAlbumItem = {
   }>;
   /** Optional contributor info — when present, the camera badge is rendered. */
   uploader?: PhotoUploaderInfo;
+  /** Human-readable location (city / state / country), for the detail modal. */
+  location?: string;
+  /** ISO capture date (`taken_at`), for the detail modal. */
+  takenAt?: string;
 };
 
 type PhotoAlbumViewerProps = {
@@ -102,6 +111,16 @@ type PhotoAlbumViewerProps = {
   claimedIds?: Set<string>;
   canClaimToProfile?: (photoId: string) => boolean;
   actionBarLabels?: LightboxActionLabels;
+  /** Detail view opened on tap. `'purchase'` opens the two-panel
+   * `PhotoDetailModal` (paid purchase surfaces); the default `'lightbox'`
+   * keeps the icon-toolbar lightbox. */
+  detailVariant?: 'lightbox' | 'purchase';
+  /** Flat event price in dollars, shown in the purchase modal's price row. */
+  pricePerPhoto?: number | null;
+  /** Locale (page `lang`) for the purchase modal's date formatting. */
+  locale?: string;
+  /** Labels for the purchase modal — required when `detailVariant='purchase'`. */
+  purchaseLabels?: PhotoDetailModalLabels;
 };
 
 export default function PhotoAlbumViewer({
@@ -142,6 +161,10 @@ export default function PhotoAlbumViewer({
   claimedIds,
   canClaimToProfile,
   actionBarLabels,
+  detailVariant = 'lightbox',
+  pricePerPhoto,
+  locale,
+  purchaseLabels,
 }: PhotoAlbumViewerProps) {
   // Single source of truth: when the caller paginates via `itemBatches`, the
   // flat list is their concatenation; otherwise it's the flat `items` prop.
@@ -262,6 +285,22 @@ export default function PhotoAlbumViewer({
         height: dimensions[item.id]?.height ?? item.height,
         tags: item.tags,
         uploader: item.uploader,
+      })),
+    [items, dimensions],
+  );
+
+  const detailItems: PhotoDetailModalItem[] = useMemo(
+    () =>
+      items.map((item) => ({
+        id: item.id,
+        url: item.url,
+        thumbMedium: item.thumbMedium,
+        alt: item.alt,
+        width: dimensions[item.id]?.width ?? item.width,
+        height: dimensions[item.id]?.height ?? item.height,
+        uploader: item.uploader,
+        location: item.location,
+        takenAt: item.takenAt,
       })),
     [items, dimensions],
   );
@@ -499,35 +538,56 @@ export default function PhotoAlbumViewer({
           />
         ))}
       </div>
-      <PhotoLightbox
-        items={lightboxItems}
-        open={index >= 0}
-        initialIndex={index >= 0 ? index : 0}
-        onClose={close}
-        onIndexChange={switchTo}
-        showDownload={showDownload}
-        canDownloadPhoto={isPhotoDownloadable}
-        showAddToPhotos={showAddToPhotos}
-        showAddToCart={showAddToCart}
-        showRemove={showRemove}
-        showTagTalent={showTagTalent}
-        onDownload={onDownload}
-        onAddToPhotos={onAddToPhotos}
-        onRemoveFromPhotos={onRemoveFromPhotos}
-        onAddToCart={onAddToCart}
-        onRemoveFromCart={onRemoveFromCart}
-        onRemove={onRemove}
-        onTagTalent={onTagTalent}
-        onUntag={onUntag}
-        onShare={onShare}
-        photosInMyPhotos={photosInMyPhotos}
-        photosInCart={photosInCart}
-        actionBar={lightboxActionBar}
-        onClaimToProfile={onClaimToProfile}
-        claimedIds={claimedIds}
-        canClaimToProfile={canClaimToProfile}
-        actionBarLabels={actionBarLabels}
-      />
+      {detailVariant === 'purchase' && purchaseLabels && locale ? (
+        <PhotoDetailModal
+          items={detailItems}
+          open={index >= 0}
+          initialIndex={index >= 0 ? index : 0}
+          onClose={close}
+          onIndexChange={switchTo}
+          labels={purchaseLabels}
+          locale={locale}
+          pricePerPhoto={pricePerPhoto}
+          showAddToCart={showAddToCart}
+          showDownload={showDownload}
+          canDownloadPhoto={isPhotoDownloadable}
+          photosInCart={photosInCart}
+          onAddToCart={onAddToCart}
+          onRemoveFromCart={onRemoveFromCart}
+          onDownload={onDownload}
+          onShare={onShare}
+        />
+      ) : (
+        <PhotoLightbox
+          items={lightboxItems}
+          open={index >= 0}
+          initialIndex={index >= 0 ? index : 0}
+          onClose={close}
+          onIndexChange={switchTo}
+          showDownload={showDownload}
+          canDownloadPhoto={isPhotoDownloadable}
+          showAddToPhotos={showAddToPhotos}
+          showAddToCart={showAddToCart}
+          showRemove={showRemove}
+          showTagTalent={showTagTalent}
+          onDownload={onDownload}
+          onAddToPhotos={onAddToPhotos}
+          onRemoveFromPhotos={onRemoveFromPhotos}
+          onAddToCart={onAddToCart}
+          onRemoveFromCart={onRemoveFromCart}
+          onRemove={onRemove}
+          onTagTalent={onTagTalent}
+          onUntag={onUntag}
+          onShare={onShare}
+          photosInMyPhotos={photosInMyPhotos}
+          photosInCart={photosInCart}
+          actionBar={lightboxActionBar}
+          onClaimToProfile={onClaimToProfile}
+          claimedIds={claimedIds}
+          canClaimToProfile={canClaimToProfile}
+          actionBarLabels={actionBarLabels}
+        />
+      )}
     </>
   );
 }
