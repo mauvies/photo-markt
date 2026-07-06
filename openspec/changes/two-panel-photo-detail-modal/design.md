@@ -35,8 +35,8 @@ Extract `useCarouselNavigation` (index state, wrap-around prev/next, emits curre
 ### 4. `detailVariant` switch on `PhotoAlbumViewer`
 Add `detailVariant?: 'lightbox' | 'purchase'` (default `'lightbox'`). On `'purchase'`, `PhotoAlbumViewer` mounts `PhotoDetailModal` instead of `PhotoLightbox`, forwarding the identical handler/flag props it already assembles. The public + talent viewers (and the AI-search path, which renders through the same `PhotoGallery`) pass `'purchase'`; the photographer viewer passes nothing (stays `'lightbox'`). Rationale: one small, well-typed seam; no viewer needs to duplicate the mount wiring.
 
-### 5. Info panel reuses existing attribution + flat price
-Attribution reuses `PhotoUploaderIndicator` / `PhotoUploaderInfo` (name-only, as today — no new profile-link feature). Price shows the flat event `price_per_photo`; there is no volume-discount display to reuse, so none is added (the ticket's "when applicable" resolves to "never, today"). Dimensions come from the item's `width`/`height`. Rationale: reuse existing building blocks; avoid scope creep into new pricing/attribution features.
+### 5. Info panel reuses existing attribution + flat price, fixed layout
+Layout matches the reference the user provided. **Right panel (white)**, top→bottom: attribution (reuse `PhotoUploaderIndicator` / `PhotoUploaderInfo`, name-only as today — no new profile-link feature) → location → date → dimensions (`<width> × <height>px` from the item's `width`/`height`) → "Price per Photo" label → amount formatted `<amount> USD` (e.g. `10.00 USD`) → primary CTA button at the bottom. **Image (left) side**: the share icon sits in the top-right corner of the image area, and the `n / total` counter sits at the far top-right. Price shows the flat event `price_per_photo`; there is no volume-discount display to reuse, so none is added (the ticket's "when applicable" resolves to "never, today"). "Report/flag" is deferred (no report flow exists in the app today). Rationale: reuse existing building blocks; avoid scope creep into new pricing/attribution/report features.
 
 ## Risks / Trade-offs
 

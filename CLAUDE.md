@@ -34,6 +34,17 @@ pnpm db:seed      # Re-run supabase/seed.sql via psql
 pnpm spell        # Spell check .ts/.tsx files
 ```
 
+## Bash command style
+
+To keep commands auto-approvable and avoid manual permission prompts, follow these rules when running shell commands:
+
+- Prefer simple, atomic commands. Run one operation per command instead of chaining multiple with `&&`.
+- Do NOT use `cd` to change directories before running a command. Compound commands starting with `cd` plus output redirection require mandatory manual approval (path-resolution bypass protection) and cannot be pre-approved.
+- Always use full paths from the repository root instead of `cd`-ing into a subdirectory. For example, use `grep -n "export" src/components/ui/dialog.tsx` rather than `cd src && grep -n "export" components/ui/dialog.tsx`.
+- When inspecting multiple files, run separate individual commands rather than chaining them into one compound command.
+- Avoid unnecessary output redirection (`2>/dev/null`, etc.) and piping inside compound commands when a simpler single command achieves the same result.
+- These conventions keep each command matching the pre-approved allowlist, so tasks run without pausing for approval.
+
 ## Project Overview
 
 **Photo Markt** is a sports event photography marketplace connecting photographers with athletes (referred to as "talent"). Photographers create events, upload photos, and earn from sales. Talent browses events, finds photos of themselves, and purchases them.

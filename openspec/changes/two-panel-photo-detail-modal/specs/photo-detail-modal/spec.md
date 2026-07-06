@@ -19,21 +19,33 @@ The system SHALL provide a `PhotoDetailModal` component, built on the existing S
 - **WHEN** the user closes the modal (close button, backdrop, or Escape)
 - **THEN** the modal dismisses and the underlying gallery grid is shown unchanged
 
-### Requirement: Info panel content
+### Requirement: Right info panel content and order
 
-The info/CTA panel SHALL display, when the corresponding data is present: uploader/photographer attribution (reusing the existing attribution logic), location, date, pixel dimensions (e.g. `5776 × 4336px`), price per photo, the primary CTA, secondary actions (share and report), and a position counter in `X / Y` form.
+The right info/CTA panel (white background) SHALL display, top to bottom, when the corresponding data is present: uploader/photographer attribution (reusing the existing attribution logic), location, date, pixel dimensions (e.g. `7008 × 4672px`), a "Price per Photo" label with the amount formatted as `<amount> USD` (e.g. `10.00 USD`), and the primary CTA button at the bottom. The panel SHALL NOT contain the share action or the position counter (those live on the image side).
 
-#### Scenario: Fields render from available data
-- **WHEN** the current photo has known dimensions, an uploader, a location, and a date
-- **THEN** the panel shows the dimensions formatted as `<width> × <height>px`, the attribution, the location, and the date
+#### Scenario: Fields render from available data in order
+- **WHEN** the current photo has an uploader, a location, a date, and known dimensions
+- **THEN** the panel shows, in order, the attribution, the location, the date, the dimensions formatted as `<width> × <height>px`, the "Price per Photo" label with `<amount> USD`, and the primary CTA at the bottom
 
 #### Scenario: Missing optional fields are omitted
 - **WHEN** the current photo has no location or no known dimensions
 - **THEN** those rows are omitted without leaving empty placeholders or breaking layout
 
+#### Scenario: Free event price
+- **WHEN** the event is free (no `price_per_photo`)
+- **THEN** the "Price per Photo" / amount row is omitted and the primary CTA reflects the free action
+
+### Requirement: Image-side action icons and counter
+
+On the image (left) side, the share action icon SHALL be placed in the top-right corner of the image area, and a position counter reading `n / total` SHALL be placed at the far top-right.
+
+#### Scenario: Share icon on the image
+- **WHEN** the modal is open and sharing is available
+- **THEN** a share icon is shown in the top-right corner of the image area
+
 #### Scenario: Counter reflects position
 - **WHEN** the modal shows photo number `n` of `total`
-- **THEN** the panel shows a counter reading `n / total`
+- **THEN** a counter reading `n / total` is shown at the far top-right
 
 ### Requirement: Conditional primary CTA reused from the action matrix
 
