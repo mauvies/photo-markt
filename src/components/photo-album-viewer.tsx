@@ -40,7 +40,14 @@ export type PhotoAlbumItem = {
 };
 
 type PhotoAlbumViewerProps = {
-  items: PhotoAlbumItem[];
+  /** A flat gallery. Provide this OR `itemBatches`. */
+  items?: PhotoAlbumItem[];
+  /** Paginated load-more pages. When provided, each page is laid out as its own
+   * justified-rows segment so a "Load more" append never re-flows the photos
+   * already on screen (no scroll-jump). The flat item list (for the lightbox,
+   * dimensions, and selection) is derived from these — a single source of
+   * truth, so the segments can never drift out of sync with the flat list. */
+  itemBatches?: PhotoAlbumItem[][];
   selectionMode?: boolean;
   selectedIds?: string[];
   onToggleSelect?: (photoId: string) => void;
@@ -95,15 +102,11 @@ type PhotoAlbumViewerProps = {
   claimedIds?: Set<string>;
   canClaimToProfile?: (photoId: string) => boolean;
   actionBarLabels?: LightboxActionLabels;
-  /** Sizes of the paginated load-more batches, in order. When set (and >1),
-   * each batch is laid out as an independent justified-rows segment so a
-   * "Load more" append never re-flows already-rendered photos (no scroll jump).
-   * The lightbox, selection, and dimensions stay unified across all segments. */
-  segmentSizes?: number[];
 };
 
 export default function PhotoAlbumViewer({
-  items,
+  items: itemsProp,
+  itemBatches,
   selectionMode = false,
   selectedIds,
   onToggleSelect,
@@ -139,8 +142,12 @@ export default function PhotoAlbumViewer({
   claimedIds,
   canClaimToProfile,
   actionBarLabels,
-  segmentSizes,
 }: PhotoAlbumViewerProps) {
+  // Single source of truth: when the caller paginates via `itemBatches`, the
+  // flat list is their concatenation; otherwise it's the flat `items` prop.
+  // Everything below (lightbox, dimensions, selection) works off this — and the
+  // rendered segments are slices of it, so they can't drift out of sync.
+  const items = useMemo(() => itemBatches?.flat() ?? itemsProp ?? [], [itemBatches, itemsProp]);
   const { index, openAt, switchTo, close } = usePhotoLightboxUrl(items);
   const [dimensions, setDimensions] = useState<Record<string, { width: number; height: number }>>(
     {},
@@ -228,24 +235,21 @@ export default function PhotoAlbumViewer({
     [items, dimensions],
   );
 
-  // Split the mapped photos into contiguous load-more segments. Each segment
-  // becomes its own justified-rows album so appending a new page never re-flows
-  // (and never visually shifts) the pages already on screen. Without
-  // `segmentSizes`, or with a single page, this is one segment — the original
-  // single-album behavior.
+  // Split the mapped photos into contiguous load-more segments — one justified-
+  // rows album per page — so appending a new page never re-flows (or visually
+  // shifts) the pages already on screen. `photos` is derived from `itemBatches`,
+  // so the slice offsets always line up exactly; no page (or a single page)
+  // means one segment: the original single-album behavior.
   const photoSegments = useMemo(() => {
-    if (!segmentSizes || segmentSizes.length <= 1) return [photos];
+    if (!itemBatches || itemBatches.length <= 1) return [photos];
     const segments: (typeof photos)[] = [];
     let start = 0;
-    for (const size of segmentSizes) {
-      if (size <= 0) continue;
-      segments.push(photos.slice(start, start + size));
-      start += size;
+    for (const batch of itemBatches) {
+      segments.push(photos.slice(start, start + batch.length));
+      start += batch.length;
     }
-    // Safety: any photos beyond the declared sizes go into a trailing segment.
-    if (start < photos.length) segments.push(photos.slice(start));
-    return segments.length > 0 ? segments : [photos];
-  }, [photos, segmentSizes]);
+    return segments;
+  }, [photos, itemBatches]);
 
   const lightboxItems: PhotoLightboxItem[] = useMemo(
     () =>

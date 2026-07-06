@@ -11,12 +11,16 @@ import type { PhotoIconTooltips, PhotoMoreMenuConfig } from '@/components/photo-
 import { TagTalentDialog } from '@/components/tag-talent-dialog';
 import { useLoadMorePhotos } from '@/hooks/use-load-more-photos';
 import { downloadEventPhotosZip } from '@/lib/download-zip';
+import { filterEventPhotoPages } from '@/lib/event-photo-filter';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { getPhotoDownloadUrlAction, loadMoreOwnerEventPhotos } from './actions';
 import { deletePhotoAction } from './edit/actions';
 
 type EventsT = Dictionary['events'];
+
+/** Stable empty set — the owner grid has no "My photos" filter. */
+const NO_MY_PHOTO_IDS: Set<string> = new Set();
 
 type UploaderLabels = {
   tooltip: string;
@@ -73,17 +77,16 @@ export function EventPhotoAlbum({
     onError: () => toast.error(loadMoreErrorLabel),
   });
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+  // Flat list — backs the local handlers (share/download by id). The grid is
+  // driven by `gridBatches` so each load-more page renders as its own segment
+  // (no re-flow / scroll-jump on append). No "mine" filter on the owner view.
   const items = useMemo(
     () => accumulated.filter((i) => !deletedIds.has(i.id)),
     [accumulated, deletedIds],
   );
-  // Each load-more page is laid out as its own segment so appending never
-  // re-flows already-rendered photos (no scroll-jump on "Load more").
-  const gridSegmentSizes = useMemo(
+  const gridBatches = useMemo(
     () =>
-      gridPages
-        .map((page) => page.filter((i) => !deletedIds.has(i.id)).length)
-        .filter((n) => n > 0),
+      filterEventPhotoPages(gridPages, { deletedIds, filter: 'all', myPhotoIds: NO_MY_PHOTO_IDS }),
     [gridPages, deletedIds],
   );
 
@@ -277,7 +280,7 @@ export function EventPhotoAlbum({
   return (
     <div className="space-y-3">
       <PhotoGallery
-        items={items}
+        itemBatches={gridBatches}
         selectionResetKey={selectionResetKey}
         bulkActions={bulkActions}
         labels={selectionLabels}
@@ -288,7 +291,6 @@ export function EventPhotoAlbum({
           onLoadMore: loadMore,
           label: loadMoreLabel,
         }}
-        segmentSizes={gridSegmentSizes}
         galleryProps={{
           onTagPhoto: handleTagSinglePhoto,
           onUntag: handleUntag,

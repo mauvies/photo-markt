@@ -276,3 +276,29 @@ export async function createPhotoUrls(
   // No watermark requested — caller is OK with direct signed URLs.
   return createSignedUrls(supabase, bucket, paths, expiresIn);
 }
+
+/**
+ * Sign a set of storage paths and return them as a `{ path -> url }` map,
+ * dropping any that failed to sign. Wraps {@link createPhotoUrls} — pass
+ * `useWatermark`/`baseUrl` for watermark-route URLs, or omit them for direct
+ * signed URLs. Replaces the repeated "loop the signed array into a Record"
+ * boilerplate at every gallery signing site.
+ */
+export async function createPhotoUrlMap(
+  supabase: SupabaseServerClient,
+  bucket: string,
+  paths: string[],
+  options?: {
+    expiresIn?: number;
+    useWatermark?: boolean;
+    baseUrl?: string;
+  },
+): Promise<Record<string, string>> {
+  if (paths.length === 0) return {};
+  const urls = await createPhotoUrls(supabase, bucket, paths, options);
+  const map: Record<string, string> = {};
+  for (const item of urls) {
+    if (item.signedUrl) map[item.path] = item.signedUrl;
+  }
+  return map;
+}

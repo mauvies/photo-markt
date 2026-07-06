@@ -38,7 +38,11 @@ import { useLoadMorePhotos } from '@/hooks/use-load-more-photos';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
 import { filterNewIds } from '@/lib/bulk-select';
 import { shouldShowBulkDownload } from '@/lib/event-bulk-actions';
-import { bibSearchEmptyKind, filterEventPhotos } from '@/lib/event-photo-filter';
+import {
+  bibSearchEmptyKind,
+  filterEventPhotoPages,
+  filterEventPhotos,
+} from '@/lib/event-photo-filter';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
   addPhotosToMyPhotosAction,
@@ -416,39 +420,26 @@ export function EventPhotoViewer({
   // ── "All photos / My photos" filter + bib search ────────────────────────
   const [filter, setFilter] = useState<EventPhotoFilter>('all');
 
-  // Grid mode: keep each load-more page as its own filtered batch so the gallery
-  // lays them out as independent segments (no reflow / scroll-jump on append).
+  // Grid mode: one filtered batch per load-more page, laid out as independent
+  // segments (no reflow / scroll-jump on append). A bib search instead renders
+  // its own complete, signed matched set.
   const gridBatches = useMemo(
-    () =>
-      gridPages.map((page) =>
-        filterEventPhotos(
-          page.filter((i) => !deletedIds.has(i.id)),
-          { filter, myPhotoIds: uploadedPhotoIds, bibMatchedIds: null },
-        ),
-      ),
+    () => filterEventPhotoPages(gridPages, { deletedIds, filter, myPhotoIds: uploadedPhotoIds }),
     [gridPages, deletedIds, filter, uploadedPhotoIds],
   );
-  const gridSegmentSizes = useMemo(
-    () => gridBatches.map((b) => b.length).filter((n) => n > 0),
-    [gridBatches],
-  );
-
-  const visiblePhotos = useMemo(() => {
-    // A bib search renders its complete, signed matched set (independent of the
-    // paginated grid); otherwise the grid (as the flattened per-page batches).
-    if (bibActive) {
-      return filterEventPhotos(bibSearch.matchedPhotos, {
+  const bibVisiblePhotos = useMemo(
+    () =>
+      filterEventPhotos(bibSearch.matchedPhotos, {
         filter,
         myPhotoIds: uploadedPhotoIds,
         bibMatchedIds: null,
-      });
-    }
-    return gridBatches.flat();
-  }, [bibActive, bibSearch.matchedPhotos, gridBatches, filter, uploadedPhotoIds]);
+      }),
+    [bibSearch.matchedPhotos, filter, uploadedPhotoIds],
+  );
 
   const bibEmptyKind = bibSearchEmptyKind(
     bibSearch.matchedPhotoIds,
-    visiblePhotos.length,
+    bibVisiblePhotos.length,
     bibHasData,
   );
 
@@ -725,7 +716,8 @@ export function EventPhotoViewer({
   return (
     <>
       <PhotoGallery
-        items={visiblePhotos}
+        items={bibActive ? bibVisiblePhotos : undefined}
+        itemBatches={bibActive ? undefined : gridBatches}
         galleryProps={galleryProps}
         bulkActions={bulkActions}
         labels={selectionLabels}
@@ -737,7 +729,6 @@ export function EventPhotoViewer({
             ? undefined
             : { hasMore, isLoading: isLoadingMore, onLoadMore: loadMore, label: loadMoreLabel }
         }
-        segmentSizes={bibActive ? undefined : gridSegmentSizes}
         toolbarLeading={
           isCollaborative ? (
             <EventPhotoFilterTabs

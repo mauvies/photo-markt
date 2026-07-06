@@ -8,7 +8,7 @@ import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/
 import { EventGalleryWithFaceSearch } from '@/components/event-gallery-with-face-search';
 import {
   countEventPhotosByStatus,
-  createPhotoUrls,
+  createPhotoUrlMap,
   getEventByShareCode,
   getEventBySlug,
   getEventPhotosPublicPage,
@@ -35,7 +35,7 @@ import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { stringifyJsonLd } from '@/lib/json-ld';
 import { ContributeDialog } from './contribute-dialog';
-import { buildPublicPhotoAlbumItem } from './photo-album-item';
+import { buildPublicPhotoAlbumItem, type UploaderProfileMap } from './photo-album-item';
 import { PublicEventPhotoViewer } from './public-event-photo-viewer';
 import { UploadProgressProvider } from './upload-progress-provider';
 
@@ -85,7 +85,7 @@ async function getCachedEventData(
    */
   signed: Record<string, string>;
   /** Profile lookup for `uploaded_by` ids, for the contributor badge. */
-  uploaderProfiles: Record<string, { display_name: string | null; username: string }>;
+  uploaderProfiles: UploaderProfileMap;
   /** Signed URL for the dedicated cover image (T-055), if the event has one. */
   coverSignedUrl: string | null;
 } | null> {
@@ -125,64 +125,51 @@ async function getCachedEventData(
   if (!event) return null;
 
   const adminForPhotos = supabaseAdmin as unknown as SupabaseServerClient;
-  // Only the first gallery page is fetched + signed up front (a 264-photo event
-  // used to sign all 264). "Load more" fetches + signs the rest via a Server
-  // Action. The real total still comes from a cheap count below.
-  const { photos, hasMore } = await getEventPhotosPublicPage(adminForPhotos, event.id, {
-    limit: EVENT_GALLERY_PAGE_SIZE,
-    offset: 0,
-  });
-  const totalCount = await countEventPhotosByStatus(adminForPhotos, event.id, ['approved']);
-
-  // Sign storage paths once per cache window. Skip for upcoming events (the
-  // gallery isn't shown anyway).
-  const signed: Record<string, string> = {};
   const eventStatusInside = getEventStatus(event.date);
-  if (eventStatusInside !== 'upcoming') {
-    const paths = photos.map((p) => p.original_url).filter((url): url is string => url !== null);
-    if (paths.length > 0) {
-      const photoUrls = await createPhotoUrls(
-        supabaseAdmin as unknown as SupabaseServerClient,
-        'photos',
-        paths,
-        {
-          expiresIn: 60 * 60,
-          useWatermark: event.watermark_enabled === true,
-          baseUrl,
-        },
-      );
-      for (const item of photoUrls) {
-        if (item.signedUrl) signed[item.path] = item.signedUrl;
-      }
-    }
-  }
+  // Dedicated cover image (T-055), if any — signed un-watermarked (it's a chosen
+  // presentation image, not a for-sale photo) so the JSON-LD can prefer it.
+  const coverPath = (event as { cover_path?: string | null }).cover_path ?? null;
 
-  // Resolve display names for authenticated contributors so the public
-  // uploader badge can render their name without an extra round-trip.
-  // The event owner is included so a collaborative event's photographer-
-  // uploaded photos (which carry no `uploaded_by`/`guest_name`) can still be
-  // attributed to them.
+  // Round 1 — the first gallery page (only the first page is fetched + signed;
+  // a 264-photo event used to sign all 264), the true approved count, and the
+  // cover signature are mutually independent (each needs only the event).
+  const [{ photos, hasMore }, totalCount, coverSignedUrl] = await Promise.all([
+    getEventPhotosPublicPage(adminForPhotos, event.id, {
+      limit: EVENT_GALLERY_PAGE_SIZE,
+      offset: 0,
+    }),
+    countEventPhotosByStatus(adminForPhotos, event.id, ['approved']),
+    coverPath
+      ? supabaseAdmin.storage
+          .from('photos')
+          .createSignedUrl(coverPath, 60 * 60)
+          .then((r) => r.data?.signedUrl ?? null)
+      : Promise.resolve<string | null>(null),
+  ]);
+
+  // Round 2 — signing the page and resolving uploader names both depend only on
+  // `photos`, so run them together. Signing is skipped for upcoming events (the
+  // gallery isn't shown). The owner profile is only read for collaborative
+  // attribution, so don't fetch it on non-collaborative events.
+  const paths = photos.map((p) => p.original_url).filter((url): url is string => url !== null);
   const uploaderUserIds = Array.from(
     new Set([
-      event.user_id,
+      ...(event.is_collaborative ? [event.user_id] : []),
       ...photos
         .map((p) => (p as { uploaded_by?: string | null }).uploaded_by)
         .filter((v): v is string => Boolean(v)),
     ]),
   );
-  const uploaderProfiles = await getProfilesByIds(adminForPhotos, uploaderUserIds);
-
-  // Sign the dedicated cover image (T-055), if any, so the JSON-LD structured
-  // data can prefer it over the first photo. Un-watermarked: it's a chosen
-  // presentation image, not a for-sale photo.
-  let coverSignedUrl: string | null = null;
-  const coverPath = (event as { cover_path?: string | null }).cover_path ?? null;
-  if (coverPath) {
-    const { data: coverSigned } = await supabaseAdmin.storage
-      .from('photos')
-      .createSignedUrl(coverPath, 60 * 60);
-    coverSignedUrl = coverSigned?.signedUrl ?? null;
-  }
+  const [signed, uploaderProfiles] = await Promise.all([
+    eventStatusInside !== 'upcoming'
+      ? createPhotoUrlMap(adminForPhotos, 'photos', paths, {
+          expiresIn: 60 * 60,
+          useWatermark: event.watermark_enabled === true,
+          baseUrl,
+        })
+      : Promise.resolve<Record<string, string>>({}),
+    getProfilesByIds(adminForPhotos, uploaderUserIds),
+  ]);
 
   return { event, photos, hasMore, totalCount, signed, uploaderProfiles, coverSignedUrl };
 }

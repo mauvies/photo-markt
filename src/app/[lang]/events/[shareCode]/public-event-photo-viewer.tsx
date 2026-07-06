@@ -30,7 +30,7 @@ import { useBulkPhotoDownload } from '@/hooks/use-bulk-photo-download';
 import { useLoadMorePhotos } from '@/hooks/use-load-more-photos';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
 import { type EventBulkActionKey, eventBulkActionKeys } from '@/lib/event-bulk-actions';
-import { filterEventPhotos } from '@/lib/event-photo-filter';
+import { filterEventPhotoPages, filterEventPhotos } from '@/lib/event-photo-filter';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import { getEventPhotoDownloadUrlAction, loadMoreEventPhotos } from './actions';
 import { buildBuckets, type FaceSearchResultsLabels } from './face-search-shared';
@@ -437,35 +437,17 @@ export function PublicEventPhotoViewer({
   const bibActive = bibSearch.matchedPhotoIds !== null;
   const [filter, setFilter] = useState<EventPhotoFilter>('all');
 
-  // Grid mode: keep each load-more page as its own filtered batch so the gallery
-  // lays them out as independent segments (no reflow / scroll-jump on append).
+  // Grid mode: one filtered batch per load-more page, laid out as independent
+  // segments (no reflow / scroll-jump on append). A bib search instead renders
+  // its own complete, signed matched set.
   const gridBatches = useMemo(
-    () =>
-      gridPages.map((page) =>
-        filterEventPhotos(
-          page.filter((p) => !deletedIds.has(p.id)),
-          { filter, myPhotoIds, bibMatchedIds: null },
-        ),
-      ),
+    () => filterEventPhotoPages(gridPages, { deletedIds, filter, myPhotoIds }),
     [gridPages, deletedIds, filter, myPhotoIds],
   );
-  const gridSegmentSizes = useMemo(
-    () => gridBatches.map((b) => b.length).filter((n) => n > 0),
-    [gridBatches],
+  const bibVisiblePhotos = useMemo(
+    () => filterEventPhotos(bibSearch.matchedPhotos, { filter, myPhotoIds, bibMatchedIds: null }),
+    [bibSearch.matchedPhotos, filter, myPhotoIds],
   );
-
-  const visiblePhotos = useMemo(() => {
-    // A bib search renders its complete, signed matched set (independent of the
-    // grid); otherwise the paginated grid (as the flattened per-page batches).
-    if (bibActive) {
-      return filterEventPhotos(bibSearch.matchedPhotos, {
-        filter,
-        myPhotoIds,
-        bibMatchedIds: null,
-      });
-    }
-    return gridBatches.flat();
-  }, [bibActive, bibSearch.matchedPhotos, gridBatches, filter, myPhotoIds]);
 
   // ── Single-photo download (lightbox) ───────────────────────────────────
   const isPhotoDownloadable = useCallback(
@@ -670,7 +652,8 @@ export function PublicEventPhotoViewer({
         />
       ) : (
         <PhotoGallery
-          items={visiblePhotos}
+          items={bibActive ? bibVisiblePhotos : undefined}
+          itemBatches={bibActive ? undefined : gridBatches}
           galleryProps={galleryProps}
           bulkActions={bulkActions}
           selectable={canSelect}
@@ -683,7 +666,6 @@ export function PublicEventPhotoViewer({
               ? undefined
               : { hasMore, isLoading: isLoadingMore, onLoadMore: loadMore, label: loadMoreLabel }
           }
-          segmentSizes={bibActive ? undefined : gridSegmentSizes}
           toolbarLeading={
             isCollaborative ? (
               <EventPhotoFilterTabs

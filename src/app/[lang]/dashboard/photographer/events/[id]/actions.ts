@@ -3,7 +3,7 @@
 import { revalidatePath, revalidateTag } from 'next/cache';
 import type { PhotoAlbumItem } from '@/components/photo-album-viewer';
 import {
-  createSignedUrls,
+  createPhotoUrlMap,
   deletePhoto,
   deleteStorageFiles,
   eventExists,
@@ -352,22 +352,19 @@ export async function loadMoreOwnerEventPhotos(
   });
 
   const paths = photos.map((p) => p.original_url).filter((url): url is string => url !== null);
-  const signed: Record<string, string> = {};
-  if (paths.length > 0) {
-    const signedUrls = await createSignedUrls(adminClient, 'photos', paths, 60 * 60);
-    for (const item of signedUrls) {
-      if (item.signedUrl) signed[item.path] = item.signedUrl;
-    }
-  }
-
-  // Tags via the cookie client (RLS-friendly, matches the page). Uploader
-  // profiles via the admin client since guest rows sit outside the owner's RLS.
-  const tags = await getTagsForPhotos(
-    supabase,
-    photos.map((p) => p.id),
-  );
   const uploaderUserIds = photos.map((p) => p.uploaded_by).filter((v): v is string => Boolean(v));
-  const uploaderProfiles = await getProfilesByIds(adminClient, uploaderUserIds);
+
+  // Signing (originals), tags, and uploader profiles are independent — run them
+  // together. Tags use the cookie client (RLS-friendly, matches the page);
+  // profiles use the admin client since guest rows sit outside the owner's RLS.
+  const [signed, tags, uploaderProfiles] = await Promise.all([
+    createPhotoUrlMap(adminClient, 'photos', paths, { expiresIn: 60 * 60 }),
+    getTagsForPhotos(
+      supabase,
+      photos.map((p) => p.id),
+    ),
+    getProfilesByIds(adminClient, uploaderUserIds),
+  ]);
 
   const items = photos
     .map((p) => buildOwnerPhotoAlbumItem(p, { signed, uploaderProfiles, tags }))

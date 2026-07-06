@@ -53,10 +53,11 @@ interface PhotoGalleryProps {
     onLoadMore: () => void;
     label: string;
   };
-  /** Load-more batch sizes for the flat `items` grid — lays out each batch as
-   * an independent segment so appending never re-flows on-screen photos. Only
-   * applies to the flat `items` path (not `sections`). */
-  segmentSizes?: number[];
+  /** Paginated load-more pages for the flat grid — each is laid out as an
+   * independent segment so appending never re-flows on-screen photos. Provide
+   * this instead of `items` for a paginated grid; ignored on the `sections`
+   * (AI-results) path. */
+  itemBatches?: PhotoAlbumItem[][];
 }
 
 const EMPTY_SELECTION_LABELS: PhotoGallerySelectionLabels = {
@@ -89,7 +90,7 @@ export function PhotoGallery({
   labels = EMPTY_SELECTION_LABELS,
   emptyState,
   loadMore,
-  segmentSizes,
+  itemBatches,
 }: PhotoGalleryProps) {
   const selection = usePhotoSelection();
 
@@ -121,8 +122,8 @@ export function PhotoGallery({
   }, [autoLoadEnabled]);
 
   const allItems = useMemo(
-    () => items ?? (sections ?? []).flatMap((s) => s.items),
-    [items, sections],
+    () => items ?? itemBatches?.flat() ?? (sections ?? []).flatMap((s) => s.items),
+    [items, itemBatches, sections],
   );
 
   const countLabel =
@@ -172,8 +173,8 @@ export function PhotoGallery({
     ))
   ) : (
     <PhotoAlbumViewer
-      items={items ?? []}
-      segmentSizes={segmentSizes}
+      items={items}
+      itemBatches={itemBatches}
       {...albumSelectionProps}
       {...galleryProps}
     />

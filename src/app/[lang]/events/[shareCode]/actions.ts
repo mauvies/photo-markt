@@ -3,7 +3,7 @@
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { headers } from 'next/headers';
 import {
-  createPhotoUrls,
+  createPhotoUrlMap,
   deletePhoto,
   deleteStorageFiles,
   type Event,
@@ -140,27 +140,26 @@ async function buildSignedEventAlbumItems(
   if (photos.length === 0) return [];
 
   const paths = photos.map((p) => p.original_url).filter((url): url is string => url !== null);
-  const signed: Record<string, string> = {};
-  if (paths.length > 0) {
-    const photoUrls = await createPhotoUrls(adminClient, 'photos', paths, {
-      expiresIn: 60 * 60,
-      useWatermark: event.watermark_enabled === true,
-      baseUrl,
-    });
-    for (const item of photoUrls) {
-      if (item.signedUrl) signed[item.path] = item.signedUrl;
-    }
-  }
-
+  // Uploader attribution is only rendered on collaborative events; on a normal
+  // event the owner profile would be fetched and never read, so skip it.
   const uploaderUserIds = Array.from(
     new Set([
-      event.user_id,
+      ...(event.is_collaborative ? [event.user_id] : []),
       ...photos.map((p) => p.uploaded_by).filter((v): v is string => Boolean(v)),
     ]),
   );
-  const uploaderProfiles = await getProfilesByIds(adminClient, uploaderUserIds);
-  const alt = `Photo from ${event.name}`;
 
+  // Signing and profile resolution are independent — run them together.
+  const [signed, uploaderProfiles] = await Promise.all([
+    createPhotoUrlMap(adminClient, 'photos', paths, {
+      expiresIn: 60 * 60,
+      useWatermark: event.watermark_enabled === true,
+      baseUrl,
+    }),
+    getProfilesByIds(adminClient, uploaderUserIds),
+  ]);
+
+  const alt = `Photo from ${event.name}`;
   return photos
     .map((p) => buildPublicPhotoAlbumItem(p, { signed, event, uploaderProfiles, alt }))
     .filter((item): item is PublicPhotoAlbumItem => item !== null);
@@ -423,13 +422,13 @@ export async function searchFacesInEvent(
     .map((m) => photoById.get(m.photoId))
     .filter((p): p is PhotoDetail => p !== undefined);
   const baseUrl = await getBaseUrl();
-  const matchedPhotos = await buildSignedEventAlbumItems(adminClient, event, matchedRows, baseUrl);
+  // Signing the matches and reading indexing progress (step 9) are independent.
+  const [matchedPhotos, progress] = await Promise.all([
+    buildSignedEventAlbumItems(adminClient, event, matchedRows, baseUrl),
+    getEventAiIndexingProgress(adminClient, event.id),
+  ]);
   const signedIds = new Set(matchedPhotos.map((p) => p.id));
   const filteredMatches = matches.filter((m) => signedIds.has(m.photoId));
-
-  // 9. Compute indexing-completeness so the UI can hint that more matches
-  //    may appear later when indexing completes.
-  const progress = await getEventAiIndexingProgress(adminClient, event.id);
 
   return {
     matches: filteredMatches,

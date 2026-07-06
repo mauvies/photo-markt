@@ -91,6 +91,22 @@ function applyEventPhotoOrder<
 }
 
 /**
+ * Column list for public gallery reads — includes `user_id` (row owner) for
+ * client-side ownership checks, omits the owner-only `guest_email`. Shared by
+ * {@link getEventPhotosPublic} and its paginated variant so the two can't drift.
+ */
+const EVENT_PHOTO_PUBLIC_COLUMNS =
+  'id, original_url, taken_at, city, country, user_id, uploaded_by, guest_name, width, height, thumbnail_status';
+
+/**
+ * Column list for owner/dashboard gallery reads — includes `guest_email` and
+ * `upload_status` (both owner-only). Shared by {@link getEventPhotos} and its
+ * paginated variant.
+ */
+const EVENT_PHOTO_OWNER_COLUMNS =
+  'id, original_url, taken_at, city, country, uploaded_by, guest_name, guest_email, upload_status, width, height, thumbnail_status';
+
+/**
  * Count photos uploaded by a user that are attached to a non-soft-deleted
  * event. Backs the photographer dashboard "photos uploaded" metric.
  *
@@ -273,26 +289,20 @@ export async function getEventPhotos(
   userId: string,
   options?: GetEventPhotosOptions,
 ): Promise<PhotoDetail[]> {
-  let query = supabase
-    .from('photos')
-    .select(
-      'id, original_url, taken_at, city, country, uploaded_by, guest_name, guest_email, upload_status, width, height, thumbnail_status',
-    )
-    .eq('event_id', eventId);
+  let query = supabase.from('photos').select(EVENT_PHOTO_OWNER_COLUMNS).eq('event_id', eventId);
 
   if (options?.includePending) {
-    // Owner-side widening: show photos still mid-validation in the grid so
-    // the photographer sees their upload-in-progress state, not a phantom
-    // gap. Rejected photos stay hidden — they're surfaced via the toast.
+    // Owner-side widening: show photos still mid-validation in the grid so the
+    // photographer sees their upload-in-progress state, not a phantom gap.
+    // Rejected photos stay hidden — they're surfaced via the toast.
     query = query.in('upload_status', ['approved', 'pending']);
   } else {
-    const status = options?.status ?? 'approved';
-    query = query.eq('upload_status', status);
+    query = query.eq('upload_status', options?.status ?? 'approved');
   }
-
   if (!options?.skipUserIdFilter) {
     query = query.eq('user_id', userId);
   }
+
   const { data, error } = await query.order('taken_at', { ascending: true }).throwOnError();
 
   if (error) {
@@ -314,9 +324,7 @@ export async function getEventPhotosPublic(
 ): Promise<PhotoDetail[]> {
   const { data, error } = await supabase
     .from('photos')
-    .select(
-      'id, original_url, taken_at, city, country, user_id, uploaded_by, guest_name, width, height, thumbnail_status',
-    )
+    .select(EVENT_PHOTO_PUBLIC_COLUMNS)
     .eq('event_id', eventId)
     .eq('upload_status', 'approved')
     .order('taken_at', { ascending: true });
@@ -341,9 +349,7 @@ export async function getEventPhotosPublicPage(
 ): Promise<{ photos: PhotoDetail[]; hasMore: boolean }> {
   const query = supabase
     .from('photos')
-    .select(
-      'id, original_url, taken_at, city, country, user_id, uploaded_by, guest_name, width, height, thumbnail_status',
-    )
+    .select(EVENT_PHOTO_PUBLIC_COLUMNS)
     .eq('event_id', eventId)
     .eq('upload_status', 'approved');
 
@@ -371,19 +377,13 @@ export async function getEventPhotosPage(
   userId: string,
   options: GetEventPhotosOptions & EventPhotoPageOptions,
 ): Promise<{ photos: PhotoDetail[]; hasMore: boolean }> {
-  let query = supabase
-    .from('photos')
-    .select(
-      'id, original_url, taken_at, city, country, uploaded_by, guest_name, guest_email, upload_status, width, height, thumbnail_status',
-    )
-    .eq('event_id', eventId);
+  let query = supabase.from('photos').select(EVENT_PHOTO_OWNER_COLUMNS).eq('event_id', eventId);
 
   if (options.includePending) {
     query = query.in('upload_status', ['approved', 'pending']);
   } else {
     query = query.eq('upload_status', options.status ?? 'approved');
   }
-
   if (!options.skipUserIdFilter) {
     query = query.eq('user_id', userId);
   }
