@@ -184,6 +184,8 @@
     "deleteEvent": "Delete event",
     "eventActionsMenuLabel": "More options",
     "galleryEmpty": "No photos in this event yet.",
+    "loadMore": "Load more",
+    "loadMoreFailed": "Couldn't load more photos. Please try again.",
     "deletePhoto": "Delete photo",
     "deletePhotoConfirmTitle": "Delete this photo?",
     "deletePhotoConfirmDesc": "This will permanently remove the photo. This cannot be undone.",

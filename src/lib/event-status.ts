@@ -26,6 +26,21 @@ export function isCollaborativeUploadOpen(date: string): boolean {
 }
 
 /**
+ * Whether an event routes uploads through a moderation queue (the dedicated
+ * "Pending" tab) rather than showing owner uploads inline while they validate.
+ * True for collaborative or organizer events that require upload approval —
+ * the same predicate the photographer event page and its load-more action use
+ * to decide whether the main grid includes pending photos.
+ */
+export function eventUsesModerationQueue(event: {
+  is_collaborative: boolean;
+  type: 'solo' | 'collaborative' | 'organizer';
+  require_upload_approval: boolean;
+}): boolean {
+  return (event.is_collaborative || event.type === 'organizer') && event.require_upload_approval;
+}
+
+/**
  * Window (in days) used by `isEventSoon`. Tuned for the photographer dashboard
  * "Upcoming" badge — events sooner than this are surfaced; farther-out events
  * stay unbadged to avoid drowning the grid in pills.

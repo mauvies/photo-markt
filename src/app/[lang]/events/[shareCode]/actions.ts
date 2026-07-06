@@ -3,12 +3,17 @@
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { headers } from 'next/headers';
 import {
+  createPhotoUrls,
   deletePhoto,
   deleteStorageFiles,
+  type Event,
   getEventByShareCode,
   getEventPhotosPublic,
+  getEventPhotosPublicPage,
   getPhotoForContributorDelete,
   getPhotoForDownload,
+  getProfilesByIds,
+  type PhotoDetail,
   resolveEventByParam,
   type SupabaseServerClient,
 } from '@/database/queries';
@@ -24,7 +29,10 @@ import { supabaseAdmin } from '@/database/supabase-admin';
 import { searchFacesByImage } from '@/lib/aws/face-indexing';
 import { prepareImageForRekognition } from '@/lib/aws/image-prep';
 import { normalizeBibToken } from '@/lib/bib-numbers';
+import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
+import { getEventStatus } from '@/lib/event-status';
 import { isFeatureEnabled } from '@/lib/feature-flags';
+import { getBaseUrl } from '@/lib/get-base-url';
 import { validatePhotoUpload } from '@/lib/photo-upload';
 import { getClientIp, rateLimit } from '@/lib/rate-limit';
 import { safeCall } from '@/lib/safe-call';
@@ -34,6 +42,7 @@ import {
   type SearchFacesInEventResult,
   type SearchMatchBucket,
 } from './face-search-shared';
+import { buildPublicPhotoAlbumItem, type PublicPhotoAlbumItem } from './photo-album-item';
 
 /**
  * Delete a photo on a collaborative event from the public viewer.
@@ -110,6 +119,94 @@ export async function deleteContributorPhotoAction(input: {
   if (event.share_code) revalidateTag(`event-${event.share_code}`, 'max');
 
   return { success: true };
+}
+
+// ─── Paginated gallery ("Load more") ─────────────────────────────────────────
+
+/**
+ * Sign a set of event photo rows and map them to gallery items — the shared
+ * signing + attribution path for both the load-more grid and the enriched
+ * search results. Watermarks exactly when the event's `watermark_enabled` is
+ * on (identical to the cached first batch, so appended tiles never leak an
+ * original the initial page hid). Uploader names come from `getProfilesByIds`
+ * over the `uploaded_by` set plus the event owner.
+ */
+async function buildSignedEventAlbumItems(
+  adminClient: SupabaseServerClient,
+  event: Event,
+  photos: PhotoDetail[],
+  baseUrl: string,
+): Promise<PublicPhotoAlbumItem[]> {
+  if (photos.length === 0) return [];
+
+  const paths = photos.map((p) => p.original_url).filter((url): url is string => url !== null);
+  const signed: Record<string, string> = {};
+  if (paths.length > 0) {
+    const photoUrls = await createPhotoUrls(adminClient, 'photos', paths, {
+      expiresIn: 60 * 60,
+      useWatermark: event.watermark_enabled === true,
+      baseUrl,
+    });
+    for (const item of photoUrls) {
+      if (item.signedUrl) signed[item.path] = item.signedUrl;
+    }
+  }
+
+  const uploaderUserIds = Array.from(
+    new Set([
+      event.user_id,
+      ...photos.map((p) => p.uploaded_by).filter((v): v is string => Boolean(v)),
+    ]),
+  );
+  const uploaderProfiles = await getProfilesByIds(adminClient, uploaderUserIds);
+  const alt = `Photo from ${event.name}`;
+
+  return photos
+    .map((p) => buildPublicPhotoAlbumItem(p, { signed, event, uploaderProfiles, alt }))
+    .filter((item): item is PublicPhotoAlbumItem => item !== null);
+}
+
+/**
+ * Fetch, sign, and map the next page of an event's public gallery. Anonymous-
+ * friendly (mirrors the other public event actions): resolves the event by
+ * UUID / slug / share code, short-circuits for upcoming events, and rate-limits
+ * by `(eventParam, IP)`. Used by the public and talent viewers' "Load more"
+ * button — watermark follows `event.watermark_enabled` so it matches the cached
+ * first batch.
+ */
+export async function loadMoreEventPhotos(
+  eventParam: string,
+  offset: number,
+): Promise<{ items: PublicPhotoAlbumItem[]; hasMore: boolean; nextOffset: number }> {
+  if (!eventParam) throw new Error('Missing event reference.');
+
+  const adminClient = supabaseAdmin as unknown as SupabaseServerClient;
+  const event = await resolveEventByParam(adminClient, eventParam);
+  if (!event) throw new Error('Event not found.');
+
+  // Upcoming events don't render a gallery — return nothing rather than sign.
+  if (getEventStatus(event.date) === 'upcoming') {
+    return { items: [], hasMore: false, nextOffset: offset };
+  }
+
+  const ip = getClientIp(await headers());
+  const rl = await rateLimit({
+    key: `load-more-photos:${eventParam}:${ip}`,
+    limit: 60,
+    windowSec: 3600,
+  });
+  if (!rl.ok) {
+    throw new Error('Too many requests. Please try again later.');
+  }
+
+  const { photos, hasMore } = await getEventPhotosPublicPage(adminClient, event.id, {
+    limit: EVENT_GALLERY_PAGE_SIZE,
+    offset,
+  });
+  const baseUrl = await getBaseUrl();
+  const items = await buildSignedEventAlbumItems(adminClient, event, photos, baseUrl);
+
+  return { items, hasMore, nextOffset: offset + photos.length };
 }
 
 // ─── Talent face search (PR 3) ────────────────────────────────────────────────
@@ -250,6 +347,7 @@ export async function searchFacesInEvent(
       const progress = await getEventAiIndexingProgress(adminClient, event.id);
       return {
         matches: [],
+        matchedPhotos: [],
         totalSearched: progress.totalApplicable,
         eventIndexingComplete: progress.pending === 0,
         reason: 'invalid-selfie',
@@ -258,6 +356,7 @@ export async function searchFacesInEvent(
     if (errorName === 'ResourceNotFoundException') {
       return {
         matches: [],
+        matchedPhotos: [],
         totalSearched: 0,
         eventIndexingComplete: true,
         reason: 'collection-missing',
@@ -274,6 +373,7 @@ export async function searchFacesInEvent(
     const progress = await getEventAiIndexingProgress(adminClient, event.id);
     return {
       matches: [],
+      matchedPhotos: [],
       totalSearched: progress.totalApplicable,
       eventIndexingComplete: progress.pending === 0,
     };
@@ -305,22 +405,35 @@ export async function searchFacesInEvent(
   //    deleted / unapproved / contains-minors photos never leak through
   //    the AI search path.
   const publicPhotos = await getEventPhotosPublic(adminClient, event.id);
-  const publicPhotoIds = new Set(publicPhotos.map((p) => p.id));
+  const photoById = new Map(publicPhotos.map((p) => [p.id, p]));
 
   const matches: SearchFacesInEventResult['matches'] = [];
   for (const [photoId, similarity] of bestSimilarityByPhotoId) {
-    if (!publicPhotoIds.has(photoId)) continue;
+    if (!photoById.has(photoId)) continue;
     const bucket = bucketForSimilarity(similarity);
     if (!bucket) continue;
     matches.push({ photoId, similarity, bucket });
   }
+
+  // 8b. Sign the matched photos so the viewer renders them independently of
+  //     the paginated grid (a match on photo #200 must show even though the
+  //     grid holds only the first page). Keep `matches` in lockstep with the
+  //     signed set so the "we found N" header can't exceed what renders.
+  const matchedRows = matches
+    .map((m) => photoById.get(m.photoId))
+    .filter((p): p is PhotoDetail => p !== undefined);
+  const baseUrl = await getBaseUrl();
+  const matchedPhotos = await buildSignedEventAlbumItems(adminClient, event, matchedRows, baseUrl);
+  const signedIds = new Set(matchedPhotos.map((p) => p.id));
+  const filteredMatches = matches.filter((m) => signedIds.has(m.photoId));
 
   // 9. Compute indexing-completeness so the UI can hint that more matches
   //    may appear later when indexing completes.
   const progress = await getEventAiIndexingProgress(adminClient, event.id);
 
   return {
-    matches,
+    matches: filteredMatches,
+    matchedPhotos,
     totalSearched: progress.totalApplicable,
     eventIndexingComplete: progress.pending === 0,
   };
@@ -342,7 +455,7 @@ export async function searchPhotosByBibInEvent(
   if (!shareCode) throw new Error('Missing share code.');
 
   const normalized = normalizeBibToken(bib ?? '');
-  if (!normalized) return { photoIds: [] };
+  if (!normalized) return { photoIds: [], matchedPhotos: [] };
 
   const adminClient = supabaseAdmin as unknown as SupabaseServerClient;
 
@@ -363,13 +476,24 @@ export async function searchPhotosByBibInEvent(
   }
 
   const matchedIds = await getPhotoIdsByBibInEvent(adminClient, event.id, normalized);
-  if (matchedIds.length === 0) return { photoIds: [] };
+  if (matchedIds.length === 0) return { photoIds: [], matchedPhotos: [] };
 
   // Cross-reference against the public photo set so unapproved / deleted /
   // minors photos never leak through bib search.
   const publicPhotos = await getEventPhotosPublic(adminClient, event.id);
-  const publicIds = new Set(publicPhotos.map((p) => p.id));
-  return { photoIds: matchedIds.filter((id) => publicIds.has(id)) };
+  const publicPhotoById = new Map(publicPhotos.map((p) => [p.id, p]));
+  const photoIds = matchedIds.filter((id) => publicPhotoById.has(id));
+
+  // Sign the matched photos so the viewer renders the COMPLETE matched set,
+  // not a filter over the paginated grid (a bib match on photo #200 must show
+  // even though the grid holds only the first page).
+  const matchedRows = photoIds
+    .map((id) => publicPhotoById.get(id))
+    .filter((p): p is PhotoDetail => p !== undefined);
+  const baseUrl = await getBaseUrl();
+  const matchedPhotos = await buildSignedEventAlbumItems(adminClient, event, matchedRows, baseUrl);
+
+  return { photoIds, matchedPhotos };
 }
 
 // ─── Single-photo download ────────────────────────────────────────────────────

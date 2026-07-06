@@ -2,17 +2,18 @@
 
 import { Download, Trash2, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import type { PhotoAlbumItem } from '@/components/photo-album-viewer';
 import { PhotoGallery, type PhotoGalleryBulkAction } from '@/components/photo-gallery';
 import type { PhotoIconTooltips, PhotoMoreMenuConfig } from '@/components/photo-icon-buttons';
 import { TagTalentDialog } from '@/components/tag-talent-dialog';
+import { useLoadMorePhotos } from '@/hooks/use-load-more-photos';
 import { downloadEventPhotosZip } from '@/lib/download-zip';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
-import { getPhotoDownloadUrlAction } from './actions';
+import { getPhotoDownloadUrlAction, loadMoreOwnerEventPhotos } from './actions';
 import { deletePhotoAction } from './edit/actions';
 
 type EventsT = Dictionary['events'];
@@ -33,6 +34,12 @@ type EventPhotoAlbumProps = {
   uploaderLabels?: UploaderLabels;
   iconTooltips?: Partial<PhotoIconTooltips>;
   imageUnavailableLabel: string;
+  /** Whether more photos exist beyond the first batch (drives "Load more"). */
+  initialHasMore?: boolean;
+  /** "Load more" button label. */
+  loadMoreLabel: string;
+  /** Toast shown when a "Load more" fetch fails. */
+  loadMoreErrorLabel: string;
 };
 
 export function EventPhotoAlbum({
@@ -42,16 +49,43 @@ export function EventPhotoAlbum({
   uploaderLabels,
   iconTooltips,
   imageUnavailableLabel,
+  initialHasMore = false,
+  loadMoreLabel,
+  loadMoreErrorLabel,
 }: EventPhotoAlbumProps) {
   const router = useRouter();
   const { t } = useTranslations<EventsT>();
-  // Local copy of the grid so a delete can drop tiles instantly (optimistic),
-  // then reconcile with the server via router.refresh(). Re-seeded whenever
-  // the server sends fresh items.
-  const [items, setItems] = useState(initialItems);
-  useEffect(() => {
-    setItems(initialItems);
-  }, [initialItems]);
+
+  // Paginated grid — server sends the first batch, "Load more" appends the
+  // rest. `deletedIds` drops tiles instantly on delete (optimistic); the hook
+  // re-seeds from the server on router.refresh().
+  const {
+    items: accumulated,
+    pages: gridPages,
+    hasMore,
+    isLoadingMore,
+    loadMore,
+  } = useLoadMorePhotos<PhotoAlbumItem>({
+    initialItems,
+    initialHasMore,
+    initialOffset: initialItems.length,
+    fetchMore: (offset) => loadMoreOwnerEventPhotos(eventId, offset),
+    onError: () => toast.error(loadMoreErrorLabel),
+  });
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+  const items = useMemo(
+    () => accumulated.filter((i) => !deletedIds.has(i.id)),
+    [accumulated, deletedIds],
+  );
+  // Each load-more page is laid out as its own segment so appending never
+  // re-flows already-rendered photos (no scroll-jump on "Load more").
+  const gridSegmentSizes = useMemo(
+    () =>
+      gridPages
+        .map((page) => page.filter((i) => !deletedIds.has(i.id)).length)
+        .filter((n) => n > 0),
+    [gridPages, deletedIds],
+  );
 
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -138,7 +172,11 @@ export function EventPhotoAlbum({
       throw error; // keep the ConfirmDialog open so the user can retry
     }
     // Optimistic removal — drop the tiles now; router.refresh() reconciles.
-    setItems((prev) => prev.filter((it) => !ids.includes(it.id)));
+    setDeletedIds((prev) => {
+      const next = new Set(prev);
+      for (const photoId of ids) next.add(photoId);
+      return next;
+    });
     toast.success(
       t('deletedPhotosToast')
         .replace('{n}', String(ids.length))
@@ -244,6 +282,13 @@ export function EventPhotoAlbum({
         bulkActions={bulkActions}
         labels={selectionLabels}
         toolbarClassName="sticky top-0 -mx-4 px-3"
+        loadMore={{
+          hasMore,
+          isLoading: isLoadingMore,
+          onLoadMore: loadMore,
+          label: loadMoreLabel,
+        }}
+        segmentSizes={gridSegmentSizes}
         galleryProps={{
           onTagPhoto: handleTagSinglePhoto,
           onUntag: handleUntag,

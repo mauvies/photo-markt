@@ -7,10 +7,13 @@ import { getActiveRole } from '@/app/[lang]/actions/roles';
 import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/activity-options';
 import { EventGalleryWithFaceSearch } from '@/components/event-gallery-with-face-search';
 import {
+  countEventPhotosByStatus,
   createPhotoUrls,
   getEventByShareCode,
   getEventBySlug,
-  getEventPhotosPublic,
+  getEventPhotosPublicPage,
+  getProfilesByIds,
+  type PhotoDetail,
   type SupabaseServerClient,
 } from '@/database/queries';
 import { getPurchasedPhotoIdsForEvent } from '@/database/queries/orders';
@@ -20,6 +23,7 @@ import {
 } from '@/database/queries/rekognition';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
 import { getEventStatus, isCollaborativeUploadOpen } from '@/lib/event-status';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { getBaseUrl } from '@/lib/get-base-url';
@@ -30,8 +34,8 @@ import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { stringifyJsonLd } from '@/lib/json-ld';
-import { thumbRelativeUrl } from '@/lib/thumbnails';
 import { ContributeDialog } from './contribute-dialog';
+import { buildPublicPhotoAlbumItem } from './photo-album-item';
 import { PublicEventPhotoViewer } from './public-event-photo-viewer';
 import { UploadProgressProvider } from './upload-progress-provider';
 
@@ -66,7 +70,13 @@ async function getCachedEventData(
   baseUrl: string,
 ): Promise<{
   event: EventRow;
-  photos: Awaited<ReturnType<typeof getEventPhotosPublic>>;
+  /** The first gallery page only — subsequent pages load via a Server Action. */
+  photos: PhotoDetail[];
+  /** Whether more approved photos exist beyond the first page. */
+  hasMore: boolean;
+  /** True total of approved photos — drives JSON-LD `numberOfItems` even though
+   * only the first page renders. */
+  totalCount: number;
   /**
    * Pre-signed photo URLs keyed by storage path, generated inside the cache
    * so they survive trivial re-renders. Without caching, every render produced
@@ -114,10 +124,15 @@ async function getCachedEventData(
 
   if (!event) return null;
 
-  const photos = await getEventPhotosPublic(
-    supabaseAdmin as unknown as SupabaseServerClient,
-    event.id,
-  );
+  const adminForPhotos = supabaseAdmin as unknown as SupabaseServerClient;
+  // Only the first gallery page is fetched + signed up front (a 264-photo event
+  // used to sign all 264). "Load more" fetches + signs the rest via a Server
+  // Action. The real total still comes from a cheap count below.
+  const { photos, hasMore } = await getEventPhotosPublicPage(adminForPhotos, event.id, {
+    limit: EVENT_GALLERY_PAGE_SIZE,
+    offset: 0,
+  });
+  const totalCount = await countEventPhotosByStatus(adminForPhotos, event.id, ['approved']);
 
   // Sign storage paths once per cache window. Skip for upcoming events (the
   // gallery isn't shown anyway).
@@ -155,19 +170,7 @@ async function getCachedEventData(
         .filter((v): v is string => Boolean(v)),
     ]),
   );
-  const uploaderProfiles: Record<string, { display_name: string | null; username: string }> = {};
-  if (uploaderUserIds.length > 0) {
-    const { data: profilesData } = await supabaseAdmin
-      .from('profiles')
-      .select('id, display_name, username')
-      .in('id', uploaderUserIds);
-    for (const row of profilesData ?? []) {
-      uploaderProfiles[row.id as string] = {
-        display_name: (row.display_name as string | null) ?? null,
-        username: row.username as string,
-      };
-    }
-  }
+  const uploaderProfiles = await getProfilesByIds(adminForPhotos, uploaderUserIds);
 
   // Sign the dedicated cover image (T-055), if any, so the JSON-LD structured
   // data can prefer it over the first photo. Un-watermarked: it's a chosen
@@ -181,7 +184,7 @@ async function getCachedEventData(
     coverSignedUrl = coverSigned?.signedUrl ?? null;
   }
 
-  return { event, photos, signed, uploaderProfiles, coverSignedUrl };
+  return { event, photos, hasMore, totalCount, signed, uploaderProfiles, coverSignedUrl };
 }
 
 // ─── Static Params (pre-render top 50 public events) ─────────────────────────
@@ -296,7 +299,7 @@ export default async function EventPage({
 
   const cached = await getCachedEventData(param, baseUrl);
   if (!cached) notFound();
-  const { event, photos, signed, uploaderProfiles, coverSignedUrl } = cached;
+  const { event, photos, hasMore, totalCount, signed, uploaderProfiles, coverSignedUrl } = cached;
 
   // Permanent redirect: UUID visitors with a slug get sent to the canonical slug URL.
   if (UUID_REGEX.test(param) && event.slug) {
@@ -400,45 +403,16 @@ export default async function EventPage({
     activityOptions.find((o) => o.value === event.activity)?.label ?? event.activity;
   const location = [event.city, event.country].filter(Boolean).join(', ');
 
+  const galleryAlt = `${activityLabel} photo at ${event.name} in ${location}`;
   const photoItems = photos
-    .map((p) => {
-      const url = p.original_url ? signed[p.original_url] : null;
-      if (!url) return null;
-      const userId = (p as { user_id?: string | null }).user_id ?? null;
-      const uploadedBy = (p as { uploaded_by?: string | null }).uploaded_by ?? null;
-      const guestName = (p as { guest_name?: string | null }).guest_name ?? null;
-      let uploader: { name: string; isAuthenticated: boolean } | undefined;
-      if (uploadedBy) {
-        const profile = uploaderProfiles[uploadedBy];
-        const name = profile?.display_name ?? profile?.username ?? guestName ?? '';
-        if (name) uploader = { name, isAuthenticated: true };
-      } else if (guestName) {
-        uploader = { name: guestName, isAuthenticated: false };
-      } else if (event.is_collaborative) {
-        // No contributor/guest attribution on a collaborative event means the
-        // photo is the event photographer's own upload — attribute it to them
-        // so every photo on a collaborative event shows who uploaded it.
-        const ownerProfile = uploaderProfiles[event.user_id];
-        const name = ownerProfile?.display_name ?? ownerProfile?.username ?? '';
-        if (name) uploader = { name, isAuthenticated: true };
-      }
-      const thumbsReady = (p as { thumbnail_status?: string }).thumbnail_status === 'ready';
-      return {
-        id: p.id,
-        url,
-        thumbSmall:
-          thumbsReady && p.original_url ? thumbRelativeUrl(p.original_url, 'small') : undefined,
-        thumbMedium:
-          thumbsReady && p.original_url ? thumbRelativeUrl(p.original_url, 'medium') : undefined,
-        alt: `${activityLabel} photo at ${event.name} in ${location}`,
-        originalPath: p.original_url,
-        userId,
-        uploadedBy,
-        uploader,
-        width: p.width ?? undefined,
-        height: p.height ?? undefined,
-      };
-    })
+    .map((p) =>
+      buildPublicPhotoAlbumItem(p, {
+        signed,
+        event,
+        uploaderProfiles,
+        alt: galleryAlt,
+      }),
+    )
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
   // ─── Structured data (JSON-LD) ──────────────────────────────────────────────
@@ -492,7 +466,7 @@ export default async function EventPage({
         name: `${event.name} — Photo Gallery`,
         description: `${activityLabel} photos from ${event.name} in ${location}`,
         url: eventUrl,
-        numberOfItems: photoItems.length,
+        numberOfItems: totalCount,
         ...(coverUrl ? { thumbnailUrl: coverUrl } : {}),
       },
       {
@@ -670,6 +644,9 @@ export default async function EventPage({
                     resultsLabels={dict.aiSearch.results}
                     imageUnavailableLabel={dict.eventCard.imageUnavailable}
                     bibSearchEmptyLabel={dict.bibDetection.searchEmpty}
+                    initialHasMore={hasMore}
+                    loadMoreLabel={dict.events.loadMore}
+                    loadMoreErrorLabel={dict.events.loadMoreFailed}
                   />
                 </Suspense>
               }

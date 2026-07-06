@@ -71,7 +71,7 @@ export function ExplorePageContent({
   });
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {eventSearchBarDict && (
         <div className="flex justify-center">
           <TranslationsProvider translations={eventSearchBarDict}>

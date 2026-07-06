@@ -11,11 +11,13 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
+| 4 | P1 | T-070 | [Bug] La subida de la portada del evento falla con "mime type image/webp is not supported" | — | todo |
 | 8 | P2 | T-060 | Paginar la galería del detalle del evento (load more, ~50) en las 3 vistas — hoy firma/renderiza todas | — | doing |
 | 9 | P2 | T-065 | Unificar "Encontrar mis fotos": botones face matching + dorsal lado a lado (responsive mobile) | T-064 | todo |
 | 10 | P2 | T-066 | Modal de detalle de foto a dos paneles (imagen + panel de info/CTA de compra) | — | todo |
 | 11 | P2 | T-067 | Rediseñar el watermark: patrón en mosaico regular y limpio (Sharp) | — | todo |
 | 12 | P2 | T-068 | Difuminar caras detectadas en las previews con watermark (2ª capa anti-robo) | T-067 | todo |
+| 13 | P2 | T-071 | [Bug] Jobs de Inngest fallan con "Object not found" al indexar fotos creadas en local (mismatch de entorno) | — | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 

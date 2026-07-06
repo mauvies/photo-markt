@@ -6,6 +6,8 @@
  * fine, but mixing them with `'use server'` is fragile across bundlers).
  */
 
+import type { PublicPhotoAlbumItem } from './photo-album-item';
+
 /**
  * Confidence buckets for the talent-side AI search. Thresholds match the
  * product spec — anything below 80 (AWS-side `FaceMatchThreshold`) is
@@ -19,6 +21,13 @@ export interface SearchFacesInEventResult {
     similarity: number;
     bucket: SearchMatchBucket;
   }>;
+  /**
+   * The matched photos, already signed and complete — independent of the
+   * paginated grid. The viewer buckets THESE (not the grid) so a match beyond
+   * the loaded page still renders. Kept in lockstep with `matches`: every id in
+   * `matches` has a corresponding item here, and vice versa.
+   */
+  matchedPhotos: PublicPhotoAlbumItem[];
   totalSearched: number;
   eventIndexingComplete: boolean;
   /**

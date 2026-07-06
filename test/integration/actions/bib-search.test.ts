@@ -54,7 +54,23 @@ describe('searchPhotosByBibInEvent (T-032)', () => {
 
   it('returns empty for a bib with no matches', async () => {
     await seedEvent({ shareCode: 'BIBC', enabled: true });
-    expect((await searchPhotosByBibInEvent('BIBC', '9999')).photoIds).toEqual([]);
+    const res = await searchPhotosByBibInEvent('BIBC', '9999');
+    expect(res.photoIds).toEqual([]);
+    expect(res.matchedPhotos).toEqual([]);
+  });
+
+  it('returns signed matchedPhotos honoring watermark (T-060)', async () => {
+    const { event, sb } = await seedEvent({ shareCode: 'BIBWM', enabled: true });
+    // Watermark on → deterministic /api/watermark/ URLs regardless of storage.
+    await sb.from('events').update({ watermark_enabled: true }).eq('id', event.id);
+    const match = await createTestPhoto(event.id);
+    await persistPhotoBibs(sb, match.id, [{ bibText: '1432', confidence: 99 }]);
+
+    const res = await searchPhotosByBibInEvent('BIBWM', '1432');
+    expect(res.photoIds).toEqual([match.id]);
+    expect(res.matchedPhotos).toHaveLength(1);
+    expect(res.matchedPhotos[0]?.id).toBe(match.id);
+    expect(res.matchedPhotos[0]?.url).toContain('/api/watermark/');
   });
 
   it('throws when bib detection is not enabled on the event', async () => {

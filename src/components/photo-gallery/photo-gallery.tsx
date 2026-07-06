@@ -1,5 +1,6 @@
 'use client';
 
+import { Loader2 } from 'lucide-react';
 import { type ComponentProps, type ReactNode, useEffect, useMemo } from 'react';
 import PhotoAlbumViewer, { type PhotoAlbumItem } from '@/components/photo-album-viewer';
 import { PhotoSelectionToolbar } from '@/components/photo-selection-toolbar';
@@ -44,6 +45,18 @@ interface PhotoGalleryProps {
   labels?: PhotoGallerySelectionLabels;
   /** Rendered when there are no photos. */
   emptyState?: ReactNode;
+  /** "Load more" footer for the paginated flat grid. Ignored on the `sections`
+   * (AI-results) path. Hidden when `hasMore` is false. */
+  loadMore?: {
+    hasMore: boolean;
+    isLoading: boolean;
+    onLoadMore: () => void;
+    label: string;
+  };
+  /** Load-more batch sizes for the flat `items` grid — lays out each batch as
+   * an independent segment so appending never re-flows on-screen photos. Only
+   * applies to the flat `items` path (not `sections`). */
+  segmentSizes?: number[];
 }
 
 const EMPTY_SELECTION_LABELS: PhotoGallerySelectionLabels = {
@@ -75,6 +88,8 @@ export function PhotoGallery({
   gridClassName,
   labels = EMPTY_SELECTION_LABELS,
   emptyState,
+  loadMore,
+  segmentSizes,
 }: PhotoGalleryProps) {
   const selection = usePhotoSelection();
 
@@ -134,7 +149,12 @@ export function PhotoGallery({
       </section>
     ))
   ) : (
-    <PhotoAlbumViewer items={items ?? []} {...albumSelectionProps} {...galleryProps} />
+    <PhotoAlbumViewer
+      items={items ?? []}
+      segmentSizes={segmentSizes}
+      {...albumSelectionProps}
+      {...galleryProps}
+    />
   );
 
   // One sticky inline toolbar serves both states on every device — the "Select"
@@ -171,6 +191,21 @@ export function PhotoGallery({
       ) : (
         <div className={cn('flex flex-col gap-4', gridClassName)}>{grids}</div>
       )}
+
+      {/* "Load more" — flat grid only (never the AI-results `sections` path). */}
+      {!sections && loadMore?.hasMore ? (
+        <div className="flex justify-center pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={loadMore.onLoadMore}
+            disabled={loadMore.isLoading}
+          >
+            {loadMore.isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {loadMore.label}
+          </Button>
+        </div>
+      ) : null}
 
       {selection.isSelecting && bulkButtons.length > 0 ? (
         // Mobile only: the bulk actions live in a fixed bar over the bottom nav

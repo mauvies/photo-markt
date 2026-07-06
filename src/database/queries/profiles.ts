@@ -69,6 +69,37 @@ export async function getProfile(
 }
 
 /**
+ * Resolve display names for a set of profile ids in one query. Backs uploader
+ * attribution on the event pages and load-more actions — a single lookup keyed
+ * by id instead of the inline `.from('profiles').in('id', …)` those call sites
+ * repeated. Returns an empty map for an empty id list; throws on query error.
+ */
+export async function getProfilesByIds(
+  supabase: SupabaseServerClient,
+  ids: string[],
+): Promise<Record<string, { display_name: string | null; username: string }>> {
+  if (ids.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, display_name, username')
+    .in('id', ids);
+
+  if (error) {
+    throw new Error(`Failed to get profiles by ids: ${getErrorMessage(error)}`);
+  }
+
+  const map: Record<string, { display_name: string | null; username: string }> = {};
+  for (const row of data ?? []) {
+    map[row.id as string] = {
+      display_name: (row.display_name as string | null) ?? null,
+      username: row.username as string,
+    };
+  }
+  return map;
+}
+
+/**
  * Get specific fields from a user's profile
  */
 export async function getProfileFields<T extends keyof ProfileSelect>(

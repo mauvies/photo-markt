@@ -2,10 +2,13 @@ import { DashboardHeader } from '@/components/dashboard-header';
 import { EventShareCode } from '@/components/event-share-code';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
+  countEventPhotos,
   createSignedUrls,
   getEvent,
   getEventPhotographers,
   getEventPhotos,
+  getEventPhotosPage,
+  getProfilesByIds,
   isApprovedEventPhotographer,
   type SupabaseServerClient,
 } from '@/database/queries';
@@ -13,6 +16,8 @@ import { type AiMatchingStatus, getEventAiIndexingProgress } from '@/database/qu
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { redirectToLogin } from '@/lib/auth/redirect-to-login';
+import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
+import { eventUsesModerationQueue } from '@/lib/event-status';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedPath } from '@/lib/i18n/localized-path';
@@ -25,6 +30,7 @@ import { EventActionsMenu } from './event-actions-menu';
 import { EventDetailsCard } from './event-details-card';
 import { EventPhotoAlbum } from './event-photo-album';
 import { OrganizerUploadSection } from './organizer-upload-section';
+import { buildOwnerPhotoAlbumItem } from './owner-album-item';
 import { PendingPhotosTab } from './pending-photos-tab';
 import { PhotographersSection } from './photographers-section';
 import { RejectedToast } from './rejected-toast';
@@ -103,15 +109,17 @@ export default async function EventDetailPage({
   // tab queue. For everything else, `includePending: true` widens the main
   // grid to show owner uploads still being validated by the worker, so the
   // photographer sees their in-flight uploads instead of a phantom gap.
-  const showPendingTab =
-    (event.is_collaborative || event.type === 'organizer') && event.require_upload_approval;
+  const showPendingTab = eventUsesModerationQueue(event);
 
-  const photos = showPendingTab
-    ? await getEventPhotos(adminClient, id, user.id, { skipUserIdFilter: true })
-    : await getEventPhotos(adminClient, id, user.id, {
-        skipUserIdFilter: true,
-        includePending: true,
-      });
+  // Only the first gallery page is fetched + signed up front; "Load more"
+  // fetches the rest via `loadMoreOwnerEventPhotos`. The moderation queue
+  // (pending tab) is small and stays un-paginated.
+  const { photos, hasMore } = await getEventPhotosPage(adminClient, id, user.id, {
+    skipUserIdFilter: true,
+    includePending: !showPendingTab,
+    limit: EVENT_GALLERY_PAGE_SIZE,
+    offset: 0,
+  });
 
   const pendingPhotos = showPendingTab
     ? await getEventPhotos(adminClient, id, user.id, {
@@ -150,57 +158,10 @@ export default async function EventDetailPage({
   const uploaderUserIds = Array.from(
     new Set(photos.map((p) => p.uploaded_by).filter((v): v is string => Boolean(v))),
   );
-  const uploaderProfiles: Record<string, { display_name: string | null; username: string }> = {};
-  if (uploaderUserIds.length > 0) {
-    const { data: profilesData } = await adminClient
-      .from('profiles')
-      .select('id, display_name, username')
-      .in('id', uploaderUserIds);
-    for (const row of profilesData ?? []) {
-      uploaderProfiles[row.id as string] = {
-        display_name: (row.display_name as string | null) ?? null,
-        username: row.username as string,
-      };
-    }
-  }
-
-  type UploaderInfo = {
-    name: string;
-    email?: string | null;
-    isAuthenticated: boolean;
-  };
-
-  const buildUploader = (p: (typeof photos)[number]): UploaderInfo | undefined => {
-    if (p.uploaded_by) {
-      const profile = uploaderProfiles[p.uploaded_by];
-      const name = profile?.display_name ?? profile?.username ?? p.guest_name ?? '';
-      if (!name) return undefined;
-      return { name, isAuthenticated: true };
-    }
-    if (p.guest_name) {
-      return {
-        name: p.guest_name,
-        email: p.guest_email ?? null,
-        isAuthenticated: false,
-      };
-    }
-    return undefined;
-  };
+  const uploaderProfiles = await getProfilesByIds(adminClient, uploaderUserIds);
 
   const albumItems = photos
-    .map((p) => {
-      const url = p.original_url ? signed[p.original_url] : null;
-      if (!url) return null;
-      return {
-        id: p.id,
-        url,
-        ...(p.original_url && { alt: p.original_url }),
-        tags: photoTags[p.id] || [],
-        uploader: buildUploader(p),
-        width: p.width ?? undefined,
-        height: p.height ?? undefined,
-      };
-    })
+    .map((p) => buildOwnerPhotoAlbumItem(p, { signed, uploaderProfiles, tags: photoTags }))
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
   const pendingItems = pendingPhotos
@@ -232,9 +193,10 @@ export default async function EventDetailPage({
   // dictionary — shared with the wizard's "Upload rejected" messaging.
   const rejectedToastLabel = dict.newEvent.uploadRejectedToast;
   // For the count-mismatch check, "visible" means anything the worker has
-  // either approved or is still mid-validation. Rejected rows are filtered
-  // out by the queries above.
-  const visibleCount = albumItems.length;
+  // either approved or is still mid-validation. Rejected rows are excluded.
+  // Must be the TRUE non-rejected total (not `albumItems.length`, which is now
+  // just the first page) so `RejectedToast` diffs against the real count.
+  const visibleCount = await countEventPhotos(adminClient, id);
 
   // The three sections above the gallery — "Event details", the live AI
   // indexing status and "Share event". AI and Share are conditional (`null`
@@ -359,6 +321,9 @@ export default async function EventDetailPage({
                   iconTooltips={dict.photoIconButtons}
                   items={albumItems}
                   imageUnavailableLabel={dict.eventCard.imageUnavailable}
+                  initialHasMore={hasMore}
+                  loadMoreLabel={dict.events.loadMore}
+                  loadMoreErrorLabel={dict.events.loadMoreFailed}
                 />
               </TabsContent>
               <TabsContent value="pending" className="mt-4">
@@ -387,6 +352,9 @@ export default async function EventDetailPage({
               iconTooltips={dict.photoIconButtons}
               items={albumItems}
               imageUnavailableLabel={dict.eventCard.imageUnavailable}
+              initialHasMore={hasMore}
+              loadMoreLabel={dict.events.loadMore}
+              loadMoreErrorLabel={dict.events.loadMoreFailed}
             />
           )}
         </TranslationsProvider>

@@ -95,6 +95,11 @@ type PhotoAlbumViewerProps = {
   claimedIds?: Set<string>;
   canClaimToProfile?: (photoId: string) => boolean;
   actionBarLabels?: LightboxActionLabels;
+  /** Sizes of the paginated load-more batches, in order. When set (and >1),
+   * each batch is laid out as an independent justified-rows segment so a
+   * "Load more" append never re-flows already-rendered photos (no scroll jump).
+   * The lightbox, selection, and dimensions stay unified across all segments. */
+  segmentSizes?: number[];
 };
 
 export default function PhotoAlbumViewer({
@@ -134,6 +139,7 @@ export default function PhotoAlbumViewer({
   claimedIds,
   canClaimToProfile,
   actionBarLabels,
+  segmentSizes,
 }: PhotoAlbumViewerProps) {
   const { index, openAt, switchTo, close } = usePhotoLightboxUrl(items);
   const [dimensions, setDimensions] = useState<Record<string, { width: number; height: number }>>(
@@ -221,6 +227,25 @@ export default function PhotoAlbumViewer({
       }),
     [items, dimensions],
   );
+
+  // Split the mapped photos into contiguous load-more segments. Each segment
+  // becomes its own justified-rows album so appending a new page never re-flows
+  // (and never visually shifts) the pages already on screen. Without
+  // `segmentSizes`, or with a single page, this is one segment — the original
+  // single-album behavior.
+  const photoSegments = useMemo(() => {
+    if (!segmentSizes || segmentSizes.length <= 1) return [photos];
+    const segments: (typeof photos)[] = [];
+    let start = 0;
+    for (const size of segmentSizes) {
+      if (size <= 0) continue;
+      segments.push(photos.slice(start, start + size));
+      start += size;
+    }
+    // Safety: any photos beyond the declared sizes go into a trailing segment.
+    if (start < photos.length) segments.push(photos.slice(start));
+    return segments.length > 0 ? segments : [photos];
+  }, [photos, segmentSizes]);
 
   const lightboxItems: PhotoLightboxItem[] = useMemo(
     () =>
@@ -360,112 +385,115 @@ export default function PhotoAlbumViewer({
 
   return (
     <>
-      <div className="w-full max-w-full min-w-0">
-        <RowsPhotoAlbum
-          photos={photos}
-          targetRowHeight={250}
-          rowConstraints={{ singleRowMaxHeight: 250 }}
-          spacing={8}
-          render={{
-            extras: renderExtras,
-            button: (props, { photo }) => {
-              const photoId = extractPhotoId(photo as Photo & { id?: string });
-              const isSelected = selectedSet.has(photoId);
-              const { onClick, className: propsClassName, ...restProps } = props;
-              return (
-                // biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons
-                <div
-                  {...(restProps as React.HTMLAttributes<HTMLDivElement>)}
-                  onClick={
-                    onClick
-                      ? (e: React.MouseEvent<HTMLDivElement>) => {
-                          onClick(e as unknown as React.MouseEvent<HTMLButtonElement>);
-                        }
-                      : undefined
-                  }
-                  tabIndex={0}
-                  role="button"
-                  data-selected={isSelected ? '' : undefined}
-                  className={cn(
-                    'group relative flex h-full w-full overflow-hidden rounded-lg bg-muted p-0 text-left focus:outline-none focus:ring-2 focus:ring-ring/30 selection:ring-0',
-                    canSelect ? 'cursor-pointer' : 'cursor-zoom-in',
-                    propsClassName,
-                  )}
-                  onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      onClick?.(event as unknown as React.MouseEvent<HTMLButtonElement>);
+      <div className="flex w-full max-w-full min-w-0 flex-col gap-2">
+        {photoSegments.map((segment, segmentIndex) => (
+          <RowsPhotoAlbum
+            key={segment[0]?.id ?? `segment-${segmentIndex}`}
+            photos={segment}
+            targetRowHeight={250}
+            rowConstraints={{ singleRowMaxHeight: 250 }}
+            spacing={8}
+            render={{
+              extras: renderExtras,
+              button: (props, { photo }) => {
+                const photoId = extractPhotoId(photo as Photo & { id?: string });
+                const isSelected = selectedSet.has(photoId);
+                const { onClick, className: propsClassName, ...restProps } = props;
+                return (
+                  // biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons
+                  <div
+                    {...(restProps as React.HTMLAttributes<HTMLDivElement>)}
+                    onClick={
+                      onClick
+                        ? (e: React.MouseEvent<HTMLDivElement>) => {
+                            onClick(e as unknown as React.MouseEvent<HTMLButtonElement>);
+                          }
+                        : undefined
                     }
-                  }}
-                />
-              );
-            },
-            link: (props, { photo }) => {
-              const photoId = extractPhotoId(photo as Photo & { id?: string });
-              const isSelected = selectedSet.has(photoId);
-              const { onClick, href, className: propsClassName, ...restProps } = props;
-              return (
-                // biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons
-                <div
-                  {...(restProps as React.HTMLAttributes<HTMLDivElement>)}
-                  onClick={
-                    onClick
-                      ? (e: React.MouseEvent<HTMLDivElement>) => {
-                          e.preventDefault();
-                          onClick(e as unknown as React.MouseEvent<HTMLAnchorElement>);
-                        }
-                      : undefined
-                  }
-                  tabIndex={0}
-                  role="link"
-                  data-selected={isSelected ? '' : undefined}
-                  aria-label={href}
-                  className={cn(
-                    'group relative flex h-full w-full overflow-hidden rounded-lg bg-muted p-0 text-left focus:outline-none focus:ring-2 focus:ring-ring/30 selection:ring-0',
-                    canSelect ? 'cursor-pointer' : 'cursor-zoom-in',
-                    propsClassName,
-                  )}
-                  onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      onClick?.(event as unknown as React.MouseEvent<HTMLAnchorElement>);
+                    tabIndex={0}
+                    role="button"
+                    data-selected={isSelected ? '' : undefined}
+                    className={cn(
+                      'group relative flex h-full w-full overflow-hidden rounded-lg bg-muted p-0 text-left focus:outline-none focus:ring-2 focus:ring-ring/30 selection:ring-0',
+                      canSelect ? 'cursor-pointer' : 'cursor-zoom-in',
+                      propsClassName,
+                    )}
+                    onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        onClick?.(event as unknown as React.MouseEvent<HTMLButtonElement>);
+                      }
+                    }}
+                  />
+                );
+              },
+              link: (props, { photo }) => {
+                const photoId = extractPhotoId(photo as Photo & { id?: string });
+                const isSelected = selectedSet.has(photoId);
+                const { onClick, href, className: propsClassName, ...restProps } = props;
+                return (
+                  // biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons
+                  <div
+                    {...(restProps as React.HTMLAttributes<HTMLDivElement>)}
+                    onClick={
+                      onClick
+                        ? (e: React.MouseEvent<HTMLDivElement>) => {
+                            e.preventDefault();
+                            onClick(e as unknown as React.MouseEvent<HTMLAnchorElement>);
+                          }
+                        : undefined
                     }
-                  }}
-                />
-              );
-            },
-          }}
-          componentsProps={{
-            image: ({ photo }) => {
+                    tabIndex={0}
+                    role="link"
+                    data-selected={isSelected ? '' : undefined}
+                    aria-label={href}
+                    className={cn(
+                      'group relative flex h-full w-full overflow-hidden rounded-lg bg-muted p-0 text-left focus:outline-none focus:ring-2 focus:ring-ring/30 selection:ring-0',
+                      canSelect ? 'cursor-pointer' : 'cursor-zoom-in',
+                      propsClassName,
+                    )}
+                    onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        onClick?.(event as unknown as React.MouseEvent<HTMLAnchorElement>);
+                      }
+                    }}
+                  />
+                );
+              },
+            }}
+            componentsProps={{
+              image: ({ photo }) => {
+                const photoId = extractPhotoId(photo as Photo & { id?: string });
+                const isSelected = selectedSet.has(photoId);
+                const state = loadStates[photoId] ?? 'loading';
+                return {
+                  className: cn(
+                    'h-full w-full object-cover transition-opacity duration-200',
+                    state === 'loaded' ? 'opacity-100' : 'opacity-0',
+                    state === 'loaded' && canSelect && isSelected && 'opacity-75',
+                  ),
+                  onLoad: () =>
+                    setLoadStates((prev) =>
+                      prev[photoId] === 'loaded' ? prev : { ...prev, [photoId]: 'loaded' },
+                    ),
+                  onError: () =>
+                    setLoadStates((prev) =>
+                      prev[photoId] === 'error' ? prev : { ...prev, [photoId]: 'error' },
+                    ),
+                };
+              },
+            }}
+            onClick={({ photo }) => {
               const photoId = extractPhotoId(photo as Photo & { id?: string });
-              const isSelected = selectedSet.has(photoId);
-              const state = loadStates[photoId] ?? 'loading';
-              return {
-                className: cn(
-                  'h-full w-full object-cover transition-opacity duration-200',
-                  state === 'loaded' ? 'opacity-100' : 'opacity-0',
-                  state === 'loaded' && canSelect && isSelected && 'opacity-75',
-                ),
-                onLoad: () =>
-                  setLoadStates((prev) =>
-                    prev[photoId] === 'loaded' ? prev : { ...prev, [photoId]: 'loaded' },
-                  ),
-                onError: () =>
-                  setLoadStates((prev) =>
-                    prev[photoId] === 'error' ? prev : { ...prev, [photoId]: 'error' },
-                  ),
-              };
-            },
-          }}
-          onClick={({ photo }) => {
-            const photoId = extractPhotoId(photo as Photo & { id?: string });
-            if (canSelect && selectionActive) {
-              handleToggleSelect(photoId);
-              return;
-            }
-            openAt(photoId);
-          }}
-        />
+              if (canSelect && selectionActive) {
+                handleToggleSelect(photoId);
+                return;
+              }
+              openAt(photoId);
+            }}
+          />
+        ))}
       </div>
       <PhotoLightbox
         items={lightboxItems}
