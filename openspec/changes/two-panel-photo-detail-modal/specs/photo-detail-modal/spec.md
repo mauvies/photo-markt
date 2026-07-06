@@ -1,8 +1,12 @@
 ## ADDED Requirements
 
-### Requirement: Two-panel photo detail on purchase surfaces
+### Requirement: Two-panel photo detail on paid purchase surfaces
 
-The system SHALL provide a `PhotoDetailModal` component, built on the existing Shadcn `Dialog`, that opens when a talent or guest taps a photo on a purchase/browse surface (public event page, talent dashboard event view, and AI face-search results). It SHALL present the photo and a dedicated info/CTA panel instead of the icon-toolbar lightbox. It SHALL NOT provide a secondary full-screen zoom layer.
+The system SHALL provide a `PhotoDetailModal` component, built on the existing Shadcn `Dialog`, that opens when a talent or guest taps a photo on a **paid** event's browse surface (public event page, talent dashboard event view, and AI face-search results). It SHALL present the photo (via the shared `PhotoCarousel`) and a dedicated info/CTA panel instead of the icon-toolbar lightbox. **Free events SHALL keep the existing lightbox** (no purchase moment). It SHALL NOT provide a secondary full-screen zoom layer.
+
+#### Scenario: Free event keeps the lightbox
+- **WHEN** a talent or guest taps a photo on a free (no `price_per_photo`) event
+- **THEN** the existing lightbox opens, not the two-panel modal
 
 #### Scenario: Desktop split layout
 - **WHEN** the modal opens on a viewport at or above the desktop breakpoint
@@ -59,10 +63,6 @@ The primary CTA SHALL be derived from the same action flags/gates the viewer alr
 #### Scenario: Photo already in the cart
 - **WHEN** the current photo is already in the cart
 - **THEN** the primary CTA reflects the in-cart state (remove / added) consistent with the existing action state
-
-#### Scenario: Free or collaborative photo
-- **WHEN** the event is free/collaborative and the photo is downloadable per the existing gate
-- **THEN** the primary CTA is the download / add-to-library action rather than a purchase action
 
 #### Scenario: Already-purchased photo
 - **WHEN** the current photo is in the viewer's purchased set
