@@ -3,6 +3,7 @@ import { getProfile } from '@/database/queries/profiles';
 import { createClient } from '@/database/server';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
+import { reconcileAndPersistConnectStatus } from '@/lib/stripe/connect';
 import { WelcomeEmpty } from './_components/empty-states';
 import { MetricsRow } from './_components/metrics-row';
 import { PerformanceChart } from './_components/performance-chart';
@@ -27,7 +28,20 @@ export default async function PhotographerDashboardPage({
     user ? getProfile(supabase, user.id) : null,
   ]);
 
-  const connectStatus = (profile?.stripe_connect_status ?? 'not_connected') as StripeConnectStatus;
+  const storedStatus = (profile?.stripe_connect_status ?? 'not_connected') as StripeConnectStatus;
+  // Reconcile a stale cached status (e.g. a `pending` left behind by a
+  // lagged/missed `account.updated` webhook) against the live Stripe account so
+  // the "under review" banner doesn't show for an already-active account. The
+  // helper only checks Stripe when the cached value is non-active, so the
+  // common active case adds no Stripe call to this hot page.
+  const connectStatus = user
+    ? await reconcileAndPersistConnectStatus({
+        client: supabase,
+        userId: user.id,
+        accountId: profile?.stripe_connect_account_id,
+        storedStatus,
+      })
+    : storedStatus;
   const t = dict.photographerDashboard;
   const isBrandNew =
     data.metrics.eventsCreated === 0 &&

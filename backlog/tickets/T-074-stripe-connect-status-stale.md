@@ -1,7 +1,7 @@
 # T-074 · Bug: el estado de Stripe Connect queda obsoleto ("en revisión") en el dashboard pese a que la conexión ya es activa
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `fix/stripe-connect-status-stale`  (tipo = fix)
 - **OpenSpec change:** —  (se decide al ejecutar; probablemente extraer la reconciliación live a un helper compartido — toca dashboard + webhook)

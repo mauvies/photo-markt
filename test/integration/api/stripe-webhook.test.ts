@@ -26,6 +26,14 @@ vi.mock('@/lib/stripe/connect', async () => {
   return {
     ...actual,
     createTransfer: vi.fn(async () => ({ id: 'tr_test_mock' }) as unknown),
+    // Default: passthrough (returns the stored status, no heal). Tests
+    // exercising stale-status reconciliation override this per-call.
+    // `deriveConnectStatus` (used by the account.updated handler) stays real
+    // via `...actual`. The helper's own reconcile/heal logic is covered in
+    // test/unit/stripe-connect-reconcile.test.ts.
+    reconcileAndPersistConnectStatus: vi.fn(
+      async (params: { storedStatus: string }) => params.storedStatus,
+    ),
   };
 });
 
@@ -311,6 +319,75 @@ describe('app/api/stripe/webhook — payment_intent.succeeded', () => {
     // Transfer mock was called for the single photographer.
     const { createTransfer } = await import('@/lib/stripe/connect');
     expect(vi.mocked(createTransfer)).toHaveBeenCalledTimes(1);
+  });
+
+  it('reconciles a stale non-active stored status against the live account so the transfer is NOT held', async () => {
+    // Regression for T-074: a lagged/missed `account.updated` webhook leaves
+    // `stripe_connect_status = 'pending'` for an account that is actually
+    // active. Before the fix the gate held the transfer in the platform
+    // account (createTransfer never called); after, the live reconcile pays
+    // the photographer and heals the cached status.
+    const sb = createServiceClient();
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(photographer.id);
+    const photo = await createTestPhoto(event.id);
+    const talent = await createTestUser('TALENT');
+
+    await sb
+      .from('profiles')
+      .update({ stripe_connect_account_id: 'acct_stale', stripe_connect_status: 'pending' })
+      .eq('id', photographer.id);
+
+    // The live account is fully enabled even though the DB still says pending,
+    // so the reconcile heals it to active and the gate lets the transfer through.
+    const { reconcileAndPersistConnectStatus } = await import('@/lib/stripe/connect');
+    vi.mocked(reconcileAndPersistConnectStatus).mockResolvedValueOnce('active');
+
+    const { data: order } = await sb
+      .from('orders')
+      .insert({
+        user_id: talent.id,
+        status: 'pending',
+        total_amount_cents: 500,
+        stripe_payment_intent_id: 'pi_stale_status',
+      })
+      .select('id')
+      .single();
+    if (!order) throw new Error('order seed failed');
+    await sb.from('order_items').insert({
+      order_id: order.id,
+      photo_id: photo.id,
+      photographer_id: photographer.id,
+      unit_price_cents: 500,
+      total_price_cents: 500,
+    });
+
+    const req = signedWebhookRequest({
+      id: 'evt_pi_stale_status',
+      type: 'payment_intent.succeeded',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: 'pi_stale_status',
+          object: 'payment_intent',
+          latest_charge: 'ch_stale_status',
+          amount: 500,
+        },
+      },
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+
+    // The gate used the reconciled 'active' status: the transfer was created
+    // (not held) despite the stale stored 'pending'. The heal-persistence
+    // itself is covered by the reconcileAndPersistConnectStatus unit tests.
+    const { createTransfer } = await import('@/lib/stripe/connect');
+    expect(vi.mocked(createTransfer)).toHaveBeenCalledTimes(1);
+
+    // The helper was consulted with the stale stored status + account id.
+    expect(vi.mocked(reconcileAndPersistConnectStatus)).toHaveBeenCalledWith(
+      expect.objectContaining({ accountId: 'acct_stale', storedStatus: 'pending' }),
+    );
   });
 });
 

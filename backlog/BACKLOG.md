@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 3 | P1 | T-074 | [Bug] Estado de Stripe Connect obsoleto: banner "en revisión" con cuenta ya activa + retiene payouts | — | todo |
+| 3 | P1 | T-074 | [Bug] Estado de Stripe Connect obsoleto: banner "en revisión" con cuenta ya activa + retiene payouts | — | doing |
 | 8 | P2 | T-060 | Paginar la galería del detalle del evento (load more, ~50) en las 3 vistas — hoy firma/renderiza todas | — | doing |
 | 9 | P2 | T-065 | Unificar "Encontrar mis fotos": botones face matching + dorsal lado a lado (responsive mobile) | T-064 | todo |
 | 10 | P2 | T-066 | Modal de detalle de foto a dos paneles (imagen + panel de info/CTA de compra) | — | todo |
@@ -20,6 +20,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | 13 | P2 | T-071 | [Bug] Jobs de Inngest fallan con "Object not found" al indexar fotos creadas en local (mismatch de entorno) | — | todo |
 | 14 | P2 | T-072 | [Bug] Evento con fotos subidas pero sin indexar: portada vacía en tarjeta del dueño + no sale en listados públicos | — | todo |
 | 15 | P2 | T-073 | [Bug] Galería del evento: columnas por fila inconsistentes (4 y luego 3), se repite por cada página de load-more | T-060 | todo |
+| 16 | P2 | T-075 | Rediseño de la navegación del dashboard del fotógrafo (añadir Configuración, Ganancias→Ventas, reubicar ítems) | — | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
