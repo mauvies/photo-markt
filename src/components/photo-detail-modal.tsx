@@ -1,10 +1,20 @@
 'use client';
 
-import { Download, Share2, X } from 'lucide-react';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import {
+  Calendar,
+  Camera,
+  Download,
+  MapPin,
+  Maximize2,
+  Share2,
+  ShoppingCart,
+  X,
+} from 'lucide-react';
+import type { ReactNode } from 'react';
 import { PhotoCarousel } from '@/components/photo-carousel';
 import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useCarouselNavigation } from '@/hooks/use-carousel-navigation';
 import { useImageLoad } from '@/hooks/use-image-load';
 import { useKeyboardNav } from '@/hooks/use-keyboard-nav';
@@ -68,12 +78,23 @@ function formatDate(iso: string | undefined, locale: string): string | undefined
   }).format(date);
 }
 
+/** One icon + value row in the info panel. */
+function MetaRow({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-2.5 text-sm text-neutral-700">
+      <span className="shrink-0 text-neutral-400">{icon}</span>
+      <span className="min-w-0 truncate">{children}</span>
+    </div>
+  );
+}
+
 /**
  * Two-panel, conversion-focused photo detail for PAID purchase surfaces
- * (public + talent event views, AI search results). The image (shared
- * `PhotoCarousel`) sits on the left; a white info/CTA panel on the right shows
- * attribution, location, date, dimensions, price, and a large primary button.
- * Free events keep the lightbox — see `PhotoAlbumViewer`'s `detailVariant`.
+ * (public + talent event views, AI search results). A large image (shared
+ * `PhotoCarousel`) dominates the left; a narrow white info/CTA panel on the
+ * right lists attribution, location, date, and dimensions (each with an icon)
+ * and pins the price + primary button to the bottom. Free events keep the
+ * lightbox — see `PhotoAlbumViewer`'s `detailVariant`.
  */
 export function PhotoDetailModal({
   items,
@@ -136,6 +157,7 @@ export function PhotoDetailModal({
       case 'add-to-cart':
         return (
           <Button size="lg" className="w-full" onClick={() => onAddToCart?.(current.id)}>
+            <ShoppingCart className="mr-2 h-4 w-4" aria-hidden />
             {labels.addToCart}
           </Button>
         );
@@ -147,6 +169,7 @@ export function PhotoDetailModal({
             className="w-full"
             onClick={() => onRemoveFromCart?.(current.id)}
           >
+            <ShoppingCart className="mr-2 h-4 w-4" aria-hidden />
             {labels.inCart}
           </Button>
         );
@@ -163,77 +186,85 @@ export function PhotoDetailModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent
-        showCloseButton={false}
-        className="flex h-[90dvh] max-h-[90dvh] w-[95vw] max-w-5xl flex-col gap-0 overflow-hidden rounded-xl p-0 md:flex-row"
-      >
-        <DialogTitle className="sr-only">{labels.title}</DialogTitle>
+    <DialogPrimitive.Root open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogPrimitive.Portal>
+        {/* Darker + blurred backdrop so the gallery behind is unreadable. */}
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Content className="fixed top-1/2 left-1/2 z-50 flex h-[92dvh] w-[96vw] max-w-[1400px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl shadow-2xl duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 md:flex-row">
+          <DialogPrimitive.Title className="sr-only">{labels.title}</DialogPrimitive.Title>
 
-        {/* Image side */}
-        <div className="relative flex h-[42dvh] w-full items-center justify-center bg-black md:h-full md:flex-1">
-          <PhotoCarousel
-            items={items}
-            currentIndex={nav.currentIndex}
-            windowIndices={nav.windowIndices}
-            onPrevious={nav.previous}
-            onNext={nav.next}
-            isLoaded={isLoaded}
-            markLoaded={markLoaded}
-            className="h-full w-full"
-          />
-          {/* Share — top-right of the image on desktop, top-left on mobile so it
-              never collides with the counter/close cluster. */}
-          <button
-            type="button"
-            onClick={handleShare}
-            aria-label={labels.share}
-            className="absolute top-3 left-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70 md:left-auto md:right-3"
-          >
-            <Share2 className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* Info / CTA panel */}
-        <aside className="flex w-full shrink-0 flex-col gap-3 overflow-y-auto bg-white p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] text-neutral-900 md:w-80 dark:bg-white">
-          {current.uploader?.name ? (
-            <p className="text-base font-semibold">{current.uploader.name}</p>
-          ) : null}
-          <div className="flex flex-col gap-1 text-sm text-neutral-600">
-            {current.location ? <span>{current.location}</span> : null}
-            {dateLabel ? <span>{dateLabel}</span> : null}
-            {dimensions ? <span>{dimensions}</span> : null}
+          {/* Image side — takes the majority of the width. */}
+          <div className="relative flex h-[48dvh] w-full items-center justify-center bg-black md:h-full md:flex-1">
+            <PhotoCarousel
+              items={items}
+              currentIndex={nav.currentIndex}
+              windowIndices={nav.windowIndices}
+              onPrevious={nav.previous}
+              onNext={nav.next}
+              isLoaded={isLoaded}
+              markLoaded={markLoaded}
+              className="h-full w-full"
+            />
+            {/* Share — top-left of the image; a translucent background appears on hover. */}
+            <button
+              type="button"
+              onClick={handleShare}
+              aria-label={labels.share}
+              className="absolute top-3 left-3 z-20 flex h-9 w-9 items-center justify-center rounded-full text-white transition-colors hover:bg-white/20"
+            >
+              <Share2 className="h-[18px] w-[18px] drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]" />
+            </button>
+            {/* Photo counter — top-right of the image. On mobile the image is
+                full-width, so nudge it left of the close button; on desktop the
+                close sits over the white panel, far from the image edge. */}
+            {items.length > 1 ? (
+              <div className="absolute top-3 right-14 z-20 rounded-full bg-black/45 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm md:right-3">
+                {nav.currentIndex + 1} / {items.length}
+              </div>
+            ) : null}
           </div>
 
-          {priceLabel ? (
-            <div className="mt-1">
-              <p className="text-xs uppercase tracking-wide text-neutral-500">
-                {labels.pricePerPhoto}
-              </p>
-              <p className="text-lg font-semibold">{priceLabel}</p>
+          {/* Info / CTA panel — narrow white column. */}
+          <aside className="flex w-full shrink-0 flex-col bg-white p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] text-neutral-900 md:w-[300px]">
+            <div className="flex-1 space-y-3 overflow-y-auto">
+              {current.uploader?.name ? (
+                <MetaRow icon={<Camera className="h-4 w-4" />}>{current.uploader.name}</MetaRow>
+              ) : null}
+              {current.location ? (
+                <MetaRow icon={<MapPin className="h-4 w-4" />}>{current.location}</MetaRow>
+              ) : null}
+              {dateLabel ? (
+                <MetaRow icon={<Calendar className="h-4 w-4" />}>{dateLabel}</MetaRow>
+              ) : null}
+              {dimensions ? (
+                <MetaRow icon={<Maximize2 className="h-4 w-4" />}>{dimensions}</MetaRow>
+              ) : null}
             </div>
-          ) : null}
 
-          <div className="mt-auto pt-3">{renderCta()}</div>
-        </aside>
+            {/* Price + CTA pinned to the bottom (price directly above the button). */}
+            <div className="mt-auto pt-4">
+              {priceLabel ? (
+                <div className="mb-2 flex items-baseline justify-between">
+                  <span className="text-sm text-neutral-500">{labels.pricePerPhoto}</span>
+                  <span className="text-base font-bold text-neutral-900">{priceLabel}</span>
+                </div>
+              ) : null}
+              {renderCta()}
+            </div>
+          </aside>
 
-        {/* Top-right cluster: counter + close */}
-        <div className="absolute right-3 top-3 z-30 flex items-center gap-2">
-          {items.length > 1 ? (
-            <span className="rounded-full bg-black/50 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
-              {nav.currentIndex + 1} / {items.length}
-            </span>
-          ) : null}
+          {/* Close — top-right of the modal. White over the mobile image, dark
+              over the desktop white panel. */}
           <button
             type="button"
             onClick={onClose}
             aria-label={labels.close}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+            className="absolute top-3 right-3 z-30 flex h-9 w-9 items-center justify-center rounded-full text-white transition-colors hover:bg-white/20 md:text-neutral-500 md:hover:bg-neutral-100"
           >
-            <X className="h-4 w-4" />
+            <X className="h-[18px] w-[18px] drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] md:drop-shadow-none" />
           </button>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
