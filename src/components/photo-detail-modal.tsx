@@ -208,23 +208,23 @@ export function PhotoDetailModal({
               markLoaded={markLoaded}
               className="h-full w-full"
             />
-            {/* Share — top-left of the image; a translucent background appears on hover. */}
-            <button
-              type="button"
-              onClick={handleShare}
-              aria-label={labels.share}
-              className="absolute top-3 left-3 z-20 flex h-9 w-9 items-center justify-center rounded-full text-white transition-colors hover:bg-white/20"
-            >
-              <Share2 className="h-[18px] w-[18px] drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]" />
-            </button>
-            {/* Photo counter — top-right of the image. On mobile the image is
-                full-width, so nudge it left of the close button; on desktop the
-                close sits over the white panel, far from the image edge. */}
-            {items.length > 1 ? (
-              <div className="absolute top-3 right-14 z-20 rounded-full bg-black/45 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm md:right-3">
-                {nav.currentIndex + 1} / {items.length}
-              </div>
-            ) : null}
+            {/* Top-right of the image: share, then the photo counter — same
+                dark bubble style and height as the counter. */}
+            <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleShare}
+                aria-label={labels.share}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-colors hover:bg-black/65"
+              >
+                <Share2 className="h-[18px] w-[18px]" />
+              </button>
+              {items.length > 1 ? (
+                <div className="flex h-9 items-center rounded-full bg-black/45 px-3 text-xs font-medium text-white backdrop-blur-sm">
+                  {nav.currentIndex + 1} / {items.length}
+                </div>
+              ) : null}
+            </div>
           </div>
 
           {/* Info / CTA panel — narrow white column. */}
@@ -256,15 +256,15 @@ export function PhotoDetailModal({
             </div>
           </aside>
 
-          {/* Close — top-right of the modal. White over the mobile image, dark
-              over the desktop white panel. */}
+          {/* Close — far top-left on mobile (dark bubble, matching the counter),
+              top-right over the white panel on desktop (subtle grey). */}
           <button
             type="button"
             onClick={onClose}
             aria-label={labels.close}
-            className="absolute top-3 right-3 z-30 flex h-9 w-9 items-center justify-center rounded-full text-white transition-colors hover:bg-white/20 md:text-neutral-500 md:hover:bg-neutral-100"
+            className="absolute top-3 left-3 z-30 flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-colors hover:bg-black/65 md:left-auto md:right-3 md:bg-transparent md:text-neutral-500 md:backdrop-blur-none md:hover:bg-neutral-100"
           >
-            <X className="h-[18px] w-[18px] drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] md:drop-shadow-none" />
+            <X className="h-[18px] w-[18px]" />
           </button>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
