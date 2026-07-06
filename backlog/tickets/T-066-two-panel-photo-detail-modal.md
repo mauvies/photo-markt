@@ -1,7 +1,7 @@
 # T-066 · Modal de detalle de foto a dos paneles (imagen + panel de info/CTA de compra)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `feat/two-panel-photo-detail-modal`  (tipo = feat)
 - **OpenSpec change:** —  (se crea al ejecutar — toca >5 archivos: nuevo componente + hooks extraídos + 4 vistas + diccionarios)

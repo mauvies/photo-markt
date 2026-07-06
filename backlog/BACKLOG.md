@@ -11,8 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 8 | P2 | T-060 | Paginar la galería del detalle del evento (load more, ~50) en las 3 vistas — hoy firma/renderiza todas | — | doing |
-| 10 | P2 | T-066 | Modal de detalle de foto a dos paneles (imagen + panel de info/CTA de compra) | — | todo |
+| 10 | P2 | T-066 | Modal de detalle de foto a dos paneles (imagen + panel de info/CTA de compra) | — | doing |
 | 11 | P2 | T-067 | Rediseñar el watermark: patrón en mosaico regular y limpio (Sharp) | — | todo |
 | 12 | P2 | T-068 | Difuminar caras detectadas en las previews con watermark (2ª capa anti-robo) | T-067 | todo |
 | 13 | P2 | T-071 | [Bug] Jobs de Inngest fallan con "Object not found" al indexar fotos creadas en local (mismatch de entorno) | — | todo |
@@ -35,6 +34,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-060** · Perf/UX: la página de detalle del evento cargaba, firmaba y renderizaba **todas** las fotos de golpe (264 → 264 filas + 264 signed URLs + 264 tiles). Ahora pagina a lotes finitos (~50) con **"Cargar más" + infinite scroll** en las 3 vistas (fotógrafo, talento, pública). Query paginada por cursor estable en `photos.ts`; solo se firman las URLs del lote cargado; el conteo total sigue correcto (no derivado del nº renderizado, coordinado con T-057). La búsqueda facial/dorsal sigue funcionando (subconjunto emparejado, cargado completo aparte de la grilla paginada). Nuevos: `use-load-more-photos` hook, `event-photo-filter`/`event-gallery`/`event-status` helpers, y refactor de `photo-album-viewer` para append de lotes en segmentos. Strings en/es ("Cargar más"/"No hay más fotos"). Tests de paginación (primer lote + `hasMore`, segundo lote continúa sin solapar) + ajustes en integración de bib/face search — PR #123
 
 - **T-065** · UI: se fusionaron las dos tarjetas separadas de "Encontrar mis fotos" (invitación a búsqueda facial + barra de dorsal) en **una sola sección**: copy a la izquierda y **un botón por capacidad a la derecha** (lado a lado en desktop, con wrap en mobile). El botón de cara abre el modal de selfie (igual que antes); el de dorsal despliega un input numérico inline que filtra la grilla in-place (mismo flujo `searchPhotosByBibInEvent` + `BibSearchContext`). Visibilidad gobernada por un helper puro `resolveFindMyPhotos` (testeado): ambos botones con face+dorsal, uno solo si solo hay una capacidad, y sección oculta mientras hay búsqueda facial activa. Aplicado a la vista pública y a la de talento (ambas usan `EventGalleryWithFaceSearch`, ahora con un único prop `findLabels`). Reemplaza `ai-find-photos-banner` + `bib-search-bar` por `find-my-photos-banner`. Strings i18n (en/es): `aiSearch.banner.faceButton`, `bibDetection.bibButton`, `bibDetection.findDescription`; se quitó el `aiSearch.banner.cta` sin uso. Test de composición/visibilidad (falla antes/pasa después) — PR #127
 
