@@ -1,10 +1,10 @@
 import { DashboardHeader } from '@/components/dashboard-header';
-import { getProfile, updateProfileStripeConnect } from '@/database/queries/profiles';
+import { getProfile } from '@/database/queries/profiles';
 import { createClient } from '@/database/server';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
-import { deriveConnectStatus, retrieveConnectAccount } from '@/lib/stripe/connect';
+import { reconcileAndPersistConnectStatus } from '@/lib/stripe/connect';
 import { PayoutProfileForm } from './payout-profile-form';
 
 export default async function PayoutProfilePage({
@@ -30,22 +30,14 @@ export default async function PayoutProfilePage({
     connectStatus = (existingProfile?.stripe_connect_status ??
       'not_connected') as typeof connectStatus;
 
-    // Live check from Stripe to avoid stale DB-cached status (the webhook
-    // can lag or miss events). Only applies when an account ID is stored.
-    const accountId = existingProfile?.stripe_connect_account_id;
-    if (accountId) {
-      const account = await retrieveConnectAccount(accountId);
-      if (account) {
-        const liveStatus = deriveConnectStatus(account);
-        if ((liveStatus as string) !== (connectStatus as string)) {
-          connectStatus = liveStatus;
-          // Sync the stale value in the background — non-blocking.
-          updateProfileStripeConnect(supabase, user.id, {
-            stripe_connect_status: liveStatus,
-          }).catch((err) => console.error('[payout-profile] failed to sync connect status:', err));
-        }
-      }
-    }
+    // Live check from Stripe to avoid a stale DB-cached status (the webhook can
+    // lag or miss events), healing the stored value when it differs.
+    connectStatus = await reconcileAndPersistConnectStatus({
+      client: supabase,
+      userId: user.id,
+      accountId: existingProfile?.stripe_connect_account_id,
+      storedStatus: connectStatus,
+    });
   }
 
   return (

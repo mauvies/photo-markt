@@ -1,4 +1,6 @@
 import type Stripe from 'stripe';
+import { type StripeConnectStatus, updateProfileStripeConnect } from '@/database/queries/profiles';
+import type { SupabaseServerClient } from '@/database/queries/types';
 import { stripe } from './config';
 
 /**
@@ -30,6 +32,73 @@ export async function retrieveConnectAccount(accountId: string): Promise<Stripe.
   } catch {
     return null;
   }
+}
+
+/**
+ * Reconcile a DB-cached Connect status against the live Stripe account.
+ *
+ * The `account.updated` webhook can lag or be missed, leaving
+ * `profiles.stripe_connect_status` stale — most damagingly a `pending` value
+ * for an account that is actually `active`, which both shows the "under
+ * review" banner and causes the `payment_intent.succeeded` handler to HOLD the
+ * photographer's transfer in the platform account. This helper is the single
+ * source of truth for the live check, shared by the dashboard, the
+ * payout-profile page, and the webhook transfer path so they can't drift.
+ *
+ * Fetches the account only when an `accountId` is present, and falls back to
+ * the stored value if the account can't be retrieved (`retrieveConnectAccount`
+ * already swallows API errors). Callers decide whether/how to persist a
+ * changed value.
+ */
+export async function reconcileConnectStatus(
+  accountId: string | null | undefined,
+  storedStatus: StripeConnectStatus,
+): Promise<{ status: StripeConnectStatus; changed: boolean }> {
+  if (!accountId) return { status: storedStatus, changed: false };
+
+  const account = await retrieveConnectAccount(accountId);
+  if (!account) return { status: storedStatus, changed: false };
+
+  const liveStatus = deriveConnectStatus(account);
+  return { status: liveStatus, changed: liveStatus !== storedStatus };
+}
+
+/**
+ * Reconcile a cached Connect status against Stripe AND persist a healed value,
+ * returning the effective status to use. The single entry point shared by the
+ * dashboard, payout-profile page, and webhook transfer gate so the heal
+ * semantics can't drift between them.
+ *
+ * Two deliberate guarantees:
+ *   - **Only heals a non-active cached status.** An `active` cached value is
+ *     treated as authoritative — legitimate downgrades arrive via the
+ *     `account.updated` webhook, the source of truth. This avoids a blocking
+ *     Stripe call on the hot dashboard path for the common active case, and
+ *     avoids flipping an active account to "restricted" on a transient Stripe
+ *     read blip. The live check exists to *promote* a stale `pending`/
+ *     `restricted` that Stripe already enabled.
+ *   - **Awaits the DB write.** A React Server Component / serverless handler can
+ *     be torn down right after the response, dropping a fire-and-forget write —
+ *     so the heal would never persist and the Stripe call would repeat every
+ *     load. Awaiting (errors swallowed + logged) makes the heal stick. The DB
+ *     write is a single fast update; the cost is negligible.
+ */
+export async function reconcileAndPersistConnectStatus(params: {
+  client: SupabaseServerClient;
+  userId: string;
+  accountId: string | null | undefined;
+  storedStatus: StripeConnectStatus;
+}): Promise<StripeConnectStatus> {
+  const { client, userId, accountId, storedStatus } = params;
+  if (storedStatus === 'active' || !accountId) return storedStatus;
+
+  const { status, changed } = await reconcileConnectStatus(accountId, storedStatus);
+  if (changed) {
+    await updateProfileStripeConnect(client, userId, { stripe_connect_status: status }).catch(
+      (err) => console.error('[connect] failed to sync connect status:', err),
+    );
+  }
+  return status;
 }
 
 export async function createExpressAccount(params: {

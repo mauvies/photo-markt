@@ -51,7 +51,11 @@ import { env } from '@/env.mjs';
 import { sendGuestPurchaseEmail } from '@/lib/email/send-guest-purchase-email';
 import { getPhotographerNetCents } from '@/lib/plans';
 import { stripe } from '@/lib/stripe/config';
-import { createTransfer, deriveConnectStatus } from '@/lib/stripe/connect';
+import {
+  createTransfer,
+  deriveConnectStatus,
+  reconcileAndPersistConnectStatus,
+} from '@/lib/stripe/connect';
 import { STRIPE_PRICE_TO_PLAN } from '@/lib/stripe/plans-stripe';
 
 /**
@@ -85,7 +89,21 @@ async function createTransfersForOrderItems(
     const grossCents = totals.get(status.id) ?? 0;
     if (grossCents === 0) continue;
 
-    if (status.stripe_connect_status !== 'active' || !status.stripe_connect_account_id) {
+    // The stored status can be stale (a lagged/missed `account.updated`
+    // webhook). Before holding a transfer, reconcile a non-active cached value
+    // against the live account so an actually-active photographer still gets
+    // paid instead of having funds stranded in the platform account. The
+    // helper only calls Stripe when the cached value is non-active (the common
+    // active path skips it) and heals the stored value so the dashboard/
+    // earnings views recover.
+    const effectiveStatus = await reconcileAndPersistConnectStatus({
+      client: supabaseAdmin,
+      userId: status.id,
+      accountId: status.stripe_connect_account_id,
+      storedStatus: status.stripe_connect_status,
+    });
+
+    if (effectiveStatus !== 'active' || !status.stripe_connect_account_id) {
       console.warn(
         `Photographer ${status.id} has no active Connect account — transfer of ${grossCents} cents held in platform account.`,
       );
