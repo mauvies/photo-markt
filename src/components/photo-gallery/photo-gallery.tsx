@@ -1,7 +1,7 @@
 'use client';
 
 import { Loader2 } from 'lucide-react';
-import { type ComponentProps, type ReactNode, useEffect, useMemo } from 'react';
+import { type ComponentProps, type ReactNode, useEffect, useMemo, useRef } from 'react';
 import PhotoAlbumViewer, { type PhotoAlbumItem } from '@/components/photo-album-viewer';
 import { PhotoSelectionToolbar } from '@/components/photo-selection-toolbar';
 import { Button } from '@/components/ui/button';
@@ -98,6 +98,28 @@ export function PhotoGallery({
     selection.clear();
   }, [selectionResetKey, selection.clear]);
 
+  // Infinite scroll: auto-trigger "Load more" when its footer scrolls into view.
+  // A ref holds the latest callback so the observer isn't re-created on every
+  // render (the host passes a fresh `loadMore` object each time). The footer
+  // stays a clickable fallback. `rootMargin` prefetches ~300px early so the
+  // append feels seamless rather than stopping at the very bottom edge.
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const onLoadMoreRef = useRef(loadMore?.onLoadMore);
+  onLoadMoreRef.current = loadMore?.onLoadMore;
+  const autoLoadEnabled = !sections && Boolean(loadMore?.hasMore) && !loadMore?.isLoading;
+  useEffect(() => {
+    const node = loadMoreSentinelRef.current;
+    if (!node || !autoLoadEnabled) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) onLoadMoreRef.current?.();
+      },
+      { rootMargin: '300px 0px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [autoLoadEnabled]);
+
   const allItems = useMemo(
     () => items ?? (sections ?? []).flatMap((s) => s.items),
     [items, sections],
@@ -192,9 +214,11 @@ export function PhotoGallery({
         <div className={cn('flex flex-col gap-4', gridClassName)}>{grids}</div>
       )}
 
-      {/* "Load more" — flat grid only (never the AI-results `sections` path). */}
+      {/* "Load more" — flat grid only (never the AI-results `sections` path).
+          The sentinel div drives infinite-scroll auto-loading; the button is
+          the clickable fallback. */}
       {!sections && loadMore?.hasMore ? (
-        <div className="flex justify-center pt-4">
+        <div ref={loadMoreSentinelRef} className="flex justify-center pt-4">
           <Button
             type="button"
             variant="outline"

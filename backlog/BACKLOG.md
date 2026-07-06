@@ -18,6 +18,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | 11 | P2 | T-067 | Rediseñar el watermark: patrón en mosaico regular y limpio (Sharp) | — | todo |
 | 12 | P2 | T-068 | Difuminar caras detectadas en las previews con watermark (2ª capa anti-robo) | T-067 | todo |
 | 13 | P2 | T-071 | [Bug] Jobs de Inngest fallan con "Object not found" al indexar fotos creadas en local (mismatch de entorno) | — | todo |
+| 14 | P2 | T-072 | [Bug] Evento con fotos subidas pero sin indexar: portada vacía en tarjeta del dueño + no sale en listados públicos | — | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
