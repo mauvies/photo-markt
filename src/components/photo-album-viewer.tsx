@@ -119,6 +119,9 @@ type PhotoAlbumViewerProps = {
   pricePerPhoto?: number | null;
   /** Locale (page `lang`) for the purchase modal's date formatting. */
   locale?: string;
+  /** Event photographer's display name — the purchase modal's attribution
+   * fallback for photos with no per-upload contributor. */
+  photographerName?: string;
   /** Labels for the purchase modal — required when `detailVariant='purchase'`. */
   purchaseLabels?: PhotoDetailModalLabels;
 };
@@ -164,6 +167,7 @@ export default function PhotoAlbumViewer({
   detailVariant = 'lightbox',
   pricePerPhoto,
   locale,
+  photographerName,
   purchaseLabels,
 }: PhotoAlbumViewerProps) {
   // Single source of truth: when the caller paginates via `itemBatches`, the
@@ -547,6 +551,7 @@ export default function PhotoAlbumViewer({
           onIndexChange={switchTo}
           labels={purchaseLabels}
           locale={locale}
+          photographerName={photographerName}
           pricePerPhoto={pricePerPhoto}
           showAddToCart={showAddToCart}
           showDownload={showDownload}

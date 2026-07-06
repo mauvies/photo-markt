@@ -74,6 +74,24 @@ describe('PhotoDetailModal', () => {
     expect(screen.getByText('1 / 2')).toBeTruthy();
   });
 
+  it('falls back to a linked @username when a photo has no uploader', () => {
+    render(
+      <PhotoDetailModal
+        items={[{ id: 'x', url: '/api/public/preview/x', alt: 'Foto', width: 100, height: 80 }]}
+        open
+        onClose={() => {}}
+        labels={labels}
+        locale="en"
+        photographerName="janedoe"
+        pricePerPhoto={10}
+        showAddToCart
+      />,
+    );
+
+    const link = screen.getByRole('link', { name: '@janedoe' });
+    expect(link.getAttribute('href')).toBe('/en/photographer/janedoe');
+  });
+
   it('shows Download for an owned photo instead of the cart', () => {
     render(
       <PhotoDetailModal

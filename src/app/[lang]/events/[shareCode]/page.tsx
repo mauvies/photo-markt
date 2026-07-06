@@ -154,7 +154,10 @@ async function getCachedEventData(
   const paths = photos.map((p) => p.original_url).filter((url): url is string => url !== null);
   const uploaderUserIds = Array.from(
     new Set([
-      ...(event.is_collaborative ? [event.user_id] : []),
+      // The owner profile is always resolved now: collaborative attribution
+      // needs it, and the two-panel purchase modal shows the photographer's
+      // name for non-collaborative events too.
+      event.user_id,
       ...photos
         .map((p) => (p as { uploaded_by?: string | null }).uploaded_by)
         .filter((v): v is string => Boolean(v)),
@@ -642,6 +645,7 @@ export default async function EventPage({
                     loadMoreErrorLabel={dict.events.loadMoreFailed}
                     photoDetailLabels={dict.photoDetail}
                     locale={lang}
+                    photographerName={uploaderProfiles[event.user_id]?.username}
                   />
                 </Suspense>
               }

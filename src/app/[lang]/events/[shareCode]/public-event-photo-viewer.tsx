@@ -112,6 +112,9 @@ interface PublicEventPhotoViewerProps {
   photoDetailLabels: PhotoDetailModalLabels;
   /** Page locale (`lang`) for the purchase modal's date formatting. */
   locale: string;
+  /** Event photographer's display name — the purchase modal's attribution
+   * fallback for non-collaborative photos. */
+  photographerName?: string;
 }
 
 export function PublicEventPhotoViewer({
@@ -145,6 +148,7 @@ export function PublicEventPhotoViewer({
   loadMoreErrorLabel,
   photoDetailLabels,
   locale,
+  photographerName,
 }: PublicEventPhotoViewerProps) {
   const router = useRouter();
   const guestCart = useGuestCart();
@@ -545,6 +549,7 @@ export function PublicEventPhotoViewer({
       detailVariant: isFreeEvent ? ('lightbox' as const) : ('purchase' as const),
       pricePerPhoto,
       locale,
+      photographerName,
       purchaseLabels: photoDetailLabels,
     }),
     [
@@ -564,6 +569,7 @@ export function PublicEventPhotoViewer({
       isFreeEvent,
       pricePerPhoto,
       locale,
+      photographerName,
       photoDetailLabels,
     ],
   );

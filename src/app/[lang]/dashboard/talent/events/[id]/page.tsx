@@ -3,10 +3,7 @@ import { cacheLife, cacheTag } from 'next/cache';
 import { notFound } from 'next/navigation';
 import { userHasRole } from '@/app/[lang]/actions/roles';
 import { ContributeDialog } from '@/app/[lang]/events/[shareCode]/contribute-dialog';
-import {
-  buildPublicPhotoAlbumItem,
-  type UploaderProfileMap,
-} from '@/app/[lang]/events/[shareCode]/photo-album-item';
+import { buildPublicPhotoAlbumItem } from '@/app/[lang]/events/[shareCode]/photo-album-item';
 import { UploadProgressProvider } from '@/app/[lang]/events/[shareCode]/upload-progress-provider';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { EventGalleryWithFaceSearch } from '@/components/event-gallery-with-face-search';
@@ -243,19 +240,22 @@ export default async function ExploreEventDetailPage({
   // must be the COMPLETE set (not first-page-derived) so a "My photos" match
   // beyond the loaded grid still resolves (R5).
   const [uploaderProfiles, uploadedPhotoIds] = await Promise.all([
-    event.is_collaborative
-      ? getProfilesByIds(
-          supabaseAdmin,
-          Array.from(
-            new Set([
-              event.user_id,
-              ...photos
+    // Always resolve the owner profile (the purchase modal shows the
+    // photographer's name); collaborative events also resolve per-upload
+    // contributors for the grid badge.
+    getProfilesByIds(
+      supabaseAdmin,
+      Array.from(
+        new Set([
+          event.user_id,
+          ...(event.is_collaborative
+            ? photos
                 .map((p) => (p as { uploaded_by?: string | null }).uploaded_by)
-                .filter((v): v is string => Boolean(v)),
-            ]),
-          ),
-        )
-      : Promise.resolve<UploaderProfileMap>({}),
+                .filter((v): v is string => Boolean(v))
+            : []),
+        ]),
+      ),
+    ),
     user
       ? getUploadedPhotoIdsForUserInEvent(supabaseAdmin, event.id, user.id)
       : Promise.resolve<string[]>([]),
@@ -437,6 +437,7 @@ export default async function ExploreEventDetailPage({
                   pricePerPhoto={event.price_per_photo}
                   photoDetailLabels={dict.photoDetail}
                   locale={lang}
+                  photographerName={uploaderProfiles[event.user_id]?.username}
                 />
               </TranslationsProvider>
             }

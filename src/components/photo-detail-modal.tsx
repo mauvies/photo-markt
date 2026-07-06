@@ -11,6 +11,7 @@ import {
   ShoppingCart,
   X,
 } from 'lucide-react';
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { PhotoCarousel } from '@/components/photo-carousel';
 import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
@@ -54,6 +55,10 @@ interface PhotoDetailModalProps {
   labels: PhotoDetailModalLabels;
   /** BCP-47 locale for date formatting (the page `lang`). */
   locale: string;
+  /** Event photographer's username — shown as `@username` (linked to their
+   * public profile) as the attribution fallback when a photo has no per-upload
+   * contributor (non-collaborative events, where every photo is the owner's). */
+  photographerName?: string;
   /** Flat event price in dollars; `null`/omitted hides the price row. */
   pricePerPhoto?: number | null;
   // Action matrix — the same flags/gates the viewer computes for the lightbox.
@@ -104,6 +109,7 @@ export function PhotoDetailModal({
   onIndexChange,
   labels,
   locale,
+  photographerName,
   pricePerPhoto,
   showAddToCart = false,
   showDownload = false,
@@ -146,6 +152,9 @@ export function PhotoDetailModal({
     }
   };
 
+  // Per-upload contributor (collaborative events) shows as a plain name;
+  // otherwise the event photographer shows as a linked `@username`.
+  const uploaderName = current.uploader?.name;
   const dimensions =
     current.width && current.height ? `${current.width} × ${current.height}px` : undefined;
   const dateLabel = formatDate(current.takenAt, locale);
@@ -229,9 +238,18 @@ export function PhotoDetailModal({
 
           {/* Info / CTA panel — narrow white column. */}
           <aside className="flex w-full shrink-0 flex-col bg-white p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] text-neutral-900 md:w-[300px]">
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
-              {current.uploader?.name ? (
-                <MetaRow icon={<Camera className="h-4 w-4" />}>{current.uploader.name}</MetaRow>
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
+              {uploaderName ? (
+                <MetaRow icon={<Camera className="h-4 w-4" />}>{uploaderName}</MetaRow>
+              ) : photographerName ? (
+                <MetaRow icon={<Camera className="h-4 w-4" />}>
+                  <Link
+                    href={`/${locale}/photographer/${encodeURIComponent(photographerName)}`}
+                    className="text-neutral-700 hover:text-neutral-900 hover:underline"
+                  >
+                    @{photographerName}
+                  </Link>
+                </MetaRow>
               ) : null}
               {current.location ? (
                 <MetaRow icon={<MapPin className="h-4 w-4" />}>{current.location}</MetaRow>

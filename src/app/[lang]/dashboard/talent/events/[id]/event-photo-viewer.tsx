@@ -116,6 +116,9 @@ type EventPhotoViewerProps = {
   photoDetailLabels: PhotoDetailModalLabels;
   /** Page locale (`lang`) for the purchase modal's date formatting. */
   locale: string;
+  /** Event photographer's display name — the purchase modal's attribution
+   * fallback for non-collaborative photos. */
+  photographerName?: string;
 };
 
 export function EventPhotoViewer({
@@ -145,6 +148,7 @@ export function EventPhotoViewer({
   pricePerPhoto,
   photoDetailLabels,
   locale,
+  photographerName,
 }: EventPhotoViewerProps) {
   const { t } = useTranslations<{
     addedToPhotos: string;
@@ -565,6 +569,7 @@ export function EventPhotoViewer({
       detailVariant: isFreeEvent ? ('lightbox' as const) : ('purchase' as const),
       pricePerPhoto,
       locale,
+      photographerName,
       purchaseLabels: photoDetailLabels,
     }),
     [
@@ -586,6 +591,7 @@ export function EventPhotoViewer({
       menuLabels,
       pricePerPhoto,
       locale,
+      photographerName,
       photoDetailLabels,
     ],
   );
