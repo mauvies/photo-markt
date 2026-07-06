@@ -190,11 +190,14 @@ export function PhotoDetailModal({
       <DialogPrimitive.Portal>
         {/* Darker + blurred backdrop so the gallery behind is unreadable. */}
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-        <DialogPrimitive.Content className="fixed top-1/2 left-1/2 z-50 flex h-[92dvh] w-[96vw] max-w-[1400px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl shadow-2xl duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 md:flex-row">
+        {/* Mobile: height wraps the content (image + panel) so there's no empty
+            transparent strip below. Desktop: fills 92dvh as a split panel. */}
+        <DialogPrimitive.Content className="fixed top-1/2 left-1/2 z-50 flex max-h-[92dvh] w-[96vw] max-w-[1400px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl bg-white shadow-2xl duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 md:h-[92dvh] md:flex-row">
           <DialogPrimitive.Title className="sr-only">{labels.title}</DialogPrimitive.Title>
 
-          {/* Image side — takes the majority of the width. */}
-          <div className="relative flex h-[48dvh] w-full items-center justify-center bg-black md:h-full md:flex-1">
+          {/* Image side — a fixed slice on mobile (so the card wraps its
+              content), the dominant column on desktop. */}
+          <div className="relative flex h-[50dvh] w-full items-center justify-center bg-black md:h-full md:flex-1">
             <PhotoCarousel
               items={items}
               currentIndex={nav.currentIndex}
@@ -226,7 +229,7 @@ export function PhotoDetailModal({
 
           {/* Info / CTA panel — narrow white column. */}
           <aside className="flex w-full shrink-0 flex-col bg-white p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] text-neutral-900 md:w-[300px]">
-            <div className="flex-1 space-y-3 overflow-y-auto">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
               {current.uploader?.name ? (
                 <MetaRow icon={<Camera className="h-4 w-4" />}>{current.uploader.name}</MetaRow>
               ) : null}
