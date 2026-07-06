@@ -8,10 +8,12 @@
  *   4. Encode  — JPEG at quality 70
  *
  * The watermark itself lives at `public/watermark/watermark-tile.png` — a
- * transparent PNG with "PHOTO MARKT" baked in at the desired angle/opacity.
- * Sharp's composite repeats it across the whole image with one call. Iterating
- * the design is `pnpm watermark:gen` (tune the config in `lib/watermark-tile.ts`
- * and regenerate the committed PNG); no runtime code changes needed.
+ * transparent PNG holding a regular diagonal "Photo Markt" mosaic (alternating
+ * large symbol-bearing and small plain labels) baked in at the desired
+ * angle/opacity. Sharp's composite repeats it across the whole image with one
+ * call. Iterating the design is `pnpm watermark:gen` (tune the config in
+ * `lib/watermark-tile.ts` and regenerate the committed PNG); no runtime code
+ * changes needed.
  *
  * Why a static PNG instead of runtime SVG/text rendering: Vercel's serverless
  * runtime has no fontconfig and a stale librsvg, so anything that resolves
