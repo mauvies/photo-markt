@@ -11,6 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
+| 3 | P1 | T-074 | [Bug] Estado de Stripe Connect obsoleto: banner "en revisión" con cuenta ya activa + retiene payouts | — | todo |
 | 4 | P1 | T-070 | [Bug] La subida de la portada del evento falla con "mime type image/webp is not supported" | — | todo |
 | 8 | P2 | T-060 | Paginar la galería del detalle del evento (load more, ~50) en las 3 vistas — hoy firma/renderiza todas | — | doing |
 | 9 | P2 | T-065 | Unificar "Encontrar mis fotos": botones face matching + dorsal lado a lado (responsive mobile) | T-064 | todo |
