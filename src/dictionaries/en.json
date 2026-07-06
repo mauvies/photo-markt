@@ -1310,6 +1310,15 @@
     "qrDescription": "Scan this QR code to open the event.",
     "qrFooter": "Or share the code directly"
   },
+  "photoDetail": {
+    "title": "Photo details",
+    "pricePerPhoto": "Price per Photo",
+    "addToCart": "Add to Cart",
+    "inCart": "Remove from cart",
+    "download": "Download",
+    "share": "Share",
+    "close": "Close"
+  },
   "aiSearch": {
     "banner": {
       "titleReady": "Find yourself in this event",

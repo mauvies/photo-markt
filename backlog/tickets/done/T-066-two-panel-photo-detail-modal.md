@@ -1,11 +1,11 @@
 # T-066 · Modal de detalle de foto a dos paneles (imagen + panel de info/CTA de compra)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/two-panel-photo-detail-modal`  (tipo = feat)
 - **OpenSpec change:** —  (se crea al ejecutar — toca >5 archivos: nuevo componente + hooks extraídos + 4 vistas + diccionarios)
-- **PR:** —
+- **PR:** #128
 
 ## Requerimiento
 Crear un **nuevo** componente de detalle de foto a dos paneles, enfocado a la compra, que reemplace el overlay actual de acciones-como-íconos en las vistas de compra/navegación de fotos. Es el patrón de los marketplaces de foto deportiva (referencia de layout: competidor SurfCloud — las capturas son solo referencia, NO son de nuestra app).

@@ -20,6 +20,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useBibSearch, useFaceSearch } from '@/components/event-gallery-with-face-search';
 import { type EventPhotoFilter, EventPhotoFilterTabs } from '@/components/event-photo-filter-tabs';
 import { FaceSearchResults } from '@/components/face-search-results';
+import type { PhotoDetailModalLabels } from '@/components/photo-detail-modal';
 import {
   type PhotoAlbumItem,
   PhotoGallery,
@@ -109,6 +110,15 @@ type EventPhotoViewerProps = {
   loadMoreLabel: string;
   /** Toast shown when a "Load more" fetch fails. */
   loadMoreErrorLabel: string;
+  /** Flat event price in dollars — shown in the paid-event purchase modal. */
+  pricePerPhoto?: number | null;
+  /** Labels for the two-panel purchase detail modal (paid events). */
+  photoDetailLabels: PhotoDetailModalLabels;
+  /** Page locale (`lang`) for the purchase modal's date formatting. */
+  locale: string;
+  /** Event photographer's display name — the purchase modal's attribution
+   * fallback for non-collaborative photos. */
+  photographerName?: string;
 };
 
 export function EventPhotoViewer({
@@ -135,6 +145,10 @@ export function EventPhotoViewer({
   initialHasMore = false,
   loadMoreLabel,
   loadMoreErrorLabel,
+  pricePerPhoto,
+  photoDetailLabels,
+  locale,
+  photographerName,
 }: EventPhotoViewerProps) {
   const { t } = useTranslations<{
     addedToPhotos: string;
@@ -550,6 +564,13 @@ export function EventPhotoViewer({
         removeFromCart: menuLabels.removeFromCart,
         uploadedBy: menuLabels.uploadedBy,
       },
+      // Paid events get the two-panel purchase modal; free events keep the
+      // lightbox (bigger photo, no purchase moment).
+      detailVariant: isFreeEvent ? ('lightbox' as const) : ('purchase' as const),
+      pricePerPhoto,
+      locale,
+      photographerName,
+      purchaseLabels: photoDetailLabels,
     }),
     [
       showAddToCart,
@@ -568,6 +589,10 @@ export function EventPhotoViewer({
       iconTooltips,
       imageUnavailableLabel,
       menuLabels,
+      pricePerPhoto,
+      locale,
+      photographerName,
+      photoDetailLabels,
     ],
   );
 

@@ -1,11 +1,11 @@
 # T-060 · Paginar la galería de fotos del detalle del evento (load more) en las 3 vistas
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/event-gallery-pagination`
 - **OpenSpec change:** — (perf/UX; implementar directo, validar el enfoque de paginación)
-- **PR:** —
+- **PR:** #123
 
 ## Requerimiento
 En la página de **detalle del evento**, hoy se cargan, firman y renderizan **todas** las fotos de golpe (un

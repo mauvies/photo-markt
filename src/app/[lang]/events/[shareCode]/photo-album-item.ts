@@ -6,6 +6,17 @@ import { thumbRelativeUrl } from '@/lib/thumbnails';
 /** Display-name lookup keyed by profile id, for uploader attribution. */
 export type UploaderProfileMap = Record<string, { display_name: string | null; username: string }>;
 
+/** Join the present location parts (city / state / country) into one label,
+ * e.g. "Peniche, Portugal". Returns undefined when nothing is set. */
+export function formatPhotoLocation(
+  city?: string | null,
+  state?: string | null,
+  country?: string | null,
+): string | undefined {
+  const parts = [city, state, country].map((p) => p?.trim()).filter(Boolean);
+  return parts.length > 0 ? parts.join(', ') : undefined;
+}
+
 /** The event fields the public/talent item builder reads. */
 export interface AlbumItemEvent {
   user_id: string;
@@ -89,6 +100,8 @@ export function buildPublicPhotoAlbumItem(
     uploader: buildUploader(photo, opts.event, opts.uploaderProfiles),
     width: photo.width ?? undefined,
     height: photo.height ?? undefined,
+    location: formatPhotoLocation(photo.city, photo.state, photo.country),
+    takenAt: photo.taken_at ?? undefined,
     userId: photo.user_id ?? null,
     uploadedBy: photo.uploaded_by ?? null,
     originalPath: photo.original_url,

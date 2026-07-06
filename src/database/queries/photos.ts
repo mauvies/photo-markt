@@ -96,7 +96,7 @@ function applyEventPhotoOrder<
  * {@link getEventPhotosPublic} and its paginated variant so the two can't drift.
  */
 const EVENT_PHOTO_PUBLIC_COLUMNS =
-  'id, original_url, taken_at, city, country, user_id, uploaded_by, guest_name, width, height, thumbnail_status';
+  'id, original_url, taken_at, city, country, state, user_id, uploaded_by, guest_name, width, height, thumbnail_status';
 
 /**
  * Column list for owner/dashboard gallery reads — includes `guest_email` and

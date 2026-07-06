@@ -13,6 +13,7 @@ import { useBibSearch, useFaceSearch } from '@/components/event-gallery-with-fac
 import { type EventPhotoFilter, EventPhotoFilterTabs } from '@/components/event-photo-filter-tabs';
 import { FaceSearchResults } from '@/components/face-search-results';
 import { useGuestCart } from '@/components/guest-cart-provider';
+import type { PhotoDetailModalLabels } from '@/components/photo-detail-modal';
 import {
   type PhotoAlbumItem,
   PhotoGallery,
@@ -107,6 +108,13 @@ interface PublicEventPhotoViewerProps {
   loadMoreLabel: string;
   /** Toast shown when a "Load more" fetch fails. */
   loadMoreErrorLabel: string;
+  /** Labels for the two-panel purchase detail modal (paid events). */
+  photoDetailLabels: PhotoDetailModalLabels;
+  /** Page locale (`lang`) for the purchase modal's date formatting. */
+  locale: string;
+  /** Event photographer's display name — the purchase modal's attribution
+   * fallback for non-collaborative photos. */
+  photographerName?: string;
 }
 
 export function PublicEventPhotoViewer({
@@ -138,6 +146,9 @@ export function PublicEventPhotoViewer({
   initialHasMore = false,
   loadMoreLabel,
   loadMoreErrorLabel,
+  photoDetailLabels,
+  locale,
+  photographerName,
 }: PublicEventPhotoViewerProps) {
   const router = useRouter();
   const guestCart = useGuestCart();
@@ -533,6 +544,13 @@ export function PublicEventPhotoViewer({
         removeFromCart: menuLabels.removeFromCart,
         uploadedBy: menuLabels.uploadedBy,
       },
+      // Paid events get the two-panel purchase modal; free events keep the
+      // lightbox (bigger photo, no purchase moment).
+      detailVariant: isFreeEvent ? ('lightbox' as const) : ('purchase' as const),
+      pricePerPhoto,
+      locale,
+      photographerName,
+      purchaseLabels: photoDetailLabels,
     }),
     [
       showAddToCart,
@@ -548,6 +566,11 @@ export function PublicEventPhotoViewer({
       handleDownloadPhoto,
       imageUnavailableLabel,
       menuLabels,
+      isFreeEvent,
+      pricePerPhoto,
+      locale,
+      photographerName,
+      photoDetailLabels,
     ],
   );
 
