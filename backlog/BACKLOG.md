@@ -19,6 +19,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | 12 | P2 | T-068 | Difuminar caras detectadas en las previews con watermark (2ª capa anti-robo) | T-067 | todo |
 | 13 | P2 | T-071 | [Bug] Jobs de Inngest fallan con "Object not found" al indexar fotos creadas en local (mismatch de entorno) | — | todo |
 | 14 | P2 | T-072 | [Bug] Evento con fotos subidas pero sin indexar: portada vacía en tarjeta del dueño + no sale en listados públicos | — | todo |
+| 15 | P2 | T-073 | [Bug] Galería del evento: columnas por fila inconsistentes (4 y luego 3), se repite por cada página de load-more | T-060 | todo |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
