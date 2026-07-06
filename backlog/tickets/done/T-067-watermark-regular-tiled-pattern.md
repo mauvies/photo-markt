@@ -1,11 +1,11 @@
 # T-067 · Rediseñar el watermark: patrón en mosaico regular y limpio
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/watermark-regular-tiled-pattern`  (tipo = feat)
 - **OpenSpec change:** —  (se crea al ejecutar si toca >1 archivo; probablemente aislado en el pipeline de watermark)
-- **PR:** —
+- **PR:** #129
 
 ## Requerimiento
 Reemplazar el patrón de watermark actual (irregular, se ve poco pulido) por un **mosaico diagonal regular y uniforme** aplicado a las previews de fotos, con calidad cercana a la de marketplaces de foto deportiva establecidos (referencia estética: el watermark de SurfCloud — grid regular). Las capturas de referencia (Fotop, SurfCloud) son de competidores, NO de nuestra app (salvo la de Photo Markt, que es el estado actual a mejorar).
