@@ -57,9 +57,7 @@ export function Nav() {
 
         <div className="flex items-center gap-2 md:gap-5">
           {showCart && <CartLinkButton guest={!user} />}
-          <div className="sm:-mr-2">
-            <LanguageSwitcher />
-          </div>
+          <LanguageSwitcher />
           {user === undefined ? (
             // Auth not yet resolved — reserve space, no logged-out flash.
             <Skeleton className="h-10 w-10 rounded-full" />
