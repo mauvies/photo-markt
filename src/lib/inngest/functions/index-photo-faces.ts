@@ -74,6 +74,18 @@ export interface PhotoUploadStep {
 }
 
 /**
+ * Narrow sender for the terminal `photo.processed` fan-out. Injected (defaults
+ * to `inngest.send`) so integration tests can substitute a spy without an
+ * Inngest runtime — same DI approach as {@link PhotoUploadStep}.
+ */
+export type PhotoProcessedSender = (event: {
+  name: 'photo.processed';
+  data: PhotoUploadedPayload;
+}) => Promise<unknown>;
+
+const defaultProcessedSender: PhotoProcessedSender = (event) => inngest.send(event);
+
+/**
  * Hard margin for the size-mismatch check. Honest re-encoding never grows
  * a file beyond a kilobyte's worth of metadata; anything larger is
  * size-gaming the storage cap.
@@ -204,7 +216,8 @@ export const indexPhotoFaces = inngest.createFunction(
     triggers: [{ event: 'photo.uploaded' }],
     onFailure: async ({ event }) => {
       const inner = (event.data as { event?: { data?: PhotoUploadedPayload } })?.event;
-      const photoId = inner?.data?.photoId;
+      const failedPayload = inner?.data;
+      const photoId = failedPayload?.photoId;
       if (!photoId) return;
       try {
         // On final-retry failure, mark only the indexing pipeline failed.
@@ -214,6 +227,15 @@ export const indexPhotoFaces = inngest.createFunction(
         await updatePhotoFaceIndexStatus(adminClient, photoId, 'failed');
       } catch (err) {
         console.error('[index-photo-faces] onFailure cleanup failed', err);
+      }
+      // Still chain thumbnail generation: a photo whose indexing failed must
+      // not be left without a thumbnail. It just bakes tile-only (no boxes).
+      if (failedPayload?.eventId && failedPayload?.storagePath) {
+        try {
+          await inngest.send({ name: 'photo.processed', data: failedPayload });
+        } catch (err) {
+          console.error('[index-photo-faces] onFailure emit photo.processed failed', err);
+        }
       }
     },
   },
@@ -273,6 +295,7 @@ async function loggedStepRun<T>(
 export async function runIndexPhotoFacesFlow(
   payload: PhotoUploadedPayload,
   step: PhotoUploadStep,
+  send: PhotoProcessedSender = defaultProcessedSender,
 ): Promise<unknown> {
   const { photoId, eventId, storagePath } = payload;
 
@@ -521,6 +544,27 @@ export async function runIndexPhotoFacesFlow(
       }
     });
   }
+
+  // ── 7. emit-processed ────────────────────────────────────────────────
+  // Chain thumbnail generation AFTER indexing settles (non-rejected only —
+  // rejected photos returned above, already deleted). `generate-photo-thumbnails`
+  // consumes this so the persisted face boxes are available and the single
+  // immutable thumbnail bake is already face-blurred (T-068).
+  //
+  // BEST-EFFORT: swallow send errors. This is a downstream fan-out trigger, not
+  // part of the indexing result — letting it throw would fail the whole function
+  // and route to onFailure, which would overwrite an already-committed
+  // `indexed` status with `failed` (contradicting the persisted photo_faces). A
+  // missed emit only means no pre-baked thumbnail; the gallery still serves the
+  // on-the-fly `/api/watermark` preview (also face-blurred) via the thumb-404
+  // fallback until a later re-index re-emits.
+  await step.run('emit-processed', async () => {
+    try {
+      await send({ name: 'photo.processed', data: { photoId, eventId, storagePath } });
+    } catch (err) {
+      console.error('[index-photo-faces] emit photo.processed failed', err);
+    }
+  });
 
   return {
     outcome: result.outcome,
