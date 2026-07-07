@@ -56,6 +56,27 @@ describe('addWatermarkToImage', () => {
     expect(meta.height).toBe(200);
   });
 
+  // The tiled mosaic must adapt to any aspect ratio: portrait, landscape and
+  // square all come back as a JPEG whose longest side is capped at 1024 with the
+  // aspect ratio preserved (proportional scaling, no stretch).
+  it.each([
+    ['portrait', 1200, 1600, 768, 1024],
+    ['landscape', 1600, 1200, 1024, 768],
+    ['square', 1400, 1400, 1024, 1024],
+  ])('watermarks a %s photo with proportional scaling', async (_label, w, h, expW, expH) => {
+    const source = await sharp({
+      create: { width: w, height: h, channels: 3, background: '#666' },
+    })
+      .jpeg()
+      .toBuffer();
+
+    const meta = await sharp(await addWatermarkToImage(source)).metadata();
+    expect(meta.format).toBe('jpeg');
+    expect(meta.width).toBe(expW);
+    expect(meta.height).toBe(expH);
+    expect(Math.max(meta.width ?? 0, meta.height ?? 0)).toBe(1024);
+  });
+
   it('watermarks an image with one dimension below the tile size', async () => {
     const sliver = await sharp({
       create: { width: 1000, height: 150, channels: 3, background: '#999' },
