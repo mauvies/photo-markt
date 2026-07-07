@@ -91,6 +91,34 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+### 5. (Optional) Testing AI background jobs locally (face indexing / thumbnails / bib detection)
+
+`pnpm dev` alone is **not** enough to exercise the Inngest-driven pipeline (face
+indexing, thumbnail generation, bib detection) end-to-end. `NEXT_PUBLIC_SUPABASE_URL`
+in `.env.local` points at a **remote** Supabase project (staging), and
+`INNGEST_EVENT_KEY`/`INNGEST_SIGNING_KEY` are shared with whatever Vercel
+deployment is registered as the Inngest app. Without further setup,
+`inngest.send()` calls from your local dev server are routed by **Inngest Cloud**
+to that deployed endpoint — not to your machine — which downloads the uploaded
+photo using **its own** environment's Supabase project. Since the photo was only
+ever written to the project your local `.env.local` points to, the deployed
+worker's download fails with `Object not found`. This is a **dev-only**
+environment mismatch — production is unaffected, because the same production
+deployment both uploads and processes photos with the same env vars.
+
+To run the pipeline against your own machine, use the [Inngest Dev
+Server](https://www.inngest.com/docs/local-development):
+
+```bash
+npx inngest-cli@latest dev
+```
+
+Then set `INNGEST_DEV=1` in `.env.local` (or leave it, if the SDK's automatic
+dev-mode detection already reaches `http://127.0.0.1:8288`) before running
+`pnpm dev`. With the Dev Server running, events sent from your local process are
+executed by your own `/api/inngest` route — the same process that has the
+photo — so uploads, indexing, and thumbnail generation stay consistent end-to-end.
+
 ## Commands
 
 | Command | Description |

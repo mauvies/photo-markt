@@ -16,6 +16,7 @@
  *                          jobs).
  */
 
+import { NonRetriableError } from 'inngest';
 import {
   countEventPhotosBibInFlight,
   getEventBibDetectionState,
@@ -30,6 +31,7 @@ import { detectTextForPhoto } from '@/lib/aws/bib-detection';
 import { prepareImageForRekognition } from '@/lib/aws/image-prep';
 import { extractBibCandidates } from '@/lib/bib-numbers';
 import { safeCall } from '@/lib/safe-call';
+import { isStorageObjectNotFound } from '@/lib/storage-object-not-found';
 import { inngest } from '../client';
 
 const adminClient = supabaseAdmin as unknown as SupabaseServerClient;
@@ -103,7 +105,12 @@ export async function runDetectPhotoBibsFlow(
       supabaseAdmin.storage.from('photos').download(storagePath),
     );
     if (error || !data) {
-      throw new Error(`Failed to download photo ${storagePath}: ${error?.message ?? 'no data'}`);
+      const message = `Failed to download photo ${storagePath}: ${error?.message ?? 'no data'}`;
+      // Definitive — retrying won't make the object appear (see T-071: the
+      // classic local-dev cause is an env mismatch between where the photo was
+      // uploaded and where this worker actually runs).
+      if (isStorageObjectNotFound(error)) throw new NonRetriableError(message);
+      throw new Error(message);
     }
     const buffer = Buffer.from(await data.arrayBuffer());
     const prepped = await safeCall('prepare-image', () => prepareImageForRekognition(buffer));

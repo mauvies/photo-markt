@@ -7,6 +7,7 @@
  * DB side effects hit the local Supabase stack.
  */
 
+import { NonRetriableError } from 'inngest';
 import sharp from 'sharp';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -124,5 +125,24 @@ describe('detect-photo-bibs worker (T-032)', () => {
     expect(detectTextMock).not.toHaveBeenCalled();
     expect(await readBibRows(photo.id)).toEqual([]);
     expect(await readBibStatus(photo.id)).toBeNull();
+  });
+
+  // T-071 regression: a storage object that will never exist must fail FAST
+  // via NonRetriableError, not retry 3x for nothing.
+  it('throws NonRetriableError for a missing storage object (never retries)', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    const sb = createServiceClient();
+    await updateEventBibDetectionState(sb, event.id, { enabled: true });
+    // No upload — the storage object never exists.
+    const path = `${owner.id}/${event.id}/never-uploaded.jpg`;
+    const photo = await createTestPhoto(event.id, { original_url: path });
+
+    await expect(
+      runDetectPhotoBibsFlow(
+        { photoId: photo.id, eventId: event.id, storagePath: path },
+        passthroughStep,
+      ),
+    ).rejects.toBeInstanceOf(NonRetriableError);
   });
 });
