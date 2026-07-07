@@ -2,10 +2,11 @@ import { cacheLife, cacheTag } from 'next/cache';
 import {
   createSignedUrl,
   getEventsCoverPaths,
-  getPhotosForEvents,
+  getPhotosForEventsIncludingPending,
   getTopEvents,
 } from '@/database/queries';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { resolvePublicEventCoverStats } from '@/lib/event-cover-stats';
 import { type EventStatus, getEventStatus } from '@/lib/event-status';
 import { thumbRelativeUrl } from '@/lib/thumbnails';
 
@@ -41,30 +42,26 @@ export async function getCachedTopEvents(): Promise<TopEventItem[]> {
   const candidates = await getTopEvents(supabaseAdmin, CANDIDATE_LIMIT);
 
   const eventIds = candidates.map((e) => e.id);
-  const photoRows = await getPhotosForEvents(supabaseAdmin, eventIds);
+  const photoRows = await getPhotosForEventsIncludingPending(supabaseAdmin, eventIds);
 
-  const stats = new Map<
-    string,
-    { count: number; coverPath: string | null; coverThumbReady: boolean }
-  >();
-  for (const row of photoRows) {
-    if (!row.event_id) continue;
-    const s = stats.get(row.event_id) ?? { count: 0, coverPath: null, coverThumbReady: false };
-    s.count++;
-    if (!s.coverPath && row.original_url) {
-      s.coverPath = row.original_url;
-      s.coverThumbReady = row.thumbnail_status === 'ready';
-    }
-    stats.set(row.event_id, s);
-  }
+  // T-072: an event with AI matching configured waits for its indexing
+  // pipeline to promote photos to `approved` (that promotion IS the
+  // moderation/quality gate); an event without AI matching has no such
+  // pipeline, so pending photos count immediately — otherwise a fully
+  // uploaded, non-AI event would sit cover-less and unfeatured forever.
+  const aiEnabledEventIds = new Set(
+    candidates.filter((e) => e.ai_matching_enabled).map((e) => e.id),
+  );
+  const stats = resolvePublicEventCoverStats(photoRows, aiEnabledEventIds);
 
   const now = Date.now();
   const scored = candidates
-    // Featured/top events require ≥1 photo on purpose: a home-page card that
-    // leads to an event with nothing to browse is bad UX. So a cover-only,
-    // zero-photo event is intentionally NOT featured here (unlike the talent
-    // search / profile lists, which do surface cover-only events). The cover
-    // override below only restyles events that already qualify.
+    // Featured/top events require ≥1 (visible) photo on purpose: a home-page
+    // card that leads to an event with nothing to browse is bad UX. So a
+    // cover-only, zero-photo event is intentionally NOT featured here (unlike
+    // the talent search / profile lists, which do surface cover-only events).
+    // "Visible" is AI-conditional (see resolvePublicEventCoverStats, T-072).
+    // The cover override below only restyles events that already qualify.
     .filter((e) => (stats.get(e.id)?.count ?? 0) >= 1)
     .map((e) => {
       const photoCount = stats.get(e.id)?.count ?? 0;

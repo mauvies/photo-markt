@@ -8,7 +8,7 @@ import {
   getEventsCoverPaths,
   getPendingInvitationsForPhotographer,
   getPhotoCountsForEvents,
-  getPhotosForEvents,
+  getPhotosForEventsIncludingPending,
   getUserEvents,
 } from '@/database/queries';
 import { createClient } from '@/database/server';
@@ -52,14 +52,13 @@ async function getCachedEventsData(userId: string): Promise<{
   };
   if (eventIds.length === 0) return empty;
 
-  // Fetch total counts (pending+approved), cover candidates (approved-only),
-  // and explicit cover overrides in parallel. The count uses all non-rejected
-  // statuses so the card number is stable from upload and doesn't grow as the
-  // Inngest worker promotes photos; cover selection stays approved-only so we
-  // always serve a displayable image.
+  // Fetch total counts (pending+approved), cover candidates (pending+approved —
+  // T-072: the owner should see their own uploads reflected immediately, not
+  // wait for the async indexing worker to promote them), and explicit cover
+  // overrides in parallel.
   const [totalCounts, photoRows, coverOverride] = await Promise.all([
     getPhotoCountsForEvents(supabaseAdmin, eventIds),
-    getPhotosForEvents(supabaseAdmin, eventIds),
+    getPhotosForEventsIncludingPending(supabaseAdmin, eventIds),
     getEventsCoverPaths(supabaseAdmin, eventIds),
   ]);
 

@@ -18,6 +18,7 @@ import {
   getPhotoCountsForEvents,
   getPhotoStoragePaths,
   getPhotosForEvents,
+  getPhotosForEventsIncludingPending,
   getPhotosUploadedCount,
   getSoldPhotoIdsForEvent,
   getStorageUsageBytes,
@@ -394,6 +395,71 @@ describe('database/queries/photos', () => {
       const event = await createTestEvent(owner.id);
       const counts = await getPhotoCountsForEvents(createServiceClient(), [event.id]);
       expect(counts.has(event.id)).toBe(false);
+    });
+  });
+
+  // Regression: T-072 — the photographer dashboard cover image showed "no
+  // photos" for an event with 264 uploaded-but-not-yet-indexed photos, because
+  // the cover query (getPhotosForEvents) is approved-only and photos start
+  // `pending` until the (T-071-affected) indexing worker promotes them. The fix
+  // mirrors T-057's counter treatment: a pending+approved query for cover
+  // selection too, so the owner sees their own uploads reflected immediately.
+  describe('getPhotosForEventsIncludingPending (regression T-072)', () => {
+    it('includes pending + approved rows, excludes rejected', async () => {
+      const owner = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(owner.id);
+      const sb = createServiceClient();
+
+      const approved = await createTestPhoto(event.id); // default: approved
+      const pending = await createTestPhoto(event.id);
+      await updatePhotoUploadStatus(sb, {
+        photoId: pending.id,
+        eventId: event.id,
+        status: 'pending',
+      });
+      const rejected = await createTestPhoto(event.id);
+      await updatePhotoUploadStatus(sb, {
+        photoId: rejected.id,
+        eventId: event.id,
+        status: 'rejected',
+      });
+
+      const rows = await getPhotosForEventsIncludingPending(sb, [event.id]);
+      expect(rows).toHaveLength(2);
+      const ids = rows.map((r) => r.original_url);
+      expect(ids).not.toContain(
+        (await sb.from('photos').select('original_url').eq('id', rejected.id).single()).data
+          ?.original_url,
+      );
+      // Confirm the old approved-only query still misses the pending photo —
+      // demonstrating the exact divergence this ticket fixes for the cover.
+      const approvedOnly = await getPhotosForEvents(sb, [event.id]);
+      expect(approvedOnly).toHaveLength(1);
+      expect(approvedOnly[0].original_url).toBe(
+        (await sb.from('photos').select('original_url').eq('id', approved.id).single()).data
+          ?.original_url,
+      );
+    });
+
+    it('a fully-pending event (nothing indexed yet) still yields a cover candidate', async () => {
+      // The exact reported scenario: 264 photos uploaded, none indexed yet.
+      const owner = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(owner.id);
+      const sb = createServiceClient();
+      const photo = await createTestPhoto(event.id);
+      await updatePhotoUploadStatus(sb, {
+        photoId: photo.id,
+        eventId: event.id,
+        status: 'pending',
+      });
+
+      expect(await getPhotosForEvents(sb, [event.id])).toHaveLength(0); // old query: empty cover
+      expect(await getPhotosForEventsIncludingPending(sb, [event.id])).toHaveLength(1); // fixed
+    });
+
+    it('returns an empty array for an empty input list (no query)', async () => {
+      const rows = await getPhotosForEventsIncludingPending(createServiceClient(), []);
+      expect(rows).toEqual([]);
     });
   });
 });
