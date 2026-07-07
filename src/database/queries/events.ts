@@ -46,6 +46,8 @@ export interface EventSummary {
   is_collaborative: boolean;
   allow_guest_upload: boolean;
   require_upload_approval: boolean;
+  /** Not selected by every `EventSummary` producer — optional, check per call site. */
+  ai_matching_enabled?: boolean;
 }
 
 /**
@@ -344,7 +346,7 @@ export async function searchPublicEvents(
   let query = supabase
     .from('events')
     .select(
-      'id, user_id, name, date, city, country, state, activity, is_public, share_code, slug, price_per_photo, watermark_enabled, is_collaborative, allow_guest_upload, require_upload_approval',
+      'id, user_id, name, date, city, country, state, activity, is_public, share_code, slug, price_per_photo, watermark_enabled, is_collaborative, allow_guest_upload, require_upload_approval, ai_matching_enabled',
       { count: 'exact' },
     )
     .eq('is_public', true)
@@ -558,6 +560,7 @@ export interface TopEventCandidate {
   slug: string | null;
   price_per_photo: number | null;
   created_at: string;
+  ai_matching_enabled: boolean;
 }
 
 /**
@@ -570,7 +573,9 @@ export async function getTopEvents(
 ): Promise<TopEventCandidate[]> {
   const { data, error } = await supabase
     .from('events')
-    .select('id, user_id, name, date, city, country, activity, slug, price_per_photo, created_at')
+    .select(
+      'id, user_id, name, date, city, country, activity, slug, price_per_photo, created_at, ai_matching_enabled',
+    )
     .eq('is_public', true)
     .is('deleted_at', null)
     .order('created_at', { ascending: false })

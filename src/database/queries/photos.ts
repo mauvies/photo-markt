@@ -237,6 +237,44 @@ export async function getPhotosForEvents(
 }
 
 /**
+ * Like {@link getPhotosForEvents}, but also includes `pending` uploads (not yet
+ * promoted to `approved` by the face-indexing worker) and the row's own
+ * `upload_status`, so callers can decide per-event whether to trust pending
+ * photos or narrow back to approved-only themselves (T-072).
+ *
+ * Rejected photos are still excluded — they failed validation and aren't real
+ * content. Used by the owner's own dashboard (always show what was uploaded)
+ * and by public surfaces that gate on `upload_status` conditionally: an event
+ * with AI matching configured genuinely benefits from waiting for its
+ * indexing pipeline to promote photos; an event without AI matching has no
+ * such pipeline to wait on, so pending is the honest signal there.
+ */
+export async function getPhotosForEventsIncludingPending(
+  supabase: SupabaseServerClient,
+  eventIds: string[],
+): Promise<PhotoSummary[]> {
+  if (eventIds.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('photos')
+    .select('event_id, original_url, taken_at, thumbnail_status, upload_status')
+    .in('event_id', eventIds)
+    .in('upload_status', ['pending', 'approved'])
+    .order('taken_at', { ascending: true })
+    .throwOnError();
+
+  if (error) {
+    throw new Error(
+      `Failed to get photos (including pending) for events: ${getErrorMessage(error)}`,
+    );
+  }
+
+  return (data ?? []) as PhotoSummary[];
+}
+
+/**
  * Return the total uploaded photo count per event for the photographer's
  * own dashboard cards. Counts `pending + approved` photos (= everything the
  * photographer submitted) so the number is stable from the moment of upload

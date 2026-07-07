@@ -8,7 +8,7 @@ import {
 } from '@/database/queries/events';
 import {
   getPhotoCountsForEvents,
-  getPhotosForEvents,
+  getPhotosForEventsIncludingPending,
   getPhotosUploadedCount,
   getStorageUsageBytes,
 } from '@/database/queries/photos';
@@ -234,13 +234,14 @@ async function getCachedDashboardData(userId: string): Promise<DashboardData> {
   // Build recent events list (5 most recent) with cover URLs from existing photos.
   const recentEventSlice = allEvents.slice(0, 5);
   const recentEventIds = recentEventSlice.map((e) => e.id);
-  // Total counts (pending+approved), cover candidates (approved-only), and
-  // explicit cover overrides fetched in parallel. Count is stable from upload;
-  // cover selection stays approved-only so we always serve a displayable image.
+  // Total counts and cover candidates both use pending+approved (T-072: the
+  // owner should see their own uploads reflected immediately, not wait for
+  // the async indexing worker to promote them), plus explicit cover
+  // overrides, fetched in parallel.
   const [photoCountByEvent, photoRows, coverOverride] = recentEventIds.length
     ? await Promise.all([
         getPhotoCountsForEvents(supabaseAdmin, recentEventIds),
-        getPhotosForEvents(supabaseAdmin, recentEventIds),
+        getPhotosForEventsIncludingPending(supabaseAdmin, recentEventIds),
         getEventsCoverPaths(supabaseAdmin, recentEventIds),
       ])
     : [new Map<string, number>(), [], new Map<string, string>()];

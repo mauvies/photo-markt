@@ -5,11 +5,12 @@ import {
   createSignedUrl,
   getEventFilterOptions,
   getEventsCoverPaths,
-  getPhotosForEvents,
+  getPhotosForEventsIncludingPending,
   type PhotographerSearchResult,
   searchPublicEvents,
 } from '@/database/queries';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { resolvePublicEventCoverStats } from '@/lib/event-cover-stats';
 import { thumbRelativeUrl } from '@/lib/thumbnails';
 
 export type { PhotographerSearchResult } from '@/database/queries';
@@ -56,33 +57,18 @@ export async function searchEventsAction(filters: {
   const eventIds = result.events.map((e) => e.id);
   // Photos and cover paths are independent reads — fetch in parallel.
   const [photoRows, coverOverride] = await Promise.all([
-    getPhotosForEvents(supabaseAdmin, eventIds),
+    getPhotosForEventsIncludingPending(supabaseAdmin, eventIds),
     getEventsCoverPaths(supabaseAdmin, eventIds),
   ]);
 
-  const stats = new Map<
-    string,
-    {
-      count: number;
-      coverPath: string | null;
-      coverThumbReady: boolean;
-    }
-  >();
-
-  for (const row of photoRows ?? []) {
-    if (!row.event_id) continue;
-    const current = stats.get(row.event_id) ?? {
-      count: 0,
-      coverPath: null,
-      coverThumbReady: false,
-    };
-    current.count += 1;
-    if (!current.coverPath && row.original_url) {
-      current.coverPath = row.original_url;
-      current.coverThumbReady = row.thumbnail_status === 'ready';
-    }
-    stats.set(row.event_id, current);
-  }
+  // T-072: an AI-enabled event waits for indexing to promote photos to
+  // `approved` (its real moderation/quality gate); a non-AI event has no such
+  // pipeline, so pending photos count immediately — otherwise a fully
+  // uploaded, non-AI event would show up with a permanently empty cover.
+  const aiEnabledEventIds = new Set(
+    result.events.filter((e) => e.ai_matching_enabled).map((e) => e.id),
+  );
+  const stats = resolvePublicEventCoverStats(photoRows, aiEnabledEventIds);
 
   // Prefer the dedicated cover image (T-055) over the first photo — including
   // for events with no photos. A dedicated cover has no thumbnail.
