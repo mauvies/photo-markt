@@ -70,6 +70,24 @@ describe('addWatermarkToImage', () => {
     }
   });
 
+  // Regression: an oversized/spurious face box must NOT blur the whole preview —
+  // the image stays evaluable (a corner keeps its detail).
+  it('does not blur the whole frame for a near-full-frame box', async () => {
+    const source = await checkerboardJpeg(1024, 768);
+    const huge: FaceBox[] = [
+      { boundingBox: { Left: 0.02, Top: 0.02, Width: 0.95, Height: 0.95 }, confidence: 99 },
+    ];
+    const out = await addWatermarkToImage(source, huge);
+    const noFace = await addWatermarkToImage(source, []);
+
+    // A corner region should retain roughly the same detail as the tile-only
+    // version — proof the whole frame was not smeared.
+    const corner = { left: 40, top: 40, width: 120, height: 100 };
+    const withBox = await regionStdev(out, corner);
+    const tileOnly = await regionStdev(noFace, corner);
+    expect(withBox).toBeGreaterThan(tileOnly * 0.7);
+  });
+
   // Critical constraint: the ORIGINAL buffer is never mutated by preview gen.
   it('does not mutate the input buffer', async () => {
     const source = await checkerboardJpeg(512, 512);
@@ -183,6 +201,19 @@ describe('computeFaceBlurRects', () => {
     expect(
       computeFaceBlurRects(
         [{ boundingBox: { Left: 0, Top: 0, Width: 0.0001, Height: 0.0001 }, confidence: 99 }],
+        W,
+        H,
+      ),
+    ).toEqual([]);
+  });
+
+  // Regression: without an upper bound, a near-full-frame box + margin clamps to
+  // the whole image and blurs the entire preview (unsellable). Oversized boxes
+  // must degrade to tile-only.
+  it('drops an implausibly large (near-full-frame) box', () => {
+    expect(
+      computeFaceBlurRects(
+        [{ boundingBox: { Left: 0.05, Top: 0.05, Width: 0.9, Height: 0.9 }, confidence: 99 }],
         W,
         H,
       ),

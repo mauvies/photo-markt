@@ -55,6 +55,13 @@ export interface FaceBox {
 // zone has no sharp edge ring, and a sigma that scales with the face size.
 const FACE_BLUR_MARGIN = 0.15; // expand each side by this fraction of the box
 const FACE_BLUR_MIN_PX = 8; // skip regions smaller than this after clamping
+// Skip implausibly large boxes (fraction of the frame area). A real event face
+// never fills most of the frame; a box this big is a spurious Rekognition
+// detection or a face-dominant close-up. Blurring it would smear the whole
+// preview into an unrecognizable, unsellable image (and the margin+clamp would
+// snap it to the full frame), so we degrade to tile-only — matching the prior
+// overlay's "oversized box → tile-only" safety net.
+const FACE_BLUR_MAX_AREA = 0.6;
 const FACE_BLUR_MIN_SIGMA = 8;
 const FACE_BLUR_MAX_SIGMA = 60;
 
@@ -68,9 +75,10 @@ export interface BlurRect {
 /**
  * Pure geometry: map EVERY usable indexed face box (normalized 0–1) to pixel
  * coordinates on the resized preview, expand each by `FACE_BLUR_MARGIN`, and
- * clamp to the image bounds. Degenerate/off-image boxes are dropped. Returns []
- * when there are no usable boxes — the caller then degrades to tile-only.
- * Exported for unit testing; this is the logic that can actually break.
+ * clamp to the image bounds. Degenerate, off-image, and implausibly large boxes
+ * (> `FACE_BLUR_MAX_AREA` of the frame) are dropped so we never blur the whole
+ * preview. Returns [] when there are no usable boxes — the caller then degrades
+ * to tile-only. Exported for unit testing; this is the logic that can break.
  */
 export function computeFaceBlurRects(
   faceBoxes: FaceBox[] | undefined,
@@ -81,6 +89,10 @@ export function computeFaceBlurRects(
   for (const face of faceBoxes ?? []) {
     const box = face.boundingBox;
     if (!box) continue;
+
+    // Oversized/spurious box → degrade to tile-only rather than smear the
+    // whole frame into an unsellable blur.
+    if ((box.Width ?? 0) * (box.Height ?? 0) > FACE_BLUR_MAX_AREA) continue;
 
     const boxW = (box.Width ?? 0) * width;
     const boxH = (box.Height ?? 0) * height;
