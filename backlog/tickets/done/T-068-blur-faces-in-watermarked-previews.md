@@ -1,11 +1,11 @@
 # T-068 · Difuminar caras detectadas en las previews con watermark
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno (coordinar con T-067 — mismo pipeline de preview; ver Notas)
 - **Rama:** `feat/blur-faces-in-watermarked-previews`  (tipo = feat)
 - **OpenSpec change:** —  (se crea al ejecutar — toca el worker de Inngest + generación de preview + posible persistencia de bounding boxes)
-- **PR:** —
+- **PR:** #130
 
 ## Requerimiento
 Además del watermark, **difuminar todas las caras detectadas** en la versión con watermark (preview) de las fotos. Segunda capa de protección: aunque alguien quite el watermark con IA, una foto con las caras difuminadas no tiene valor — el/la atleta no es identificable — lo que disuade fuertemente el robo y la eliminación del watermark por IA. Referencia: SurfCloud difumina la cara del atleta en las previews por exactamente esta razón.

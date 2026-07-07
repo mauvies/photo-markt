@@ -48,15 +48,24 @@ export interface FaceBox {
   confidence: number;
 }
 
-// Face-overlay knobs. Conservative on purpose: one face, partial coverage, mild
-// extra opacity — over-watermarking kills buyer evaluation (FinisherPix's
-// mistake). Tune these against real event photos.
-// ponytail: stacking the 0.5-opacity tile twice ≈ 0.75 effective opacity. If a
-// stronger, single-pass opaque badge is wanted, bake a dedicated badge PNG.
-const FACE_BADGE_COVERAGE = 0.7; // fraction of the face box the badge fills
-const FACE_BADGE_STACK = 2; // composite the tile this many times for opacity
+// Face-blur knobs. A blurred face makes the athlete unidentifiable, so an
+// AI-cleaned copy is worthless — the strongest anti-theft lever, stronger than
+// the old single-face watermark badge (which this replaces). We blur EVERY
+// detected face (protect everyone until purchase), with a margin so the blurred
+// zone has no sharp edge ring, and a sigma that scales with the face size.
+const FACE_BLUR_MARGIN = 0.15; // expand each side by this fraction of the box
+const FACE_BLUR_MIN_PX = 8; // skip regions smaller than this after clamping
+// Skip implausibly large boxes (fraction of the frame area). A real event face
+// never fills most of the frame; a box this big is a spurious Rekognition
+// detection or a face-dominant close-up. Blurring it would smear the whole
+// preview into an unrecognizable, unsellable image (and the margin+clamp would
+// snap it to the full frame), so we degrade to tile-only — matching the prior
+// overlay's "oversized box → tile-only" safety net.
+const FACE_BLUR_MAX_AREA = 0.6;
+const FACE_BLUR_MIN_SIGMA = 8;
+const FACE_BLUR_MAX_SIGMA = 60;
 
-export interface BadgeRect {
+export interface BlurRect {
   left: number;
   top: number;
   width: number;
@@ -64,74 +73,105 @@ export interface BadgeRect {
 }
 
 /**
- * Pure geometry: pick the most prominent indexed face (largest area, tie-break
- * on confidence), scale its normalized box to pixels, and return the centered
- * badge rect at `FACE_BADGE_COVERAGE`. Returns null when there's no usable box
- * or the box is degenerate/oversized — caller then degrades to tile-only.
- * Exported for unit testing; this is the logic that can actually break.
+ * Pure geometry: map EVERY usable indexed face box (normalized 0–1) to pixel
+ * coordinates on the resized preview, expand each by `FACE_BLUR_MARGIN`, and
+ * clamp to the image bounds. Degenerate, off-image, and implausibly large boxes
+ * (> `FACE_BLUR_MAX_AREA` of the frame) are dropped so we never blur the whole
+ * preview. Returns [] when there are no usable boxes — the caller then degrades
+ * to tile-only. Exported for unit testing; this is the logic that can break.
  */
-export function selectFaceBadgeRect(
+export function computeFaceBlurRects(
   faceBoxes: FaceBox[] | undefined,
   width: number,
   height: number,
-): BadgeRect | null {
-  const usable = (faceBoxes ?? []).filter((f) => f.boundingBox);
-  if (usable.length === 0) return null;
+): BlurRect[] {
+  const rects: BlurRect[] = [];
+  for (const face of faceBoxes ?? []) {
+    const box = face.boundingBox;
+    if (!box) continue;
 
-  const area = (b: Record<string, number>) => (b.Width ?? 0) * (b.Height ?? 0);
-  const best = usable.reduce((a, b) =>
-    area(b.boundingBox) > area(a.boundingBox) ||
-    (area(b.boundingBox) === area(a.boundingBox) && b.confidence > a.confidence)
-      ? b
-      : a,
-  ).boundingBox;
+    // Oversized/spurious box → degrade to tile-only rather than smear the
+    // whole frame into an unsellable blur.
+    if ((box.Width ?? 0) * (box.Height ?? 0) > FACE_BLUR_MAX_AREA) continue;
 
-  const boxW = (best.Width ?? 0) * width;
-  const boxH = (best.Height ?? 0) * height;
-  const badgeW = Math.round(boxW * FACE_BADGE_COVERAGE);
-  const badgeH = Math.round(boxH * FACE_BADGE_COVERAGE);
-  if (badgeW < 1 || badgeH < 1 || badgeW > width || badgeH > height) return null;
+    const boxW = (box.Width ?? 0) * width;
+    const boxH = (box.Height ?? 0) * height;
+    const marginX = boxW * FACE_BLUR_MARGIN;
+    const marginY = boxH * FACE_BLUR_MARGIN;
 
-  return {
-    left: Math.max(0, Math.round((best.Left ?? 0) * width + (boxW - badgeW) / 2)),
-    top: Math.max(0, Math.round((best.Top ?? 0) * height + (boxH - badgeH) / 2)),
-    width: badgeW,
-    height: badgeH,
-  };
+    let left = Math.round((box.Left ?? 0) * width - marginX);
+    let top = Math.round((box.Top ?? 0) * height - marginY);
+    let rectW = Math.round(boxW + 2 * marginX);
+    let rectH = Math.round(boxH + 2 * marginY);
+
+    // Clamp to bounds, shrinking width/height so left+width stays on-image.
+    if (left < 0) {
+      rectW += left;
+      left = 0;
+    }
+    if (top < 0) {
+      rectH += top;
+      top = 0;
+    }
+    if (left + rectW > width) rectW = width - left;
+    if (top + rectH > height) rectH = height - top;
+
+    if (rectW < FACE_BLUR_MIN_PX || rectH < FACE_BLUR_MIN_PX) continue;
+    rects.push({ left, top, width: rectW, height: rectH });
+  }
+  return rects;
 }
 
 /**
- * Build composite entries that drop a watermark badge over the most prominent
- * indexed face. The badge is the pre-baked tile (no runtime font rendering),
- * resized to the face box — inpainting over a face reconstructs it badly, so
- * this is the most AI-removal-resistant mark. Returns [] when there's no usable
- * box, so the caller degrades to tile-only.
+ * Build composite entries that blur each face region. Each rect is extracted,
+ * Gaussian-blurred at a size-scaled sigma, and composited back opaquely over its
+ * own location — under the watermark tile, so the tile stays readable on top.
+ * Returns [] when there are no usable boxes, so the caller degrades to tile-only.
+ *
+ * The preview is decoded to raw pixels ONCE and every face extracts from that
+ * shared raw buffer — a crowd photo with many faces would otherwise re-decode
+ * the whole JPEG per face on the hot `/api/watermark` request path.
  */
-async function buildFaceBadgeComposites(
-  faceBoxes: FaceBox[] | undefined,
-  tileBuffer: Buffer,
-  width: number,
-  height: number,
+async function buildFaceBlurComposites(
+  baseBuffer: Buffer,
+  rects: BlurRect[],
 ): Promise<sharp.OverlayOptions[]> {
-  const rect = selectFaceBadgeRect(faceBoxes, width, height);
-  if (!rect) return [];
+  if (rects.length === 0) return [];
 
-  const badge = await sharp(tileBuffer).resize(rect.width, rect.height, { fit: 'fill' }).toBuffer();
-  return Array.from({ length: FACE_BADGE_STACK }, () => ({
-    input: badge,
-    top: rect.top,
-    left: rect.left,
-    blend: 'over' as const,
-  }));
+  const { data: raw, info } = await sharp(baseBuffer).raw().toBuffer({ resolveWithObject: true });
+  const { width, height, channels } = info;
+
+  return Promise.all(
+    rects.map(async (rect) => {
+      const sigma = Math.max(
+        FACE_BLUR_MIN_SIGMA,
+        Math.min(FACE_BLUR_MAX_SIGMA, Math.round(Math.min(rect.width, rect.height) / 4)),
+      );
+      const blurred = await sharp(raw, { raw: { width, height, channels } })
+        .extract({ left: rect.left, top: rect.top, width: rect.width, height: rect.height })
+        .blur(sigma)
+        .raw()
+        .toBuffer();
+      return {
+        input: blurred,
+        raw: { width: rect.width, height: rect.height, channels },
+        top: rect.top,
+        left: rect.left,
+        blend: 'over' as const,
+      };
+    }),
+  );
 }
 
 /**
  * Takes the raw original image buffer and returns a degraded, watermarked
  * JPEG preview buffer. Always outputs JPEG regardless of the input format.
  *
- * When `faceBoxes` are supplied (from the Rekognition flow), an extra badge is
- * composited over one face for stronger AI-removal resistance. Face data is
- * best-effort: an empty/undefined list just yields the tile-only preview.
+ * When `faceBoxes` are supplied (from the Rekognition flow), EVERY detected
+ * face is blurred to non-identifiable before the tile is composited on top —
+ * a second anti-theft layer so an AI-cleaned copy still has no usable face.
+ * Face data is best-effort: an empty/undefined list just yields the tile-only
+ * preview. Only this derived buffer is blurred; the original is never touched.
  */
 export async function addWatermarkToImage(
   imageBuffer: Buffer,
@@ -168,15 +208,20 @@ export async function addWatermarkToImage(
           .toBuffer()
       : tile.buffer;
 
-  const faceBadges = await buildFaceBadgeComposites(faceBoxes, tile.buffer, w, h);
+  // Blur every detected face on the resized preview, UNDER the tile, so the
+  // watermark stays readable on top of the blurred zones.
+  const faceBlurs = await buildFaceBlurComposites(
+    degradedBuffer,
+    computeFaceBlurRects(faceBoxes, w, h),
+  );
 
   return sharp(degradedBuffer)
     .composite([
+      // Blurred face regions first (beneath the tile).
+      ...faceBlurs,
       // `tile: true` repeats the input across the entire base image. Opacity
       // and rotation are pre-baked into the PNG, so no runtime adjustment.
       { input: tileInput, tile: true, blend: 'over' },
-      // Badge over a face (if any) — composited on top of the tile.
-      ...faceBadges,
       // Grayscale grain layer (~3 % opacity via alpha channel)
       { input: noiseBuffer, top: 0, left: 0, blend: 'over' },
     ])

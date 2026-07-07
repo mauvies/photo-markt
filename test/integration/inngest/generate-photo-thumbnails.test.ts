@@ -18,6 +18,7 @@ import { runGeneratePhotoThumbnailsFlow } from '@/lib/inngest/functions/generate
 import type { PhotoUploadStep } from '@/lib/inngest/functions/index-photo-faces';
 import { ROLES } from '@/lib/roles';
 import { thumbStoragePath } from '@/lib/thumbnails';
+import { checkerboardJpeg, regionStdev } from '../../helpers/image';
 import {
   createServiceClient,
   createTestEvent,
@@ -87,6 +88,38 @@ async function storageObjectExists(path: string): Promise<boolean> {
   return data !== null;
 }
 
+/** Upload a high-frequency checkerboard so a face blur is measurable as a big
+ *  drop in local stdev (a flat fill wouldn't change under blur). */
+async function uploadCheckerboard(path: string, width = 800, height = 600): Promise<number> {
+  const bytes = await checkerboardJpeg(width, height);
+  const sb = createServiceClient();
+  const { error } = await sb.storage
+    .from('photos')
+    .upload(path, bytes, { contentType: 'image/jpeg', upsert: true });
+  if (error) throw new Error(`uploadCheckerboard: ${error.message}`);
+  return bytes.byteLength;
+}
+
+/** Insert a persisted face box (what index-photo-faces writes) for a photo. */
+async function insertFace(photoId: string, box: Record<string, number>): Promise<void> {
+  const sb = createServiceClient();
+  const { error } = await sb.from('photo_faces').insert({
+    photo_id: photoId,
+    aws_face_id: `face-${photoId}`,
+    aws_collection_id: 'test-collection',
+    confidence: 99,
+    bounding_box: box,
+  });
+  if (error) throw new Error(`insertFace: ${error.message}`);
+}
+
+async function downloadThumb(storagePath: string, size: 'small' | 'medium'): Promise<Buffer> {
+  const sb = createServiceClient();
+  const { data } = await sb.storage.from('photos').download(thumbStoragePath(storagePath, size));
+  if (!data) throw new Error(`thumb ${size} not found`);
+  return Buffer.from(await data.arrayBuffer());
+}
+
 describe('runGeneratePhotoThumbnailsFlow', () => {
   beforeEach(async () => {
     await resetDatabase();
@@ -153,6 +186,64 @@ describe('runGeneratePhotoThumbnailsFlow', () => {
     expect(await readThumbnailStatus(photo.id)).toBe('ready');
     expect(await storageObjectExists(thumbStoragePath(storagePath, 'small'))).toBe(true);
     expect(await storageObjectExists(thumbStoragePath(storagePath, 'medium'))).toBe(true);
+  });
+
+  // T-068: chained after indexing, the paid-event thumbnail bakes with the
+  // persisted face boxes → every indexed face is blurred in the stored thumb.
+  it('blurs indexed faces in the paid-event thumbnail (tile-only when none)', async () => {
+    const sb = createServiceClient();
+    const user = await createTestUser(ROLES.PHOTOGRAPHER, { email: 'thumb-blur@test.com' });
+    const event = await createTestEvent(user.id);
+    await sb.from('events').update({ watermark_enabled: true }).eq('id', event.id);
+
+    // Photo WITH an indexed face box centered on the image.
+    const facePath = `${user.id}/${event.id}/photo-with-face.jpg`;
+    const faceSize = await uploadCheckerboard(facePath);
+    const facePhoto = await insertPhoto({
+      userId: user.id,
+      eventId: event.id,
+      originalUrl: facePath,
+      sizeBytes: faceSize,
+      uploadStatus: 'approved',
+    });
+    await insertFace(facePhoto.id, { Left: 0.35, Top: 0.35, Width: 0.3, Height: 0.3 });
+
+    // Control photo on the same event, NO face rows → tile-only, no blur.
+    const plainPath = `${user.id}/${event.id}/photo-no-face.jpg`;
+    const plainSize = await uploadCheckerboard(plainPath);
+    const plainPhoto = await insertPhoto({
+      userId: user.id,
+      eventId: event.id,
+      originalUrl: plainPath,
+      sizeBytes: plainSize,
+      uploadStatus: 'approved',
+    });
+
+    await runGeneratePhotoThumbnailsFlow(
+      { photoId: facePhoto.id, eventId: event.id, storagePath: facePath },
+      passthroughStep,
+    );
+    await runGeneratePhotoThumbnailsFlow(
+      { photoId: plainPhoto.id, eventId: event.id, storagePath: plainPath },
+      passthroughStep,
+    );
+
+    const faceThumb = await downloadThumb(facePath, 'medium');
+    const plainThumb = await downloadThumb(plainPath, 'medium');
+    const meta = await sharp(faceThumb).metadata();
+    const w = meta.width ?? 0;
+    const h = meta.height ?? 0;
+    // Sample the center of the (0.35–0.65) face box, inset to stay inside it.
+    const core = {
+      left: Math.round(w * 0.42),
+      top: Math.round(h * 0.42),
+      width: Math.round(w * 0.16),
+      height: Math.round(h * 0.16),
+    };
+
+    const blurred = await regionStdev(faceThumb, core);
+    const detailed = await regionStdev(plainThumb, core);
+    expect(blurred).toBeLessThan(detailed * 0.6);
   });
 
   it('skips a rejected photo without writing thumbs', async () => {

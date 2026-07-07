@@ -16,6 +16,7 @@
 import sharp from 'sharp';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  type PhotoProcessedSender,
   type PhotoUploadStep,
   runIndexPhotoFacesFlow,
 } from '@/lib/inngest/functions/index-photo-faces';
@@ -37,6 +38,28 @@ const passthroughStep: PhotoUploadStep = {
     return await fn();
   },
 };
+
+/** No-op sender — the flow now emits `photo.processed`; tests that don't care
+ *  about it inject this so nothing hits the real Inngest client. */
+const noopSend: PhotoProcessedSender = async () => undefined;
+
+/** Recording sender for the emission tests. */
+function recordingSend(): {
+  send: PhotoProcessedSender;
+  events: Array<{ name: string; data: { photoId: string; eventId: string; storagePath: string } }>;
+} {
+  const events: Array<{
+    name: string;
+    data: { photoId: string; eventId: string; storagePath: string };
+  }> = [];
+  return {
+    events,
+    send: async (event) => {
+      events.push(event);
+      return undefined;
+    },
+  };
+}
 
 async function uploadJpeg(path: string, sb = createServiceClient()): Promise<number> {
   const bytes = await sharp({
@@ -122,6 +145,7 @@ describe('runIndexPhotoFacesFlow — upload_status promotion', () => {
     await runIndexPhotoFacesFlow(
       { photoId: photo.id, eventId: event.id, storagePath },
       passthroughStep,
+      noopSend,
     );
 
     const updated = await readPhoto(photo.id);
@@ -161,6 +185,7 @@ describe('runIndexPhotoFacesFlow — upload_status promotion', () => {
     await runIndexPhotoFacesFlow(
       { photoId: photo.id, eventId: event.id, storagePath },
       passthroughStep,
+      noopSend,
     );
 
     const updated = await readPhoto(photo.id);
@@ -194,6 +219,7 @@ describe('runIndexPhotoFacesFlow — upload_status promotion', () => {
     await runIndexPhotoFacesFlow(
       { photoId: photo.id, eventId: event.id, storagePath },
       passthroughStep,
+      noopSend,
     );
 
     const updated = await readPhoto(photo.id);
@@ -229,7 +255,11 @@ describe('runIndexPhotoFacesFlow — upload_status promotion', () => {
       },
     };
 
-    await runIndexPhotoFacesFlow({ photoId: photo.id, eventId: event.id, storagePath }, spyingStep);
+    await runIndexPhotoFacesFlow(
+      { photoId: photo.id, eventId: event.id, storagePath },
+      spyingStep,
+      noopSend,
+    );
 
     // 50 KB is well under Inngest's ~4 MB cap; even at this conservative
     // threshold our face-metadata payloads (tens of bytes) sail through.
@@ -284,6 +314,7 @@ describe('runIndexPhotoFacesFlow — upload_status promotion', () => {
     await runIndexPhotoFacesFlow(
       { photoId: photo.id, eventId: event.id, storagePath },
       passthroughStep,
+      noopSend,
     );
 
     const updated = await readPhoto(photo.id);
@@ -295,5 +326,64 @@ describe('runIndexPhotoFacesFlow — upload_status promotion', () => {
       .from('photos')
       .list(`${owner.id}/${event.id}/`, { limit: 1000 });
     expect(existing?.some((o) => o.name === 'not-an-image.jpg')).toBe(false);
+  });
+
+  // T-068: thumbnails are chained after indexing. A non-rejected photo must
+  // emit `photo.processed` (carrying the same payload) so the thumbnail worker
+  // can bake with face boxes available. Fails before the emit step existed.
+  it('emits photo.processed after a non-rejected outcome', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+
+    const storagePath = `${owner.id}/${event.id}/emits-processed.jpg`;
+    const sizeBytes = await uploadJpeg(storagePath);
+    const photo = await insertPhoto({
+      userId: owner.id,
+      eventId: event.id,
+      originalUrl: storagePath,
+      sizeBytes,
+      uploadStatus: 'pending',
+    });
+
+    const rec = recordingSend();
+    await runIndexPhotoFacesFlow(
+      { photoId: photo.id, eventId: event.id, storagePath },
+      passthroughStep,
+      rec.send,
+    );
+
+    expect(rec.events).toHaveLength(1);
+    expect(rec.events[0].name).toBe('photo.processed');
+    expect(rec.events[0].data).toEqual({ photoId: photo.id, eventId: event.id, storagePath });
+  });
+
+  it('does NOT emit photo.processed for a rejected photo', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+
+    const storagePath = `${owner.id}/${event.id}/rejected-no-emit.jpg`;
+    const sb = createServiceClient();
+    const garbage = Buffer.from('<svg onload="alert(1)"></svg>', 'utf8');
+    const { error: upErr } = await sb.storage
+      .from('photos')
+      .upload(storagePath, garbage, { contentType: 'image/jpeg', upsert: true });
+    if (upErr) throw new Error(upErr.message);
+
+    const photo = await insertPhoto({
+      userId: owner.id,
+      eventId: event.id,
+      originalUrl: storagePath,
+      sizeBytes: garbage.byteLength,
+      uploadStatus: 'pending',
+    });
+
+    const rec = recordingSend();
+    await runIndexPhotoFacesFlow(
+      { photoId: photo.id, eventId: event.id, storagePath },
+      passthroughStep,
+      rec.send,
+    );
+
+    expect(rec.events).toHaveLength(0);
   });
 });

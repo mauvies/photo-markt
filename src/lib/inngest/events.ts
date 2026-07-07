@@ -23,6 +23,22 @@ export type Events = {
   };
 
   /**
+   * Emitted by `index-photo-faces.ts` once a photo's face indexing has settled
+   * to a terminal, non-rejected outcome (indexed, no faces, AI not applicable,
+   * or — via onFailure — indexing failed). Consumed by
+   * `generate-photo-thumbnails.ts`: chaining thumbnails after indexing means the
+   * persisted face boxes are available, so the single immutable thumbnail bake
+   * is already face-blurred. Rejected photos are deleted and emit nothing.
+   */
+  'photo.processed': {
+    data: {
+      photoId: string;
+      eventId: string;
+      storagePath: string;
+    };
+  };
+
+  /**
    * Emitted when a photographer toggles AI matching ON or fires "Re-index
    * event". The backfill function (`backfill-event-indexing.ts`) creates
    * the AWS collection if needed, resets per-photo statuses, and fans out
