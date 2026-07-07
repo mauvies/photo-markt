@@ -226,10 +226,10 @@ export function PhotoDetailModal({
                 aria-label={labels.share}
                 className="flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-colors hover:bg-black/65"
               >
-                <Share2 className="h-[18px] w-[18px]" />
+                <Share2 className="h-4 w-4" />
               </button>
               {items.length > 1 ? (
-                <div className="flex h-9 items-center rounded-full bg-black/45 px-3 text-xs font-medium text-white backdrop-blur-sm">
+                <div className="flex h-9 items-center rounded-full bg-black/45 px-3 text-sm font-medium text-white backdrop-blur-sm">
                   {nav.currentIndex + 1} / {items.length}
                 </div>
               ) : null}
@@ -280,9 +280,9 @@ export function PhotoDetailModal({
             type="button"
             onClick={onClose}
             aria-label={labels.close}
-            className="absolute top-3 left-3 z-30 flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-colors hover:bg-black/65 md:left-auto md:right-3 md:bg-transparent md:text-neutral-500 md:backdrop-blur-none md:hover:bg-neutral-100"
+            className="absolute top-3 left-3 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-colors hover:bg-black/65 md:left-auto md:right-3 md:bg-transparent md:text-neutral-500 md:backdrop-blur-none md:hover:bg-neutral-100"
           >
-            <X className="h-[18px] w-[18px]" />
+            <X className="h-6 w-6" />
           </button>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
