@@ -38,6 +38,7 @@
  * step 2 or 3 — never touched by `onFailure`.
  */
 
+import { NonRetriableError } from 'inngest';
 import { revalidateTag } from 'next/cache';
 import { updatePhotoDimensions } from '@/database/queries/photos';
 import {
@@ -54,6 +55,7 @@ import { indexFaceForPhoto } from '@/lib/aws/face-indexing';
 import { prepareImageForRekognition } from '@/lib/aws/image-prep';
 import { validatePhotoBuffer } from '@/lib/photo-upload';
 import { safeCall } from '@/lib/safe-call';
+import { isStorageObjectNotFound } from '@/lib/storage-object-not-found';
 import { inngest } from '../client';
 
 const adminClient = supabaseAdmin as unknown as SupabaseServerClient;
@@ -364,7 +366,14 @@ export async function runIndexPhotoFacesFlow(
       supabaseAdmin.storage.from('photos').download(storagePath),
     );
     if (error || !data) {
-      throw new Error(`Failed to download photo ${storagePath}: ${error?.message ?? 'no data'}`);
+      const message = `Failed to download photo ${storagePath}: ${error?.message ?? 'no data'}`;
+      // "Object not found" is definitive — retrying won't make the object
+      // appear (the classic cause locally: an env mismatch between where the
+      // photo was uploaded and where this worker is running — see T-071).
+      // NonRetriableError skips the remaining automatic retries and goes
+      // straight to onFailure instead of wasting 3 identical download attempts.
+      if (isStorageObjectNotFound(error)) throw new NonRetriableError(message);
+      throw new Error(message);
     }
     const buffer = Buffer.from(await data.arrayBuffer());
 

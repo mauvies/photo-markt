@@ -13,6 +13,7 @@
  * tests. The promotion step ordering is the load-bearing invariant.
  */
 
+import { NonRetriableError } from 'inngest';
 import sharp from 'sharp';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -385,5 +386,31 @@ describe('runIndexPhotoFacesFlow — upload_status promotion', () => {
     );
 
     expect(rec.events).toHaveLength(0);
+  });
+
+  // T-071 regression: a storage object that will never exist (the classic
+  // local-dev symptom — env mismatch between where the photo was uploaded and
+  // where this worker runs) must fail FAST via NonRetriableError, not retry
+  // 3x for nothing. Fails before the fix (plain Error, retries pointlessly).
+  it('throws NonRetriableError for a missing storage object (never retries)', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    // Insert a photo row whose storage object was never uploaded.
+    const storagePath = `${owner.id}/${event.id}/never-uploaded.jpg`;
+    const photo = await insertPhoto({
+      userId: owner.id,
+      eventId: event.id,
+      originalUrl: storagePath,
+      sizeBytes: 1234,
+      uploadStatus: 'pending',
+    });
+
+    await expect(
+      runIndexPhotoFacesFlow(
+        { photoId: photo.id, eventId: event.id, storagePath },
+        passthroughStep,
+        noopSend,
+      ),
+    ).rejects.toBeInstanceOf(NonRetriableError);
   });
 });

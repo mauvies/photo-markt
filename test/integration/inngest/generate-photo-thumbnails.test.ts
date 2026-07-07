@@ -12,6 +12,7 @@
  *   - Idempotency: running twice (upsert) does not fail
  */
 
+import { NonRetriableError } from 'inngest';
 import sharp from 'sharp';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { runGeneratePhotoThumbnailsFlow } from '@/lib/inngest/functions/generate-photo-thumbnails';
@@ -304,5 +305,29 @@ describe('runGeneratePhotoThumbnailsFlow', () => {
     await runGeneratePhotoThumbnailsFlow(payload, passthroughStep);
     await expect(runGeneratePhotoThumbnailsFlow(payload, passthroughStep)).resolves.not.toThrow();
     expect(await readThumbnailStatus(photo.id)).toBe('ready');
+  });
+
+  // T-071 regression: a storage object that will never exist must fail FAST
+  // via NonRetriableError, not retry 3x for nothing.
+  it('throws NonRetriableError for a missing storage object (never retries)', async () => {
+    const user = await createTestUser(ROLES.PHOTOGRAPHER, {
+      email: 'thumb-not-found@test.com',
+    });
+    const event = await createTestEvent(user.id);
+    const storagePath = `${user.id}/${event.id}/never-uploaded.jpg`;
+    const photo = await insertPhoto({
+      userId: user.id,
+      eventId: event.id,
+      originalUrl: storagePath,
+      sizeBytes: 1234,
+      uploadStatus: 'approved',
+    });
+
+    await expect(
+      runGeneratePhotoThumbnailsFlow(
+        { photoId: photo.id, eventId: event.id, storagePath },
+        passthroughStep,
+      ),
+    ).rejects.toBeInstanceOf(NonRetriableError);
   });
 });

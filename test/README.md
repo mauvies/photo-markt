@@ -155,6 +155,10 @@ sign in with the credentials returned by `createTestUser()` — its
    ```
 6. **`permission denied for table …` on every test?** The local API roles are
    missing their DML grants — run `pnpm db:reset` to re-apply `supabase/seed.sql`.
+7. **`Failed to download photo … Object not found` from an Inngest job when
+   using `pnpm dev` (not `pnpm test`)?** That's a dev-environment mismatch, not
+   a test failure — see the root [`README.md`](../README.md#5-optional-testing-ai-background-jobs-locally-face-indexing--thumbnails--bib-detection)
+   for running the Inngest Dev Server locally.
 
 ## CI
 

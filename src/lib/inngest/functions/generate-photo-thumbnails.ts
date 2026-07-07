@@ -38,6 +38,7 @@
  * cap on serialization. safeCall re-throws a plain message-only Error.
  */
 
+import { NonRetriableError } from 'inngest';
 import { revalidateTag } from 'next/cache';
 import type { ThumbnailStatus } from '@/database/queries/photos';
 import { updatePhotoThumbnailStatus } from '@/database/queries/photos';
@@ -45,6 +46,7 @@ import { getPhotoFaceBoxesByStoragePath } from '@/database/queries/rekognition';
 import type { SupabaseServerClient } from '@/database/queries/types';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { safeCall } from '@/lib/safe-call';
+import { isStorageObjectNotFound } from '@/lib/storage-object-not-found';
 import { generateThumbnail, thumbStoragePath } from '@/lib/thumbnails';
 import { addWatermarkToImage, type FaceBox } from '@/lib/watermark';
 import { inngest } from '../client';
@@ -143,9 +145,12 @@ export async function runGeneratePhotoThumbnailsFlow(
       supabaseAdmin.storage.from('photos').download(storagePath),
     );
     if (downloadError || !blob) {
-      throw new Error(
-        `thumb:download failed for ${storagePath}: ${downloadError?.message ?? 'no data'}`,
-      );
+      const message = `thumb:download failed for ${storagePath}: ${downloadError?.message ?? 'no data'}`;
+      // Definitive — retrying won't make the object appear (see T-071: the
+      // classic local-dev cause is an env mismatch between where the photo was
+      // uploaded and where this worker actually runs).
+      if (isStorageObjectNotFound(downloadError)) throw new NonRetriableError(message);
+      throw new Error(message);
     }
     const originalBuffer = Buffer.from(await blob.arrayBuffer());
 
