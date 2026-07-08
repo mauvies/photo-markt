@@ -1,7 +1,7 @@
 # T-073 · Bug: la galería del evento muestra columnas por fila inconsistentes (4 y luego 3), repitiéndose por cada página de paginación
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno (fuerte solape con T-060 — misma ruta de render; ver Notas)
 - **Rama:** `fix/gallery-grid-inconsistent-columns-per-row`  (tipo = fix)
 - **OpenSpec change:** —  (se decide al ejecutar según el enfoque: grid uniforme vs album justificado continuo)
