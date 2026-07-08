@@ -15,7 +15,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | 21 | P2 | T-080 | Título/descripción de "Encuéntrate" no reflejan que también existe búsqueda por dorsal | — | todo |
 | 22 | P2 | T-081 | Búsqueda por dorsal: abrir un modal en vez de un input inline | — | todo |
 | 23 | P2 | T-082 | Reposicionar "Save event" y "Share" como iconos junto al título del evento | — | todo |
-| 24 | P2 | T-083 | Auditoría completa de caching (estado, optimizaciones, readiness de escala) — solo investigación/reporte | — | todo |
+| 24 | P2 | T-083 | Auditoría completa de caching (estado, optimizaciones, readiness de escala) — solo investigación/reporte | — | doing |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |

@@ -1,7 +1,7 @@
 # T-083 · Auditoría completa de caching (estado actual, optimizaciones y readiness de escala)
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `chore/caching-audit`  (tipo = chore — investigación + reporte, **sin cambios de código**)
 - **OpenSpec change:** —  (no aplica: no se implementa nada; cada mejora sale como su propio ticket)
