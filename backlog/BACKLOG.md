@@ -11,7 +11,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 21 | P1 | T-085 | [Seguridad] Rate limit en guest Stripe checkout (API paga sin límite ni auth) | — | todo |
 | 22 | P1 | T-086 | [Seguridad] `getClientIp` confía en el primer `x-forwarded-for` (spoofeable) — usar `x-real-ip` | — | todo |
 | 23 | P1 | T-087 | [Perf/DB] Índice parcial para la query más caliente de galería + drop del índice duplicado | — | todo |
 | 24 | P2 | T-079 | Unificar el control "Clear selection" en desktop con mobile (ícono X en vez de botón "Clear") | — | todo |
@@ -51,6 +50,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-085** · Seguridad: `createGuestCheckoutSessionAction` (`cart/actions.ts`) creaba sesiones de Stripe (API paga) **sin autenticación y sin rate limit** — cualquier anónimo podía mintear sesiones ilimitadas + una lectura de DB de todos los photoIds por llamada (el gap de abuso más serio del inventario de limiters, F-15). Aplicado el limiter existente (`src/lib/rate-limit.ts`) keyed por IP (`guest-checkout:${ip}`, 10/h — más conservador que el checkout autenticado 20/h ya que el anónimo no aporta otra señal de identidad), error amigable traducido al exceder. **Hallazgos de `/code-review high` aceptados sin cambio de código:** (1) la key usa `getClientIp()` (spoofeable vía `X-Forwarded-For`) — gap ya trackeado y diferido explícitamente a **T-086** por el propio ticket; (2) sin `Retry-After` al rate-limitear, a diferencia del Route Handler hermano — pero consistente con el patrón ya usado en los otros Server Actions rate-limited (face-search/bib-search), que tampoco pueden setear headers HTTP. Tests: caracterización del flujo actual en verde antes del cambio + regresión (11 llamadas en la ventana → la 11ª rechazada, nunca llega a Stripe) — PR #139
 
 - **T-084** · Bug: editar o borrar un evento no revalidaba el tag `photographer-${slug}`, así que `getPhotographerEventsAction` (perfil público `/photographer/[slug]`) seguía sirviendo la card vieja hasta el TTL del tag — un evento borrado producía click-through a 404. **create** ya resolvía el slug del perfil y revalidaba el tag; `updateEventAction`/`deletePhotoAction` (`events/[id]/edit/actions.ts`) y `deleteEventAction` (`events/actions.ts`) ahora siguen el mismo patrón. De paso se borró el `deletePhoto` muerto de `events/actions.ts` (cero importers, revalidaba solo `event-${id}` — F-08). Tests: caracterización del set de tags actual en verde antes del cambio + regresión del tag faltante (falla antes/pasa después) — PR #138
 

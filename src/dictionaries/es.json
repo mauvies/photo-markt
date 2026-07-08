@@ -1214,7 +1214,8 @@
       "goToPayoutProfile": "Ir a configuración de pagos"
     },
     "checkout": {
-      "photographerNotConnected": "Uno o más fotógrafos en tu carrito aún no han configurado sus pagos. Por favor intenta más tarde."
+      "photographerNotConnected": "Uno o más fotógrafos en tu carrito aún no han configurado sus pagos. Por favor intenta más tarde.",
+      "rateLimited": "Demasiados intentos de pago. Espera un momento e inténtalo de nuevo."
     },
     "sales": {
       "commission": "Comisión",
