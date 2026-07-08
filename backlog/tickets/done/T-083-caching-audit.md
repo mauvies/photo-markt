@@ -1,11 +1,11 @@
 # T-083 · Auditoría completa de caching (estado actual, optimizaciones y readiness de escala)
 
 - **Prioridad:** P1
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `chore/caching-audit`  (tipo = chore — investigación + reporte, **sin cambios de código**)
 - **OpenSpec change:** —  (no aplica: no se implementa nada; cada mejora sale como su propio ticket)
-- **PR:** —
+- **PR:** #137 — entregable: `docs/CACHING_AUDIT.md`
 
 ## Requerimiento
 Auditoría exhaustiva de **todas las capas de caching** de la app: qué existe hoy, qué tan bien está
