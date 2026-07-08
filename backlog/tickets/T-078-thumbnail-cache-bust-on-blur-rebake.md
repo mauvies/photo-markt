@@ -1,7 +1,7 @@
 # T-078 · El blur de caras no llega a thumbnails ya cacheados al habilitar IA después de subir
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `fix/thumbnail-cache-bust-on-blur-rebake`  (tipo = fix)
 - **OpenSpec change:** — (probable: toca la ruta de thumbnails cacheada + derivación de URL en varios sitios → evaluar al ejecutar)

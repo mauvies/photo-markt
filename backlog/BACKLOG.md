@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 19 | P2 | T-078 | [Bug] El blur de caras no llega a thumbnails ya cacheados al habilitar IA después de subir (hueco de T-068) | T-068 | todo |
+| 19 | P2 | T-078 | [Bug] El blur de caras no llega a thumbnails ya cacheados al habilitar IA después de subir (hueco de T-068) | T-068 | doing |
 | 20 | P2 | T-079 | Unificar el control "Clear selection" en desktop con mobile (ícono X en vez de botón "Clear") | — | todo |
 | 21 | P2 | T-080 | Título/descripción de "Encuéntrate" no reflejan que también existe búsqueda por dorsal | — | todo |
 | 22 | P2 | T-081 | Búsqueda por dorsal: abrir un modal en vez de un input inline | — | todo |
