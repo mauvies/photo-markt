@@ -7,6 +7,7 @@ import { getBaseUrl } from '@/lib/get-base-url';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
+import { getClientIp, rateLimit } from '@/lib/rate-limit';
 import { stripe } from '@/lib/stripe/config';
 
 /**
@@ -18,6 +19,22 @@ export async function createGuestCheckoutSessionAction(
 ): Promise<{ url: string }> {
   if (items.length === 0) {
     throw new Error('Cart is empty');
+  }
+
+  const h = await headers();
+  const referer = h.get('referer') ?? '';
+  const lang = (referer.match(/\/(es|en)\//)?.[1] ?? 'en') as Locale;
+
+  // Unauthenticated + hits the Stripe API (real $$$ side effect) on every
+  // call, plus a DB read of all photoIds — the most serious abuse gap in the
+  // limiter inventory. Keyed by IP since there's no user to key on; mirrors
+  // the authed checkout's stripe-checkout:${uid} limiter (20/h) but more
+  // conservative since anonymous callers carry no other identity signal.
+  const ip = getClientIp(h);
+  const rl = await rateLimit({ key: `guest-checkout:${ip}`, limit: 10, windowSec: 3600 });
+  if (!rl.ok) {
+    const dict = await getDictionary(lang);
+    throw new Error(dict.stripeConnect.checkout.rateLimited);
   }
 
   // Re-validate photos and prices from DB (never trust client-side prices)
@@ -51,9 +68,6 @@ export async function createGuestCheckoutSessionAction(
   const connectStatuses = await getPhotographerConnectStatuses(supabaseAdmin, photographerIds);
   const notConnected = connectStatuses.filter((p) => p.stripe_connect_status !== 'active');
   if (notConnected.length > 0) {
-    const h = await headers();
-    const referer = h.get('referer') ?? '';
-    const lang = (referer.match(/\/(es|en)\//)?.[1] ?? 'en') as Locale;
     const dict = await getDictionary(lang);
     throw new Error(dict.stripeConnect.checkout.photographerNotConnected);
   }

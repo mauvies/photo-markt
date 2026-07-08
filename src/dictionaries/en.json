@@ -1214,7 +1214,8 @@
       "goToPayoutProfile": "Go to payout settings"
     },
     "checkout": {
-      "photographerNotConnected": "One or more photographers in your cart have not set up payouts yet. Please try again later."
+      "photographerNotConnected": "One or more photographers in your cart have not set up payouts yet. Please try again later.",
+      "rateLimited": "Too many checkout attempts. Please wait a bit and try again."
     },
     "sales": {
       "commission": "Commission",
