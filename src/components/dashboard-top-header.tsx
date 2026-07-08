@@ -57,8 +57,6 @@ export async function DashboardTopHeader({
             activeRole: dict.dashboard.activeRole,
             profile: dict.dashboard.profile,
             settings: dict.dashboard.settings,
-            billing: dict.dashboard.billing,
-            payouts: dict.dashboard.payouts,
             support: dict.dashboard.support,
             feedback: dict.dashboard.feedback,
             switchTo: dict.dashboard.switchTo,

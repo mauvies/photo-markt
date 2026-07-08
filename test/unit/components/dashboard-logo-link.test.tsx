@@ -39,13 +39,12 @@ const photographerLabels = {
   overview: 'Overview',
   createEvent: 'Create',
   events: 'Events',
-  revenue: 'Revenue',
+  sales: 'Sales',
+  settings: 'Settings',
   myPhotos: 'My photos',
   profile: 'Profile',
   explore: 'Explore',
   orders: 'Orders',
-  support: 'Support',
-  feedback: 'Feedback',
 };
 
 const talentLabels = {
@@ -55,7 +54,6 @@ const talentLabels = {
   profile: 'Profile',
   privacy: 'Privacy',
   settings: 'Settings',
-  billing: 'Billing',
   support: 'Support',
   feedback: 'Feedback',
   activeRole: 'Active role',

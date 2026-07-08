@@ -7,8 +7,10 @@ import {
   Home,
   Images,
   LifeBuoy,
+  type LucideIcon,
   Package,
   Send,
+  Settings,
   TrendingUp,
   User,
 } from 'lucide-react';
@@ -17,6 +19,11 @@ import Link from 'next/link';
 import type { ComponentProps } from 'react';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { dashboardHomeForRole } from '@/lib/auth/dashboard-home';
+import {
+  buildPhotographerSidebarItems,
+  type PhotographerSidebarKey,
+  showSidebarSupportFeedback,
+} from '@/lib/nav/photographer-nav';
 import { NavMains } from './nav-main';
 import { NavSecondary } from './nav-secondary';
 import { Sidebar, SidebarContent, SidebarHeader } from './ui/sidebar';
@@ -25,14 +32,28 @@ interface NavLabels {
   overview: string;
   createEvent: string;
   events: string;
-  revenue: string;
+  /** Sales/Ventas — renamed from Earnings/Ganancias (T-075). */
+  sales: string;
+  settings: string;
   myPhotos: string;
   profile: string;
   explore: string;
   orders: string;
-  support: string;
-  feedback: string;
+  /** Optional — only the (talent) secondary section renders these. */
+  support?: string;
+  feedback?: string;
 }
+
+/** Maps each photographer sidebar item to its icon (kept out of the pure
+ *  composition helper so that stays free of React/icon deps). */
+const PHOTOGRAPHER_ICONS: Record<PhotographerSidebarKey, LucideIcon> = {
+  overview: Home,
+  events: CalendarDays,
+  createEvent: CalendarPlus,
+  sales: TrendingUp,
+  profile: User,
+  settings: Settings,
+};
 
 export function AppSidebar({
   activeRole,
@@ -49,17 +70,15 @@ export function AppSidebar({
   // page but with the dashboard sidebar/header still visible. The public
   // URL (`/photographer/{slug}`) is reserved for sharing externally; it's
   // exposed via the "Copy profile link" button on the profile itself.
-  const photographerNav: Array<{ title: string; url: string; icon: typeof Home }> = [
-    { title: navLabels.overview, url: '/dashboard/photographer', icon: Home },
-    { title: navLabels.createEvent, url: '/dashboard/photographer/events/new', icon: CalendarPlus },
-    { title: navLabels.events, url: '/dashboard/photographer/events', icon: CalendarDays },
-    { title: navLabels.revenue, url: '/dashboard/photographer/sales', icon: TrendingUp },
-    {
-      title: navLabels.profile,
-      url: '/dashboard/photographer/profile/preview',
-      icon: User,
-    },
-  ];
+  // Order + membership (6 items incl. Settings) live in the pure helper.
+  const photographerNav = buildPhotographerSidebarItems({
+    overview: navLabels.overview,
+    events: navLabels.events,
+    createEvent: navLabels.createEvent,
+    sales: navLabels.sales,
+    profile: navLabels.profile,
+    settings: navLabels.settings,
+  }).map((item) => ({ title: item.title, url: item.url, icon: PHOTOGRAPHER_ICONS[item.key] }));
 
   const talentNav = [
     { title: navLabels.overview, url: '/dashboard/talent', icon: Home },
@@ -70,10 +89,16 @@ export function AppSidebar({
   ];
 
   const base = activeRole === 'photographer' ? '/dashboard/photographer' : '/dashboard/talent';
-  const navSecondaryItems = [
-    { title: navLabels.support, url: `${base}/support`, icon: LifeBuoy },
-    { title: navLabels.feedback, url: `${base}/feedback`, icon: Send },
-  ];
+  // Support & Feedback moved to the avatar dropdown for photographers (T-075);
+  // the secondary section only renders for roles that keep it in the sidebar.
+  const showSecondary =
+    showSidebarSupportFeedback(activeRole) && navLabels.support && navLabels.feedback;
+  const navSecondaryItems = showSecondary
+    ? [
+        { title: navLabels.support as string, url: `${base}/support`, icon: LifeBuoy },
+        { title: navLabels.feedback as string, url: `${base}/feedback`, icon: Send },
+      ]
+    : [];
 
   const navItems = (activeRole === 'photographer' ? photographerNav : talentNav).map((item) => ({
     ...item,
@@ -102,7 +127,7 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         <NavMains items={navItems} />
-        <NavSecondary items={navSecondary} className="mt-auto" />
+        {navSecondary.length > 0 ? <NavSecondary items={navSecondary} className="mt-auto" /> : null}
       </SidebarContent>
     </Sidebar>
   );

@@ -1,16 +1,6 @@
 'use client';
 
-import {
-  Camera,
-  CreditCard,
-  LifeBuoy,
-  LogOut,
-  Send,
-  Settings,
-  Shield,
-  User,
-  WalletMinimal,
-} from 'lucide-react';
+import { Camera, LifeBuoy, LogOut, Send, Settings, Shield, User } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useOptimistic, useTransition } from 'react';
@@ -61,8 +51,6 @@ export function DashboardUserMenu({
      *  talent-facing). */
     privacy?: string;
     settings?: string;
-    billing?: string;
-    payouts?: string;
     support?: string;
     feedback?: string;
     switchTo?: string;
@@ -201,6 +189,10 @@ export function DashboardUserMenu({
           </span>
         </DropdownMenuItem>
 
+        {/* Profile + Settings — surfaced in the dropdown on every role/viewport
+            (the photographer sidebar links them too; having them here as well
+            is intentional). Payouts/Billing are not — they live inside
+            Settings. */}
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem asChild className={cn(MENU_ITEM_CLASS, isProfileActive && 'bg-accent')}>
@@ -218,24 +210,6 @@ export function DashboardUserMenu({
               <span>{navLabels.settings ?? 'Settings'}</span>
             </Link>
           </DropdownMenuItem>
-          {/* Payouts — only relevant for photographer role; links straight to
-              the payout-profile config page that lives under settings/. */}
-          {optimisticRole === 'photographer' && (
-            <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
-              <Link href="/dashboard/photographer/settings/payout-profile">
-                <WalletMinimal className="mr-2 h-4 w-4" />
-                <span>{navLabels.payouts ?? 'Payouts'}</span>
-              </Link>
-            </DropdownMenuItem>
-          )}
-          {optimisticRole === 'photographer' && (
-            <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
-              <Link href="/dashboard/photographer/settings?tab=billing">
-                <CreditCard className="mr-2 h-4 w-4" />
-                <span>{navLabels.billing ?? 'Billing'}</span>
-              </Link>
-            </DropdownMenuItem>
-          )}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>

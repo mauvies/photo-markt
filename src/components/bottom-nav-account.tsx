@@ -1,16 +1,6 @@
 'use client';
 
-import {
-  Camera,
-  CreditCard,
-  LifeBuoy,
-  LogOut,
-  Send,
-  Settings,
-  Shield,
-  User,
-  WalletMinimal,
-} from 'lucide-react';
+import { Camera, LifeBuoy, LogOut, Send, Settings, Shield, User } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTransition } from 'react';
@@ -54,9 +44,6 @@ export interface BottomNavAccountLabels {
   switchRoleLabel: string;
   profile: string;
   settings: string;
-  /** Photographer-only menu items. */
-  billing?: string;
-  payouts?: string;
   /** Talent-only menu item. */
   privacy?: string;
   support: string;
@@ -205,6 +192,9 @@ export function BottomNavAccount({
           <span>{labels.switchRoleLabel}</span>
         </DropdownMenuItem>
 
+        {/* Profile + Settings — always surfaced. On mobile the bottom nav only
+            holds the primary work links, so this is their access point;
+            Payouts/Billing live inside Settings. */}
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
@@ -219,22 +209,6 @@ export function BottomNavAccount({
               <span>{labels.settings}</span>
             </Link>
           </DropdownMenuItem>
-          {isPhotographer && labels.payouts ? (
-            <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
-              <Link href={lp('/dashboard/photographer/settings/payout-profile')}>
-                <WalletMinimal className="mr-2 h-4 w-4" />
-                <span>{labels.payouts}</span>
-              </Link>
-            </DropdownMenuItem>
-          ) : null}
-          {isPhotographer && labels.billing ? (
-            <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
-              <Link href={lp('/dashboard/photographer/settings/billing')}>
-                <CreditCard className="mr-2 h-4 w-4" />
-                <span>{labels.billing}</span>
-              </Link>
-            </DropdownMenuItem>
-          ) : null}
         </DropdownMenuGroup>
 
         <DropdownMenuSeparator />
