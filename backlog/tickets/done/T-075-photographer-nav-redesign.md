@@ -1,11 +1,24 @@
 # T-075 · Rediseño de la navegación del dashboard del fotógrafo (añadir Configuración, renombrar Ganancias→Ventas, reubicar ítems)
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/photographer-nav-redesign`  (tipo = feat)
-- **OpenSpec change:** —  (se crea al ejecutar — toca sidebar + dropdown del avatar + bottom nav mobile + diccionarios; >5 archivos probable)
-- **PR:** —
+- **OpenSpec change:** — (implementado directo — UI con requerimiento claro; no toca BD/auth/pagos)
+- **PR:** #134
+
+## Resolución
+Rediseño en las 3 superficies de nav del fotógrafo, con la composición "qué ítem aparece por rol y viewport" extraída a un helper puro nuevo `src/lib/nav/photographer-nav.ts` (testeado) para que las superficies no diverjan.
+
+- **Sidebar → 6 enlaces** (Resumen · Eventos · Crear evento · Ventas · Perfil · Configuración): se añadió **Configuración** (abre la página de settings con tabs existente, `/dashboard/photographer/settings`) y se reordenó.
+- **Ganancias → Ventas** (solo label): se reusa la key existente `dashboard.sales` (= "Ventas"/"Sales"), sin editar diccionarios. El destino `/dashboard/photographer/sales` y los redirects legacy `/earnings`·`/ganancias`·`/ventas` quedan intactos.
+- **Soporte y Feedback** salen del footer del sidebar → al dropdown del avatar.
+- **Dropdown desktop (fotógrafo):** se quitaron Perfil, Configuración, Pagos y Facturación (redundantes con el sidebar / dentro de Settings). Conserva info de usuario, indicador de rol, switcher de rol, Soporte, Feedback, Cerrar sesión.
+- **Bottom nav mobile:** sigue en 4 enlaces primarios (Resumen, Eventos, Crear evento, Ventas) + avatar. El dropdown mobile conserva **Perfil + Configuración** (única vía en mobile) y también soltó Pagos/Facturación.
+- **Talent role-gated para quedar sin cambios:** los 2 componentes de dropdown (`DashboardUserMenu`, `BottomNavAccount`) se comparten con talent; todos los quites van detrás de checks de rol/superficie. Se limpió el plumbing muerto de `billing` en la ruta de talent.
+- **La página pública Perfil y el tab Configuración → Perfil siguen distintos** (rutas sin cambio).
+
+**Archivos:** `src/lib/nav/photographer-nav.ts` (nuevo helper), `app-sidebar.tsx`, `dashboard-user-menu.tsx`, `bottom-nav-account.tsx`, `photographer-bottom-nav.tsx`, `dashboard-top-header.tsx`, `talent-dashboard-header.tsx`, layouts photographer/talent. **Tests:** `test/unit/lib/photographer-nav.test.ts` (composición del sidebar de 6 ítems + orden + label Ventas + links del dropdown por rol/superficie) + ajuste del test de logo existente. `pnpm typecheck && pnpm lint && pnpm test` verde (851). **Pendiente (usuario):** smoke test manual en browser desktop+mobile antes de mergear.
 
 ## Requerimiento
 Rediseñar la navegación del dashboard del fotógrafo: añadir "Configuración" al sidebar, renombrar "Ganancias" → "Ventas", limpiar el dropdown del avatar (quitar enlaces ya redundantes con sidebar/Settings), y gestionar el bottom nav mobile porque el sidebar pasa a 6 enlaces (no caben todos en mobile).
