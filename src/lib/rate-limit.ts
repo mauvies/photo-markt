@@ -87,19 +87,36 @@ export async function rateLimit(
 }
 
 /**
- * Best-effort client IP from request headers. Vercel populates
- * x-forwarded-for; the first hop is the original client. Falls back to
- * x-real-ip, then a constant so missing headers still produce a usable key
- * (one bad-actor "unknown" bucket beats throwing).
+ * Best-effort client IP from request headers, for keying per-IP rate limits.
+ *
+ * On this app's deployment target (stock Vercel, no Enterprise "Trusted
+ * Proxy" add-on), Vercel's edge overwrites x-forwarded-for entirely with the
+ * single IP it observed and does not forward client-supplied values — see
+ * https://vercel.com/docs/headers/request-headers#x-forwarded-for. x-real-ip
+ * is documented as identical to x-forwarded-for. So on THIS platform,
+ * neither header is a multi-hop, client-appendable chain in practice.
+ *
+ * Still: prioritize x-real-ip, and if only x-forwarded-for is present, take
+ * the RIGHTMOST hop rather than the leftmost. This is defense-in-depth for
+ * any environment where x-forwarded-for genuinely can be a chain a client
+ * partially controls (a proxy layered in front of Vercel, local dev, a
+ * future hosting change) — the leftmost hop is always the least trustworthy
+ * position in that shape, so never treat it as authoritative. Falls back to
+ * a constant so missing headers still produce a usable key (one bad-actor
+ * "unknown" bucket beats throwing).
  */
 export function getClientIp(headers: Headers): string {
+  const real = headers.get('x-real-ip');
+  if (real?.trim()) return real.trim();
   const forwarded = headers.get('x-forwarded-for');
   if (forwarded) {
-    const first = forwarded.split(',')[0]?.trim();
-    if (first) return first;
+    const hops = forwarded
+      .split(',')
+      .map((hop) => hop.trim())
+      .filter(Boolean);
+    const last = hops[hops.length - 1];
+    if (last) return last;
   }
-  const real = headers.get('x-real-ip');
-  if (real) return real.trim();
   return 'unknown';
 }
 

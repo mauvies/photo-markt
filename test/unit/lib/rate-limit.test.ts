@@ -101,10 +101,30 @@ describe('rateLimit', () => {
 });
 
 describe('getClientIp', () => {
-  it('prefers first IP in x-forwarded-for', () => {
+  it('returns the single IP in x-forwarded-for when there is no proxy chain', () => {
     const h = new Headers();
-    h.set('x-forwarded-for', '203.0.113.5, 70.41.3.18, 150.172.238.178');
+    h.set('x-forwarded-for', '203.0.113.5');
     expect(getClientIp(h)).toBe('203.0.113.5');
+  });
+
+  it('falls back to the rightmost hop of x-forwarded-for rather than the leftmost (T-086)', () => {
+    // On this app's stock-Vercel deployment, Vercel overwrites
+    // x-forwarded-for with a single edge-observed IP and never forwards a
+    // client-supplied chain (vercel.com/docs/headers/request-headers), so
+    // this multi-hop shape shouldn't occur in this app's production traffic.
+    // It's still the right default for any environment where the header
+    // legitimately is a chain a client partially controls — the leftmost
+    // hop is always the least trustworthy position in that shape.
+    const h = new Headers();
+    h.set('x-forwarded-for', '1.2.3.4, 70.41.3.18, 203.0.113.9');
+    expect(getClientIp(h)).toBe('203.0.113.9');
+  });
+
+  it('prioritizes x-real-ip over x-forwarded-for when both are present (T-086)', () => {
+    const h = new Headers();
+    h.set('x-forwarded-for', '1.2.3.4, 203.0.113.9');
+    h.set('x-real-ip', '198.51.100.7');
+    expect(getClientIp(h)).toBe('198.51.100.7');
   });
 
   it('falls back to x-real-ip when forwarded missing', () => {
