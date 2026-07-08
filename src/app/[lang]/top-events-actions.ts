@@ -74,6 +74,7 @@ export async function getCachedTopEvents(): Promise<TopEventItem[]> {
         photoCount,
         coverPath: stats.get(e.id)?.coverPath ?? null,
         coverThumbReady: stats.get(e.id)?.coverThumbReady ?? false,
+        coverThumbVersion: stats.get(e.id)?.coverThumbVersion ?? null,
         score,
         status: getEventStatus(e.date),
       };
@@ -131,7 +132,10 @@ export async function getCachedTopEvents(): Promise<TopEventItem[]> {
     pricePerPhoto: e.price_per_photo,
     photoCount: e.photoCount,
     coverUrl: coverUrls.get(e.id) ?? null,
-    coverThumbUrl: e.coverThumbReady && e.coverPath ? thumbRelativeUrl(e.coverPath, 'small') : null,
+    coverThumbUrl:
+      e.coverThumbReady && e.coverPath
+        ? thumbRelativeUrl(e.coverPath, 'small', e.coverThumbVersion)
+        : null,
     photographerUsername: profileMap.get(e.user_id)?.username ?? null,
     photographerDisplayName: profileMap.get(e.user_id)?.display_name ?? null,
     status: e.status,

@@ -83,6 +83,17 @@ async function readThumbnailStatus(photoId: string): Promise<string | null> {
   return (data as { thumbnail_status: string | null }).thumbnail_status;
 }
 
+async function readThumbVersion(photoId: string): Promise<number> {
+  const sb = createServiceClient();
+  const { data, error } = await sb
+    .from('photos')
+    .select('thumb_version')
+    .eq('id', photoId)
+    .single();
+  if (error || !data) throw new Error(`readThumbVersion: ${error?.message ?? 'not found'}`);
+  return (data as { thumb_version: number }).thumb_version;
+}
+
 async function storageObjectExists(path: string): Promise<boolean> {
   const sb = createServiceClient();
   const { data } = await sb.storage.from('photos').download(path);
@@ -304,6 +315,41 @@ describe('runGeneratePhotoThumbnailsFlow', () => {
     const payload = { photoId: photo.id, eventId: event.id, storagePath };
     await runGeneratePhotoThumbnailsFlow(payload, passthroughStep);
     await expect(runGeneratePhotoThumbnailsFlow(payload, passthroughStep)).resolves.not.toThrow();
+    expect(await readThumbnailStatus(photo.id)).toBe('ready');
+  });
+
+  // T-078 regression: the /api/thumb URL is content-addressed + served
+  // `immutable, max-age=1y`, so a re-bake (AI enabled after upload / re-index)
+  // that overwrites the same storage path would otherwise keep serving the
+  // stale, unblurred copy. Each successful bake bumps `thumb_version`, which
+  // readers append as `?v=N` → a re-bake gets a fresh CDN cache key. Before the
+  // fix `thumb_version` stayed 0 across bakes and the URL never changed.
+  it('bumps thumb_version on every bake so a re-bake busts the CDN cache', async () => {
+    const user = await createTestUser(ROLES.PHOTOGRAPHER, { email: 'thumb-version@test.com' });
+    const event = await createTestEvent(user.id);
+    const storagePath = `${user.id}/${event.id}/photo-version.jpg`;
+    const sizeBytes = await uploadJpeg(storagePath);
+    const photo = await insertPhoto({
+      userId: user.id,
+      eventId: event.id,
+      originalUrl: storagePath,
+      sizeBytes,
+      uploadStatus: 'approved',
+    });
+
+    // Freshly inserted → version 0 (no cache-bust suffix yet).
+    expect(await readThumbVersion(photo.id)).toBe(0);
+
+    const payload = { photoId: photo.id, eventId: event.id, storagePath };
+
+    // First bake (tile-only): version → 1.
+    await runGeneratePhotoThumbnailsFlow(payload, passthroughStep);
+    expect(await readThumbVersion(photo.id)).toBe(1);
+
+    // Re-bake (e.g. AI enabled later → blurred): version → 2, so the /api/thumb
+    // URL the gallery builds changes from ?v=1 to ?v=2.
+    await runGeneratePhotoThumbnailsFlow(payload, passthroughStep);
+    expect(await readThumbVersion(photo.id)).toBe(2);
     expect(await readThumbnailStatus(photo.id)).toBe('ready');
   });
 

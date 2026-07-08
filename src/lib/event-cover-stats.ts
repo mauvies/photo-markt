@@ -17,6 +17,7 @@ export interface EventPhotoRow {
   event_id: string | null;
   original_url: string | null;
   thumbnail_status?: string | null;
+  thumb_version?: number | null;
   upload_status?: string | null;
 }
 
@@ -24,6 +25,9 @@ export interface EventCoverStat {
   count: number;
   coverPath: string | null;
   coverThumbReady: boolean;
+  /** Cache-bust token of the cover photo's thumbnail — threaded into `?v=N`
+   *  so a re-baked (re-blurred) cover busts the immutable CDN cache (T-078). */
+  coverThumbVersion: number | null;
 }
 
 /**
@@ -44,11 +48,13 @@ export function resolvePublicEventCoverStats(
       count: 0,
       coverPath: null,
       coverThumbReady: false,
+      coverThumbVersion: null,
     };
     current.count += 1;
     if (!current.coverPath && row.original_url) {
       current.coverPath = row.original_url;
       current.coverThumbReady = row.thumbnail_status === 'ready';
+      current.coverThumbVersion = row.thumb_version ?? null;
     }
     stats.set(row.event_id, current);
   }

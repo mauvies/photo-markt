@@ -14,6 +14,7 @@ describe('resolvePublicEventCoverStats', () => {
           event_id: 'e1',
           original_url: 'p1.jpg',
           thumbnail_status: 'ready',
+          thumb_version: 3,
           upload_status: 'pending',
         },
         {
@@ -25,7 +26,13 @@ describe('resolvePublicEventCoverStats', () => {
       ],
       new Set(), // no AI-enabled events
     );
-    expect(stats.get('e1')).toEqual({ count: 2, coverPath: 'p1.jpg', coverThumbReady: true });
+    // T-078: the cover row's thumb_version is captured for CDN cache-busting.
+    expect(stats.get('e1')).toEqual({
+      count: 2,
+      coverPath: 'p1.jpg',
+      coverThumbReady: true,
+      coverThumbVersion: 3,
+    });
   });
 
   it('excludes pending photos for an event WITH AI matching configured', () => {
@@ -48,7 +55,12 @@ describe('resolvePublicEventCoverStats', () => {
     );
     // Only the approved row counts/covers — the pending row is invisible until
     // indexing promotes it (that promotion IS the moderation gate here).
-    expect(stats.get('e1')).toEqual({ count: 1, coverPath: 'p2.jpg', coverThumbReady: true });
+    expect(stats.get('e1')).toEqual({
+      count: 1,
+      coverPath: 'p2.jpg',
+      coverThumbReady: true,
+      coverThumbVersion: null,
+    });
   });
 
   it('an AI-enabled event with ONLY pending photos yields no stat at all', () => {
@@ -89,6 +101,7 @@ describe('resolvePublicEventCoverStats', () => {
       count: 1,
       coverPath: 'b.jpg',
       coverThumbReady: false,
+      coverThumbVersion: null,
     });
   });
 

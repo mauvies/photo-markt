@@ -8,11 +8,12 @@
  * immutably, so their single bake must already carry the face blur (T-068) —
  * chaining after indexing is what makes that possible.
  *
- * KNOWN GAP (T-078): the immutable /api/thumb URL is stable per photo, so if a
- * thumbnail was already baked tile-only and is later re-baked with blur (AI
- * enabled after upload / re-index), the CDN keeps serving the stale unblurred
- * copy. Correct for the primary flow (AI on at creation → single blurred bake);
- * the enable-AI-later case needs thumb URL versioning, tracked separately.
+ * Re-bake cache-busting (T-078): the /api/thumb URL is content-addressed and
+ * served `immutable, max-age=1y`, so a thumbnail re-baked with blur (AI enabled
+ * after upload / re-index) writes the SAME path and the CDN would keep serving
+ * the stale unblurred copy. `mark-ready` bumps `photos.thumb_version` on every
+ * bake; readers append it as `?v=N`, giving the re-baked thumbnail a fresh CDN
+ * cache key while unchanged photos keep their cached URL.
  *
  * Step ordering (3 steps; bytes NEVER cross step boundaries):
  *
@@ -41,7 +42,7 @@
 import { NonRetriableError } from 'inngest';
 import { revalidateTag } from 'next/cache';
 import type { ThumbnailStatus } from '@/database/queries/photos';
-import { updatePhotoThumbnailStatus } from '@/database/queries/photos';
+import { markPhotoThumbnailReady, updatePhotoThumbnailStatus } from '@/database/queries/photos';
 import { getPhotoFaceBoxesByStoragePath } from '@/database/queries/rekognition';
 import type { SupabaseServerClient } from '@/database/queries/types';
 import { supabaseAdmin } from '@/database/supabase-admin';
@@ -206,10 +207,11 @@ export async function runGeneratePhotoThumbnailsFlow(
   }
 
   // ── 3. mark-ready ────────────────────────────────────────────────────
-  // Flip thumbnail_status and bust the cached event page so galleries
-  // serve the new thumbs without waiting for the 55-min TTL.
+  // Flip thumbnail_status → ready, bump thumb_version (busts the immutable
+  // /api/thumb CDN cache for a re-bake, T-078), and revalidate the cached
+  // event page so galleries serve the new thumbs without waiting for the TTL.
   await step.run('mark-ready', async () => {
-    await updatePhotoThumbnailStatus(adminClient, photoId, 'ready' as ThumbnailStatus);
+    await markPhotoThumbnailReady(adminClient, photoId);
     await invalidateEventPhotoCache(eventId);
   });
 

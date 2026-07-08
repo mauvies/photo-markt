@@ -87,14 +87,19 @@ export function buildPublicPhotoAlbumItem(
   if (!url) return null;
 
   const thumbsReady = photo.thumbnail_status === 'ready';
+  // thumb_version busts the immutable CDN cache when a thumbnail is re-baked
+  // with face blur (AI enabled after upload / re-index) — T-078.
+  const thumbVersion = photo.thumb_version ?? undefined;
   return {
     id: photo.id,
     url,
     thumbSmall:
-      thumbsReady && photo.original_url ? thumbRelativeUrl(photo.original_url, 'small') : undefined,
+      thumbsReady && photo.original_url
+        ? thumbRelativeUrl(photo.original_url, 'small', thumbVersion)
+        : undefined,
     thumbMedium:
       thumbsReady && photo.original_url
-        ? thumbRelativeUrl(photo.original_url, 'medium')
+        ? thumbRelativeUrl(photo.original_url, 'medium', thumbVersion)
         : undefined,
     alt: opts.alt,
     uploader: buildUploader(photo, opts.event, opts.uploaderProfiles),

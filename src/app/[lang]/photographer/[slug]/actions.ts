@@ -58,7 +58,12 @@ export async function getPhotographerEventsAction(
 
   const stats = new Map<
     string,
-    { count: number; coverPath: string | null; coverThumbReady: boolean }
+    {
+      count: number;
+      coverPath: string | null;
+      coverThumbReady: boolean;
+      coverThumbVersion: number | null;
+    }
   >();
   for (const row of photoRows) {
     if (!row.event_id) continue;
@@ -66,11 +71,13 @@ export async function getPhotographerEventsAction(
       count: 0,
       coverPath: null,
       coverThumbReady: false,
+      coverThumbVersion: null,
     };
     current.count += 1;
     if (!current.coverPath && row.original_url) {
       current.coverPath = row.original_url;
       current.coverThumbReady = row.thumbnail_status === 'ready';
+      current.coverThumbVersion = row.thumb_version ?? null;
     }
     stats.set(row.event_id, current);
   }
@@ -78,7 +85,12 @@ export async function getPhotographerEventsAction(
   // Prefer the dedicated cover image (T-055), including for events with no
   // photos. A dedicated cover has no thumbnail, so force the thumb off.
   for (const [id, path] of coverOverride) {
-    const current = stats.get(id) ?? { count: 0, coverPath: null, coverThumbReady: false };
+    const current = stats.get(id) ?? {
+      count: 0,
+      coverPath: null,
+      coverThumbReady: false,
+      coverThumbVersion: null,
+    };
     current.coverPath = path;
     current.coverThumbReady = false;
     stats.set(id, current);
@@ -100,7 +112,9 @@ export async function getPhotographerEventsAction(
       coverUrl: coverUrls.get(event.id) ?? null,
       coverThumbUrl: (() => {
         const s = stats.get(event.id);
-        return s?.coverThumbReady && s.coverPath ? thumbRelativeUrl(s.coverPath, 'small') : null;
+        return s?.coverThumbReady && s.coverPath
+          ? thumbRelativeUrl(s.coverPath, 'small', s.coverThumbVersion)
+          : null;
       })(),
       pricePerPhoto: event.price_per_photo,
       photographerUsername: null,

@@ -43,6 +43,27 @@ describe('thumbRelativeUrl', () => {
     const result = thumbRelativeUrl('uid/eventId/abc123.jpg', 'medium');
     expect(result).toBe('/api/thumb/uid/eventId/thumbs/abc123/medium.webp');
   });
+
+  // T-078: a re-baked (re-blurred) thumbnail must bust the immutable CDN cache.
+  // The version suffix gives it a fresh cache key without changing the storage
+  // path, so re-baking over the same object serves fresh instead of stale.
+  it('appends a ?v= cache-bust suffix when a positive version is given', () => {
+    const result = thumbRelativeUrl('uid/eventId/abc123.jpg', 'small', 2);
+    expect(result).toBe('/api/thumb/uid/eventId/thumbs/abc123/small.webp?v=2');
+  });
+
+  it('produces a DIFFERENT URL for a re-baked thumbnail (v1 → v2)', () => {
+    const v1 = thumbRelativeUrl('uid/eventId/abc123.jpg', 'small', 1);
+    const v2 = thumbRelativeUrl('uid/eventId/abc123.jpg', 'small', 2);
+    expect(v1).not.toBe(v2);
+  });
+
+  it('omits the suffix for version 0 / null / undefined (legacy rows stay cached)', () => {
+    const base = '/api/thumb/uid/eventId/thumbs/abc123/small.webp';
+    expect(thumbRelativeUrl('uid/eventId/abc123.jpg', 'small', 0)).toBe(base);
+    expect(thumbRelativeUrl('uid/eventId/abc123.jpg', 'small', null)).toBe(base);
+    expect(thumbRelativeUrl('uid/eventId/abc123.jpg', 'small', undefined)).toBe(base);
+  });
 });
 
 describe('generateThumbnail', () => {
