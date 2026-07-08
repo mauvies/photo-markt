@@ -1,8 +1,8 @@
 'use client';
 
 import { ImageOff } from 'lucide-react';
+import Image from 'next/image';
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { type Photo, type RenderPhotoContext, RowsPhotoAlbum } from 'react-photo-album';
 import type { LightboxActionLabels } from '@/components/lightbox-action-bar';
 import {
   PhotoDetailModal,
@@ -20,7 +20,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useCoarsePointer } from '@/hooks/use-coarse-pointer';
 import { usePhotoLightboxUrl } from '@/hooks/use-photo-lightbox-url';
 import { cn } from '@/lib/utils';
-import 'react-photo-album/rows.css';
+
+/** Matches the `sm`/`md`/`lg` breakpoints in `grid-cols-*` below so `next/image`
+ * requests a close-fitting resize instead of always the largest variant. */
+const GRID_SIZES =
+  '(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw';
 
 export type PhotoAlbumItem = {
   id: string;
@@ -51,11 +55,12 @@ export type PhotoAlbumItem = {
 type PhotoAlbumViewerProps = {
   /** A flat gallery. Provide this OR `itemBatches`. */
   items?: PhotoAlbumItem[];
-  /** Paginated load-more pages. When provided, each page is laid out as its own
-   * justified-rows segment so a "Load more" append never re-flows the photos
-   * already on screen (no scroll-jump). The flat item list (for the lightbox,
-   * dimensions, and selection) is derived from these — a single source of
-   * truth, so the segments can never drift out of sync with the flat list. */
+  /** Paginated load-more pages. The grid uses fixed CSS columns rather than
+   * aspect-ratio-justified rows, so appending a page never re-flows the tiles
+   * already on screen (no scroll-jump) — pages are simply concatenated into
+   * one continuous grid. The flat item list (for the lightbox, dimensions,
+   * and selection) is derived from these — a single source of truth, so it
+   * can never drift out of sync with what's rendered. */
   itemBatches?: PhotoAlbumItem[][];
   selectionMode?: boolean;
   selectedIds?: string[];
@@ -195,12 +200,6 @@ export default function PhotoAlbumViewer({
   const coarsePointer = useCoarsePointer();
   const cleanGrid = cleanOnCoarsePointer && coarsePointer;
 
-  const extractPhotoId = useCallback((photo: Photo & { id?: string }) => {
-    if (typeof photo.id === 'string' && photo.id.length > 0) return photo.id;
-    if (typeof photo.key === 'string' && photo.key.length > 0) return photo.key;
-    return photo.src;
-  }, []);
-
   useEffect(() => {
     items.forEach((item) => {
       if (dimensions[item.id]) return;
@@ -233,50 +232,20 @@ export default function PhotoAlbumViewer({
     });
   }, [items, dimensions]);
 
-  const photos: Array<Photo & { id: string }> = useMemo(
+  // Uniform tile source: fixed-size crops (aspect-square, object-cover) don't
+  // need natural width/height, so this — unlike the old justified-rows layout
+  // — never varies tile count per row by aspect ratio. `next/image` resizes
+  // the medium thumbnail (or the full url as fallback) down to the rendered
+  // tile size per `GRID_SIZES`, so no manual srcSet is needed.
+  const photos = useMemo(
     () =>
-      items.map((p) => {
-        const dims = dimensions[p.id];
-        const width = dims?.width ?? p.width ?? 1600;
-        const height = dims?.height ?? p.height ?? 1066;
-        return {
-          id: p.id,
-          key: p.id,
-          // When thumbnails are ready, srcSet lets the browser pick the right
-          // variant for the rendered size (small for grid tiles, medium for
-          // wider layouts). Falls back to the full url when absent.
-          src: p.thumbMedium ?? p.url,
-          srcSet:
-            p.thumbSmall && p.thumbMedium
-              ? [
-                  { src: p.thumbSmall, width: 400, height: Math.round((400 / width) * height) },
-                  { src: p.thumbMedium, width: 800, height: Math.round((800 / width) * height) },
-                ]
-              : undefined,
-          sizes: '(max-width: 768px) 50vw, 250px',
-          alt: p.alt ?? 'photo',
-          width,
-          height,
-        };
-      }),
-    [items, dimensions],
+      items.map((p) => ({
+        id: p.id,
+        src: p.thumbMedium ?? p.url,
+        alt: p.alt ?? 'photo',
+      })),
+    [items],
   );
-
-  // Split the mapped photos into contiguous load-more segments — one justified-
-  // rows album per page — so appending a new page never re-flows (or visually
-  // shifts) the pages already on screen. `photos` is derived from `itemBatches`,
-  // so the slice offsets always line up exactly; no page (or a single page)
-  // means one segment: the original single-album behavior.
-  const photoSegments = useMemo(() => {
-    if (!itemBatches || itemBatches.length <= 1) return [photos];
-    const segments: (typeof photos)[] = [];
-    let start = 0;
-    for (const batch of itemBatches) {
-      segments.push(photos.slice(start, start + batch.length));
-      start += batch.length;
-    }
-    return segments;
-  }, [photos, itemBatches]);
 
   const lightboxItems: PhotoLightboxItem[] = useMemo(
     () =>
@@ -318,8 +287,7 @@ export default function PhotoAlbumViewer({
   );
 
   const renderExtras = useCallback(
-    (_props: object, { photo }: RenderPhotoContext<Photo & { id?: string }>) => {
-      const photoId = extractPhotoId(photo);
+    (photoId: string) => {
       const state = loadStates[photoId] ?? 'loading';
 
       // While the image is in flight, cover the tile with a skeleton and
@@ -399,7 +367,6 @@ export default function PhotoAlbumViewer({
       );
     },
     [
-      extractPhotoId,
       loadStates,
       imageUnavailableLabel,
       canSelect,
@@ -430,117 +397,71 @@ export default function PhotoAlbumViewer({
     ],
   );
 
+  const handleTileActivate = useCallback(
+    (photoId: string) => {
+      if (canSelect && selectionActive) {
+        handleToggleSelect(photoId);
+        return;
+      }
+      openAt(photoId);
+    },
+    [canSelect, selectionActive, handleToggleSelect, openAt],
+  );
+
   return (
     <>
-      <div className="flex w-full max-w-full min-w-0 flex-col gap-2">
-        {photoSegments.map((segment, segmentIndex) => (
-          <RowsPhotoAlbum
-            key={segment[0]?.id ?? `segment-${segmentIndex}`}
-            photos={segment}
-            targetRowHeight={250}
-            rowConstraints={{ singleRowMaxHeight: 250 }}
-            spacing={8}
-            render={{
-              extras: renderExtras,
-              button: (props, { photo }) => {
-                const photoId = extractPhotoId(photo as Photo & { id?: string });
-                const isSelected = selectedSet.has(photoId);
-                const { onClick, className: propsClassName, ...restProps } = props;
-                return (
-                  // biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons
-                  <div
-                    {...(restProps as React.HTMLAttributes<HTMLDivElement>)}
-                    onClick={
-                      onClick
-                        ? (e: React.MouseEvent<HTMLDivElement>) => {
-                            onClick(e as unknown as React.MouseEvent<HTMLButtonElement>);
-                          }
-                        : undefined
-                    }
-                    tabIndex={0}
-                    role="button"
-                    data-selected={isSelected ? '' : undefined}
-                    className={cn(
-                      'group relative flex h-full w-full overflow-hidden rounded-lg bg-muted p-0 text-left focus:outline-none focus:ring-2 focus:ring-ring/30 selection:ring-0',
-                      canSelect ? 'cursor-pointer' : 'cursor-zoom-in',
-                      propsClassName,
-                    )}
-                    onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        onClick?.(event as unknown as React.MouseEvent<HTMLButtonElement>);
-                      }
-                    }}
-                  />
-                );
-              },
-              link: (props, { photo }) => {
-                const photoId = extractPhotoId(photo as Photo & { id?: string });
-                const isSelected = selectedSet.has(photoId);
-                const { onClick, href, className: propsClassName, ...restProps } = props;
-                return (
-                  // biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons
-                  <div
-                    {...(restProps as React.HTMLAttributes<HTMLDivElement>)}
-                    onClick={
-                      onClick
-                        ? (e: React.MouseEvent<HTMLDivElement>) => {
-                            e.preventDefault();
-                            onClick(e as unknown as React.MouseEvent<HTMLAnchorElement>);
-                          }
-                        : undefined
-                    }
-                    tabIndex={0}
-                    role="link"
-                    data-selected={isSelected ? '' : undefined}
-                    aria-label={href}
-                    className={cn(
-                      'group relative flex h-full w-full overflow-hidden rounded-lg bg-muted p-0 text-left focus:outline-none focus:ring-2 focus:ring-ring/30 selection:ring-0',
-                      canSelect ? 'cursor-pointer' : 'cursor-zoom-in',
-                      propsClassName,
-                    )}
-                    onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        onClick?.(event as unknown as React.MouseEvent<HTMLAnchorElement>);
-                      }
-                    }}
-                  />
-                );
-              },
-            }}
-            componentsProps={{
-              image: ({ photo }) => {
-                const photoId = extractPhotoId(photo as Photo & { id?: string });
-                const isSelected = selectedSet.has(photoId);
-                const state = loadStates[photoId] ?? 'loading';
-                return {
-                  className: cn(
-                    'h-full w-full object-cover transition-opacity duration-200',
-                    state === 'loaded' ? 'opacity-100' : 'opacity-0',
-                    state === 'loaded' && canSelect && isSelected && 'opacity-75',
-                  ),
-                  onLoad: () =>
-                    setLoadStates((prev) =>
-                      prev[photoId] === 'loaded' ? prev : { ...prev, [photoId]: 'loaded' },
-                    ),
-                  onError: () =>
-                    setLoadStates((prev) =>
-                      prev[photoId] === 'error' ? prev : { ...prev, [photoId]: 'error' },
-                    ),
-                };
-              },
-            }}
-            onClick={({ photo }) => {
-              const photoId = extractPhotoId(photo as Photo & { id?: string });
-              if (canSelect && selectionActive) {
-                handleToggleSelect(photoId);
-                return;
-              }
-              openAt(photoId);
-            }}
-          />
-        ))}
+      {/* Fixed columns per breakpoint — every row holds the same tile count
+          regardless of each photo's aspect ratio (unlike the previous
+          justified-rows layout, which packed 4 vs 3 per row depending on it). */}
+      <div className="grid w-full max-w-full min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        {photos.map((photo) => {
+          const photoId = photo.id;
+          const isSelected = selectedSet.has(photoId);
+          const state = loadStates[photoId] ?? 'loading';
+          return (
+            // biome-ignore lint/a11y/useSemanticElements: Intentionally using div to avoid nested buttons
+            <div
+              key={photoId}
+              tabIndex={0}
+              role="button"
+              data-selected={isSelected ? '' : undefined}
+              className={cn(
+                'group relative aspect-square overflow-hidden rounded-lg bg-muted p-0 text-left focus:outline-none focus:ring-2 focus:ring-ring/30 selection:ring-0',
+                canSelect ? 'cursor-pointer' : 'cursor-zoom-in',
+              )}
+              onClick={() => handleTileActivate(photoId)}
+              onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  handleTileActivate(photoId);
+                }
+              }}
+            >
+              <Image
+                src={photo.src}
+                alt={photo.alt}
+                fill
+                sizes={GRID_SIZES}
+                className={cn(
+                  'object-cover transition-opacity duration-200',
+                  state === 'loaded' ? 'opacity-100' : 'opacity-0',
+                  state === 'loaded' && canSelect && isSelected && 'opacity-75',
+                )}
+                onLoad={() =>
+                  setLoadStates((prev) =>
+                    prev[photoId] === 'loaded' ? prev : { ...prev, [photoId]: 'loaded' },
+                  )
+                }
+                onError={() =>
+                  setLoadStates((prev) =>
+                    prev[photoId] === 'error' ? prev : { ...prev, [photoId]: 'error' },
+                  )
+                }
+              />
+              {renderExtras(photoId)}
+            </div>
+          );
+        })}
       </div>
       {detailVariant === 'purchase' && purchaseLabels && locale ? (
         <PhotoDetailModal

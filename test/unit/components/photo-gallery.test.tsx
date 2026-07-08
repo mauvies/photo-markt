@@ -4,8 +4,8 @@ import { Download } from 'lucide-react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Stub the underlying grid so PhotoGallery's own logic (selection, sections,
-// toolbar, bulk actions) is tested without react-photo-album's layout pass.
-// Each item renders as a button that toggles its selection.
+// toolbar, bulk actions) is tested without the album viewer's tile-rendering
+// pass. Each item renders as a button that toggles its selection.
 vi.mock('@/components/photo-album-viewer', () => ({
   default: ({
     items,
