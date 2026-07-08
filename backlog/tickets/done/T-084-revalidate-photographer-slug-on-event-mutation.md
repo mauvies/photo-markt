@@ -1,11 +1,11 @@
 # T-084 · [Bug] Edit/delete de evento no revalida `photographer-${slug}` — evento borrado visible en el perfil público (404)
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/revalidate-photographer-slug-on-event-mutation`  (tipo = fix)
 - **OpenSpec change:** —  (fix acotado de invalidación de caché)
-- **PR:** —
+- **PR:** #138
 - **Origen:** auditoría de caching T-083 (`docs/CACHING_AUDIT.md`, **F-01**, ítem #1 del plan)
 
 ## Requerimiento
@@ -15,14 +15,14 @@ borrado produce click-through a 404. El **create** sí incluye el tag
 (`events/new/actions.ts:145`), la omisión en edit/delete es un descuido evidente.
 
 ## Criterio de aceptación (Definition of Done)
-- [ ] **Cobertura previa:** tests de caracterización del set de tags que revalidan hoy
+- [x] **Cobertura previa:** tests de caracterización del set de tags que revalidan hoy
       `revalidateAfterEventMutation` y `deleteEventAction`, en verde **antes** de tocar código
-- [ ] `revalidateAfterEventMutation` (`.../events/[id]/edit/actions.ts:90-111`) y
+- [x] `revalidateAfterEventMutation` (`.../events/[id]/edit/actions.ts:90-111`) y
       `deleteEventAction` (`.../events/actions.ts:81-102`) revalidan también `photographer-${slug}`
-- [ ] Tras borrar/editar un evento, `getPhotographerEventsAction` (tag `photographer-${slug}`)
+- [x] Tras borrar/editar un evento, `getPhotographerEventsAction` (tag `photographer-${slug}`)
       no sirve la versión vieja
-- [ ] test de regresión que falla antes y pasa después (el tag faltante en el set revalidado)
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] test de regresión que falla antes y pasa después (el tag faltante en el set revalidado)
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
 - Necesita el `slug` del dueño en los dos paths de mutación — el create ya lo resuelve; copiar ese patrón.

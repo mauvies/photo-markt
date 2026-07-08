@@ -11,6 +11,7 @@ import {
   getPhoto,
   updateEvent,
 } from '@/database/queries';
+import type { SupabaseServerClient } from '@/database/queries/types';
 import { createClient } from '@/database/server';
 import { inngest } from '@/lib/inngest/client';
 
@@ -87,10 +88,11 @@ function generateShareCode(): string {
   ).join('');
 }
 
-function revalidateAfterEventMutation(
+async function revalidateAfterEventMutation(
+  supabase: SupabaseServerClient,
   userId: string,
   event: { id: string; slug: string | null; share_code: string | null },
-): void {
+): Promise<void> {
   revalidatePath('/es/dashboard/photographer/events');
   revalidatePath('/en/dashboard/photographer/events');
   revalidatePath(`/es/dashboard/photographer/events/${event.id}`);
@@ -108,6 +110,16 @@ function revalidateAfterEventMutation(
   revalidateTag(`dashboard-photographer-${userId}`, 'max');
   updateTag(`event-${event.id}`);
   updateTag(`photographer-events-${userId}`);
+
+  // The photographer's public profile (`/photographer/[slug]`) lists this
+  // event's card too — without this tag an edited/deleted event keeps
+  // showing there until the tag's natural TTL (create already does this).
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('slug')
+    .eq('id', userId)
+    .maybeSingle();
+  if (profile?.slug) revalidateTag(`photographer-${profile.slug}`, 'max');
 }
 
 // --- Exports ---
@@ -251,7 +263,7 @@ export async function updateEventAction(
     }
   }
 
-  revalidateAfterEventMutation(user.id, {
+  await revalidateAfterEventMutation(supabase, user.id, {
     id: eventId,
     slug: currentEvent.slug,
     share_code: shareCode,
@@ -288,7 +300,7 @@ export async function deletePhotoAction(photoId: string, eventId: string): Promi
   }
 
   const event = await getEvent(supabase, eventId, user.id);
-  revalidateAfterEventMutation(user.id, {
+  await revalidateAfterEventMutation(supabase, user.id, {
     id: eventId,
     slug: event?.slug ?? null,
     share_code: event?.share_code ?? null,

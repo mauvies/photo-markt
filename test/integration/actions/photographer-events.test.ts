@@ -15,6 +15,7 @@
  *   - validatePhotoUpload integration (non-image bytes rejected)
  */
 
+import { revalidateTag } from 'next/cache';
 import sharp from 'sharp';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockSession } from '../../helpers/server-action-mocks';
@@ -422,5 +423,87 @@ describe('deleteEventAction', () => {
       .eq('id', photo.id)
       .maybeSingle();
     expect(leftover).toBeNull();
+  });
+});
+
+// ─── Cache tag revalidation (T-084) ───────────────────────────────────────────
+//
+// Characterization of the tag set each mutation revalidates today, plus a
+// regression pin for the `photographer-${slug}` tag: edit/delete must
+// invalidate the photographer's public profile cache (`/photographer/[slug]`)
+// just like create already does, or a deleted/edited event keeps showing on
+// the public profile until the tag's natural TTL expires.
+
+describe('cache tag revalidation', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    await ensurePhotosBucket();
+    mockSession.userId = null;
+    mockSession.activeRole = 'photographer';
+    vi.mocked(revalidateTag).mockClear();
+  });
+
+  function revalidatedTags(): unknown[] {
+    return vi.mocked(revalidateTag).mock.calls.map(([tag]) => tag);
+  }
+
+  it('updateEventAction revalidates the existing known tag set', async () => {
+    const user = await createTestUser('PHOTOGRAPHER');
+    mockSession.userId = user.id;
+    const event = await createTestEvent(user.id, { is_public: true });
+
+    await updateEventAction(event.id, buildEventFormData({ name: 'Renamed' }));
+
+    const tags = revalidatedTags();
+    expect(tags).toEqual(
+      expect.arrayContaining([
+        'events-public',
+        'top-events',
+        'filter-options',
+        `event-${event.id}`,
+        `photographer-events-${user.id}`,
+        `dashboard-photographer-${user.id}`,
+      ]),
+    );
+  });
+
+  it('updateEventAction also revalidates the photographer profile tag so the public profile drops the edited event', async () => {
+    const user = await createTestUser('PHOTOGRAPHER');
+    mockSession.userId = user.id;
+    const event = await createTestEvent(user.id, { is_public: true });
+
+    await updateEventAction(event.id, buildEventFormData({ name: 'Renamed' }));
+
+    expect(revalidatedTags()).toContain(`photographer-${user.username}`);
+  });
+
+  it('deleteEventAction revalidates the existing known tag set', async () => {
+    const user = await createTestUser('PHOTOGRAPHER');
+    mockSession.userId = user.id;
+    const event = await createTestEvent(user.id, { is_public: true });
+
+    await deleteEventAction(event.id);
+
+    const tags = revalidatedTags();
+    expect(tags).toEqual(
+      expect.arrayContaining([
+        'events-public',
+        'top-events',
+        'filter-options',
+        `event-${event.id}`,
+        `photographer-events-${user.id}`,
+        `dashboard-photographer-${user.id}`,
+      ]),
+    );
+  });
+
+  it('deleteEventAction also revalidates the photographer profile tag so the deleted event stops appearing on the public profile', async () => {
+    const user = await createTestUser('PHOTOGRAPHER');
+    mockSession.userId = user.id;
+    const event = await createTestEvent(user.id, { is_public: true });
+
+    await deleteEventAction(event.id);
+
+    expect(revalidatedTags()).toContain(`photographer-${user.username}`);
   });
 });
