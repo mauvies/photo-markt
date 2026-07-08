@@ -11,7 +11,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 22 | P1 | T-086 | [Seguridad] `getClientIp` confía en el primer `x-forwarded-for` (spoofeable) — usar `x-real-ip` | — | todo |
 | 23 | P1 | T-087 | [Perf/DB] Índice parcial para la query más caliente de galería + drop del índice duplicado | — | todo |
 | 24 | P2 | T-079 | Unificar el control "Clear selection" en desktop con mobile (ícono X en vez de botón "Clear") | — | todo |
 | 25 | P2 | T-080 | Título/descripción de "Encuéntrate" no reflejan que también existe búsqueda por dorsal | — | todo |
@@ -50,6 +49,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-086** · Seguridad: `getClientIp` (`rate-limit.ts`) confiaba en el hop **más a la izquierda** de `x-forwarded-for`, controlable por el cliente — un atacante rotaba la key per-IP gratis variando el header, debilitando 6 de los 9 limiters (face search, bib search, load-more, bulk download, guest uploads, health; F-16). Ahora prioriza `x-real-ip`, cae al hop **más a la derecha** de `x-forwarded-for`, y solo devuelve `'unknown'` sin ningún header. **Diagnóstico post-`/code-review high`:** verificado contra la doc de Vercel que en este deploy (Vercel estándar, sin Trusted Proxy) el edge sobrescribe `x-forwarded-for` por completo con un único valor observado (nunca reenvía cadena del cliente) y `x-real-ip` es idéntico a `x-forwarded-for` — el bug original no era explotable vía multi-hop forjado *en este deploy concreto*, pero el fix es defensa en profundidad real (nunca peor) para cualquier entorno con proxy delante de Vercel, dev local, o cambio futuro de hosting; comentario del código y tests corregidos para no sobre-afirmar el escenario de explotación. Tests: caracterización de los shapes actuales (XFF simple, XFF múltiple, x-real-ip, sin headers) en verde antes del cambio + regresión (XFF spoofeado con IP real appendeada a la derecha, y prioridad de x-real-ip sobre XFF) — PR #140
 
 - **T-085** · Seguridad: `createGuestCheckoutSessionAction` (`cart/actions.ts`) creaba sesiones de Stripe (API paga) **sin autenticación y sin rate limit** — cualquier anónimo podía mintear sesiones ilimitadas + una lectura de DB de todos los photoIds por llamada (el gap de abuso más serio del inventario de limiters, F-15). Aplicado el limiter existente (`src/lib/rate-limit.ts`) keyed por IP (`guest-checkout:${ip}`, 10/h — más conservador que el checkout autenticado 20/h ya que el anónimo no aporta otra señal de identidad), error amigable traducido al exceder. **Hallazgos de `/code-review high` aceptados sin cambio de código:** (1) la key usa `getClientIp()` (spoofeable vía `X-Forwarded-For`) — gap ya trackeado y diferido explícitamente a **T-086** por el propio ticket; (2) sin `Retry-After` al rate-limitear, a diferencia del Route Handler hermano — pero consistente con el patrón ya usado en los otros Server Actions rate-limited (face-search/bib-search), que tampoco pueden setear headers HTTP. Tests: caracterización del flujo actual en verde antes del cambio + regresión (11 llamadas en la ventana → la 11ª rechazada, nunca llega a Stripe) — PR #139
 
