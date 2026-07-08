@@ -35,7 +35,6 @@ export function TalentDashboardHeader({
      *  is surfaced there instead of in the top nav. The key stays on this
      *  type for ergonomics so the layout can pass it through unchanged. */
     settings: string;
-    billing: string;
     support: string;
     feedback: string;
     activeRole: string;
@@ -122,7 +121,6 @@ export function TalentDashboardHeader({
                   profile: navLabels.profile,
                   privacy: navLabels.privacy,
                   settings: navLabels.settings,
-                  billing: navLabels.billing,
                   support: navLabels.support,
                   feedback: navLabels.feedback,
                   switchTo: navLabels.switchTo,

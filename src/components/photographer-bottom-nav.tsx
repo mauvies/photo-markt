@@ -19,7 +19,8 @@ export function PhotographerBottomNav({
     overview: string;
     events: string;
     createEvent: string;
-    revenue: string;
+    /** Sales/Ventas — renamed from Earnings/Ganancias (T-075). */
+    sales: string;
     account: string;
     /** Generic "Role" label (e.g. en="Role", es="Rol"). Prefix for the role row. */
     activeRoleLabel: string;
@@ -27,8 +28,6 @@ export function PhotographerBottomNav({
     roleLabel: string;
     profile: string;
     settings: string;
-    billing: string;
-    payouts: string;
     support: string;
     feedback: string;
     switchToTalent: string;
@@ -73,7 +72,7 @@ export function PhotographerBottomNav({
       // Single combined Sales + Earnings entry. The destination page renders
       // both as tabs; legacy `/ventas` and `/ganancias` redirect here.
       href: '/dashboard/photographer/sales',
-      label: navLabels.revenue,
+      label: navLabels.sales,
       icon: TrendingUp,
       isActive: (p: string) => {
         const clean = p.replace(/^\/(es|en)/, '');
@@ -130,8 +129,6 @@ export function PhotographerBottomNav({
           switchRoleLabel: navLabels.switchToTalent,
           profile: navLabels.profile,
           settings: navLabels.settings,
-          billing: navLabels.billing,
-          payouts: navLabels.payouts,
           support: navLabels.support,
           feedback: navLabels.feedback,
           logOut: navLabels.logOut,

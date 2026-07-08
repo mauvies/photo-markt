@@ -1,16 +1,6 @@
 'use client';
 
-import {
-  Camera,
-  CreditCard,
-  LifeBuoy,
-  LogOut,
-  Send,
-  Settings,
-  Shield,
-  User,
-  WalletMinimal,
-} from 'lucide-react';
+import { Camera, LifeBuoy, LogOut, Send, Settings, Shield, User } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useOptimistic, useTransition } from 'react';
@@ -26,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { createClient } from '@/database/client';
+import { accountDropdownLinks } from '@/lib/nav/photographer-nav';
 import type { RoleSlug } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 
@@ -61,8 +52,6 @@ export function DashboardUserMenu({
      *  talent-facing). */
     privacy?: string;
     settings?: string;
-    billing?: string;
-    payouts?: string;
     support?: string;
     feedback?: string;
     switchTo?: string;
@@ -123,6 +112,12 @@ export function DashboardUserMenu({
 
   const isProfileActive = pathname.startsWith(profileUrl);
   const isSettingsActive = pathname.startsWith(settingsUrl);
+
+  // Profile/Settings appear in this desktop dropdown only when the role's
+  // primary nav doesn't already carry them. For photographers that's the
+  // sidebar (which now links both + Settings), so the dropdown drops them;
+  // talent has no sidebar, so they stay. Shared with the mobile bottom nav.
+  const linkKeys = accountDropdownLinks(optimisticRole, 'desktop-header');
 
   const otherRole: RoleSlug = optimisticRole === 'photographer' ? 'talent' : 'photographer';
   const photographerLabel = navLabels.rolePhotographer ?? 'Photographer';
@@ -201,42 +196,35 @@ export function DashboardUserMenu({
           </span>
         </DropdownMenuItem>
 
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem asChild className={cn(MENU_ITEM_CLASS, isProfileActive && 'bg-accent')}>
-            <Link href={profileUrl}>
-              <User className="mr-2 h-4 w-4" />
-              <span>{navLabels.profile ?? 'Profile'}</span>
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            asChild
-            className={cn(MENU_ITEM_CLASS, isSettingsActive && 'bg-accent')}
-          >
-            <Link href={settingsUrl}>
-              <Settings className="mr-2 h-4 w-4" />
-              <span>{navLabels.settings ?? 'Settings'}</span>
-            </Link>
-          </DropdownMenuItem>
-          {/* Payouts — only relevant for photographer role; links straight to
-              the payout-profile config page that lives under settings/. */}
-          {optimisticRole === 'photographer' && (
-            <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
-              <Link href="/dashboard/photographer/settings/payout-profile">
-                <WalletMinimal className="mr-2 h-4 w-4" />
-                <span>{navLabels.payouts ?? 'Payouts'}</span>
-              </Link>
-            </DropdownMenuItem>
-          )}
-          {optimisticRole === 'photographer' && (
-            <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
-              <Link href="/dashboard/photographer/settings?tab=billing">
-                <CreditCard className="mr-2 h-4 w-4" />
-                <span>{navLabels.billing ?? 'Billing'}</span>
-              </Link>
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuGroup>
+        {linkKeys.length > 0 ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              {linkKeys.includes('profile') ? (
+                <DropdownMenuItem
+                  asChild
+                  className={cn(MENU_ITEM_CLASS, isProfileActive && 'bg-accent')}
+                >
+                  <Link href={profileUrl}>
+                    <User className="mr-2 h-4 w-4" />
+                    <span>{navLabels.profile ?? 'Profile'}</span>
+                  </Link>
+                </DropdownMenuItem>
+              ) : null}
+              {linkKeys.includes('settings') ? (
+                <DropdownMenuItem
+                  asChild
+                  className={cn(MENU_ITEM_CLASS, isSettingsActive && 'bg-accent')}
+                >
+                  <Link href={settingsUrl}>
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>{navLabels.settings ?? 'Settings'}</span>
+                  </Link>
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuGroup>
+          </>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>

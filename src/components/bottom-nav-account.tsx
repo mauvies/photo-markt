@@ -1,16 +1,6 @@
 'use client';
 
-import {
-  Camera,
-  CreditCard,
-  LifeBuoy,
-  LogOut,
-  Send,
-  Settings,
-  Shield,
-  User,
-  WalletMinimal,
-} from 'lucide-react';
+import { Camera, LifeBuoy, LogOut, Send, Settings, Shield, User } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTransition } from 'react';
@@ -27,6 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { createClient } from '@/database/client';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { accountDropdownLinks } from '@/lib/nav/photographer-nav';
 import type { RoleSlug } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 
@@ -54,9 +45,6 @@ export interface BottomNavAccountLabels {
   switchRoleLabel: string;
   profile: string;
   settings: string;
-  /** Photographer-only menu items. */
-  billing?: string;
-  payouts?: string;
   /** Talent-only menu item. */
   privacy?: string;
   support: string;
@@ -87,6 +75,10 @@ export function BottomNavAccount({
   const pathWithoutLang = pathname.replace(/^\/(es|en)/, '') || '/';
   const isPhotographer = activeRole === 'photographer';
   const otherRole: RoleSlug = isPhotographer ? 'talent' : 'photographer';
+
+  // Profile/Settings visibility is shared with the desktop dropdown via the
+  // pure helper; on mobile both roles surface them (the bottom nav omits them).
+  const linkKeys = accountDropdownLinks(activeRole, 'mobile-bottom');
 
   // Photographer "Profile" → the dashboard-wrapped preview so the dashboard
   // chrome stays visible; talent goes straight to their profile page.
@@ -205,37 +197,29 @@ export function BottomNavAccount({
           <span>{labels.switchRoleLabel}</span>
         </DropdownMenuItem>
 
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
-            <Link href={lp(profileHref)}>
-              <User className="mr-2 h-4 w-4" />
-              <span>{labels.profile}</span>
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
-            <Link href={lp(settingsHref)}>
-              <Settings className="mr-2 h-4 w-4" />
-              <span>{labels.settings}</span>
-            </Link>
-          </DropdownMenuItem>
-          {isPhotographer && labels.payouts ? (
-            <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
-              <Link href={lp('/dashboard/photographer/settings/payout-profile')}>
-                <WalletMinimal className="mr-2 h-4 w-4" />
-                <span>{labels.payouts}</span>
-              </Link>
-            </DropdownMenuItem>
-          ) : null}
-          {isPhotographer && labels.billing ? (
-            <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
-              <Link href={lp('/dashboard/photographer/settings/billing')}>
-                <CreditCard className="mr-2 h-4 w-4" />
-                <span>{labels.billing}</span>
-              </Link>
-            </DropdownMenuItem>
-          ) : null}
-        </DropdownMenuGroup>
+        {linkKeys.length > 0 ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              {linkKeys.includes('profile') ? (
+                <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
+                  <Link href={lp(profileHref)}>
+                    <User className="mr-2 h-4 w-4" />
+                    <span>{labels.profile}</span>
+                  </Link>
+                </DropdownMenuItem>
+              ) : null}
+              {linkKeys.includes('settings') ? (
+                <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
+                  <Link href={lp(settingsHref)}>
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>{labels.settings}</span>
+                  </Link>
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuGroup>
+          </>
+        ) : null}
 
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
