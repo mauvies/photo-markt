@@ -8,13 +8,7 @@ import {
   type SearchFacesInEventResult,
 } from '@/app/[lang]/events/[shareCode]/face-search-shared';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export interface FaceSearchModalLabels {
   title: string;
@@ -361,7 +355,7 @@ export function FaceSearchModal({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{labels.title}</DialogTitle>
-          <DialogDescription>{labels.description}</DialogDescription>
+          {/* <DialogDescription>{labels.description}</DialogDescription> */}
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
