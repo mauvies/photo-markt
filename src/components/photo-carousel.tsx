@@ -127,7 +127,7 @@ export function PhotoCarousel({
             e.stopPropagation();
             onPrevious();
           }}
-          className={`absolute left-4 z-20 hidden h-14 w-14 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition-opacity duration-200 hover:bg-white/15 md:left-8 md:flex cursor-pointer ${
+          className={`absolute left-4 z-20 hidden h-14 w-14 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition-opacity duration-200 hover:bg-white/15 md:left-8 md:flex cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${
             controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
           aria-label="Previous photo"
@@ -180,7 +180,7 @@ export function PhotoCarousel({
             e.stopPropagation();
             onNext();
           }}
-          className={`absolute right-4 z-20 hidden h-14 w-14 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition-opacity duration-200 hover:bg-white/15 md:right-8 md:flex cursor-pointer ${
+          className={`absolute right-4 z-20 hidden h-14 w-14 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition-opacity duration-200 hover:bg-white/15 md:right-8 md:flex cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${
             controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
           aria-label="Next photo"
