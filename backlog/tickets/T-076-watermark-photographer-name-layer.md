@@ -1,8 +1,8 @@
 # T-076 · Interleave el nombre/handle del fotógrafo en el watermark
 
 - **Prioridad:** P2
-- **Estado:** todo
-- **Blockers:** ninguno
+- **Estado:** blocked
+- **Blockers:** on-hold — aplazado por el usuario (2026-07-08). No abordar aún; sacado de la cola activa para que `/work-next` no lo tome como prioritario. Reactivar cambiando el estado a `todo` cuando se quiera retomar.
 - **Rama:** `feat/watermark-photographer-name-layer`  (tipo = feat)
 - **OpenSpec change:** —  (probable: toca cómo se genera/sirve la preview y necesita una decisión de rendering — evaluar al ejecutar)
 - **PR:** —

@@ -11,13 +11,13 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 17 | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | T-067 | todo |
 | 18 | P2 | T-077 | [Bug] Photo-detail-modal: al navegar con flechas siempre queda el focus/selected en la izquierda | — | todo |
 | 19 | P2 | T-078 | [Bug] El blur de caras no llega a thumbnails ya cacheados al habilitar IA después de subir (hueco de T-068) | T-068 | todo |
 | 20 | P2 | T-079 | Unificar el control "Clear selection" en desktop con mobile (ícono X en vez de botón "Clear") | — | todo |
 | 21 | P2 | T-080 | Título/descripción de "Encuéntrate" no reflejan que también existe búsqueda por dorsal | — | todo |
 | 22 | P2 | T-081 | Búsqueda por dorsal: abrir un modal en vez de un input inline | — | todo |
 | 23 | P2 | T-082 | Reposicionar "Save event" y "Share" como iconos junto al título del evento | — | todo |
+| — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
@@ -28,7 +28,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 - **Tabs:** T-004 (arregla el salto) → T-013 (restila todos los tabs, incluidos los de eventos destacados).
 - **Carrito:** ✅ completado — ~~T-038~~ (PR #92, ítems navegables/lightbox) → ~~T-039~~ (PR #93, sin parpadeo del merge) → ~~T-040~~ (PR #94, excluye eventos eliminados de carrito y favoritos). No quedan tickets de este cluster.
 - **Páginas i18n/producción:** T-014 → T-015 → T-016 (hechas). Mismo patrón pendiente: **T-028 (`/about`) → T-029 (`/contact`)** — placeholders `staticPages.preparing` por completar; comparten `en.json`/`es.json`, ejecutar en serie con merge previo para evitar conflictos de diccionario. (Contacto: no duplicar el formulario que ya vive en `/support`.)
-- **Preview con watermark:** ~~T-067~~ (rediseño del patrón, PR #129) → ~~T-068~~ (blur de caras, PR #130) → T-078 (hueco de T-068: blur no llega a thumbnails ya cacheados) + T-076 (nombre del fotógrafo en el tile — parte diferida de T-067). Todos tocan la generación de la preview con watermark (Sharp); mergear cada uno antes de empezar el siguiente para que compongan sin conflictos.
+- **Preview con watermark:** ~~T-067~~ (rediseño del patrón, PR #129) → ~~T-068~~ (blur de caras, PR #130) → T-078 (hueco de T-068: blur no llega a thumbnails ya cacheados) + T-076 (nombre del fotógrafo en el tile — parte diferida de T-067, **on-hold**). Todos tocan la generación de la preview con watermark (Sharp); mergear cada uno antes de empezar el siguiente para que compongan sin conflictos.
 - **"Encuentra tus fotos" (mismo archivo):** T-080 (copy título/descripción) + T-081 (modal en vez de input inline para dorsal). Ambos tocan `find-my-photos-banner.tsx`; mergear uno antes de empezar el otro para evitar conflictos.
 - **Independientes (sin cluster):** T-005, T-012, T-018, T-009, T-017, T-019, T-020. (T-018 reusa `pricing-section`/`lib/plans.ts`; T-019 es refactor de toda la raíz — ejecutar aislado, con el resto de la cola mergeada. T-020 es rename trivial.)
 
