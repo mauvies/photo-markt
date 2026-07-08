@@ -33,6 +33,8 @@ export interface PhotoSummary {
   taken_at: string | null;
   upload_status?: UploadStatus;
   thumbnail_status?: ThumbnailStatus;
+  /** Cache-bust token for the /api/thumb URL — bumped on every bake (T-078). */
+  thumb_version?: number | null;
 }
 
 export interface PhotoDetail {
@@ -54,6 +56,8 @@ export interface PhotoDetail {
   width: number | null;
   height: number | null;
   thumbnail_status?: ThumbnailStatus;
+  /** Cache-bust token for the /api/thumb URL — bumped on every bake (T-078). */
+  thumb_version?: number | null;
 }
 
 /**
@@ -96,7 +100,7 @@ function applyEventPhotoOrder<
  * {@link getEventPhotosPublic} and its paginated variant so the two can't drift.
  */
 const EVENT_PHOTO_PUBLIC_COLUMNS =
-  'id, original_url, taken_at, city, country, state, user_id, uploaded_by, guest_name, width, height, thumbnail_status';
+  'id, original_url, taken_at, city, country, state, user_id, uploaded_by, guest_name, width, height, thumbnail_status, thumb_version';
 
 /**
  * Column list for owner/dashboard gallery reads — includes `guest_email` and
@@ -104,7 +108,7 @@ const EVENT_PHOTO_PUBLIC_COLUMNS =
  * paginated variant.
  */
 const EVENT_PHOTO_OWNER_COLUMNS =
-  'id, original_url, taken_at, city, country, uploaded_by, guest_name, guest_email, upload_status, width, height, thumbnail_status';
+  'id, original_url, taken_at, city, country, uploaded_by, guest_name, guest_email, upload_status, width, height, thumbnail_status, thumb_version';
 
 /**
  * Count photos uploaded by a user that are attached to a non-soft-deleted
@@ -223,7 +227,7 @@ export async function getPhotosForEvents(
 
   const { data, error } = await supabase
     .from('photos')
-    .select('event_id, original_url, taken_at, thumbnail_status')
+    .select('event_id, original_url, taken_at, thumbnail_status, thumb_version')
     .in('event_id', eventIds)
     .eq('upload_status', 'approved')
     .order('taken_at', { ascending: true })
@@ -259,7 +263,7 @@ export async function getPhotosForEventsIncludingPending(
 
   const { data, error } = await supabase
     .from('photos')
-    .select('event_id, original_url, taken_at, thumbnail_status, upload_status')
+    .select('event_id, original_url, taken_at, thumbnail_status, thumb_version, upload_status')
     .in('event_id', eventIds)
     .in('upload_status', ['pending', 'approved'])
     .order('taken_at', { ascending: true })
@@ -669,6 +673,45 @@ export async function updatePhotoThumbnailStatus(
 
   if (error) {
     throw new Error(`Failed to update photo thumbnail_status: ${getErrorMessage(error)}`);
+  }
+}
+
+/**
+ * Flip `thumbnail_status` to `'ready'` AND bump `thumb_version` (T-078).
+ *
+ * The version bump is what makes a re-bake reach already-cached galleries: the
+ * /api/thumb URL is content-addressed + served `immutable, max-age=1y`, so
+ * re-baking a blurred thumbnail over the same path would otherwise keep serving
+ * the stale, unblurred copy. Bumping the version changes the `?v=N` suffix →
+ * fresh CDN cache key. Called once per successful bake (`mark-ready` step).
+ *
+ * The read-then-write is race-free in practice: one bake runs per photo (a
+ * single `photo.processed` per index settle), and Inngest step memoization
+ * keeps a retried function from re-running an already-succeeded `mark-ready`.
+ */
+export async function markPhotoThumbnailReady(
+  supabase: SupabaseServerClient,
+  photoId: string,
+): Promise<void> {
+  const { data, error: readError } = await supabase
+    .from('photos')
+    .select('thumb_version')
+    .eq('id', photoId)
+    .maybeSingle();
+
+  if (readError) {
+    throw new Error(`Failed to read thumb_version: ${getErrorMessage(readError)}`);
+  }
+
+  const nextVersion = ((data?.thumb_version as number | null) ?? 0) + 1;
+
+  const { error } = await supabase
+    .from('photos')
+    .update({ thumbnail_status: 'ready', thumb_version: nextVersion })
+    .eq('id', photoId);
+
+  if (error) {
+    throw new Error(`Failed to mark photo thumbnail ready: ${getErrorMessage(error)}`);
   }
 }
 

@@ -42,18 +42,45 @@ export function thumbStoragePath(originalPath: string, size: ThumbSize): string 
 }
 
 /**
- * Build the public-facing /api/thumb URL for a stored thumbnail.
- * These are immutable, CDN-cached URLs — no signing required.
+ * Cache-busting query suffix for a thumbnail URL (T-078).
+ *
+ * Thumbnail objects are content-addressed and served `immutable, max-age=1y`,
+ * so a re-bake (face blur applied after AI is enabled post-upload, or a
+ * re-index) overwrites the SAME storage path — the CDN/browser would keep
+ * serving the stale, unblurred copy for up to a year. `photos.thumb_version`
+ * is bumped on every successful bake; appending it as `?v=N` gives the re-baked
+ * thumbnail a fresh CDN cache key. Legacy rows (and the first bake before this
+ * shipped) sit at version 0 → no suffix → their already-cached URL is untouched,
+ * preserving the egress win for photos that never change.
  */
-export function thumbUrl(baseUrl: string, storagePath: string, size: ThumbSize): string {
+function versionSuffix(version?: number | null): string {
+  return version && version > 0 ? `?v=${version}` : '';
+}
+
+/**
+ * Build the public-facing /api/thumb URL for a stored thumbnail.
+ * These are immutable, CDN-cached URLs — no signing required. Pass the photo's
+ * `thumb_version` so a re-baked (re-blurred) thumbnail busts the CDN cache.
+ */
+export function thumbUrl(
+  baseUrl: string,
+  storagePath: string,
+  size: ThumbSize,
+  version?: number | null,
+): string {
   const thumbPath = thumbStoragePath(storagePath, size);
-  return `${baseUrl}/api/thumb/${thumbPath}`;
+  return `${baseUrl}/api/thumb/${thumbPath}${versionSuffix(version)}`;
 }
 
 /**
  * Build a root-relative /api/thumb URL — usable in any client context
  * (next/image src, srcSet) where an absolute URL with baseUrl is not needed.
+ * Pass the photo's `thumb_version` so a re-baked thumbnail busts the CDN cache.
  */
-export function thumbRelativeUrl(storagePath: string, size: ThumbSize): string {
-  return `/api/thumb/${thumbStoragePath(storagePath, size)}`;
+export function thumbRelativeUrl(
+  storagePath: string,
+  size: ThumbSize,
+  version?: number | null,
+): string {
+  return `/api/thumb/${thumbStoragePath(storagePath, size)}${versionSuffix(version)}`;
 }

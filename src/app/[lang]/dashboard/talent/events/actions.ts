@@ -73,7 +73,12 @@ export async function searchEventsAction(filters: {
   // Prefer the dedicated cover image (T-055) over the first photo — including
   // for events with no photos. A dedicated cover has no thumbnail.
   for (const [id, path] of coverOverride) {
-    const current = stats.get(id) ?? { count: 0, coverPath: null, coverThumbReady: false };
+    const current = stats.get(id) ?? {
+      count: 0,
+      coverPath: null,
+      coverThumbReady: false,
+      coverThumbVersion: null,
+    };
     current.coverPath = path;
     current.coverThumbReady = false;
     stats.set(id, current);
@@ -110,7 +115,9 @@ export async function searchEventsAction(filters: {
         coverUrl: coverUrls.get(event.id) ?? null,
         coverThumbUrl: (() => {
           const s = stats.get(event.id);
-          return s?.coverThumbReady && s.coverPath ? thumbRelativeUrl(s.coverPath, 'small') : null;
+          return s?.coverThumbReady && s.coverPath
+            ? thumbRelativeUrl(s.coverPath, 'small', s.coverThumbVersion)
+            : null;
         })(),
         photographerUsername: profile?.username ?? null,
         photographerDisplayName: profile?.display_name ?? null,
