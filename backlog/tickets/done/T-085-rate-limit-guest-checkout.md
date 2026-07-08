@@ -1,11 +1,11 @@
 # T-085 · [Seguridad] Rate limit en el checkout de invitados (API paga de Stripe sin límite ni auth)
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/rate-limit-guest-checkout`  (tipo = fix)
 - **OpenSpec change:** —  (patrón existente de `src/lib/rate-limit.ts`, un call site)
-- **PR:** —
+- **PR:** #139
 - **Origen:** auditoría de caching T-083 (`docs/CACHING_AUDIT.md`, **F-15**, ítem #2 del plan)
 
 ## Requerimiento
@@ -16,14 +16,14 @@ Es el gap de abuso más serio del inventario de limiters. Aplicar el limiter exi
 IP, espejando el del checkout autenticado (`stripe-checkout:${uid}`, 20/h).
 
 ## Criterio de aceptación (Definition of Done)
-- [ ] **Cobertura previa:** test de caracterización del flujo actual de guest checkout (crea sesión
+- [x] **Cobertura previa:** test de caracterización del flujo actual de guest checkout (crea sesión
       con carrito válido) en verde **antes** del cambio
-- [ ] `createGuestCheckoutSessionAction` aplica `rateLimit` (p.ej. `guest-checkout:${ip}`, límite
+- [x] `createGuestCheckoutSessionAction` aplica `rateLimit` (p.ej. `guest-checkout:${ip}`, límite
       conservador ~10/h) y devuelve error amigable al exceder
-- [ ] El flujo legítimo de compra guest no se ve afectado (límite holgado para uso real)
-- [ ] test de regresión que falla antes y pasa después (N+1 llamadas → rechazada)
-- [ ] strings de error en `en.json` y `es.json` si el error llega a UI
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] El flujo legítimo de compra guest no se ve afectado (límite holgado para uso real)
+- [x] test de regresión que falla antes y pasa después (N+1 llamadas → rechazada)
+- [x] strings de error en `en.json` y `es.json` si el error llega a UI
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
 - Mismo patrón que `api/stripe/checkout/route.ts:27`. Usar `getClientIp` — coordinar con **T-086**
