@@ -12,7 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { type ReactNode, useRef } from 'react';
 import { PhotoCarousel } from '@/components/photo-carousel';
 import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
 import { Button } from '@/components/ui/button';
@@ -123,6 +123,7 @@ export function PhotoDetailModal({
   const nav = useCarouselNavigation({ items, open, initialIndex, onIndexChange });
   const { isLoaded, markLoaded } = useImageLoad();
   const current = nav.currentItem;
+  const contentRef = useRef<HTMLDivElement>(null);
 
   // The Dialog owns Escape/backdrop close; wire only the arrow keys here.
   useKeyboardNav({ enabled: open, onPrevious: nav.previous, onNext: nav.next });
@@ -201,7 +202,20 @@ export function PhotoDetailModal({
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         {/* Mobile: height wraps the content (image + panel) so there's no empty
             transparent strip below. Desktop: fills 92dvh as a split panel. */}
-        <DialogPrimitive.Content className="fixed top-1/2 left-1/2 z-50 flex max-h-[92dvh] w-[96vw] max-w-[1400px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl bg-white shadow-2xl duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 md:h-[92dvh] md:flex-row">
+        <DialogPrimitive.Content
+          ref={contentRef}
+          // Radix's default auto-focus targets the first focusable descendant
+          // — here that's the carousel's Previous arrow, which then visually
+          // reads as "selected" no matter which arrow the user actually
+          // clicks afterwards. Redirect the initial focus to the dialog
+          // container itself (still announced to screen readers via the
+          // title below) instead of an arbitrary nav control.
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            contentRef.current?.focus();
+          }}
+          className="fixed top-1/2 left-1/2 z-50 flex max-h-[92dvh] w-[96vw] max-w-[1400px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl bg-white shadow-2xl duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 md:h-[92dvh] md:flex-row"
+        >
           <DialogPrimitive.Title className="sr-only">{labels.title}</DialogPrimitive.Title>
 
           {/* Image side — a fixed slice on mobile (so the card wraps its

@@ -6,7 +6,7 @@
  * crashes and pins the panel content.
  */
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // next/image → a plain <img> so the carousel renders in happy-dom.
@@ -110,5 +110,50 @@ describe('PhotoDetailModal', () => {
 
     expect(screen.getByText('Download')).toBeTruthy();
     expect(screen.queryByText('Add to Cart')).toBeNull();
+  });
+
+  // T-077 — Radix's default open-autofocus landed on the carousel's Previous
+  // arrow (the first focusable descendant), which then visually read as
+  // "selected" no matter which arrow the user actually clicked afterwards.
+  describe('arrow focus (T-077)', () => {
+    const threeItems = [
+      { id: 'p1', url: '/api/public/preview/p1', alt: 'Foto 1' },
+      { id: 'p2', url: '/api/public/preview/p2', alt: 'Foto 2' },
+      { id: 'p3', url: '/api/public/preview/p3', alt: 'Foto 3' },
+    ];
+
+    it('does not auto-focus the Previous arrow when the modal opens', () => {
+      render(
+        <PhotoDetailModal
+          items={threeItems}
+          open
+          onClose={() => {}}
+          labels={labels}
+          locale="en"
+          pricePerPhoto={10}
+          showAddToCart
+        />,
+      );
+
+      expect(document.activeElement?.getAttribute('aria-label')).not.toBe('Previous photo');
+    });
+
+    it('does not leave focus on the Previous arrow after clicking Next', () => {
+      render(
+        <PhotoDetailModal
+          items={threeItems}
+          open
+          onClose={() => {}}
+          labels={labels}
+          locale="en"
+          pricePerPhoto={10}
+          showAddToCart
+        />,
+      );
+
+      fireEvent.click(screen.getByLabelText('Next photo'));
+
+      expect(document.activeElement?.getAttribute('aria-label')).not.toBe('Previous photo');
+    });
   });
 });
