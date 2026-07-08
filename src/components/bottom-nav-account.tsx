@@ -17,7 +17,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { createClient } from '@/database/client';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
-import { accountDropdownLinks } from '@/lib/nav/photographer-nav';
 import type { RoleSlug } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 
@@ -75,10 +74,6 @@ export function BottomNavAccount({
   const pathWithoutLang = pathname.replace(/^\/(es|en)/, '') || '/';
   const isPhotographer = activeRole === 'photographer';
   const otherRole: RoleSlug = isPhotographer ? 'talent' : 'photographer';
-
-  // Profile/Settings visibility is shared with the desktop dropdown via the
-  // pure helper; on mobile both roles surface them (the bottom nav omits them).
-  const linkKeys = accountDropdownLinks(activeRole, 'mobile-bottom');
 
   // Photographer "Profile" → the dashboard-wrapped preview so the dashboard
   // chrome stays visible; talent goes straight to their profile page.
@@ -197,29 +192,24 @@ export function BottomNavAccount({
           <span>{labels.switchRoleLabel}</span>
         </DropdownMenuItem>
 
-        {linkKeys.length > 0 ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              {linkKeys.includes('profile') ? (
-                <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
-                  <Link href={lp(profileHref)}>
-                    <User className="mr-2 h-4 w-4" />
-                    <span>{labels.profile}</span>
-                  </Link>
-                </DropdownMenuItem>
-              ) : null}
-              {linkKeys.includes('settings') ? (
-                <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
-                  <Link href={lp(settingsHref)}>
-                    <Settings className="mr-2 h-4 w-4" />
-                    <span>{labels.settings}</span>
-                  </Link>
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuGroup>
-          </>
-        ) : null}
+        {/* Profile + Settings — always surfaced. On mobile the bottom nav only
+            holds the primary work links, so this is their access point;
+            Payouts/Billing live inside Settings. */}
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
+            <Link href={lp(profileHref)}>
+              <User className="mr-2 h-4 w-4" />
+              <span>{labels.profile}</span>
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
+            <Link href={lp(settingsHref)}>
+              <Settings className="mr-2 h-4 w-4" />
+              <span>{labels.settings}</span>
+            </Link>
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
 
         <DropdownMenuSeparator />
         <DropdownMenuGroup>

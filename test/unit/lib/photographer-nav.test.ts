@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  accountDropdownLinks,
   buildPhotographerSidebarItems,
   showSidebarSupportFeedback,
 } from '@/lib/nav/photographer-nav';
@@ -55,20 +54,5 @@ describe('showSidebarSupportFeedback (T-075)', () => {
 
   it('keeps it for talent', () => {
     expect(showSidebarSupportFeedback('talent')).toBe(true);
-  });
-});
-
-describe('accountDropdownLinks (T-075)', () => {
-  it('drops Profile/Settings from the photographer desktop dropdown (the sidebar carries them)', () => {
-    expect(accountDropdownLinks('photographer', 'desktop-header')).toEqual([]);
-  });
-
-  it('keeps Profile/Settings in the photographer mobile dropdown (the bottom nav omits them)', () => {
-    expect(accountDropdownLinks('photographer', 'mobile-bottom')).toEqual(['profile', 'settings']);
-  });
-
-  it('keeps Profile/Settings for talent on both surfaces (no sidebar to carry them)', () => {
-    expect(accountDropdownLinks('talent', 'desktop-header')).toEqual(['profile', 'settings']);
-    expect(accountDropdownLinks('talent', 'mobile-bottom')).toEqual(['profile', 'settings']);
   });
 });

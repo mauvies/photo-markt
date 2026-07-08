@@ -16,7 +16,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { createClient } from '@/database/client';
-import { accountDropdownLinks } from '@/lib/nav/photographer-nav';
 import type { RoleSlug } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 
@@ -113,12 +112,6 @@ export function DashboardUserMenu({
   const isProfileActive = pathname.startsWith(profileUrl);
   const isSettingsActive = pathname.startsWith(settingsUrl);
 
-  // Profile/Settings appear in this desktop dropdown only when the role's
-  // primary nav doesn't already carry them. For photographers that's the
-  // sidebar (which now links both + Settings), so the dropdown drops them;
-  // talent has no sidebar, so they stay. Shared with the mobile bottom nav.
-  const linkKeys = accountDropdownLinks(optimisticRole, 'desktop-header');
-
   const otherRole: RoleSlug = optimisticRole === 'photographer' ? 'talent' : 'photographer';
   const photographerLabel = navLabels.rolePhotographer ?? 'Photographer';
   const talentLabel = navLabels.roleTalent ?? 'Talent';
@@ -196,35 +189,28 @@ export function DashboardUserMenu({
           </span>
         </DropdownMenuItem>
 
-        {linkKeys.length > 0 ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              {linkKeys.includes('profile') ? (
-                <DropdownMenuItem
-                  asChild
-                  className={cn(MENU_ITEM_CLASS, isProfileActive && 'bg-accent')}
-                >
-                  <Link href={profileUrl}>
-                    <User className="mr-2 h-4 w-4" />
-                    <span>{navLabels.profile ?? 'Profile'}</span>
-                  </Link>
-                </DropdownMenuItem>
-              ) : null}
-              {linkKeys.includes('settings') ? (
-                <DropdownMenuItem
-                  asChild
-                  className={cn(MENU_ITEM_CLASS, isSettingsActive && 'bg-accent')}
-                >
-                  <Link href={settingsUrl}>
-                    <Settings className="mr-2 h-4 w-4" />
-                    <span>{navLabels.settings ?? 'Settings'}</span>
-                  </Link>
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuGroup>
-          </>
-        ) : null}
+        {/* Profile + Settings — surfaced in the dropdown on every role/viewport
+            (the photographer sidebar links them too; having them here as well
+            is intentional). Payouts/Billing are not — they live inside
+            Settings. */}
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem asChild className={cn(MENU_ITEM_CLASS, isProfileActive && 'bg-accent')}>
+            <Link href={profileUrl}>
+              <User className="mr-2 h-4 w-4" />
+              <span>{navLabels.profile ?? 'Profile'}</span>
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            asChild
+            className={cn(MENU_ITEM_CLASS, isSettingsActive && 'bg-accent')}
+          >
+            <Link href={settingsUrl}>
+              <Settings className="mr-2 h-4 w-4" />
+              <span>{navLabels.settings ?? 'Settings'}</span>
+            </Link>
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>

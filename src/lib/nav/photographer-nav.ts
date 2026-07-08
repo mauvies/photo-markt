@@ -64,29 +64,3 @@ export function buildPhotographerSidebarItems(
 export function showSidebarSupportFeedback(role: RoleSlug): boolean {
   return role !== 'photographer';
 }
-
-export type AccountMenuSurface = 'desktop-header' | 'mobile-bottom';
-export type AccountLinkKey = 'profile' | 'settings';
-
-/**
- * Which account links (Profile / Settings) the avatar dropdown surfaces, by
- * role and viewport surface.
- *
- * - Photographer + desktop header: none — the sidebar beside it already links
- *   both Profile and Settings, so repeating them in the dropdown is redundant.
- * - Photographer + mobile bottom nav: both — the bottom nav only holds the
- *   primary work links (Overview/Events/Create/Sales), so Profile and Settings
- *   are only reachable here.
- * - Talent (either surface): both — talent has no sidebar and its top nav
- *   omits Settings, so the dropdown is their access point.
- *
- * Payouts and Billing are never surfaced in the dropdown anymore; they live
- * inside the Settings page (reachable via the Settings link above).
- */
-export function accountDropdownLinks(
-  role: RoleSlug,
-  surface: AccountMenuSurface,
-): AccountLinkKey[] {
-  if (role === 'photographer' && surface === 'desktop-header') return [];
-  return ['profile', 'settings'];
-}
