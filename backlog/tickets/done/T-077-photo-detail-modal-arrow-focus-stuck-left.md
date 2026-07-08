@@ -1,11 +1,22 @@
 # T-077 · Bug: en el photo-detail-modal, al navegar con las flechas siempre queda el focus/selected en la flecha izquierda
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/photo-detail-modal-arrow-focus-stuck-left`  (tipo = fix)
-- **OpenSpec change:** —  (fix aislado de UI/a11y, implementar directo)
-- **PR:** —
+- **OpenSpec change:** — (fix aislado de UI/a11y, implementado directo)
+- **PR:** #135
+
+## Resolución
+**Causa raíz confirmada con un repro en jsdom** (render real de `PhotoDetailModal` + click en las flechas, inspeccionando `document.activeElement`) antes de tocar código: el auto-focus por defecto de **Radix Dialog** al abrir el modal enfoca el primer elemento tabbable del contenido — en el orden del DOM de `PhotoDetailModal` eso es la flecha **"Previous"** del `PhotoCarousel` compartido — y como los botones no tenían estilo `focus-visible` (solo dependían del outline `:focus` default del navegador), ese foco quedaba visualmente "pegado" ahí sin importar cuál flecha se pulsara después.
+
+**Fix de dos partes:**
+1. `src/components/photo-detail-modal.tsx` — se agrega `onOpenAutoFocus` en `DialogPrimitive.Content` (con `ref` propio) que hace `preventDefault()` y redirige el foco inicial al contenedor del diálogo (`contentRef.current?.focus()`, ya tiene `tabIndex={-1}` por Radix) en vez de una flecha arbitraria. Sigue anunciado a lectores de pantalla vía el `DialogPrimitive.Title` (sr-only) existente.
+2. `src/components/photo-carousel.tsx` (compartido por `PhotoDetailModal` y `PhotoLightbox`) — las flechas prev/next pasan de depender del `:focus` default a `focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80` (mismo patrón que ya usa el `Button` de shadcn vía `button-variants.ts`). Así un click de mouse/touch nunca deja un anillo pegado en ninguna flecha, mientras Tab (navegación por teclado) sigue mostrando el anillo correctamente en la que corresponda.
+
+**Alcance:** al vivir el fix en el modal compartido + el carousel compartido, aplica automáticamente a las 3 superficies que montan `PhotoDetailModal` (evento público, dashboard de talento, resultados de búsqueda facial) sin tocar cada viewer por separado. `PhotoLightbox` (eventos gratis/fotógrafo) no está construido sobre Radix Dialog (es un `createPortal` simple sin lógica de auto-focus), así que nunca tuvo el bug de auto-focus — solo se beneficia del cleanup de `focus-visible` en las flechas, sin regresión.
+
+**Tests:** `test/unit/components/photo-detail-modal.test.tsx` — 2 casos nuevos (falla antes/pasa después): sin auto-focus en "Previous" al abrir el modal, y "Previous" no retiene el foco tras hacer click en "Next". `pnpm typecheck && pnpm lint && pnpm test` verde (850). **Pendiente (usuario):** smoke test manual en browser (click con mouse + Tab con teclado) antes de mergear.
 
 ## Requerimiento
 En el **modal de detalle de foto a dos paneles** (T-066, PR #128) — el que se usa para ver la imagen en detalle en **eventos públicos de pago** (foto con marca de agua) — al pasar de foto con las flechas prev/next, **presione la que presione (izquierda o derecha), siempre la flecha izquierda muestra el estado de focus/selected**. Nunca la derecha. Debería corregirse: pulsar una flecha no debe dejar un anillo de focus/estado "seleccionado" persistente en la flecha equivocada (ni en ninguna, con ratón); y la navegación por teclado debe seguir siendo coherente y accesible.
