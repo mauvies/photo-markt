@@ -1,7 +1,7 @@
 # T-075 · Rediseño de la navegación del dashboard del fotógrafo (añadir Configuración, renombrar Ganancias→Ventas, reubicar ítems)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `feat/photographer-nav-redesign`  (tipo = feat)
 - **OpenSpec change:** —  (se crea al ejecutar — toca sidebar + dropdown del avatar + bottom nav mobile + diccionarios; >5 archivos probable)

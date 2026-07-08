@@ -12,7 +12,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
 | 17 | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | T-067 | todo |
-| 16 | P2 | T-075 | Rediseño de la navegación del dashboard del fotógrafo (añadir Configuración, Ganancias→Ventas, reubicar ítems) | — | todo |
+| 16 | P2 | T-075 | Rediseño de la navegación del dashboard del fotógrafo (añadir Configuración, Ganancias→Ventas, reubicar ítems) | — | doing |
 | 18 | P2 | T-077 | [Bug] Photo-detail-modal: al navegar con flechas siempre queda el focus/selected en la izquierda | — | todo |
 | 19 | P2 | T-078 | [Bug] El blur de caras no llega a thumbnails ya cacheados al habilitar IA después de subir (hueco de T-068) | T-068 | todo |
 | 20 | P2 | T-079 | Unificar el control "Clear selection" en desktop con mobile (ícono X en vez de botón "Clear") | — | todo |
