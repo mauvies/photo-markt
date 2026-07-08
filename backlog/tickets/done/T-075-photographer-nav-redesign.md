@@ -13,8 +13,9 @@ Rediseño en las 3 superficies de nav del fotógrafo, con la composición "qué 
 - **Sidebar → 6 enlaces** (Resumen · Eventos · Crear evento · Ventas · Perfil · Configuración): se añadió **Configuración** (abre la página de settings con tabs existente, `/dashboard/photographer/settings`) y se reordenó.
 - **Ganancias → Ventas** (solo label): se reusa la key existente `dashboard.sales` (= "Ventas"/"Sales"), sin editar diccionarios. El destino `/dashboard/photographer/sales` y los redirects legacy `/earnings`·`/ganancias`·`/ventas` quedan intactos.
 - **Soporte y Feedback** salen del footer del sidebar → al dropdown del avatar.
-- **Dropdown desktop (fotógrafo):** se quitaron Perfil, Configuración, Pagos y Facturación (redundantes con el sidebar / dentro de Settings). Conserva info de usuario, indicador de rol, switcher de rol, Soporte, Feedback, Cerrar sesión.
+- **Dropdown desktop (fotógrafo):** se quitaron Pagos y Facturación (viven dentro de Settings). **Perfil y Configuración se mantienen** en el dropdown además del sidebar (ajuste pedido por el usuario en review del PR). Conserva info de usuario, indicador de rol, switcher de rol, Soporte, Feedback, Cerrar sesión.
 - **Bottom nav mobile:** sigue en 4 enlaces primarios (Resumen, Eventos, Crear evento, Ventas) + avatar. El dropdown mobile conserva **Perfil + Configuración** (única vía en mobile) y también soltó Pagos/Facturación.
+- Como el dropdown de cuenta quedó uniforme por rol/viewport, no lleva helper de gating; el helper puro cubre solo la composición del sidebar y la visibilidad de Soporte/Feedback.
 - **Talent role-gated para quedar sin cambios:** los 2 componentes de dropdown (`DashboardUserMenu`, `BottomNavAccount`) se comparten con talent; todos los quites van detrás de checks de rol/superficie. Se limpió el plumbing muerto de `billing` en la ruta de talent.
 - **La página pública Perfil y el tab Configuración → Perfil siguen distintos** (rutas sin cambio).
 
