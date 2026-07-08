@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 18 | P2 | T-077 | [Bug] Photo-detail-modal: al navegar con flechas siempre queda el focus/selected en la izquierda | — | todo |
+| 18 | P2 | T-077 | [Bug] Photo-detail-modal: al navegar con flechas siempre queda el focus/selected en la izquierda | — | doing |
 | 19 | P2 | T-078 | [Bug] El blur de caras no llega a thumbnails ya cacheados al habilitar IA después de subir (hueco de T-068) | T-068 | todo |
 | 20 | P2 | T-079 | Unificar el control "Clear selection" en desktop con mobile (ícono X en vez de botón "Clear") | — | todo |
 | 21 | P2 | T-080 | Título/descripción de "Encuéntrate" no reflejan que también existe búsqueda por dorsal | — | todo |

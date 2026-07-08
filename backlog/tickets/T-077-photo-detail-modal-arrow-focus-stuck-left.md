@@ -1,7 +1,7 @@
 # T-077 · Bug: en el photo-detail-modal, al navegar con las flechas siempre queda el focus/selected en la flecha izquierda
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `fix/photo-detail-modal-arrow-focus-stuck-left`  (tipo = fix)
 - **OpenSpec change:** —  (fix aislado de UI/a11y, implementar directo)
