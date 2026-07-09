@@ -1238,8 +1238,6 @@
     "enableFailed": "Couldn't update bib detection. Please try again.",
     "enabled": "On — new and existing photos are scanned for bib numbers.",
     "disabled": "Off — bib numbers aren't detected for this event.",
-    "searchTitle": "Search by bib number",
-    "findDescription": "Search this event by your race bib number.",
     "bibButton": "Bib search",
     "searchPlaceholder": "Enter a bib number",
     "searchButton": "Search",
@@ -1320,9 +1318,11 @@
   },
   "aiSearch": {
     "banner": {
-      "titleReady": "Find yourself in this event",
+      "title": "Find your photos",
       "titleIndexing": "Processing photos…",
-      "descriptionReady": "Upload a selfie and we'll surface the photos with you in them.",
+      "descriptionFace": "Upload a selfie and we'll show you the photos you appear in.",
+      "descriptionBib": "Enter your bib number and we'll show you your photos.",
+      "descriptionBoth": "Upload a selfie or enter your bib number and we'll show you your photos.",
       "descriptionIndexing": "You can still search what's ready now — more matches may appear once indexing completes.",
       "faceButton": "Face search"
     },

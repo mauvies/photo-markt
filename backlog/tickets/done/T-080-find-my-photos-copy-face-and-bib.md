@@ -1,11 +1,11 @@
 # T-080 · Título/descripción de "Encuéntrate" no reflejan que también existe búsqueda por dorsal
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/find-my-photos-copy-face-and-bib`  (tipo = fix)
-- **OpenSpec change:** — (probablemente no aplica — cambio de copy + lógica de selección en un componente ya existente; confirmar al ejecutar)
-- **PR:** —
+- **OpenSpec change:** — (no aplicó — copy + helper puro de selección en componente existente)
+- **PR:** #143
 
 ## Requerimiento
 La sección "Encuéntrate en este evento" (banner "find my photos") en las páginas de evento tiene un título y descripción que asumen **solo búsqueda facial** ("Sube una selfie..."), pero un evento puede tener búsqueda facial, por dorsal, o ambas. Actualizar:
@@ -19,14 +19,20 @@ La sección "Encuéntrate en este evento" (banner "find my photos") en las pági
 Si ningún método está habilitado, la sección no debe renderizar (comportamiento ya existente — verificar que se mantiene).
 
 ## Criterio de aceptación (Definition of Done)
-- [ ] El título en las vistas aplicables dice "Encuentra tus fotos" / "Find your photos"
-- [ ] La descripción es condicional y coincide con los métodos habilitados del evento: copy solo-selfie (solo facial), solo-dorsal (solo bib), combinada (ambos)
-- [ ] Copy correcto en español e inglés
-- [ ] Aplica en `/events/[shareCode]` y `/dashboard/talent/events/[id]`; el dashboard del fotógrafo queda sin cambios (no muestra esta sección)
-- [ ] Si ningún método está habilitado, la sección sigue sin renderizar (test de regresión que confirme que no rompió)
-- [ ] test de regresión/feature que falla antes y pasa después (selección de copy: facial-only / dorsal-only / ambos)
-- [ ] strings nuevos en `en.json` y `es.json`; limpiar claves que queden sin uso
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] El título en las vistas aplicables dice "Encuentra tus fotos" / "Find your photos"
+- [x] La descripción es condicional y coincide con los métodos habilitados del evento: copy solo-selfie (solo facial), solo-dorsal (solo bib), combinada (ambos)
+- [x] Copy correcto en español e inglés
+- [x] Aplica en `/events/[shareCode]` y `/dashboard/talent/events/[id]`; el dashboard del fotógrafo queda sin cambios (no muestra esta sección)
+- [x] Si ningún método está habilitado, la sección sigue sin renderizar (`resolveFindMyPhotos` intacto; cubierto por tests existentes)
+- [x] test de regresión/feature que falla antes y pasa después (helper `resolveFindMyPhotosCopy`: facial-only / dorsal-only / ambos + indexing)
+- [x] strings nuevos en `en.json` y `es.json`; eliminadas las huérfanas `aiSearch.banner.titleReady`/`descriptionReady` y `bibDetection.searchTitle`/`findDescription`
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
+
+## Nota de implementación
+La selección de copy se extrajo a un helper puro `resolveFindMyPhotosCopy` (junto a `resolveFindMyPhotos`),
+testeado para las 3 combinaciones + el caso indexing. El bug exacto (líneas ~86-97 del componente) era
+que con ambos métodos habilitados se mostraba el copy solo-facial; ahora hay una 3ª rama "ambos". El
+título dejó de ser específico de facial ("Encuéntrate en este evento") a neutral ("Encuentra tus fotos").
 
 ## Notas
 - **Componente exacto:** `src/components/find-my-photos-banner.tsx` (`FindMyPhotosBanner`, interfaz `FindMyPhotosLabels`). La visibilidad (ocultar si ningún método habilitado) ya vive en el helper puro `resolveFindMyPhotos` (`src/lib/find-my-photos.ts`, de T-065) — **no tocar esa lógica**, ya hace lo que pide el AC de "si ninguno, no renderiza".

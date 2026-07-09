@@ -1238,8 +1238,6 @@
     "enableFailed": "No se pudo actualizar la detección de dorsales. Inténtalo de nuevo.",
     "enabled": "Activado: se escanean las fotos nuevas y existentes en busca de dorsales.",
     "disabled": "Desactivado: no se detectan dorsales en este evento.",
-    "searchTitle": "Buscar por número de dorsal",
-    "findDescription": "Busca en este evento por tu número de dorsal.",
     "bibButton": "Búsqueda por dorsal",
     "searchPlaceholder": "Introduce un número de dorsal",
     "searchButton": "Buscar",
@@ -1320,9 +1318,11 @@
   },
   "aiSearch": {
     "banner": {
-      "titleReady": "Encuéntrate en este evento",
+      "title": "Encuentra tus fotos",
       "titleIndexing": "Procesando fotos…",
-      "descriptionReady": "Sube una selfie y te mostraremos las fotos en las que apareces.",
+      "descriptionFace": "Sube una selfie y te mostraremos las fotos en las que apareces.",
+      "descriptionBib": "Introduce tu número de dorsal y te mostraremos tus fotos.",
+      "descriptionBoth": "Sube una selfie o introduce tu número de dorsal y te mostraremos tus fotos.",
       "descriptionIndexing": "Aún puedes buscar lo que ya está listo — pueden aparecer más coincidencias cuando termine la indexación.",
       "faceButton": "Búsqueda facial"
     },

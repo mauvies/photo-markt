@@ -11,7 +11,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 25 | P2 | T-080 | Título/descripción de "Encuéntrate" no reflejan que también existe búsqueda por dorsal | — | todo |
 | 26 | P2 | T-081 | Búsqueda por dorsal: abrir un modal en vez de un input inline | — | todo |
 | 27 | P2 | T-082 | Reposicionar "Save event" y "Share" como iconos junto al título del evento | — | todo |
 | 28 | P2 | T-088 | [Cache] Mutaciones de fotos revalidan también los tags de listados (home/búsqueda/perfil/dashboard) | T-084 | todo |
@@ -47,6 +46,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-080** · UI/copy: el banner "Encuéntrate" (`find-my-photos-banner.tsx`) asumía copy solo-facial (título "Encuéntrate en este evento" + descripción de selfie), pero un evento puede tener facial, dorsal o ambos — y con **ambos** habilitados mostraba la descripción solo-facial, ignorando el dorsal (bug reportado). Título ahora neutral ("Encuentra tus fotos"/"Find your photos") y descripción condicional por método: solo-facial / solo-dorsal / combinada. El estado indexing (fotos aún procesando) es ortogonal y mantiene su copy. La selección se extrajo a un helper puro `resolveFindMyPhotosCopy` (junto a `resolveFindMyPhotos`, cuya lógica de visibilidad quedó intacta), testeado para las 3 combinaciones + indexing. Reemplazadas las labels `titleReady`/`descriptionReady`/`bibOnly*` por `title`/`descriptionFace`/`descriptionBib`/`descriptionBoth`; eliminadas las claves i18n huérfanas `aiSearch.banner.titleReady`/`descriptionReady` y `bibDetection.searchTitle`/`findDescription` (en+es). Test de regresión (el caso "ambos" fallaba antes/pasa después) — PR #143
 
 - **T-079** · UI/consistencia: en modo selección, desktop y mobile usaban controles distintos para limpiar — mobile un ícono X a la izquierda del contador, desktop un botón "Clear" en la fila de acciones. Unificado en el patrón de mobile: el ícono X (que ya llamaba al mismo `onClear`) ahora se muestra en todos los viewports (quitado el `md:hidden`) y el botón "Clear" se eliminó. Fix acotado al componente compartido `photo-selection-toolbar.tsx` (único lugar que renderiza la barra, vía `PhotoGallery`), así que aplica de una a las 4 superficies (fotógrafo/talento/público/búsqueda facial) + bonus (favoritos/perfil de talento). Se borró el prop `clearLabel`, el campo `clear` de ambos tipos de labels, y las claves i18n huérfanas `events.clearButton` / `talentPhotos.clear` (grep confirmó cero lectores). Test de regresión: sin botón "Clear" en modo selección + el X ya no lleva `md:hidden` (falla antes/pasa después). Ajuste de estilo del usuario: quitado el `-ml-1` del X — PR #142
 
