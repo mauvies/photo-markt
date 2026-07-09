@@ -673,7 +673,13 @@ export function EventPhotoViewer({
     [bulkDownload],
   );
 
-  const toolbarClassName = 'sticky top-[var(--header-height)] -mx-4 px-3 md:-mx-6 md:px-4';
+  // -mx-3 exactly cancels the dashboard shell's own `px-3` on mobile (and
+  // md:-mx-6 cancels its `md:p-6`) so the toolbar's bled edge lands flush
+  // with the viewport. A prior -mx-4 overshot the shell's px-3 by 4px per
+  // side (8px total scrollWidth over the viewport, confirmed via DevTools),
+  // which mobile browsers rendered as a small, permanent zoom-in on load —
+  // real horizontal overflow, not a viewport/scale bug.
+  const toolbarClassName = 'sticky top-[var(--header-height)] -mx-3 px-3 md:-mx-6 md:px-4';
   // Bleed the grid nearly full-width on mobile, leaving a 2px gap at each edge
   // (-mx-3.5 against the page's px-4); padded again from sm up so the toolbar
   // stays the only inset chrome on phones.
