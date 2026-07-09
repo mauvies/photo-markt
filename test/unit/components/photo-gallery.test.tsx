@@ -38,7 +38,6 @@ afterEach(cleanup);
 
 const labels = {
   select: 'Select',
-  clear: 'Clear',
   countNone: 'No photos selected',
   countOne: '1 selected',
   countMany: '{n} selected',
@@ -72,6 +71,19 @@ describe('PhotoGallery', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Exit' }));
     expect(screen.queryByText('No photos selected')).toBeNull();
     expect(screen.getByRole('button', { name: 'Select' })).toBeTruthy();
+  });
+
+  it('unifies clearing on the X icon: no separate Clear button, and the X is not desktop-hidden (T-079)', () => {
+    render(<PhotoGallery items={items} galleryProps={galleryProps} labels={labels} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+
+    // The old desktop-only "Clear" button is gone from every viewport.
+    expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull();
+
+    // The X (exit/clear) icon is the single clear control and is no longer
+    // hidden on desktop (`md:hidden` removed), so it shows on all viewports.
+    const exit = screen.getByRole('button', { name: 'Exit' });
+    expect(exit.className).not.toContain('md:hidden');
   });
 
   it('runs a bulk action with the selected ids', () => {

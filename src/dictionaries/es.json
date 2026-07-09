@@ -202,7 +202,6 @@
     "noPhotosYet": "Aún no hay fotos",
     "perPhoto": "por foto",
     "selectButton": "Seleccionar",
-    "clearButton": "Limpiar",
     "exitSelection": "Salir de la selección",
     "removeButton": "Eliminar",
     "tagTalentButton": "Etiquetar talento",
@@ -642,7 +641,6 @@
   "talentPhotos": {
     "noPhotosTagged": "Aún no hay fotos etiquetadas. Los fotógrafos te etiquetarán en fotos de eventos.",
     "select": "Seleccionar",
-    "clear": "Limpiar",
     "exitSelection": "Salir de la selección",
     "remove": "Eliminar",
     "addToCart": "Añadir al carrito",

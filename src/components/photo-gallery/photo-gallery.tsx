@@ -62,7 +62,6 @@ interface PhotoGalleryProps {
 
 const EMPTY_SELECTION_LABELS: PhotoGallerySelectionLabels = {
   select: '',
-  clear: '',
   countNone: '',
   countOne: '',
   countMany: '',
@@ -200,7 +199,6 @@ export function PhotoGallery({
           isSelecting={selection.isSelecting}
           countLabel={countLabel}
           selectLabel={labels.select}
-          clearLabel={labels.clear}
           exitLabel={labels.exitSelection}
           onStartSelecting={selection.startSelecting}
           onClear={selection.clear}

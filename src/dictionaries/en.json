@@ -202,7 +202,6 @@
     "noPhotosYet": "No photos yet",
     "perPhoto": "per photo",
     "selectButton": "Select",
-    "clearButton": "Clear",
     "exitSelection": "Exit selection",
     "removeButton": "Remove",
     "tagTalentButton": "Tag talent",
@@ -642,7 +641,6 @@
   "talentPhotos": {
     "noPhotosTagged": "No photos tagged yet. Photographers will tag you in photos from events.",
     "select": "Select",
-    "clear": "Clear",
     "exitSelection": "Exit selection",
     "remove": "Remove",
     "addToCart": "Add to cart",

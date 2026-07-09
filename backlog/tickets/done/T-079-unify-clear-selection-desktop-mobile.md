@@ -1,11 +1,11 @@
 # T-079 · Unificar el control "Clear selection" en desktop con mobile (ícono X en vez de botón "Clear")
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/unify-clear-selection-desktop-mobile`  (tipo = fix)
-- **OpenSpec change:** — (probablemente no aplica — cambio acotado a un componente compartido ya existente; confirmar al ejecutar)
-- **PR:** —
+- **OpenSpec change:** — (no aplicó — cambio acotado al componente compartido `photo-selection-toolbar.tsx`)
+- **PR:** #142
 
 ## Requerimiento
 En modo selección de fotos, desktop y mobile usan controles distintos para limpiar la selección: desktop tiene un botón "Clear"/"Limpiar" en la barra de acciones; mobile usa un ícono X a la izquierda del contador de seleccionadas (ej. "✕ 3 selected"). Unificar: desktop debe usar el mismo patrón que mobile (ícono X junto al contador) y el botón "Clear" desaparece de ambos.
@@ -15,14 +15,14 @@ Aplica a las vistas: `/dashboard/photographer/events/[id]`, `/dashboard/talent/e
 **Reusar la implementación existente del ícono X de mobile** — no construir una paralela; preferir que la barra de selección sea un único componente/comportamiento compartido entre viewports.
 
 ## Criterio de aceptación (Definition of Done)
-- [ ] En desktop, el botón "Clear" desaparece de la barra de acciones en modo selección
-- [ ] En desktop, aparece el ícono X a la izquierda del contador de seleccionadas y limpia la selección al hacer click, igual que en mobile
-- [ ] El comportamiento en mobile no cambia
-- [ ] El comportamiento es consistente en las 4 superficies: dashboard fotógrafo, dashboard talento, evento público, resultados de búsqueda facial
-- [ ] Sin regresión en el modo selección, el resto de acciones de la barra, ni el contador de seleccionadas
-- [ ] strings nuevos en `en.json` y `es.json` si aplica; **eliminar** las claves `clearButton`/`bulkDownload.clear` si quedan sin uso tras el cambio
-- [ ] test de regresión/feature que falla antes y pasa después
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] En desktop, el botón "Clear" desaparece de la barra de acciones en modo selección
+- [x] En desktop, aparece el ícono X a la izquierda del contador de seleccionadas y limpia la selección al hacer click, igual que en mobile
+- [x] El comportamiento en mobile no cambia
+- [x] El comportamiento es consistente en las 4 superficies: dashboard fotógrafo, dashboard talento, evento público, resultados de búsqueda facial
+- [x] Sin regresión en el modo selección, el resto de acciones de la barra, ni el contador de seleccionadas
+- [x] strings: eliminadas las claves huérfanas `events.clearButton` y `talentPhotos.clear` (grep confirmó cero lectores tras el cambio)
+- [x] test de regresión/feature que falla antes y pasa después (sin botón "Clear" + el X ya no lleva `md:hidden`)
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
 - **Ya es un componente compartido** (buena noticia — reduce el riesgo/alcance de este ticket): `src/components/photo-selection-toolbar.tsx` (`PhotoSelectionToolbar`) es el ÚNICO lugar que renderiza la barra de selección, consumido solo por `src/components/photo-gallery/photo-gallery.tsx` (`PhotoGallery`). Todas las superficies listadas ya pasan por ahí:

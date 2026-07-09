@@ -8,7 +8,6 @@ import { cn } from '@/lib/utils';
 /** Localized copy for the selection toolbar + bulk-download / bulk-cart actions. */
 export type BulkDownloadLabels = {
   select: string;
-  clear: string;
   countNone: string;
   countOne: string;
   /** Template with `{n}`. */
@@ -38,8 +37,7 @@ interface PhotoSelectionToolbarProps {
   /** Localized "N photos selected" line, shown while selecting. */
   countLabel: string;
   selectLabel: string;
-  clearLabel: string;
-  /** aria-label for the mobile exit (X) button shown while selecting. */
+  /** aria-label for the exit (X) button shown while selecting. */
   exitLabel: string;
   onStartSelecting: () => void;
   onClear: () => void;
@@ -55,16 +53,15 @@ interface PhotoSelectionToolbarProps {
 
 /**
  * Shared sticky bar above an event photo grid: a "Select" toggle, and — while
- * selecting — the selected-count, a "Clear" button, and the view's bulk
+ * selecting — an X (exit/clear) icon, the selected-count, and the view's bulk
  * actions. Used by the photographer, talent and public event-detail views so
- * the selection UI stays identical across all three. An optional `leading`
+ * the selection UI stays identical across all viewports. An optional `leading`
  * slot (the photo filter tabs) sits on the same row, to the left.
  */
 export function PhotoSelectionToolbar({
   isSelecting,
   countLabel,
   selectLabel,
-  clearLabel,
   exitLabel,
   onStartSelecting,
   onClear,
@@ -83,28 +80,24 @@ export function PhotoSelectionToolbar({
       <div className="flex min-h-9 items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {selectable && isSelecting ? (
           <>
-            {/* Mobile: only the X (exit) + count live here, left-aligned — the
-                bulk actions render in the fixed bottom bar instead. Desktop:
-                the X is hidden and the Clear button + actions sit inline on the
-                right. Either way the row height matches the idle "Select" row,
-                so entering selection never shifts the grid. */}
+            {/* The X (exit/clear) icon + count sit left-aligned on every
+                viewport, so clearing the selection is the same gesture on
+                desktop and mobile. On mobile the bulk actions render in the
+                fixed bottom bar; on desktop they sit inline on the right. The
+                row height matches the idle "Select" row, so entering selection
+                never shifts the grid. */}
             <Button
               type="button"
               variant="ghost"
               size="icon"
               onClick={onClear}
               aria-label={exitLabel}
-              className="-ml-1 size-8 shrink-0 md:hidden"
+              className="size-8 shrink-0"
             >
               <X className="h-5 w-5" />
             </Button>
             <div className="shrink-0 whitespace-nowrap text-sm font-medium">{countLabel}</div>
-            <div className="ml-auto hidden shrink-0 items-center gap-2 md:flex">
-              <Button type="button" variant="outline" size="sm" onClick={onClear}>
-                {clearLabel}
-              </Button>
-              {children}
-            </div>
+            <div className="ml-auto hidden shrink-0 items-center gap-2 md:flex">{children}</div>
           </>
         ) : (
           <>
