@@ -352,7 +352,7 @@ export function FaceSearchModal({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{labels.title}</DialogTitle>
           {/* <DialogDescription>{labels.description}</DialogDescription> */}

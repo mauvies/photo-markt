@@ -108,7 +108,7 @@ export function UploadProgressDialog({
       }}
     >
       <DialogContent
-        className="max-w-sm"
+        className="sm:max-w-sm"
         onPointerDownOutside={(e) => {
           if (isActive) e.preventDefault();
         }}
