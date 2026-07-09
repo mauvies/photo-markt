@@ -11,7 +11,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 26 | P2 | T-081 | Búsqueda por dorsal: abrir un modal en vez de un input inline | — | todo |
 | 27 | P2 | T-082 | Reposicionar "Save event" y "Share" como iconos junto al título del evento | — | todo |
 | 28 | P2 | T-088 | [Cache] Mutaciones de fotos revalidan también los tags de listados (home/búsqueda/perfil/dashboard) | T-084 | todo |
 | 29 | P2 | T-089 | [Inngest] Serializar backfills por evento + idempotency keys (doble click = doble gasto AWS) | — | todo |
@@ -46,6 +45,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-081** · UX: la búsqueda por dorsal usaba un `<form>` inline que se expandía debajo de la fila de botones en el banner "Encuentra tus fotos", cambiando la altura de la sección y empujando la grilla al activarse. Movido el input a un Shadcn `Dialog` (`find-my-photos-banner.tsx`): el botón de dorsal abre el modal, enviar corre el mismo flujo `searchPhotosByBibInEvent`, cierra el modal y filtra la grilla — matching/resultados/empty-state sin cambios. Radix maneja focus-on-open, Enter envía (form), Escape cancela (bloqueado mientras hay búsqueda en vuelo). Como el modal vive en un portal, la altura del banner es constante (se elimina el salto reportado). El clear de una búsqueda activa (que vivía en el form inline) pasa a un botón "Clear" en la fila de botones, visible solo con `hasResults`. Nuevas claves i18n `bibDetection.searchModalTitle`/`searchModalDescription`/`searchCancel` (en+es). Test de regresión (input dentro de `role="dialog"` tras click; la versión inline no producía dialog) — PR #144
 
 - **T-080** · UI/copy: el banner "Encuéntrate" (`find-my-photos-banner.tsx`) asumía copy solo-facial (título "Encuéntrate en este evento" + descripción de selfie), pero un evento puede tener facial, dorsal o ambos — y con **ambos** habilitados mostraba la descripción solo-facial, ignorando el dorsal (bug reportado). Título ahora neutral ("Encuentra tus fotos"/"Find your photos") y descripción condicional por método: solo-facial / solo-dorsal / combinada. El estado indexing (fotos aún procesando) es ortogonal y mantiene su copy. La selección se extrajo a un helper puro `resolveFindMyPhotosCopy` (junto a `resolveFindMyPhotos`, cuya lógica de visibilidad quedó intacta), testeado para las 3 combinaciones + indexing. Reemplazadas las labels `titleReady`/`descriptionReady`/`bibOnly*` por `title`/`descriptionFace`/`descriptionBib`/`descriptionBoth`; eliminadas las claves i18n huérfanas `aiSearch.banner.titleReady`/`descriptionReady` y `bibDetection.searchTitle`/`findDescription` (en+es). Test de regresión (el caso "ambos" fallaba antes/pasa después) — PR #143
 
