@@ -1,11 +1,11 @@
 # T-091 · [Inngest/Bug] Re-index duplica caras: borrar caras previas (AWS + `photo_faces`) antes de re-indexar
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/delete-faces-before-reindex`  (tipo = fix)
 - **OpenSpec change:** —  (evaluar al ejecutar; toca worker + query layer)
-- **PR:** —
+- **PR:** #150
 - **Dep:** T-089 (serialización primero — sin ella, dos re-index concurrentes compiten con el delete)
 - **Origen:** auditoría de caching T-083 (`docs/CACHING_AUDIT.md`, **F-11**, ítem #8 del plan)
 
