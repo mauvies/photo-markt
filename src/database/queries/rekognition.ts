@@ -176,6 +176,27 @@ export async function getPhotoFacesByEventId(
 }
 
 /**
+ * Service-role only. Read every face record persisted for a single photo.
+ * Used by the worker to clear stale faces (a prior partial run / re-index)
+ * before calling `IndexFaces` again — see `deletePhotoFacesByPhotoId`.
+ */
+export async function getPhotoFacesByPhotoId(
+  supabase: SupabaseServerClient,
+  photoId: string,
+): Promise<PhotoFace[]> {
+  const { data, error } = await supabase
+    .from('photo_faces')
+    .select(
+      'id, photo_id, aws_face_id, aws_collection_id, confidence, bounding_box, indexed_at, created_at',
+    )
+    .eq('photo_id', photoId);
+  if (error) {
+    throw new Error(`Failed to get photo faces by photo id: ${getErrorMessage(error)}`);
+  }
+  return (data ?? []) as PhotoFace[];
+}
+
+/**
  * Point-lookup used in PR 3's talent search: AWS returns a list of
  * matching face_ids, and we resolve them to our photo rows here.
  */

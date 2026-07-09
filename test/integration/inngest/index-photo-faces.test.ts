@@ -15,7 +15,18 @@
 
 import { NonRetriableError } from 'inngest';
 import sharp from 'sharp';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { indexFaceForPhotoMock, deleteFacesFromCollectionMock } = vi.hoisted(() => ({
+  indexFaceForPhotoMock: vi.fn(),
+  deleteFacesFromCollectionMock: vi.fn(),
+}));
+vi.mock('@/lib/aws/face-indexing', () => ({
+  indexFaceForPhoto: indexFaceForPhotoMock,
+  deleteFacesFromCollection: deleteFacesFromCollectionMock,
+}));
+
+import { updateEventRekognitionState } from '@/database/queries/rekognition';
 import {
   type PhotoProcessedSender,
   type PhotoUploadStep,
@@ -88,6 +99,31 @@ async function readPhoto(
   return data as { upload_status: string | null; face_index_status: string | null };
 }
 
+async function insertPhotoFace(args: {
+  photoId: string;
+  awsFaceId: string;
+  awsCollectionId: string;
+}): Promise<void> {
+  const sb = createServiceClient();
+  const { error } = await sb.from('photo_faces').insert({
+    photo_id: args.photoId,
+    aws_face_id: args.awsFaceId,
+    aws_collection_id: args.awsCollectionId,
+    confidence: 99,
+  });
+  if (error) throw new Error(`insertPhotoFace: ${error.message}`);
+}
+
+async function readPhotoFaceIds(photoId: string): Promise<string[]> {
+  const sb = createServiceClient();
+  const { data, error } = await sb
+    .from('photo_faces')
+    .select('aws_face_id')
+    .eq('photo_id', photoId);
+  if (error) throw new Error(`readPhotoFaceIds: ${error.message}`);
+  return (data ?? []).map((row) => row.aws_face_id as string).sort();
+}
+
 async function insertPhoto(args: {
   userId: string;
   eventId: string;
@@ -124,6 +160,8 @@ describe('runIndexPhotoFacesFlow — upload_status promotion', () => {
   beforeEach(async () => {
     await resetDatabase();
     await ensurePhotosBucket();
+    indexFaceForPhotoMock.mockReset();
+    deleteFacesFromCollectionMock.mockReset();
   });
 
   it('promotes pending → approved when AI matching is DISABLED on the event', async () => {
@@ -412,5 +450,139 @@ describe('runIndexPhotoFacesFlow — upload_status promotion', () => {
         noopSend,
       ),
     ).rejects.toBeInstanceOf(NonRetriableError);
+  });
+});
+
+// T-091 regression: re-indexing a photo that already has persisted faces
+// (a prior partial run, or the "Re-index event" backfill re-emitting
+// photo.uploaded) must not accumulate rows in photo_faces or orphan faces
+// in the AWS collection forever. Fails before the fix (old + new face rows
+// both present); passes after (stale row replaced by the new one).
+describe('runIndexPhotoFacesFlow — stale face cleanup on re-index (T-091)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    await ensurePhotosBucket();
+    indexFaceForPhotoMock.mockReset();
+    deleteFacesFromCollectionMock.mockReset();
+  });
+
+  async function setupAiEnabledEvent(): Promise<{
+    owner: { id: string };
+    event: { id: string };
+    collectionId: string;
+  }> {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    const collectionId = `test-collection-${event.id}`;
+    await updateEventRekognitionState(createServiceClient(), event.id, {
+      enabled: true,
+      collectionId,
+      region: 'eu-west-1',
+      status: 'indexing',
+    });
+    return { owner, event, collectionId };
+  }
+
+  it('deletes stale AWS faces + photo_faces rows before re-indexing (no accumulation)', async () => {
+    const { owner, event, collectionId } = await setupAiEnabledEvent();
+
+    const storagePath = `${owner.id}/${event.id}/reindex-cleanup.jpg`;
+    const sizeBytes = await uploadJpeg(storagePath);
+    const photo = await insertPhoto({
+      userId: owner.id,
+      eventId: event.id,
+      originalUrl: storagePath,
+      sizeBytes,
+      uploadStatus: 'pending',
+    });
+
+    // Simulate a prior run that already persisted a face for this photo.
+    await insertPhotoFace({
+      photoId: photo.id,
+      awsFaceId: 'old-face-1',
+      awsCollectionId: collectionId,
+    });
+
+    indexFaceForPhotoMock.mockResolvedValue([
+      { awsFaceId: 'new-face-1', confidence: 99, boundingBox: null },
+    ]);
+    deleteFacesFromCollectionMock.mockResolvedValue(undefined);
+
+    await runIndexPhotoFacesFlow(
+      { photoId: photo.id, eventId: event.id, storagePath },
+      passthroughStep,
+      noopSend,
+    );
+
+    expect(deleteFacesFromCollectionMock).toHaveBeenCalledWith({
+      collectionId,
+      faceIds: ['old-face-1'],
+    });
+    // Exactly the new set — no accumulation of the stale row.
+    expect(await readPhotoFaceIds(photo.id)).toEqual(['new-face-1']);
+  });
+
+  it('still replaces stale faces even when the AWS DeleteFaces call fails (best-effort)', async () => {
+    const { owner, event, collectionId } = await setupAiEnabledEvent();
+
+    const storagePath = `${owner.id}/${event.id}/reindex-cleanup-aws-fails.jpg`;
+    const sizeBytes = await uploadJpeg(storagePath);
+    const photo = await insertPhoto({
+      userId: owner.id,
+      eventId: event.id,
+      originalUrl: storagePath,
+      sizeBytes,
+      uploadStatus: 'pending',
+    });
+
+    await insertPhotoFace({
+      photoId: photo.id,
+      awsFaceId: 'old-face-2',
+      awsCollectionId: collectionId,
+    });
+
+    indexFaceForPhotoMock.mockResolvedValue([
+      { awsFaceId: 'new-face-2', confidence: 99, boundingBox: null },
+    ]);
+    deleteFacesFromCollectionMock.mockRejectedValue(new Error('AWS throttled'));
+
+    await runIndexPhotoFacesFlow(
+      { photoId: photo.id, eventId: event.id, storagePath },
+      passthroughStep,
+      noopSend,
+    );
+
+    // The AWS delete failed but the re-index must still complete and the
+    // stale DB row must still be gone (never blocks / never leaves it behind).
+    expect(await readPhotoFaceIds(photo.id)).toEqual(['new-face-2']);
+    const updated = await readPhoto(photo.id);
+    expect(updated.face_index_status).toBe('indexed');
+  });
+
+  it('does not call DeleteFaces when the photo has no prior faces (first index)', async () => {
+    const { owner, event } = await setupAiEnabledEvent();
+
+    const storagePath = `${owner.id}/${event.id}/first-index.jpg`;
+    const sizeBytes = await uploadJpeg(storagePath);
+    const photo = await insertPhoto({
+      userId: owner.id,
+      eventId: event.id,
+      originalUrl: storagePath,
+      sizeBytes,
+      uploadStatus: 'pending',
+    });
+
+    indexFaceForPhotoMock.mockResolvedValue([
+      { awsFaceId: 'first-face-1', confidence: 99, boundingBox: null },
+    ]);
+
+    await runIndexPhotoFacesFlow(
+      { photoId: photo.id, eventId: event.id, storagePath },
+      passthroughStep,
+      noopSend,
+    );
+
+    expect(deleteFacesFromCollectionMock).not.toHaveBeenCalled();
+    expect(await readPhotoFaceIds(photo.id)).toEqual(['first-face-1']);
   });
 });
