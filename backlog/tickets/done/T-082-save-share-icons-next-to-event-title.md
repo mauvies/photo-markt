@@ -1,11 +1,11 @@
 # T-082 · Reposicionar "Save event" y "Share" como iconos junto al título del evento
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/save-share-icons-next-to-event-title`  (tipo = feat)
-- **OpenSpec change:** — (probablemente no aplica — reusa componentes/lógica existentes; confirmar al ejecutar)
-- **PR:** —
+- **OpenSpec change:** — (no aplicó — reusó componentes/lógica existentes)
+- **PR:** #146
 
 ## Requerimiento
 En la página de evento del dashboard de talento, el botón "Save event" (icono corazón + texto) aparece hoy debajo del título/descripción. Moverlo a la misma línea del título, alineado a la derecha, y reducirlo a icono-only con tooltip. Agregar un icono "Share" al lado (reusando la funcionalidad de compartir que ya existe para fotos individuales, apuntado a la URL pública del evento). En la vista pública, mostrar solo el icono Share (sin Save, que es solo para talento).
