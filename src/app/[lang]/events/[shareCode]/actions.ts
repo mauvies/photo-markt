@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import {
   createPhotoUrlMap,
@@ -29,6 +29,7 @@ import { supabaseAdmin } from '@/database/supabase-admin';
 import { searchFacesByImage } from '@/lib/aws/face-indexing';
 import { prepareImageForRekognition } from '@/lib/aws/image-prep';
 import { normalizeBibToken } from '@/lib/bib-numbers';
+import { revalidateEventDetailTags, revalidateEventListingTags } from '@/lib/event-cache-tags';
 import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
 import { getEventStatus } from '@/lib/event-status';
 import { isFeatureEnabled } from '@/lib/feature-flags';
@@ -114,9 +115,8 @@ export async function deleteContributorPhotoAction(input: {
   revalidatePath(`/en/events/${shareCode}`);
   revalidatePath(`/es/dashboard/photographer/events/${event.id}`);
   revalidatePath(`/en/dashboard/photographer/events/${event.id}`);
-  revalidateTag(`event-${event.id}`, 'max');
-  if (event.slug) revalidateTag(`event-${event.slug}`, 'max');
-  if (event.share_code) revalidateTag(`event-${event.share_code}`, 'max');
+  revalidateEventDetailTags({ id: event.id, slug: event.slug, share_code: event.share_code });
+  await revalidateEventListingTags(event.user_id);
 
   return { success: true };
 }

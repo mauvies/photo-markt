@@ -15,6 +15,7 @@
  *   4. Everyone else                     → rejected; the row survives.
  */
 
+import { revalidateTag } from 'next/cache';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockSession } from '../../helpers/server-action-mocks';
 
@@ -206,5 +207,48 @@ describe('deleteContributorPhotoAction', () => {
       deleteContributorPhotoAction({ photoId: photo.id, shareCode: event.share_code ?? '' }),
     ).rejects.toThrow(/event not found/i);
     expect(await photoExists(photo.id)).toBe(true);
+  });
+});
+
+// ─── Cache tag revalidation (T-088) ───────────────────────────────────────────
+//
+// Before this ticket, a contributor delete only revalidated `event-${id}`
+// (plus slug/share_code variants) — never the listing tags. Deleting the
+// only approved photo of an event should drop it from "Featured"/search
+// promptly instead of lingering there until the TTL elapses.
+
+describe('cache tag revalidation', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    await ensurePhotosBucket();
+    mockSession.userId = null;
+    mockSession.activeRole = 'talent';
+    vi.mocked(revalidateTag).mockClear();
+  });
+
+  function revalidatedTags(): unknown[] {
+    return vi.mocked(revalidateTag).mock.calls.map(([tag]) => tag);
+  }
+
+  it('deleteContributorPhotoAction also revalidates the listing tags, not just the event-detail tag', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const contributor = await createTestUser('TALENT');
+    const { id: eventId, shareCode } = await makeCollaborativeEvent(owner.id);
+    const photo = await seedPhoto(eventId, { userId: contributor.id, uploadedBy: null });
+
+    mockSession.userId = owner.id;
+    await deleteContributorPhotoAction({ photoId: photo.id, shareCode });
+
+    const tags = revalidatedTags();
+    expect(tags).toEqual(
+      expect.arrayContaining([
+        `event-${eventId}`,
+        'events-public',
+        'top-events',
+        `photographer-${owner.username}`,
+        `photographer-events-${owner.id}`,
+        `dashboard-photographer-${owner.id}`,
+      ]),
+    );
   });
 });

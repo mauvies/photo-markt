@@ -40,12 +40,12 @@
  */
 
 import { NonRetriableError } from 'inngest';
-import { revalidateTag } from 'next/cache';
 import type { ThumbnailStatus } from '@/database/queries/photos';
 import { markPhotoThumbnailReady, updatePhotoThumbnailStatus } from '@/database/queries/photos';
 import { getPhotoFaceBoxesByStoragePath } from '@/database/queries/rekognition';
 import type { SupabaseServerClient } from '@/database/queries/types';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { revalidateEventDetailTags } from '@/lib/event-cache-tags';
 import { safeCall } from '@/lib/safe-call';
 import { isStorageObjectNotFound } from '@/lib/storage-object-not-found';
 import { generateThumbnail, thumbStoragePath } from '@/lib/thumbnails';
@@ -74,6 +74,10 @@ async function loadContext(photoId: string, eventId: string): Promise<ContextRes
   };
 }
 
+// Thumbnail readiness doesn't change the approved-photo count — the
+// upload_status promotion (and its listing-tag bust) already happened
+// upstream in index-photo-faces — so only the detail tag needs a bust here
+// for the new thumbnail to show up.
 async function invalidateEventPhotoCache(eventId: string): Promise<void> {
   try {
     const { data } = await supabaseAdmin
@@ -81,11 +85,11 @@ async function invalidateEventPhotoCache(eventId: string): Promise<void> {
       .select('slug, share_code')
       .eq('id', eventId)
       .maybeSingle();
-    revalidateTag(`event-${eventId}`, 'max');
-    const slug = (data?.slug as string | null) ?? null;
-    const shareCode = (data?.share_code as string | null) ?? null;
-    if (slug) revalidateTag(`event-${slug}`, 'max');
-    if (shareCode) revalidateTag(`event-${shareCode}`, 'max');
+    revalidateEventDetailTags({
+      id: eventId,
+      slug: (data?.slug as string | null) ?? null,
+      share_code: (data?.share_code as string | null) ?? null,
+    });
   } catch (err) {
     console.error('[generate-photo-thumbnails] revalidateTag failed', err);
   }
