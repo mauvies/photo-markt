@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 30 | P2 | T-090 | [Inngest/Bug] Re-index de caras re-paga `DetectText` — worker de dorsales sin guard por foto | — | todo |
+| 30 | P2 | T-090 | [Inngest/Bug] Re-index de caras re-paga `DetectText` — worker de dorsales sin guard por foto | — | doing |
 | 31 | P2 | T-091 | [Inngest/Bug] Re-index duplica caras: `DeleteFaces` + limpiar `photo_faces` antes de re-indexar | T-089 | todo |
 | 32 | P2 | T-092 | [Inngest/Perf] Guard `thumbnail_status='ready'` en el re-horneado (sin romper el re-bake de T-078) | — | todo |
 | 33 | P2 | T-093 | [Perf/Imágenes] `unoptimized` en grid/covers para fuentes `/api/` (no re-optimizar thumbs horneados) | — | todo |
