@@ -1,11 +1,11 @@
 # T-081 · Búsqueda por dorsal: abrir un modal en vez de un input inline
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno (mismo archivo que T-080 — ver Notas, coordinar orden de ejecución)
 - **Rama:** `fix/bib-search-modal-instead-of-inline`  (tipo = fix)
-- **OpenSpec change:** — (probablemente no aplica — cambio de UI acotado a un componente existente; confirmar al ejecutar)
-- **PR:** —
+- **OpenSpec change:** — (no aplicó — cambio de UI acotado a `find-my-photos-banner.tsx`)
+- **PR:** #144
 
 ## Requerimiento
 En las páginas de evento (dashboard de talento y vista pública), buscar por número de dorsal hoy muestra un input inline que aparece debajo del botón de búsqueda, dentro de la misma sección "Encuentra tus fotos" — esto causa un salto de layout no deseado (la altura de la sección cambia y empuja el contenido de abajo). Reemplazar por un **modal** (Shadcn Dialog): al hacer click en el botón de búsqueda por dorsal se abre un modal simple con el input de dorsal, en vez de expandir la sección inline.
@@ -15,15 +15,22 @@ El modal debe tener: una instrucción/label corta, el input de número de dorsal
 **Teclado:** el input recibe foco al abrir el modal; Enter envía; Escape cierra el modal sin buscar.
 
 ## Criterio de aceptación (Definition of Done)
-- [ ] Al hacer click en la acción de búsqueda por dorsal se abre un modal con el input, en vez de expandir un campo inline dentro de la sección
-- [ ] La sección "Encuentra tus fotos" mantiene una altura constante — sin salto de layout al activar la búsqueda por dorsal
-- [ ] Enviar el dorsal en el modal lo cierra y filtra la grilla a los matches, igual que el comportamiento actual
-- [ ] El modal soporta Enter para enviar y Escape para cerrar/cancelar
-- [ ] Mismo comportamiento en `/events/[shareCode]` y `/dashboard/talent/events/[id]`
-- [ ] Sin regresión en la lógica de matching por dorsal ni en la visualización de resultados
-- [ ] test de regresión/feature que falla antes y pasa después
-- [ ] strings nuevos en `en.json` y `es.json` si aplica (label/instrucción del modal)
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] Al hacer click en la acción de búsqueda por dorsal se abre un modal con el input, en vez de expandir un campo inline dentro de la sección
+- [x] La sección "Encuentra tus fotos" mantiene una altura constante — sin salto de layout (el modal vive en un portal)
+- [x] Enviar el dorsal en el modal lo cierra y filtra la grilla a los matches, igual que el comportamiento actual
+- [x] El modal soporta Enter para enviar (form) y Escape para cerrar/cancelar (Radix; bloqueado solo mientras hay búsqueda en vuelo)
+- [x] Mismo comportamiento en `/events/[shareCode]` y `/dashboard/talent/events/[id]` (ambos usan `EventGalleryWithFaceSearch`)
+- [x] Sin regresión en la lógica de matching por dorsal ni en la visualización de resultados (flujo `searchPhotosByBibInEvent` reusado tal cual)
+- [x] test de regresión/feature que falla antes y pasa después (input dentro de `role="dialog"` tras click; sin dialog en la versión inline)
+- [x] strings nuevos en `en.json` y `es.json` (`bibDetection.searchModalTitle`/`searchModalDescription`/`searchCancel`)
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
+
+## Nota de implementación
+El input se movió del `<form>` inline (bloque `bibExpanded`) a un Shadcn `Dialog` controlado por
+`bibModalOpen`. Como el clear de una búsqueda activa vivía en ese form inline (los viewers no tienen
+clear propio), se añadió un botón "Clear" en la fila de botones del banner, visible solo cuando
+`bib.hasResults`. El flujo de búsqueda (`runBibSearch`/`clearBib`/`searchPhotosByBibInEvent`) quedó
+intacto.
 
 ## Notas
 - **Componente exacto a tocar:** `src/components/find-my-photos-banner.tsx` (`FindMyPhotosBanner`). El input inline vive hoy en el bloque `bibExpanded` (estado local `bibOpen`/`bibValue`, líneas ~56-154): un `<form>` con `<Input>` + botón de búsqueda + botón "Clear", que se renderiza condicionalmente DEBAJO de la fila de botones — eso es lo que causa el salto de layout. Hay que mover ese `<form>` (input, submit, clear) a un `Dialog` de Shadcn, controlado por el mismo estado `bibOpen` (que pasa a controlar la apertura del modal en vez de la expansión inline).
