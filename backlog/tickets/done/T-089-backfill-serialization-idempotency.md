@@ -1,11 +1,11 @@
 # T-089 · [Inngest] Serializar backfills por evento + idempotency keys (doble click = doble gasto AWS)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/backfill-serialization-idempotency`  (tipo = fix)
 - **OpenSpec change:** —  (config de Inngest + keys en sends)
-- **PR:** —
+- **PR:** #148
 - **Origen:** auditoría de caching T-083 (`docs/CACHING_AUDIT.md`, **F-17**, ítem #6 del plan)
 
 ## Requerimiento
