@@ -39,7 +39,6 @@
  */
 
 import { NonRetriableError } from 'inngest';
-import { revalidateTag } from 'next/cache';
 import { updatePhotoDimensions } from '@/database/queries/photos';
 import {
   addPhotoFace,
@@ -53,6 +52,7 @@ import type { SupabaseServerClient } from '@/database/queries/types';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { indexFaceForPhoto } from '@/lib/aws/face-indexing';
 import { prepareImageForRekognition } from '@/lib/aws/image-prep';
+import { revalidateEventDetailTags, revalidateEventListingTags } from '@/lib/event-cache-tags';
 import { validatePhotoBuffer } from '@/lib/photo-upload';
 import { safeCall } from '@/lib/safe-call';
 import { isStorageObjectNotFound } from '@/lib/storage-object-not-found';
@@ -178,11 +178,17 @@ async function promoteToApproved(photoId: string): Promise<void> {
 }
 
 /**
- * Invalidate the public-event photo cache for an event after the worker
- * promotes one of its photos to `upload_status='approved'`. Without this,
- * the `getCachedEventData` in `app/[lang]/events/[shareCode]/page.tsx`
- * (55-min TTL) keeps serving the pre-promotion photo list, so newly
- * approved photos stay invisible to talents until the TTL elapses.
+ * Invalidate the event photo cache after the worker promotes one of its
+ * photos to `upload_status='approved'`. Without this, the `getCachedEventData`
+ * in `app/[lang]/events/[shareCode]/page.tsx` (55-min TTL) keeps serving the
+ * pre-promotion photo list, so newly approved photos stay invisible to
+ * talents until the TTL elapses. Also unconditionally busts the owner's
+ * dashboard listing tags and the PUBLIC listing tags (home "Featured",
+ * talent search, photographer profile) — see `revalidateEventListingTags`
+ * for why this is unconditional rather than gated on an approved-count
+ * boundary. Re-queries the event row for `user_id` here (rather than
+ * trusting a caller-supplied owner id) so a bust never silently no-ops due
+ * to stale/missing caller state.
  *
  * Best-effort — failures here only delay visibility, never block the
  * worker's terminal state writes. Inngest's `revalidateTag` is available
@@ -192,14 +198,14 @@ async function invalidateEventPhotoCache(eventId: string): Promise<void> {
   try {
     const { data } = await supabaseAdmin
       .from('events')
-      .select('slug, share_code')
+      .select('slug, share_code, user_id')
       .eq('id', eventId)
       .maybeSingle();
-    revalidateTag(`event-${eventId}`, 'max');
     const slug = (data?.slug as string | null) ?? null;
     const shareCode = (data?.share_code as string | null) ?? null;
-    if (slug) revalidateTag(`event-${slug}`, 'max');
-    if (shareCode) revalidateTag(`event-${shareCode}`, 'max');
+    const ownerId = (data?.user_id as string | null) ?? null;
+    revalidateEventDetailTags({ id: eventId, slug, share_code: shareCode });
+    if (ownerId) await revalidateEventListingTags(ownerId);
   } catch (err) {
     console.error('[index-photo-faces] revalidateTag failed', err);
   }

@@ -29,6 +29,7 @@ import {
 } from '@/database/queries/rekognition';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { revalidateEventDetailTags, revalidateEventListingTags } from '@/lib/event-cache-tags';
 import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
 import { eventUsesModerationQueue } from '@/lib/event-status';
 import { inngest } from '@/lib/inngest/client';
@@ -46,9 +47,11 @@ async function revalidateEventPhotoCacheTags(eventId: string): Promise<void> {
     .select('slug, share_code')
     .eq('id', eventId)
     .maybeSingle();
-  revalidateTag(`event-${eventId}`, 'max');
-  if (data?.slug) revalidateTag(`event-${data.slug}`, 'max');
-  if (data?.share_code) revalidateTag(`event-${data.share_code}`, 'max');
+  revalidateEventDetailTags({
+    id: eventId,
+    slug: data?.slug ?? null,
+    share_code: data?.share_code ?? null,
+  });
 }
 
 export type PhotographerSearchHit = {
@@ -492,6 +495,7 @@ export async function approvePendingPhotoAction(
   revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
   revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
   await revalidateEventPhotoCacheTags(eventId);
+  await revalidateEventListingTags(user.id);
   return { success: true };
 }
 
@@ -526,6 +530,7 @@ export async function rejectPendingPhotoAction(
   revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
   revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
   await revalidateEventPhotoCacheTags(eventId);
+  await revalidateEventListingTags(user.id);
   return { success: true };
 }
 

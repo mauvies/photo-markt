@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import {
   countEventPhotos,
@@ -16,6 +16,7 @@ import { updatePhotoFaceIndexStatus } from '@/database/queries/rekognition';
 import { createSignedUploadUrls } from '@/database/queries/storage';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { revalidateEventDetailTags, revalidateOwnerListingTags } from '@/lib/event-cache-tags';
 import { isCollaborativeUploadOpen } from '@/lib/event-status';
 import { inngest } from '@/lib/inngest/client';
 import { assertCanUploadPhoto, isPlanLimitError } from '@/lib/plan-limits';
@@ -308,10 +309,13 @@ function revalidateAfterUpload(eventId: string, event: EventRow): void {
   if (event.share_code) {
     revalidatePath(`/es/events/${event.share_code}`);
     revalidatePath(`/en/events/${event.share_code}`);
-    revalidateTag(`event-${event.share_code}`, 'max');
   }
-  revalidateTag(`event-${eventId}`, 'max');
-  if (event.slug) revalidateTag(`event-${event.slug}`, 'max');
+  revalidateEventDetailTags({ id: eventId, slug: event.slug, share_code: event.share_code });
+  // Photos always start `pending` here — approval (and the public listing
+  // visibility that comes with it) happens later in the Inngest worker —
+  // so only the owner's own dashboard count needs to reflect this upload
+  // immediately.
+  revalidateOwnerListingTags(event.user_id);
 }
 
 // ─── createPhotoUploadUrls ───────────────────────────────────────────────────

@@ -14,6 +14,7 @@
  * tests are deliberately heavy on authorization branches.
  */
 
+import { revalidateTag } from 'next/cache';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockSession } from '../../helpers/server-action-mocks';
 
@@ -533,5 +534,70 @@ describe('rejectPendingPhotoAction', () => {
     const sb = createServiceClient();
     const { data } = await sb.from('photos').select('id').eq('id', photoId).maybeSingle();
     expect(data).toBeNull();
+  });
+});
+
+// ─── Cache tag revalidation (T-088) ───────────────────────────────────────────
+//
+// Before this ticket, approve/reject only revalidated `event-${id|slug|share_code}`
+// — never the listing tags (`events-public`, `top-events`, `photographer-${slug}`,
+// `photographer-events-${userId}`, `dashboard-photographer-${userId}`). A
+// collaborative event's first approved photo (the "Featured"/search
+// eligibility gate) could stay invisible on the home page and search for up
+// to 55 min after approval.
+
+describe('cache tag revalidation (approve/reject)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    await ensurePhotosBucket();
+    mockSession.userId = null;
+    mockSession.activeRole = 'photographer';
+    vi.mocked(revalidateTag).mockClear();
+  });
+
+  function revalidatedTags(): unknown[] {
+    return vi.mocked(revalidateTag).mock.calls.map(([tag]) => tag);
+  }
+
+  it('approvePendingPhotoAction also revalidates the listing tags, not just the event-detail tag', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    const { photoId } = await seedPendingPhoto(event.id, owner.id);
+
+    mockSession.userId = owner.id;
+    await approvePendingPhotoAction(photoId, event.id);
+
+    const tags = revalidatedTags();
+    expect(tags).toEqual(
+      expect.arrayContaining([
+        `event-${event.id}`,
+        'events-public',
+        'top-events',
+        `photographer-${owner.username}`,
+        `photographer-events-${owner.id}`,
+        `dashboard-photographer-${owner.id}`,
+      ]),
+    );
+  });
+
+  it('rejectPendingPhotoAction also revalidates the listing tags, not just the event-detail tag', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    const { photoId } = await seedPendingPhoto(event.id, owner.id);
+
+    mockSession.userId = owner.id;
+    await rejectPendingPhotoAction(photoId, event.id);
+
+    const tags = revalidatedTags();
+    expect(tags).toEqual(
+      expect.arrayContaining([
+        `event-${event.id}`,
+        'events-public',
+        'top-events',
+        `photographer-${owner.username}`,
+        `photographer-events-${owner.id}`,
+        `dashboard-photographer-${owner.id}`,
+      ]),
+    );
   });
 });
