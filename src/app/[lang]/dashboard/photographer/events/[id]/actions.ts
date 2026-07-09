@@ -575,6 +575,8 @@ export async function enableAIMatchingForEvent(eventId: string): Promise<{ succe
     .eq('user_id', userId);
 
   try {
+    // Rapid duplicate triggers for this event collapse into one backfill run
+    // via the worker's `debounce` config (see backfill-event-indexing.ts).
     await inngest.send({
       name: 'event.ai-matching-enabled',
       data: { eventId, userId },
@@ -637,6 +639,8 @@ export async function enableBibDetectionForEvent(eventId: string): Promise<{ suc
     .eq('user_id', userId);
 
   try {
+    // Rapid duplicate enables collapse into one backfill via the worker's
+    // `debounce` config (see backfill-event-bib-detection.ts).
     await inngest.send({
       name: 'event.bib-detection-enabled',
       data: { eventId, userId },
@@ -723,6 +727,8 @@ export async function reindexEvent(eventId: string): Promise<{ success: true }> 
   }
 
   try {
+    // A double-click on "Re-index event" is the canonical double-spend path
+    // (T-089); the worker's `debounce` collapses the burst into one run.
     await inngest.send({
       name: 'event.ai-matching-enabled',
       data: { eventId, userId },
