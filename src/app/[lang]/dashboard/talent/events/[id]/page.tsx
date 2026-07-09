@@ -370,8 +370,11 @@ export default async function ExploreEventDetailPage({
               descriptionIndexing: dict.aiSearch.banner.descriptionIndexing,
               faceButton: dict.aiSearch.banner.faceButton,
               bibButton: dict.bibDetection.bibButton,
+              bibModalTitle: dict.bibDetection.searchModalTitle,
+              bibModalDescription: dict.bibDetection.searchModalDescription,
               bibPlaceholder: dict.bibDetection.searchPlaceholder,
               bibSearch: dict.bibDetection.searchButton,
+              bibCancel: dict.bibDetection.searchCancel,
               bibClear: dict.bibDetection.searchClear,
               bibFailed: dict.bibDetection.searchFailed,
             }}
