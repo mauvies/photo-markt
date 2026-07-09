@@ -555,13 +555,13 @@ export default async function EventPage({
                 (event as unknown as Record<string, unknown>).bib_detection_enabled,
               )}
               findLabels={{
-                titleReady: dict.aiSearch.banner.titleReady,
+                title: dict.aiSearch.banner.title,
                 titleIndexing: dict.aiSearch.banner.titleIndexing,
-                descriptionReady: dict.aiSearch.banner.descriptionReady,
+                descriptionFace: dict.aiSearch.banner.descriptionFace,
+                descriptionBib: dict.aiSearch.banner.descriptionBib,
+                descriptionBoth: dict.aiSearch.banner.descriptionBoth,
                 descriptionIndexing: dict.aiSearch.banner.descriptionIndexing,
                 faceButton: dict.aiSearch.banner.faceButton,
-                bibOnlyTitle: dict.bibDetection.searchTitle,
-                bibOnlyDescription: dict.bibDetection.findDescription,
                 bibButton: dict.bibDetection.bibButton,
                 bibPlaceholder: dict.bibDetection.searchPlaceholder,
                 bibSearch: dict.bibDetection.searchButton,

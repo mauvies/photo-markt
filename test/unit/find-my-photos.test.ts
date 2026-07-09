@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { resolveFindMyPhotos } from '@/lib/find-my-photos';
+import { resolveFindMyPhotos, resolveFindMyPhotosCopy } from '@/lib/find-my-photos';
 
 describe('resolveFindMyPhotos', () => {
   it('shows both buttons when face and bib are enabled', () => {
@@ -60,5 +60,45 @@ describe('resolveFindMyPhotos', () => {
         bibDetectionEnabled: true,
       }),
     ).toEqual({ visible: false, showFace: false, showBib: false });
+  });
+});
+
+/**
+ * Copy selection for the banner header (T-080). The bug fixed here: with BOTH
+ * methods enabled, the banner used to show the face-only description, ignoring
+ * bib. These pin the neutral title + a method-specific description per combo.
+ */
+describe('resolveFindMyPhotosCopy', () => {
+  const labels = {
+    title: 'Find your photos',
+    titleIndexing: 'Processing photos…',
+    descriptionFace: 'FACE',
+    descriptionBib: 'BIB',
+    descriptionBoth: 'BOTH',
+    descriptionIndexing: 'INDEXING',
+  };
+
+  it('uses the face-only description when only face is available', () => {
+    expect(
+      resolveFindMyPhotosCopy(labels, { hasFace: true, hasBib: false, indexing: false }),
+    ).toEqual({ title: 'Find your photos', description: 'FACE' });
+  });
+
+  it('uses the bib-only description when only bib is available', () => {
+    expect(
+      resolveFindMyPhotosCopy(labels, { hasFace: false, hasBib: true, indexing: false }),
+    ).toEqual({ title: 'Find your photos', description: 'BIB' });
+  });
+
+  it('uses the combined description when both methods are available (the T-080 bug)', () => {
+    expect(
+      resolveFindMyPhotosCopy(labels, { hasFace: true, hasBib: true, indexing: false }),
+    ).toEqual({ title: 'Find your photos', description: 'BOTH' });
+  });
+
+  it('keeps the indexing copy regardless of bib while face is still indexing', () => {
+    expect(
+      resolveFindMyPhotosCopy(labels, { hasFace: true, hasBib: true, indexing: true }),
+    ).toEqual({ title: 'Processing photos…', description: 'INDEXING' });
   });
 });

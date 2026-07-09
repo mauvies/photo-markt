@@ -32,3 +32,45 @@ export function resolveFindMyPhotos(params: {
   const showBib = params.bibDetectionEnabled;
   return { visible: showFace || showBib, showFace, showBib };
 }
+
+/** Header copy for the "Find my photos" banner, keyed by which methods apply. */
+export interface FindMyPhotosCopyLabels {
+  /** Method-neutral title used for the ready state (face, bib, or both). */
+  title: string;
+  /** Title while face indexing is still in progress. */
+  titleIndexing: string;
+  /** Ready-state description when only face search is available. */
+  descriptionFace: string;
+  /** Ready-state description when only bib search is available. */
+  descriptionBib: string;
+  /** Ready-state description when both face and bib search are available. */
+  descriptionBoth: string;
+  /** Description while face indexing is still in progress. */
+  descriptionIndexing: string;
+}
+
+/**
+ * Pick the banner's title + description from the methods enabled on the event.
+ *
+ * The ready-state description is method-specific (face-only / bib-only / both),
+ * which is the whole point of T-080 — before it, an event with BOTH methods
+ * showed the face-only copy. The `indexing` state (face photos still
+ * processing) is orthogonal to the method mix, so it keeps its own copy
+ * regardless of bib.
+ */
+export function resolveFindMyPhotosCopy(
+  labels: FindMyPhotosCopyLabels,
+  state: { hasFace: boolean; hasBib: boolean; indexing: boolean },
+): { title: string; description: string } {
+  const { hasFace, hasBib, indexing } = state;
+  if (hasFace && indexing) {
+    return { title: labels.titleIndexing, description: labels.descriptionIndexing };
+  }
+  const description =
+    hasFace && hasBib
+      ? labels.descriptionBoth
+      : hasFace
+        ? labels.descriptionFace
+        : labels.descriptionBib;
+  return { title: labels.title, description };
+}

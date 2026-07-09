@@ -7,16 +7,9 @@ import { searchPhotosByBibInEvent } from '@/app/[lang]/events/[shareCode]/action
 import type { BibSearchResult } from '@/components/event-gallery-with-face-search';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { type FindMyPhotosCopyLabels, resolveFindMyPhotosCopy } from '@/lib/find-my-photos';
 
-export interface FindMyPhotosLabels {
-  /** Header copy when face search is available (the primary invite). */
-  titleReady: string;
-  titleIndexing: string;
-  descriptionReady: string;
-  descriptionIndexing: string;
-  /** Header copy when only bib search is available. */
-  bibOnlyTitle: string;
-  bibOnlyDescription: string;
+export interface FindMyPhotosLabels extends FindMyPhotosCopyLabels {
   /** Button labels. */
   faceButton: string;
   bibButton: string;
@@ -83,18 +76,11 @@ export function FindMyPhotosBanner({ labels, face, bib }: FindMyPhotosBannerProp
     bib?.onResults(null);
   };
 
-  const isIndexing = face?.state === 'indexing';
-  // Prefer the face copy when face search is available; otherwise the bib copy.
-  const title = face
-    ? isIndexing
-      ? labels.titleIndexing
-      : labels.titleReady
-    : labels.bibOnlyTitle;
-  const description = face
-    ? isIndexing
-      ? labels.descriptionIndexing
-      : labels.descriptionReady
-    : labels.bibOnlyDescription;
+  const { title, description } = resolveFindMyPhotosCopy(labels, {
+    hasFace: Boolean(face),
+    hasBib: Boolean(bib),
+    indexing: face?.state === 'indexing',
+  });
 
   return (
     <div className="sm:mb-4 flex flex-col gap-3 rounded-lg border border-input bg-card p-4 md:p-6">
