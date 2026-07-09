@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useSavedEventsLabels } from '@/components/saved-events-labels-provider';
 import { Button } from '@/components/ui/button';
 import { PhotoActionIcon } from '@/components/ui/photo-action-icon';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useSavedEvents } from '@/hooks/use-saved-events';
 import { cn } from '@/lib/utils';
 
@@ -12,9 +13,9 @@ type EventSaveButtonProps = {
   eventId: string;
   /**
    * `overlay` — dark pill heart icon for event-card corners (default).
-   * `button`  — labeled Save/Saved button for the event-detail header.
+   * `icon`    — plain ghost icon button with tooltip, for the event title header.
    */
-  variant?: 'overlay' | 'button';
+  variant?: 'overlay' | 'icon';
   /** Fired after a successful toggle with the resulting saved state. */
   onToggled?: (saved: boolean) => void;
   className?: string;
@@ -51,24 +52,31 @@ export function EventSaveButton({
     }
   };
 
-  if (variant === 'button') {
+  if (variant === 'icon') {
     return (
-      <Button
-        type="button"
-        variant={saved ? 'secondary' : 'outline'}
-        size="sm"
-        onClick={onToggle}
-        disabled={pending}
-        aria-pressed={saved}
-        className={cn('gap-2', className)}
-      >
-        {pending ? (
-          <Loader2 className="size-4 animate-spin" />
-        ) : (
-          <Heart className="size-4" fill={saved ? 'currentColor' : 'none'} />
-        )}
-        {tooltip}
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onToggle}
+            disabled={pending}
+            aria-pressed={saved}
+            aria-label={tooltip}
+            className={cn('size-10', className)}
+          >
+            {pending ? (
+              <Loader2 className="size-5 animate-spin" />
+            ) : (
+              <Heart className="size-5" fill={saved ? 'currentColor' : 'none'} />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{tooltip}</p>
+        </TooltipContent>
+      </Tooltip>
     );
   }
 

@@ -56,6 +56,9 @@
     "loadMore": "Load more",
     "loading": "Loading…"
   },
+  "eventShare": {
+    "tooltip": "Share"
+  },
   "home": {
     "heroHeadline1": "Your Best Shots",
     "heroHeadline2": "Delivered Fast.",

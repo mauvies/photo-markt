@@ -11,7 +11,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 27 | P2 | T-082 | Reposicionar "Save event" y "Share" como iconos junto al título del evento | — | todo |
 | 28 | P2 | T-088 | [Cache] Mutaciones de fotos revalidan también los tags de listados (home/búsqueda/perfil/dashboard) | T-084 | todo |
 | 29 | P2 | T-089 | [Inngest] Serializar backfills por evento + idempotency keys (doble click = doble gasto AWS) | — | todo |
 | 30 | P2 | T-090 | [Inngest/Bug] Re-index de caras re-paga `DetectText` — worker de dorsales sin guard por foto | — | todo |
@@ -45,6 +44,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-082** · UI/consistencia: en la página de evento del dashboard de talento, el botón "Save event" (corazón + texto) vivía debajo del título/descripción. Movido a la línea del título, icon-only con tooltip, junto a un nuevo icono Share (reusa el patrón Web Share API + fallback a portapapeles que ya existía inline en `photo-detail-modal.tsx`, extraído a un helper compartido `shareUrl()` en `src/lib/share-url.ts`). Vista pública: solo el icono Share (Save es solo-talento). **Un único layout para todos los viewports:** el slot `actions` ya existente de `DashboardHeader` (y el wrapper flex equivalente de la página pública) pasan de `items-center` a `items-start` para que un título que hace wrap a varias líneas no descentre los iconos — siguen en un contenedor `shrink-0`, nunca comprimido. `EventSaveButton` gana un variant `icon` (ghost + Tooltip, mismo patrón que el Share de `lightbox-toolbar.tsx`) que reemplaza al variant `button` (con texto), ahora sin callers — eliminado. El Share siempre apunta a la **URL pública** del evento (`share_code` → `slug` → `id`), nunca a la ruta del dashboard, para que el link funcione sin cuenta aunque se comparta desde el dashboard de talento. Nueva clave i18n `eventShare.tooltip` (en+es); el tooltip de Save reusa las labels `savedEvents.save`/`saved` ya existentes. Tests de regresión: `shareUrl()` (Web Share API + fallback a portapapeles) y los dos iconos (icon-only, accessible name via tooltip, Share comparte la URL dada) — PR #146
 
 - **T-081** · UX: la búsqueda por dorsal usaba un `<form>` inline que se expandía debajo de la fila de botones en el banner "Encuentra tus fotos", cambiando la altura de la sección y empujando la grilla al activarse. Movido el input a un Shadcn `Dialog` (`find-my-photos-banner.tsx`): el botón de dorsal abre el modal, enviar corre el mismo flujo `searchPhotosByBibInEvent`, cierra el modal y filtra la grilla — matching/resultados/empty-state sin cambios. Radix maneja focus-on-open, Enter envía (form), Escape cancela (bloqueado mientras hay búsqueda en vuelo). Como el modal vive en un portal, la altura del banner es constante (se elimina el salto reportado). El clear de una búsqueda activa (que vivía en el form inline) pasa a un botón "Clear" en la fila de botones, visible solo con `hasResults`. Nuevas claves i18n `bibDetection.searchModalTitle`/`searchModalDescription`/`searchCancel` (en+es). Test de regresión (input dentro de `role="dialog"` tras click; la versión inline no producía dialog) — PR #144
 

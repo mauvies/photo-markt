@@ -56,6 +56,9 @@
     "loadMore": "Cargar más",
     "loading": "Cargando…"
   },
+  "eventShare": {
+    "tooltip": "Compartir"
+  },
   "home": {
     "heroHeadline1": "Tus Mejores Fotos",
     "heroHeadline2": "Entregadas Al Instante.",

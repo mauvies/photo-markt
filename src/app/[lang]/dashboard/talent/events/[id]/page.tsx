@@ -8,6 +8,7 @@ import { UploadProgressProvider } from '@/app/[lang]/events/[shareCode]/upload-p
 import { DashboardHeader } from '@/components/dashboard-header';
 import { EventGalleryWithFaceSearch } from '@/components/event-gallery-with-face-search';
 import { EventSaveButton } from '@/components/event-save-button';
+import { EventShareButton } from '@/components/event-share-button';
 import { MarkEventSeen } from '@/components/mark-event-seen';
 import {
   createPhotoUrlMap,
@@ -32,6 +33,7 @@ import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
 import { getEventStatus, isCollaborativeUploadOpen } from '@/lib/event-status';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { getBaseUrl } from '@/lib/get-base-url';
+import { getSiteUrl } from '@/lib/get-site-url';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
@@ -261,6 +263,12 @@ export default async function ExploreEventDetailPage({
       : Promise.resolve<string[]>([]),
   ]);
 
+  // Public URL for the Share icon — must resolve for anyone, even without an
+  // account, so it always points at /events/[shareCode-or-slug], never the
+  // dashboard route. Share code first (works for private collaborative
+  // events too), then slug, then id as a last resort.
+  const eventPublicUrl = `${getSiteUrl()}/${lang}/events/${event.share_code ?? event.slug ?? event.id}`;
+
   const galleryAlt = `Photo from ${event.name}`;
   const photoItems = photos
     .map((p) => buildPublicPhotoAlbumItem(p, { signed, event, uploaderProfiles, alt: galleryAlt }))
@@ -295,8 +303,20 @@ export default async function ExploreEventDetailPage({
     <div className="space-y-4">
       <MarkEventSeen eventId={event.id} />
       <div>
-        <DashboardHeader title={event.name} />
-        <div className="mt-2 text-sm leading-relaxed text-muted-foreground">
+        <DashboardHeader
+          title={event.name}
+          actions={
+            <div className="flex items-center gap-1">
+              <EventSaveButton eventId={event.id} variant="icon" />
+              <EventShareButton
+                eventName={event.name}
+                eventUrl={eventPublicUrl}
+                tooltip={dict.eventShare.tooltip}
+              />
+            </div>
+          }
+        />
+        <div className="mt-1 text-sm leading-relaxed text-muted-foreground">
           {new Date(event.date).toDateString().split(' ').slice(1).join(' ')} •{' '}
           {event.city[0]?.toUpperCase() + event.city.slice(1)}
           {event.price_per_photo !== null && (
@@ -305,9 +325,6 @@ export default async function ExploreEventDetailPage({
               • ${event.price_per_photo.toFixed(2)} {dict.talentDashboard.perPhoto}
             </>
           )}
-        </div>
-        <div className="mt-3">
-          <EventSaveButton eventId={event.id} variant="button" />
         </div>
       </div>
 

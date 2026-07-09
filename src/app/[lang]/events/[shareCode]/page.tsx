@@ -6,6 +6,7 @@ import { Suspense } from 'react';
 import { getActiveRole } from '@/app/[lang]/actions/roles';
 import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/activity-options';
 import { EventGalleryWithFaceSearch } from '@/components/event-gallery-with-face-search';
+import { EventShareButton } from '@/components/event-share-button';
 import {
   countEventPhotosByStatus,
   createPhotoUrlMap,
@@ -497,7 +498,7 @@ export default async function EventPage({
         }}
       >
         <div className="mx-auto max-w-7xl w-full flex-1 px-4 py-6">
-          <div className="mb-6 flex items-center justify-between gap-4">
+          <div className="mb-6 flex items-start justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold">{event.name}</h1>
               <div className="mt-2 text-sm leading-relaxed text-muted-foreground">
@@ -511,6 +512,11 @@ export default async function EventPage({
                 )}
               </div>
             </div>
+            <EventShareButton
+              eventName={event.name}
+              eventUrl={eventUrl}
+              tooltip={dict.eventShare.tooltip}
+            />
           </div>
 
           {showContribute && event.share_code ? (
