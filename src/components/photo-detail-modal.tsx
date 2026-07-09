@@ -20,6 +20,7 @@ import { useCarouselNavigation } from '@/hooks/use-carousel-navigation';
 import { useImageLoad } from '@/hooks/use-image-load';
 import { useKeyboardNav } from '@/hooks/use-keyboard-nav';
 import { resolvePhotoCta } from '@/lib/photo-detail-cta';
+import { shareUrl } from '@/lib/share-url';
 
 export interface PhotoDetailModalLabels {
   /** Screen-reader dialog title. */
@@ -144,13 +145,7 @@ export function PhotoDetailModal({
       return;
     }
     if (!current.url) return;
-    if (typeof navigator !== 'undefined' && navigator.share) {
-      navigator.share({ title: current.alt || 'Photo', url: current.url }).catch(() => {
-        navigator.clipboard?.writeText(current.url).catch(() => {});
-      });
-    } else if (typeof navigator !== 'undefined') {
-      navigator.clipboard?.writeText(current.url).catch(() => {});
-    }
+    shareUrl(current.alt || 'Photo', current.url);
   };
 
   // Per-upload contributor (collaborative events) shows as a plain name;
