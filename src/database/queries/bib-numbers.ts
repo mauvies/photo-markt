@@ -129,6 +129,27 @@ export async function updatePhotoBibDetectionStatus(
 }
 
 /**
+ * Service-role only. Read a single photo's current `bib_detection_status`.
+ * Used by the worker to skip a redundant `DetectText` call when a photo was
+ * already detected and `photo.uploaded` re-fires for an unrelated reason
+ * (e.g. a face-indexing re-index backfill).
+ */
+export async function getPhotoBibDetectionStatus(
+  supabase: SupabaseServerClient,
+  photoId: string,
+): Promise<BibDetectionStatus | null> {
+  const { data, error } = await supabase
+    .from('photos')
+    .select('bib_detection_status')
+    .eq('id', photoId)
+    .maybeSingle();
+  if (error) {
+    throw new Error(`Failed to get photo bib_detection_status: ${getErrorMessage(error)}`);
+  }
+  return (data?.bib_detection_status as BibDetectionStatus | null) ?? null;
+}
+
+/**
  * Service-role only. Bulk-set `bib_detection_status` for an id list — used by
  * the backfill (set `pending`) and the in-flight tracker.
  */

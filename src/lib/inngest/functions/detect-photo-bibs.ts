@@ -20,6 +20,7 @@ import { NonRetriableError } from 'inngest';
 import {
   countEventPhotosBibInFlight,
   getEventBibDetectionState,
+  getPhotoBibDetectionStatus,
   type PhotoBibInput,
   persistPhotoBibs,
   updateEventBibDetectionState,
@@ -75,6 +76,7 @@ export const detectPhotoBibs = inngest.createFunction(
     return await runDetectPhotoBibsFlow(
       event.data as BibDetectPayload,
       step as unknown as BibDetectStep,
+      event.name,
     );
   },
 );
@@ -82,10 +84,19 @@ export const detectPhotoBibs = inngest.createFunction(
 /**
  * Pure handler body, exported for the integration test (which passes a
  * pass-through fake step).
+ *
+ * `eventName` distinguishes the two triggers: `photo.uploaded` re-fires for
+ * reasons that have nothing to do with bibs (e.g. a face-indexing re-index
+ * backfill resets `face_index_status` and replays this event), so a photo
+ * already `detected`/`no_bibs` is skipped — no download, no `DetectText`.
+ * `photo.bib-detect` is the dorsal backfill's own explicit re-detection
+ * event; it already filters to null/`failed` photos before sending
+ * (`backfill-event-bib-detection.ts`), so it always runs.
  */
 export async function runDetectPhotoBibsFlow(
   payload: BibDetectPayload,
   step: BibDetectStep,
+  eventName = 'photo.uploaded',
 ): Promise<unknown> {
   const { photoId, eventId, storagePath } = payload;
 
@@ -97,6 +108,18 @@ export async function runDetectPhotoBibsFlow(
   });
   if (!state || !state.enabled || state.containsMinors) {
     return { skipped: true, reason: 'not-enabled' };
+  }
+
+  // 1b. Gate on the per-photo status — only for photo.uploaded. A photo whose
+  //     bibs were already resolved must not re-pay DetectText just because an
+  //     unrelated re-index replayed this event (F-12).
+  if (eventName === 'photo.uploaded') {
+    const photoStatus = await step.run('check-photo-status', async () => {
+      return await getPhotoBibDetectionStatus(adminClient, photoId);
+    });
+    if (photoStatus === 'detected' || photoStatus === 'no_bibs') {
+      return { skipped: true, reason: 'already-detected' };
+    }
   }
 
   // 2. The mega-step: download + DetectText + filter, all bytes stack-local.
