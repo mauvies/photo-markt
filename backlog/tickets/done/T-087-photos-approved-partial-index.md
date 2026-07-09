@@ -1,11 +1,11 @@
 # T-087 · [Perf/DB] Índice parcial para la query más caliente de galería + drop del índice duplicado
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `chore/photos-approved-partial-index`  (tipo = chore — migración, sin cambio de comportamiento)
 - **OpenSpec change:** —  (migración de índices, semántica de queries intacta)
-- **PR:** —
+- **PR:** #141
 - **Origen:** auditoría de caching T-083 (`docs/CACHING_AUDIT.md`, **F-24**, ítem #4 del plan)
 
 ## Requerimiento
@@ -17,18 +17,36 @@ página; en eventos grandes cada página re-ordena todo el set approved. Además
 duplicado: `photos_event_idx` ≡ `photos_event_id_idx` (ambos `(event_id)`).
 
 ## Criterio de aceptación (Definition of Done)
-- [ ] **Cobertura previa:** los tests existentes de paginación de galería
+- [x] **Cobertura previa:** los tests existentes de paginación de galería
       (`getEventPhotosPublicPage`/`getEventPhotosPage` — orden determinista `(taken_at, id)`,
-      ventanas sin solaparse) están en verde **antes** de la migración; si falta alguno de orden
-      estable entre páginas, añadirlo primero
-- [ ] Migración: `CREATE INDEX photos_event_approved_taken_idx ON photos (event_id, taken_at, id)
+      ventanas sin solaparse) están en verde **antes** de la migración; ya existían (6 tests en
+      `event-photos-pagination.test.ts`), no hizo falta añadir ninguno
+- [x] Migración: `CREATE INDEX photos_event_approved_taken_idx ON photos (event_id, taken_at, id)
       WHERE upload_status = 'approved'`
-- [ ] Migración: drop de `photos_event_idx` (duplicado de `photos_event_id_idx`)
-- [ ] Los mismos tests de paginación pasan **después** sin cambios (cero cambio de comportamiento
+- [x] ~~Migración: drop de `photos_event_idx` (duplicado de `photos_event_id_idx`)~~ — **premisa
+      corregida: el duplicado NO existe** (ver Diagnóstico); `photos_event_idx` se mantiene
+- [x] Los mismos tests de paginación pasan **después** sin cambios (cero cambio de comportamiento
       — el índice solo cambia el plan)
-- [ ] Verificación manual (documentada en el PR): `EXPLAIN` de la query de galería usa el índice
-      nuevo en local
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] Verificación manual (documentada en el PR): `EXPLAIN` de la query de galería usa el índice
+      nuevo en local (Index Scan sin sort, 1656→74 buffer hits)
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
+
+## Diagnóstico (post-implementación)
+El ítem "drop del índice duplicado" reposaba en una premisa falsa. La auditoría F-24 afirmó
+`photos_event_idx` ≡ `photos_event_id_idx`, pero la migración `20260427162800_remote_schema.sql`
+**ya dropeó** `photos_event_id_idx` (línea 281) y recreó el índice `(event_id)` bajo el nombre
+canónico `photos_event_idx` (línea 426) — un artefacto de rename típico de `supabase db pull` que
+la auditoría no vio. Verificado contra **prod y local**: solo existe `photos_event_idx`. Además NO
+es redundante con el índice parcial nuevo — es el único índice `(event_id)` y sirve los lookups por
+`event_id` sin filtro de `upload_status` (`getPhotoStoragePaths` en borrado,
+`getUploadedPhotoIdsForUserInEvent` para dedup de subida colaborativa) que ninguno de los dos
+índices parciales cubre. Se mantiene a propósito; no hay nada que dropear.
+
+**Nota del `/code-review high`:** `CREATE INDEX` (no CONCURRENTLY) toma un SHARE lock que bloquea
+escrituras durante el build. La tabla `photos` en prod tiene ~300 filas / 128 kB, así que el build
+es sub-milisegundo — añadirlo ahora, con la tabla pequeña, es el momento más barato. CONCURRENTLY
+no aplica: `migrate.yml` corre cada migración en transacción y CONCURRENTLY no puede correr dentro
+de una. Documentado inline en la migración.
 
 ## Notas
 - Este ticket es deliberadamente "no-behavior-change": el requisito de tests aquí es de
