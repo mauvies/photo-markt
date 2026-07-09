@@ -64,12 +64,12 @@ export function EventSaveButton({
             disabled={pending}
             aria-pressed={saved}
             aria-label={tooltip}
-            className={cn('size-9', className)}
+            className={cn('size-10', className)}
           >
             {pending ? (
-              <Loader2 className="size-4 animate-spin" />
+              <Loader2 className="size-5 animate-spin" />
             ) : (
-              <Heart className="size-4" fill={saved ? 'currentColor' : 'none'} />
+              <Heart className="size-5" fill={saved ? 'currentColor' : 'none'} />
             )}
           </Button>
         </TooltipTrigger>

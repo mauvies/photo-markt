@@ -31,9 +31,9 @@ export function EventShareButton({
           size="icon"
           onClick={() => shareUrl(eventName, eventUrl)}
           aria-label={tooltip}
-          className={cn('size-9', className)}
+          className={cn('size-10', className)}
         >
-          <Share2 className="size-4" strokeWidth={1.5} />
+          <Share2 className="size-5" />
         </Button>
       </TooltipTrigger>
       <TooltipContent>
