@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 31 | P2 | T-091 | [Inngest/Bug] Re-index duplica caras: `DeleteFaces` + limpiar `photo_faces` antes de re-indexar | T-089 | todo |
+| 31 | P2 | T-091 | [Inngest/Bug] Re-index duplica caras: `DeleteFaces` + limpiar `photo_faces` antes de re-indexar | T-089 | doing |
 | 32 | P2 | T-092 | [Inngest/Perf] Guard `thumbnail_status='ready'` en el re-horneado (sin romper el re-bake de T-078) | — | todo |
 | 33 | P2 | T-093 | [Perf/Imágenes] `unoptimized` en grid/covers para fuentes `/api/` (no re-optimizar thumbs horneados) | — | todo |
 | 34 | P2 | T-094 | [Seguridad] Rate limit + `maxDuration` en `/api/watermark` | T-086 | todo |
