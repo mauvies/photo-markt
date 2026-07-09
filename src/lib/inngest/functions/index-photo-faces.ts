@@ -43,14 +43,16 @@ import { updatePhotoDimensions } from '@/database/queries/photos';
 import {
   addPhotoFace,
   countEventPhotosInFlight,
+  deletePhotoFacesByPhotoId,
   type EventRekognitionState,
   getEventRekognitionState,
+  getPhotoFacesByPhotoId,
   updateEventRekognitionState,
   updatePhotoFaceIndexStatus,
 } from '@/database/queries/rekognition';
 import type { SupabaseServerClient } from '@/database/queries/types';
 import { supabaseAdmin } from '@/database/supabase-admin';
-import { indexFaceForPhoto } from '@/lib/aws/face-indexing';
+import { deleteFacesFromCollection, indexFaceForPhoto } from '@/lib/aws/face-indexing';
 import { prepareImageForRekognition } from '@/lib/aws/image-prep';
 import { revalidateEventDetailTags, revalidateEventListingTags } from '@/lib/event-cache-tags';
 import { validatePhotoBuffer } from '@/lib/photo-upload';
@@ -165,6 +167,46 @@ async function markRejected(photoId: string, path: string): Promise<void> {
   if (error) {
     throw new Error(`Failed to mark photo rejected: ${error.message}`);
   }
+}
+
+/**
+ * Clear any face records a prior run left for this photo before calling
+ * `IndexFaces` again — AWS mints a brand-new `FaceId` on every call, so
+ * without this a re-index (partial-failure retry, or the "Re-index event"
+ * backfill) just appends to `photo_faces` and to the AWS collection forever
+ * (T-091). AWS-side deletion is best-effort: a failure here leaves an
+ * orphaned face in the collection (storage cost only — search already
+ * dedupes results by `photo_id`, so an orphan never surfaces as a
+ * duplicate) but must never block the re-index itself. The DB rows are
+ * always cleared so `photo_faces` never accumulates, regardless of whether
+ * the AWS delete succeeded.
+ */
+async function deleteStaleFaces(photoId: string): Promise<void> {
+  const staleFaces = await getPhotoFacesByPhotoId(adminClient, photoId);
+  if (staleFaces.length === 0) return;
+
+  const faceIdsByCollection = new Map<string, string[]>();
+  for (const face of staleFaces) {
+    const ids = faceIdsByCollection.get(face.aws_collection_id) ?? [];
+    ids.push(face.aws_face_id);
+    faceIdsByCollection.set(face.aws_collection_id, ids);
+  }
+
+  for (const [collectionId, faceIds] of faceIdsByCollection) {
+    try {
+      await safeCall('delete-stale-faces', () =>
+        deleteFacesFromCollection({ collectionId, faceIds }),
+      );
+    } catch (err) {
+      console.error('[index-photo-faces] failed to delete stale AWS faces', {
+        photoId,
+        collectionId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  await deletePhotoFacesByPhotoId(adminClient, photoId);
 }
 
 async function promoteToApproved(photoId: string): Promise<void> {
@@ -443,6 +485,12 @@ export async function runIndexPhotoFacesFlow(
     // but TypeScript drops the narrowing across the safeCall closure boundary
     // — hoist into a local to keep the type tight.
     const collectionId = state.collectionId;
+
+    // Clear whatever a prior run (partial failure, or a deliberate
+    // re-index) left for this photo — otherwise IndexFaces below mints a
+    // fresh FaceId and photo_faces just accumulates (T-091).
+    await deleteStaleFaces(photoId);
+
     const prepped = await safeCall('prepare-image', () => prepareImageForRekognition(buffer));
     const faces = await safeCall('index-faces', () =>
       indexFaceForPhoto({
