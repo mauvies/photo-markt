@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 27 | P2 | T-082 | Reposicionar "Save event" y "Share" como iconos junto al título del evento | — | todo |
+| 27 | P2 | T-082 | Reposicionar "Save event" y "Share" como iconos junto al título del evento | — | doing |
 | 28 | P2 | T-088 | [Cache] Mutaciones de fotos revalidan también los tags de listados (home/búsqueda/perfil/dashboard) | T-084 | todo |
 | 29 | P2 | T-089 | [Inngest] Serializar backfills por evento + idempotency keys (doble click = doble gasto AWS) | — | todo |
 | 30 | P2 | T-090 | [Inngest/Bug] Re-index de caras re-paga `DetectText` — worker de dorsales sin guard por foto | — | todo |

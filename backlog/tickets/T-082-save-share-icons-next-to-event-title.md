@@ -1,7 +1,7 @@
 # T-082 · Reposicionar "Save event" y "Share" como iconos junto al título del evento
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `feat/save-share-icons-next-to-event-title`  (tipo = feat)
 - **OpenSpec change:** — (probablemente no aplica — reusa componentes/lógica existentes; confirmar al ejecutar)
