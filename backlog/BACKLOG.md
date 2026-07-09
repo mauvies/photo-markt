@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 28 | P2 | T-088 | [Cache] Mutaciones de fotos revalidan también los tags de listados (home/búsqueda/perfil/dashboard) | T-084 | todo |
+| 28 | P2 | T-088 | [Cache] Mutaciones de fotos revalidan también los tags de listados (home/búsqueda/perfil/dashboard) | T-084 | doing |
 | 29 | P2 | T-089 | [Inngest] Serializar backfills por evento + idempotency keys (doble click = doble gasto AWS) | — | todo |
 | 30 | P2 | T-090 | [Inngest/Bug] Re-index de caras re-paga `DetectText` — worker de dorsales sin guard por foto | — | todo |
 | 31 | P2 | T-091 | [Inngest/Bug] Re-index duplica caras: `DeleteFaces` + limpiar `photo_faces` antes de re-indexar | T-089 | todo |

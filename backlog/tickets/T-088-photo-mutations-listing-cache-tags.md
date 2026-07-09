@@ -1,7 +1,7 @@
 # T-088 · [Cache] Mutaciones de fotos deben revalidar también los tags de listados (home/búsqueda/perfil/dashboard)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `fix/photo-mutations-listing-cache-tags`  (tipo = fix)
 - **OpenSpec change:** —  (extensión del helper de revalidación existente)
