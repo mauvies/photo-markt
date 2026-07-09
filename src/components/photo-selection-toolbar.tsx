@@ -92,7 +92,7 @@ export function PhotoSelectionToolbar({
               size="icon"
               onClick={onClear}
               aria-label={exitLabel}
-              className="-ml-1 size-8 shrink-0"
+              className="size-8 shrink-0"
             >
               <X className="h-5 w-5" />
             </Button>
