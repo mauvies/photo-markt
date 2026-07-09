@@ -1,11 +1,11 @@
 # T-090 · [Inngest/Bug] El re-index de caras re-paga `DetectText` — el worker de dorsales no chequea el estado por foto
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/bib-detection-skip-already-detected`  (tipo = fix)
 - **OpenSpec change:** —  (guard en un worker)
-- **PR:** —
+- **PR:** #149
 - **Origen:** auditoría de caching T-083 (`docs/CACHING_AUDIT.md`, **F-12**, ítem #7 del plan)
 
 ## Requerimiento

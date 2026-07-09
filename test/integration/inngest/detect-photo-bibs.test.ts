@@ -127,6 +127,51 @@ describe('detect-photo-bibs worker (T-032)', () => {
     expect(await readBibStatus(photo.id)).toBeNull();
   });
 
+  // T-090 regression: a face-indexing re-index backfill replays `photo.uploaded`
+  // for photos that already have bibs resolved — must not re-pay DetectText.
+  it('skips (no AWS call) when photo.uploaded re-fires on an already-detected photo', async () => {
+    detectTextMock.mockResolvedValue([{ text: '1432', confidence: 99, boundingBox: null }]);
+    const { event, photo, path } = await setup({ enabled: true });
+
+    await runDetectPhotoBibsFlow(
+      { photoId: photo.id, eventId: event.id, storagePath: path },
+      passthroughStep,
+    );
+    expect(detectTextMock).toHaveBeenCalledTimes(1);
+
+    const result = await runDetectPhotoBibsFlow(
+      { photoId: photo.id, eventId: event.id, storagePath: path },
+      passthroughStep,
+      'photo.uploaded',
+    );
+
+    expect(result).toMatchObject({ skipped: true, reason: 'already-detected' });
+    expect(detectTextMock).toHaveBeenCalledTimes(1); // still just the first call
+    expect(await readBibStatus(photo.id)).toBe('detected');
+  });
+
+  // The dorsal backfill's own explicit re-detection event must still run even
+  // if a photo's status is (unexpectedly) already terminal.
+  it('still runs on an already-detected photo when re-fired via photo.bib-detect', async () => {
+    detectTextMock.mockResolvedValue([{ text: '1432', confidence: 99, boundingBox: null }]);
+    const { event, photo, path } = await setup({ enabled: true });
+
+    await runDetectPhotoBibsFlow(
+      { photoId: photo.id, eventId: event.id, storagePath: path },
+      passthroughStep,
+    );
+    expect(detectTextMock).toHaveBeenCalledTimes(1);
+
+    const result = await runDetectPhotoBibsFlow(
+      { photoId: photo.id, eventId: event.id, storagePath: path },
+      passthroughStep,
+      'photo.bib-detect',
+    );
+
+    expect(result).toMatchObject({ outcome: 'detected' });
+    expect(detectTextMock).toHaveBeenCalledTimes(2);
+  });
+
   // T-071 regression: a storage object that will never exist must fail FAST
   // via NonRetriableError, not retry 3x for nothing.
   it('throws NonRetriableError for a missing storage object (never retries)', async () => {

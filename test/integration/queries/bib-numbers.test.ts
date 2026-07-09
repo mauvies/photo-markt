@@ -7,6 +7,7 @@ import {
   bulkSetPhotoBibDetectionStatus,
   countEventPhotosBibInFlight,
   getEventBibDetectionState,
+  getPhotoBibDetectionStatus,
   getPhotoIdsByBibInEvent,
   persistPhotoBibs,
   updateEventBibDetectionState,
@@ -82,6 +83,20 @@ describe('database/queries/bib-numbers', () => {
       const photographer = await createTestUser('PHOTOGRAPHER');
       const event = await createTestEvent(photographer.id);
       expect(await getPhotoIdsByBibInEvent(createServiceClient(), event.id, '9999')).toEqual([]);
+    });
+  });
+
+  describe('getPhotoBibDetectionStatus', () => {
+    it('returns null before detection ever ran, then the persisted status', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id);
+      const photo = await createTestPhoto(event.id);
+      const sb = createServiceClient();
+
+      expect(await getPhotoBibDetectionStatus(sb, photo.id)).toBeNull();
+
+      await updatePhotoBibDetectionStatus(sb, photo.id, 'detected');
+      expect(await getPhotoBibDetectionStatus(sb, photo.id)).toBe('detected');
     });
   });
 
