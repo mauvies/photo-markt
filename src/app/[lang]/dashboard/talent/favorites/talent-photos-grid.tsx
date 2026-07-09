@@ -301,7 +301,6 @@ export function TalentPhotosGrid({
   const selectionLabels = useMemo(
     () => ({
       select: t('select'),
-      clear: t('clear'),
       countNone: t('noPhotosSelected'),
       countOne: t('photoSelected'),
       countMany: t('photosSelected'),

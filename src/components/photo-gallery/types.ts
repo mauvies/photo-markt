@@ -29,7 +29,6 @@ export interface PhotoGalleryBulkAction {
 /** Localized copy for the selection toolbar / bars. */
 export interface PhotoGallerySelectionLabels {
   select: string;
-  clear: string;
   countNone: string;
   countOne: string;
   /** "{n}" placeholder substituted with the selected count. */

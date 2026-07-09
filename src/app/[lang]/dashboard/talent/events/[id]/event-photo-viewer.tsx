@@ -665,7 +665,6 @@ export function EventPhotoViewer({
   const selectionLabels = useMemo(
     () => ({
       select: bulkDownload.select,
-      clear: bulkDownload.clear,
       countNone: bulkDownload.countNone,
       countOne: bulkDownload.countOne,
       countMany: bulkDownload.countMany,

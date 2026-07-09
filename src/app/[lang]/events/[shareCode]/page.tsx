@@ -372,7 +372,6 @@ export default async function EventPage({
 
   const bulkDownloadLabels = {
     select: dict.events.selectButton,
-    clear: dict.events.clearButton,
     exitSelection: dict.events.exitSelection,
     countNone: dict.events.noPhotosSelected,
     countOne: dict.events.onePhotoSelected,

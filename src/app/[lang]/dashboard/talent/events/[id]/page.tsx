@@ -271,7 +271,6 @@ export default async function ExploreEventDetailPage({
   const isFreeEvent = event.price_per_photo === null;
   const bulkDownloadLabels = {
     select: dict.events.selectButton,
-    clear: dict.events.clearButton,
     exitSelection: dict.events.exitSelection,
     countNone: dict.events.noPhotosSelected,
     countOne: dict.events.onePhotoSelected,

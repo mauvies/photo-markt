@@ -268,7 +268,6 @@ export function EventPhotoAlbum({
   const selectionLabels = useMemo(
     () => ({
       select: t('selectButton'),
-      clear: t('clearButton'),
       countNone: t('noPhotosSelected'),
       countOne: t('onePhotoSelected'),
       countMany: t('nPhotosSelected'),
