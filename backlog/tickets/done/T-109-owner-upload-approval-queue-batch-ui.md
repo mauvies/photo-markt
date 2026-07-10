@@ -1,11 +1,11 @@
 # T-109 · Fix: fotos del organizador en la cola de aprobación + UI de aprobación con acciones batch
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/owner-upload-approval-queue-batch-ui`
-- **OpenSpec change:** — (evaluar al ejecutar: toca 2+ archivos pero es acotado — `pending-photos-tab.tsx` + `actions.ts`; decidir si amerita OpenSpec por el alcance de la Parte 2)
-- **PR:** —
+- **OpenSpec change:** — (implementado directo: bug-fix + rediseño UI, sin migración/pagos)
+- **PR:** #154
 
 ## Requerimiento
 
