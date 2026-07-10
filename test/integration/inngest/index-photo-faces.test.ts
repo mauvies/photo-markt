@@ -58,11 +58,14 @@ const noopSend: PhotoProcessedSender = async () => undefined;
 /** Recording sender for the emission tests. */
 function recordingSend(): {
   send: PhotoProcessedSender;
-  events: Array<{ name: string; data: { photoId: string; eventId: string; storagePath: string } }>;
+  events: Array<{
+    name: string;
+    data: { photoId: string; eventId: string; storagePath: string; force?: boolean };
+  }>;
 } {
   const events: Array<{
     name: string;
-    data: { photoId: string; eventId: string; storagePath: string };
+    data: { photoId: string; eventId: string; storagePath: string; force?: boolean };
   }> = [];
   return {
     events,
@@ -393,7 +396,14 @@ describe('runIndexPhotoFacesFlow — upload_status promotion', () => {
 
     expect(rec.events).toHaveLength(1);
     expect(rec.events[0].name).toBe('photo.processed');
-    expect(rec.events[0].data).toEqual({ photoId: photo.id, eventId: event.id, storagePath });
+    // No AI on this event → no faces indexed → force:false so the thumbnail
+    // ready-guard (T-092) can skip a bare re-emission over a ready thumbnail.
+    expect(rec.events[0].data).toEqual({
+      photoId: photo.id,
+      eventId: event.id,
+      storagePath,
+      force: false,
+    });
   });
 
   it('does NOT emit photo.processed for a rejected photo', async () => {
@@ -584,5 +594,57 @@ describe('runIndexPhotoFacesFlow — stale face cleanup on re-index (T-091)', ()
 
     expect(deleteFacesFromCollectionMock).not.toHaveBeenCalled();
     expect(await readPhotoFaceIds(photo.id)).toEqual(['first-face-1']);
+  });
+
+  // T-092: when a run actually indexes faces, the emitted photo.processed must
+  // carry force:true so the thumbnail worker re-bakes even an already-`ready`
+  // thumbnail — the T-078 scenario (AI enabled after upload → blur must appear)
+  // depends on this. A no-face run must carry force:false.
+  it('emits photo.processed with force:true when faces were indexed (false when none)', async () => {
+    const { owner, event } = await setupAiEnabledEvent();
+
+    // Photo that indexes a face → force:true.
+    const facePath = `${owner.id}/${event.id}/force-with-face.jpg`;
+    const faceSize = await uploadJpeg(facePath);
+    const facePhoto = await insertPhoto({
+      userId: owner.id,
+      eventId: event.id,
+      originalUrl: facePath,
+      sizeBytes: faceSize,
+      uploadStatus: 'pending',
+    });
+    indexFaceForPhotoMock.mockResolvedValueOnce([
+      { awsFaceId: 'force-face-1', confidence: 99, boundingBox: null },
+    ]);
+
+    const recWithFace = recordingSend();
+    await runIndexPhotoFacesFlow(
+      { photoId: facePhoto.id, eventId: event.id, storagePath: facePath },
+      passthroughStep,
+      recWithFace.send,
+    );
+    expect(recWithFace.events).toHaveLength(1);
+    expect(recWithFace.events[0].data.force).toBe(true);
+
+    // Photo that indexes zero faces → force:false (no blur, nothing changed).
+    const plainPath = `${owner.id}/${event.id}/force-no-face.jpg`;
+    const plainSize = await uploadJpeg(plainPath);
+    const plainPhoto = await insertPhoto({
+      userId: owner.id,
+      eventId: event.id,
+      originalUrl: plainPath,
+      sizeBytes: plainSize,
+      uploadStatus: 'pending',
+    });
+    indexFaceForPhotoMock.mockResolvedValueOnce([]);
+
+    const recNoFace = recordingSend();
+    await runIndexPhotoFacesFlow(
+      { photoId: plainPhoto.id, eventId: event.id, storagePath: plainPath },
+      passthroughStep,
+      recNoFace.send,
+    );
+    expect(recNoFace.events).toHaveLength(1);
+    expect(recNoFace.events[0].data.force).toBe(false);
   });
 });

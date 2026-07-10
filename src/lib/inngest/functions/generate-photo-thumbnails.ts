@@ -18,9 +18,12 @@
  * Step ordering (3 steps; bytes NEVER cross step boundaries):
  *
  *   1. load-context        → small JSON: event watermark_enabled flag +
- *                            photo upload_status. Bails early on
- *                            rejected/missing photos (race with
- *                            index-photo-faces validation step).
+ *                            photo upload_status + thumbnail_status. Bails
+ *                            early on rejected/missing photos (race with
+ *                            index-photo-faces validation step) and on an
+ *                            already-`ready` thumbnail when the trigger didn't
+ *                            set `force` (ready-guard, T-092 — avoids a
+ *                            pointless re-bake + CDN churn on bare re-emissions).
  *   2. generate-and-upload → THE mega-step. Downloads original, for paid
  *                            events blurs every indexed face + applies
  *                            watermark, resizes to small + medium WebP,
@@ -59,18 +62,25 @@ interface ContextResult {
   watermarkEnabled: boolean;
   /** null means the photo was deleted or rejected before we ran */
   uploadStatus: string | null;
+  /** current thumbnail_status — drives the ready-guard skip (T-092) */
+  thumbnailStatus: string | null;
 }
 
 type GenerateOutcome = 'generated' | 'skipped' | 'no-original';
 
 async function loadContext(photoId: string, eventId: string): Promise<ContextResult> {
   const [photoResult, eventResult] = await Promise.all([
-    adminClient.from('photos').select('upload_status').eq('id', photoId).maybeSingle(),
+    adminClient
+      .from('photos')
+      .select('upload_status, thumbnail_status')
+      .eq('id', photoId)
+      .maybeSingle(),
     adminClient.from('events').select('watermark_enabled').eq('id', eventId).maybeSingle(),
   ]);
   return {
     watermarkEnabled: Boolean(eventResult.data?.watermark_enabled),
     uploadStatus: (photoResult.data?.upload_status as string | null) ?? null,
+    thumbnailStatus: (photoResult.data?.thumbnail_status as string | null) ?? null,
   };
 }
 
@@ -124,7 +134,7 @@ export async function runGeneratePhotoThumbnailsFlow(
   payload: PhotoUploadedPayload,
   step: PhotoUploadStep,
 ): Promise<unknown> {
-  const { photoId, eventId, storagePath } = payload;
+  const { photoId, eventId, storagePath, force } = payload;
 
   console.log(`[generate-photo-thumbnails] start photoId=${photoId} eventId=${eventId}`);
 
@@ -139,6 +149,18 @@ export async function runGeneratePhotoThumbnailsFlow(
       `[generate-photo-thumbnails] skipping photoId=${photoId} uploadStatus=${ctx.uploadStatus}`,
     );
     return { outcome: 'skipped', reason: 'rejected-or-missing' };
+  }
+
+  // Ready-guard (T-092): a thumbnail already baked `ready` doesn't need
+  // re-baking on a bare `photo.processed` re-emission (re-index of non-indexed
+  // photos, disable→re-enable of AI) — re-baking would re-download the
+  // original, re-run watermark+blur+2×resize+2×upload and bump `thumb_version`,
+  // pointlessly busting the immutable /api/thumb CDN entry. Skip UNLESS `force`
+  // is set, which index-photo-faces sets only when this run (re)wrote face
+  // boxes and the baked-in blur may have changed (never skip the T-078 re-bake).
+  if (ctx.thumbnailStatus === 'ready' && !force) {
+    console.log(`[generate-photo-thumbnails] skipping photoId=${photoId} already ready (no force)`);
+    return { outcome: 'skipped', reason: 'already-ready' };
   }
 
   // ── 2. generate-and-upload ───────────────────────────────────────────

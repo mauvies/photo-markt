@@ -340,17 +340,107 @@ describe('runGeneratePhotoThumbnailsFlow', () => {
     // Freshly inserted → version 0 (no cache-bust suffix yet).
     expect(await readThumbVersion(photo.id)).toBe(0);
 
-    const payload = { photoId: photo.id, eventId: event.id, storagePath };
-
     // First bake (tile-only): version → 1.
-    await runGeneratePhotoThumbnailsFlow(payload, passthroughStep);
+    await runGeneratePhotoThumbnailsFlow(
+      { photoId: photo.id, eventId: event.id, storagePath },
+      passthroughStep,
+    );
     expect(await readThumbVersion(photo.id)).toBe(1);
 
-    // Re-bake (e.g. AI enabled later → blurred): version → 2, so the /api/thumb
+    // Genuine re-bake (T-092: only with `force`, e.g. AI enabled later →
+    // faces indexed → blur may have changed): version → 2, so the /api/thumb
     // URL the gallery builds changes from ?v=1 to ?v=2.
-    await runGeneratePhotoThumbnailsFlow(payload, passthroughStep);
+    await runGeneratePhotoThumbnailsFlow(
+      { photoId: photo.id, eventId: event.id, storagePath, force: true },
+      passthroughStep,
+    );
     expect(await readThumbVersion(photo.id)).toBe(2);
     expect(await readThumbnailStatus(photo.id)).toBe('ready');
+  });
+
+  // T-092 regression: a bare `photo.processed` re-emission (no `force`) over a
+  // thumbnail that's already `ready` must SKIP — no re-download, no re-upload,
+  // no `thumb_version` bump (which would pointlessly bust the immutable CDN
+  // entry). Before the guard the worker re-baked unconditionally and version
+  // climbed on every re-emission.
+  it('skips a re-emission over a ready thumbnail without force (version intact)', async () => {
+    const user = await createTestUser(ROLES.PHOTOGRAPHER, { email: 'thumb-guard@test.com' });
+    const event = await createTestEvent(user.id);
+    const storagePath = `${user.id}/${event.id}/photo-guard.jpg`;
+    const sizeBytes = await uploadJpeg(storagePath);
+    const photo = await insertPhoto({
+      userId: user.id,
+      eventId: event.id,
+      originalUrl: storagePath,
+      sizeBytes,
+      uploadStatus: 'approved',
+    });
+
+    // First bake → ready, version 1.
+    await runGeneratePhotoThumbnailsFlow(
+      { photoId: photo.id, eventId: event.id, storagePath },
+      passthroughStep,
+    );
+    expect(await readThumbnailStatus(photo.id)).toBe('ready');
+    expect(await readThumbVersion(photo.id)).toBe(1);
+
+    // Delete the baked thumbnails so a re-bake would be observable (it would
+    // re-create them). A skip leaves them absent.
+    const sb = createServiceClient();
+    await sb.storage
+      .from('photos')
+      .remove([thumbStoragePath(storagePath, 'small'), thumbStoragePath(storagePath, 'medium')]);
+
+    // Bare re-emission (no force) → skip.
+    const result = await runGeneratePhotoThumbnailsFlow(
+      { photoId: photo.id, eventId: event.id, storagePath },
+      passthroughStep,
+    );
+
+    expect((result as { outcome: string; reason?: string }).outcome).toBe('skipped');
+    expect((result as { reason?: string }).reason).toBe('already-ready');
+    // Version untouched → immutable /api/thumb URL unchanged, CDN hit preserved.
+    expect(await readThumbVersion(photo.id)).toBe(1);
+    // No re-bake happened: the deleted thumbnails were not re-created.
+    expect(await storageObjectExists(thumbStoragePath(storagePath, 'small'))).toBe(false);
+    expect(await storageObjectExists(thumbStoragePath(storagePath, 'medium'))).toBe(false);
+  });
+
+  // T-092: `force` overrides the ready-guard so a genuine re-bake still runs.
+  it('re-bakes a ready thumbnail when force is set', async () => {
+    const user = await createTestUser(ROLES.PHOTOGRAPHER, { email: 'thumb-force@test.com' });
+    const event = await createTestEvent(user.id);
+    const storagePath = `${user.id}/${event.id}/photo-force.jpg`;
+    const sizeBytes = await uploadJpeg(storagePath);
+    const photo = await insertPhoto({
+      userId: user.id,
+      eventId: event.id,
+      originalUrl: storagePath,
+      sizeBytes,
+      uploadStatus: 'approved',
+    });
+
+    await runGeneratePhotoThumbnailsFlow(
+      { photoId: photo.id, eventId: event.id, storagePath },
+      passthroughStep,
+    );
+    expect(await readThumbVersion(photo.id)).toBe(1);
+
+    const sb = createServiceClient();
+    await sb.storage
+      .from('photos')
+      .remove([thumbStoragePath(storagePath, 'small'), thumbStoragePath(storagePath, 'medium')]);
+
+    const result = await runGeneratePhotoThumbnailsFlow(
+      { photoId: photo.id, eventId: event.id, storagePath, force: true },
+      passthroughStep,
+    );
+
+    expect((result as { outcome: string }).outcome).toBe('generated');
+    expect(await readThumbVersion(photo.id)).toBe(2);
+    // Re-bake re-created the thumbnails.
+    expect(await storageObjectExists(thumbStoragePath(storagePath, 'small'))).toBe(true);
+    expect(await storageObjectExists(thumbStoragePath(storagePath, 'medium'))).toBe(true);
   });
 
   // T-071 regression: a storage object that will never exist must fail FAST
