@@ -17,12 +17,13 @@ import { createEvent, uploadEventCoverAction } from './actions';
 import { activityOptions } from './activity-options';
 import { DraftResumeDialog } from './components/draft-resume-dialog';
 import { ShareCodeDialog } from './components/share-code-dialog';
-import { type StepNumber, WizardSteps } from './components/wizard-steps';
+import { REVIEW_STEP, type StepNumber, TOTAL_STEPS, WizardSteps } from './components/wizard-steps';
 import { resolveRetryOutcome, shouldDiscardCreatedEvent } from './orphan-cleanup';
-import { Step1Config } from './steps/step-1-config';
-import { Step2Details } from './steps/step-2-details';
-import { Step3Photos } from './steps/step-3-photos';
-import { type ReviewSection, Step4Review } from './steps/step-4-review';
+import { Step1Type } from './steps/step-1-type';
+import { Step2Config } from './steps/step-2-config';
+import { Step3Details } from './steps/step-3-details';
+import { Step4Photos } from './steps/step-4-photos';
+import { type ReviewSection, Step5Review } from './steps/step-5-review';
 import { eventSchema, type FormValues } from './wizard.schema';
 import { mergeFilePreviews, removeFileFromPreviews } from './wizard-file-utils';
 import {
@@ -36,16 +37,23 @@ import { type FilePreview, useEventForm } from './wizard-types';
 
 type NewEventT = Dictionary['newEvent'];
 
+// Step 3 (Details) is the only step with required fields to validate.
 const STEP_FIELDS: Record<StepNumber, Array<keyof FormValues>> = {
   1: [],
-  2: ['name', 'activity', 'date', 'city', 'price_per_photo'],
-  3: [],
+  2: [],
+  3: ['name', 'activity', 'date', 'city', 'price_per_photo'],
   4: [],
+  5: [],
 };
+
+// Numbered wizard steps for quick reference (the review step is REVIEW_STEP).
+const TYPE_STEP: StepNumber = 1;
+const DETAILS_STEP: StepNumber = 3;
+const PHOTOS_STEP: StepNumber = 4;
 
 function parseStepParam(value: string | null): StepNumber {
   const parsed = Number.parseInt(value ?? '1', 10);
-  if (parsed === 1 || parsed === 2 || parsed === 3 || parsed === 4) return parsed;
+  if (parsed === 1 || parsed === 2 || parsed === 3 || parsed === 4 || parsed === 5) return parsed;
   return 1;
 }
 
@@ -84,7 +92,7 @@ export default function NewEventForm({
   // closure so the retry handler can trigger navigation after a successful
   // retryFailed() without needing to re-derive all the captured variables.
   const goToEventRef = useRef<((count: number) => void) | null>(null);
-  const [submitAttemptedStep2, setSubmitAttemptedStep2] = useState(false);
+  const [submitAttemptedDetails, setSubmitAttemptedDetails] = useState(false);
   const [createdShareCode, setCreatedShareCode] = useState<string | null>(null);
   const [createdEventName, setCreatedEventName] = useState<string | null>(null);
   const [createdEventId, setCreatedEventId] = useState<string | null>(null);
@@ -303,9 +311,9 @@ export default function NewEventForm({
   };
 
   const validateAndAdvance = useCallback(async () => {
-    if (currentStep === 2) {
-      setSubmitAttemptedStep2(true);
-      const fields = STEP_FIELDS[2];
+    if (currentStep === DETAILS_STEP) {
+      setSubmitAttemptedDetails(true);
+      const fields = STEP_FIELDS[DETAILS_STEP];
       await Promise.all(fields.map((name) => form.validateField(name, 'change')));
       const fieldMeta = form.state.fieldMeta;
       const hasErrors = fields.some((name) => {
@@ -315,7 +323,7 @@ export default function NewEventForm({
       if (hasErrors) return;
     }
 
-    if (currentStep === 3) {
+    if (currentStep === PHOTOS_STEP) {
       const eventType = form.state.values.event_type;
       // Solo events require ≥1 photo; collaborative and organizer events
       // both let other users contribute later, so the wizard accepts zero.
@@ -331,7 +339,7 @@ export default function NewEventForm({
     // from instead of walking the next sequential step. Clear the memo so
     // subsequent Next clicks behave normally.
     const next: StepNumber =
-      returnToStep !== null ? returnToStep : (Math.min(currentStep + 1, 4) as StepNumber);
+      returnToStep !== null ? returnToStep : (Math.min(currentStep + 1, REVIEW_STEP) as StepNumber);
     if (returnToStep !== null) setReturnToStep(null);
     goToStep(next);
   }, [currentStep, files.length, form, goToStep, returnToStep, t]);
@@ -348,10 +356,10 @@ export default function NewEventForm({
     }
 
     if (parsed.event_type === 'solo' && files.length === 0) {
-      // Bump the user back to step 3 with the banner if they somehow reached
-      // step 4 with no photos (e.g., refresh).
+      // Bump the user back to the photos step with the banner if they somehow
+      // reached the review step with no photos (e.g., refresh).
       setPhotosError(t('photosRequired'));
-      goToStep(3);
+      goToStep(PHOTOS_STEP);
       return;
     }
 
@@ -581,8 +589,11 @@ export default function NewEventForm({
     }
 
     return [
-      { title: t('reviewConfigSection'), editStep: 1, rows: configRows },
-      { title: t('reviewDetailsSection'), editStep: 2, rows: detailsRows },
+      // Config section aggregates the event type (step 1) + all the toggles
+      // (step 2); its Edit jumps to the toggles step, from where Back reaches
+      // the type step if needed.
+      { title: t('reviewConfigSection'), editStep: 2, rows: configRows },
+      { title: t('reviewDetailsSection'), editStep: DETAILS_STEP, rows: detailsRows },
     ];
   }, [form.state.values, t]);
 
@@ -595,27 +606,28 @@ export default function NewEventForm({
         <header className="space-y-3">
           <DashboardHeader title={t('title')} />
           <p className="text-sm text-muted-foreground">
-            {currentStep === 4
-              ? t('step4Title')
+            {currentStep === REVIEW_STEP
+              ? t('step5Title')
               : t('wizardStepLabel')
                   .replace('{current}', String(currentStep))
-                  .replace('{total}', '3')}
+                  .replace('{total}', String(TOTAL_STEPS))}
           </p>
           <WizardSteps current={currentStep} reached={reachedStep} onSelect={goToStep} />
         </header>
 
         <div className="min-w-0">
-          {currentStep === 1 && <Step1Config form={form} />}
-          {currentStep === 2 && (
-            <Step2Details
+          {currentStep === 1 && <Step1Type form={form} />}
+          {currentStep === 2 && <Step2Config form={form} />}
+          {currentStep === 3 && (
+            <Step3Details
               form={form}
-              submitAttempted={submitAttemptedStep2}
+              submitAttempted={submitAttemptedDetails}
               coverPreviewUrl={coverPreviewUrl}
               onCoverChange={handleCoverChange}
             />
           )}
-          {currentStep === 3 && (
-            <Step3Photos
+          {currentStep === 4 && (
+            <Step4Photos
               previews={filePreviews}
               error={photosError}
               photosLost={photosLost}
@@ -624,8 +636,8 @@ export default function NewEventForm({
               onRemove={removeFile}
             />
           )}
-          {currentStep === 4 && (
-            <Step4Review
+          {currentStep === REVIEW_STEP && (
+            <Step5Review
               sections={reviewSections}
               previews={filePreviews}
               photosLost={photosLost && eventType === 'solo'}
@@ -640,7 +652,7 @@ export default function NewEventForm({
         <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 z-50 border-t border-border bg-background/95 shadow-lg backdrop-blur supports-backdrop-filter:bg-background/80 md:bottom-0 md:left-(--sidebar-width)">
           <div className="mx-auto flex w-full max-w-full flex-col items-end gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-end sm:px-6">
             <div className="flex gap-3">
-              {currentStep === 1 ? (
+              {currentStep === TYPE_STEP ? (
                 <Button
                   type="button"
                   variant="outline"
@@ -669,7 +681,7 @@ export default function NewEventForm({
                   {t('wizardBack')}
                 </Button>
               )}
-              {currentStep < 4 ? (
+              {currentStep < REVIEW_STEP ? (
                 <Button type="button" onClick={validateAndAdvance} disabled={isPending}>
                   {t('wizardNext')}
                 </Button>

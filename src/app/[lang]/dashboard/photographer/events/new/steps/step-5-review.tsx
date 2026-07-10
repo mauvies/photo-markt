@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
-import type { StepNumber } from '../components/wizard-steps';
+import { REVIEW_STEP, type StepNumber } from '../components/wizard-steps';
 import type { EventType } from '../wizard.schema';
 import type { FilePreview } from '../wizard-types';
 
@@ -17,7 +17,7 @@ export type ReviewSection = {
   rows: Array<{ label: string; value: string }>;
 };
 
-type Step4ReviewProps = {
+type Step5ReviewProps = {
   sections: ReviewSection[];
   previews: FilePreview[];
   // Shown when previews are empty due to a refresh wiping File[] state.
@@ -25,18 +25,18 @@ type Step4ReviewProps = {
   photosLost: boolean;
   eventType: EventType;
   // Optional `remember` hint lets Edit buttons here signal "after Next from
-  // the edited step, jump straight back to step 4" — preserving the user's
-  // review position rather than walking through intermediate steps.
+  // the edited step, jump straight back to the review step" — preserving the
+  // user's review position rather than walking through intermediate steps.
   goToStep: (step: StepNumber, opts?: { remember?: StepNumber }) => void;
 };
 
-export function Step4Review({
+export function Step5Review({
   sections,
   previews,
   photosLost,
   eventType,
   goToStep,
-}: Step4ReviewProps) {
+}: Step5ReviewProps) {
   const { t } = useTranslations<NewEventT>();
   const isOrganizer = eventType === 'organizer';
 
@@ -52,7 +52,7 @@ export function Step4Review({
               variant="outline"
               size="sm"
               className="mt-2"
-              onClick={() => goToStep(3, { remember: 4 })}
+              onClick={() => goToStep(4, { remember: REVIEW_STEP })}
             >
               {t('reviewEditPhotos')}
             </Button>
@@ -69,7 +69,7 @@ export function Step4Review({
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => goToStep(section.editStep, { remember: 4 })}
+                onClick={() => goToStep(section.editStep, { remember: REVIEW_STEP })}
                 className="h-8 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
               >
                 <Pencil className="h-3 w-3" />
@@ -99,7 +99,7 @@ export function Step4Review({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => goToStep(3, { remember: 4 })}
+              onClick={() => goToStep(4, { remember: REVIEW_STEP })}
               className="h-8 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
             >
               <Pencil className="h-3 w-3" />

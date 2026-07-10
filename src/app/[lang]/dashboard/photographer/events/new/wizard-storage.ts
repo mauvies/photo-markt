@@ -156,14 +156,19 @@ export function readStoredState(): StoredWizardState | null {
     };
 
     const reachedStep: StepNumber =
-      reachedStepRaw === 1 || reachedStepRaw === 2 || reachedStepRaw === 3 || reachedStepRaw === 4
+      reachedStepRaw === 1 ||
+      reachedStepRaw === 2 ||
+      reachedStepRaw === 3 ||
+      reachedStepRaw === 4 ||
+      reachedStepRaw === 5
         ? reachedStepRaw
         : 1;
     const returnToStep: StepNumber | null =
       returnToStepRaw === 1 ||
       returnToStepRaw === 2 ||
       returnToStepRaw === 3 ||
-      returnToStepRaw === 4
+      returnToStepRaw === 4 ||
+      returnToStepRaw === 5
         ? returnToStepRaw
         : null;
 
