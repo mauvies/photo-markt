@@ -1,11 +1,11 @@
 # T-105 · Reestructurar wizard de crear evento: separar tipo/config en 2 pasos + rediseñar paso Detalles (portada 2 columnas) + limpiar hover del indicador
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/event-wizard-restructure`  (tipo = feat)
 - **OpenSpec change:** — (UI con requerimiento claro → implementar directo)
-- **PR:** —
+- **PR:** #151
 
 ## Requerimiento
 El flujo de crear evento hoy son 3 pasos visibles, y el **paso 1 mezcla dos cosas** —elección del **tipo
