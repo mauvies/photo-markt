@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useCoarsePointer } from '@/hooks/use-coarse-pointer';
 import { getActivityIcon } from '@/lib/activity-icon';
 import { type EventStatus, isEventSoon } from '@/lib/event-status';
+import { shouldSkipImageOptimization } from '@/lib/image-source';
 import { cn } from '@/lib/utils';
 
 export type EventCardLabels = {
@@ -244,6 +245,7 @@ export function EventCard({
                 src={(coverThumbUrl ?? coverUrl) as string}
                 alt={`${name} cover`}
                 fill
+                unoptimized={shouldSkipImageOptimization((coverThumbUrl ?? coverUrl) as string)}
                 sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
                 priority={priority}
                 className={cn(

@@ -1,11 +1,11 @@
 # T-093 · [Perf/Imágenes] `unoptimized` en grid y covers para fuentes `/api/` (no re-optimizar thumbs ya horneados)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `perf/unoptimized-thumb-images`  (tipo = perf)
 - **OpenSpec change:** —  (dos componentes, patrón ya existente en el carousel)
-- **PR:** —
+- **PR:** #153
 - **Origen:** auditoría de caching T-083 (`docs/CACHING_AUDIT.md`, **F-21**, ítem #10 del plan)
 
 ## Requerimiento
