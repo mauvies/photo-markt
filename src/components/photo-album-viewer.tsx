@@ -19,6 +19,7 @@ import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCoarsePointer } from '@/hooks/use-coarse-pointer';
 import { usePhotoLightboxUrl } from '@/hooks/use-photo-lightbox-url';
+import { shouldSkipImageOptimization } from '@/lib/image-source';
 import { cn } from '@/lib/utils';
 
 /** Matches the `sm`/`md`/`lg` breakpoints in `grid-cols-*` below so `next/image`
@@ -442,6 +443,7 @@ export default function PhotoAlbumViewer({
                 alt={photo.alt}
                 fill
                 sizes={GRID_SIZES}
+                unoptimized={shouldSkipImageOptimization(photo.src)}
                 className={cn(
                   'object-cover transition-opacity duration-200',
                   state === 'loaded' ? 'opacity-100' : 'opacity-0',
