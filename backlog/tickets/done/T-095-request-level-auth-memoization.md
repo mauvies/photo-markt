@@ -1,11 +1,11 @@
 # T-095 · [Perf/Auth] Memoización per-request de auth: `getRoleContext()` en layouts + React `cache()` (~6 → 1-2 round-trips)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `perf/request-level-auth-memoization`  (tipo = perf; **toca auth → correr `/code-review` antes de commitear**)
 - **OpenSpec change:** evaluar al ejecutar (toca auth en >1 archivo — probable que sí)
-- **PR:** —
+- **PR:** #157
 - **Origen:** auditoría de caching T-083 (`docs/CACHING_AUDIT.md`, **F-19**, ítem #12 del plan)
 
 ## Requerimiento
