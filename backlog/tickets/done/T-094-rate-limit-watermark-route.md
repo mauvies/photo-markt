@@ -1,11 +1,11 @@
 # T-094 · [Seguridad] Rate limit + `maxDuration` en `/api/watermark` (amplificación de egress/CPU sin límite)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/rate-limit-watermark-route`  (tipo = fix)
 - **OpenSpec change:** —  (patrón de limiter existente)
-- **PR:** —
+- **PR:** #156 (stacked sobre #155, el hotfix de en.json)
 - **Dep:** T-086 (key de IP confiable primero)
 - **Origen:** auditoría de caching T-083 (`docs/CACHING_AUDIT.md`, **F-22**, ítem #11 del plan)
 

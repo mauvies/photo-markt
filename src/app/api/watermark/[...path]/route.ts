@@ -2,7 +2,23 @@ import { createClient } from '@supabase/supabase-js';
 import { type NextRequest, NextResponse } from 'next/server';
 import { getPhotoFaceBoxesByStoragePath } from '@/database/queries/rekognition';
 import { env } from '@/env.mjs';
+import { getClientIp, rateLimit, retryAfterSeconds } from '@/lib/rate-limit';
 import { addWatermarkToImage, buildWatermarkErrorPlaceholder, type FaceBox } from '@/lib/watermark';
+
+// Bound the request so a hung Sharp encode (or a slow Supabase download) can't
+// bill open-ended serverless time. A single watermark is normally sub-second;
+// 15s is generous headroom without leaving a stuck request running for minutes.
+export const maxDuration = 15;
+
+// Per-IP hourly cap. Each unique path is a fresh CDN miss that forces one
+// Supabase download + one Sharp encode, so enumerating paths amplifies egress
+// and CPU without bound. Cached edge hits never reach the function, so only
+// misses count against this. In steady state the grid is served by the baked,
+// immutable /api/thumb thumbnails (T-093) — this route is only the fallback for
+// the transient pre-bake window, so normal volume is low. The cap is sized to
+// absorb a large gallery scrolled entirely during that window; past it we serve
+// the placeholder tile (not a hard error), so the limit degrades gracefully.
+const WATERMARK_RATE_LIMIT = { limit: 600, windowSec: 3600 } as const;
 
 /**
  * API route to serve watermarked images — accessible without authentication.
@@ -14,7 +30,10 @@ import { addWatermarkToImage, buildWatermarkErrorPlaceholder, type FaceBox } fro
  * payment-gated; falling back to the un-watermarked source on error would
  * silently bypass that gate.
  */
-async function serveErrorPlaceholder(status: number): Promise<NextResponse> {
+async function serveErrorPlaceholder(
+  status: number,
+  extraHeaders?: Record<string, string>,
+): Promise<NextResponse> {
   try {
     const placeholder = await buildWatermarkErrorPlaceholder();
     return new NextResponse(new Uint8Array(placeholder), {
@@ -25,6 +44,7 @@ async function serveErrorPlaceholder(status: number): Promise<NextResponse> {
         // problem is transient (DB hiccup, cold start), the next request
         // should retry rather than serve placeholder for 24h.
         'Cache-Control': 'no-store, must-revalidate',
+        ...extraHeaders,
       },
     });
   } catch (placeholderErr) {
@@ -33,7 +53,7 @@ async function serveErrorPlaceholder(status: number): Promise<NextResponse> {
     console.error('[watermark-error] placeholder generation failed', placeholderErr);
     return new NextResponse('Preview unavailable', {
       status,
-      headers: { 'Cache-Control': 'no-store' },
+      headers: { 'Cache-Control': 'no-store', ...extraHeaders },
     });
   }
 }
@@ -56,7 +76,7 @@ function logWatermarkError(
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
 ) {
   const { path: pathSegments } = await params;
@@ -72,6 +92,24 @@ export async function GET(
     fullPath.startsWith('/')
   ) {
     return new NextResponse('Invalid path', { status: 400 });
+  }
+
+  // Throttle before the expensive work (download + Sharp). Runs after path
+  // validation so malformed requests never consume budget.
+  const rl = await rateLimit({
+    key: `watermark:${getClientIp(request.headers)}`,
+    limit: WATERMARK_RATE_LIMIT.limit,
+    windowSec: WATERMARK_RATE_LIMIT.windowSec,
+  });
+  if (!rl.ok) {
+    // Serve the placeholder image (not a text body) so a throttled gallery
+    // shows "preview unavailable" tiles rather than broken-image icons — same
+    // fail-closed invariant as every other error path. `serveErrorPlaceholder`
+    // already sets `no-store`, so the 429 is never cached (no CDN poisoning);
+    // Retry-After tells the client when the window resets. Generating the tiny
+    // placeholder is far cheaper than the download + full watermark it replaces,
+    // so this doesn't reopen the amplification the limit closes.
+    return serveErrorPlaceholder(429, { 'Retry-After': String(retryAfterSeconds(rl)) });
   }
 
   // From here on, any failure must serve the placeholder, not surface the
