@@ -11,7 +11,7 @@ import type { FilePreview } from '../wizard-types';
 
 type NewEventT = Dictionary['newEvent'];
 
-type Step3PhotosProps = {
+type Step4PhotosProps = {
   previews: FilePreview[];
   error: string | null;
   // Shown when the user lands on this step after a refresh that wiped the
@@ -22,14 +22,14 @@ type Step3PhotosProps = {
   onRemove: (file: File) => void;
 };
 
-export function Step3Photos({
+export function Step4Photos({
   previews,
   error,
   photosLost,
   eventType,
   onFiles,
   onRemove,
-}: Step3PhotosProps) {
+}: Step4PhotosProps) {
   const { t } = useTranslations<NewEventT>();
   const isCollaborative = eventType === 'collaborative';
   const isOrganizer = eventType === 'organizer';

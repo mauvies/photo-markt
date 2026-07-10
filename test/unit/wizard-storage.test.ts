@@ -116,6 +116,23 @@ describe('readStoredState', () => {
     const result = readStoredState();
     expect(result!.reachedStep).toBe(3);
   });
+
+  // T-105 split the wizard into 4 numbered steps + a review step (5). Before
+  // the range was widened, readStoredState validated reachedStep/returnToStep
+  // against 1-4 only, so a draft saved on the review step fell back to 1.
+  it('restores reachedStep=5 (review step) — regression: T-105 widened range', () => {
+    const draft = JSON.parse(makeDraft());
+    draft.reachedStep = 5;
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    expect(readStoredState()!.reachedStep).toBe(5);
+  });
+
+  it('restores returnToStep=5 (review step) — regression: T-105 widened range', () => {
+    const draft = JSON.parse(makeDraft());
+    draft.returnToStep = 5;
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    expect(readStoredState()!.returnToStep).toBe(5);
+  });
 });
 
 /**
