@@ -4,10 +4,11 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import type { PhotoAlbumItem } from '@/components/photo-album-viewer';
 import {
   createPhotoUrlMap,
-  deletePhoto,
+  deleteEventPhotosByIds,
   deleteStorageFiles,
   eventExists,
   getEvent,
+  getEventPhotoStoragePaths,
   getEventPhotosPage,
   getPhoto,
   getProfilesByIds,
@@ -17,9 +18,9 @@ import {
   revokeEventPhotographer,
   type SupabaseServerClient,
   searchPhotographers,
+  setEventPhotosUploadStatus,
   tagPhotosForTalent,
   untagPhotoForTalent,
-  updatePhotoUploadStatus,
 } from '@/database/queries';
 import { getEventBibDetectionState } from '@/database/queries/bib-numbers';
 import {
@@ -468,69 +469,110 @@ export async function checkPhotoTaggedForTalent(
 }
 
 /**
- * Approve a pending guest-uploaded photo on a collaborative event.
+ * Shared auth gate for the approve/reject queue actions: an authenticated
+ * photographer must own the event. Returns the owner's user id.
+ */
+async function requirePendingQueueOwner(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  eventId: string,
+  verb: 'approve' | 'reject',
+): Promise<string> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error(`You must be signed in to ${verb} photos.`);
+  }
+  if (!(await eventExists(supabase, eventId, user.id))) {
+    throw new Error('Event not found or access denied.');
+  }
+  return user.id;
+}
+
+/** Bust every cache surface a queue mutation touches (event detail + listings). */
+async function revalidateAfterPendingQueueMutation(
+  eventId: string,
+  ownerId: string,
+): Promise<void> {
+  revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
+  revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
+  await revalidateEventPhotoCacheTags(eventId);
+  await revalidateEventListingTags(ownerId);
+}
+
+// The moderation queue is read with the service-role client (the page fetches
+// it `skipUserIdFilter: true`), so it lists organizer-contributor uploads whose
+// `user_id` is the contributor, not the owner. The write path must match: after
+// verifying the caller owns the event with the user-scoped client, the bulk ops
+// run on `supabaseAdmin`, scoped to `event_id`. A user-scoped write would hit
+// RLS `own_photos_mutate (user_id = auth.uid())` and silently skip contributor
+// rows (0-row update / null lookup) — the queue could then neither approve nor
+// reject them.
+const adminClient = supabaseAdmin as unknown as SupabaseServerClient;
+
+/**
+ * Approve one or more pending photos on a collaborative event in a single bulk
+ * write. Single auth check + single cache bust for the whole batch.
+ */
+export async function approvePendingPhotosAction(
+  photoIds: string[],
+  eventId: string,
+): Promise<{ success: true; count: number }> {
+  const supabase = await createClient();
+  const ownerId = await requirePendingQueueOwner(supabase, eventId, 'approve');
+
+  await setEventPhotosUploadStatus(adminClient, eventId, photoIds, 'approved');
+
+  await revalidateAfterPendingQueueMutation(eventId, ownerId);
+  return { success: true, count: photoIds.length };
+}
+
+/**
+ * Reject one or more pending photos: hard-delete the `photos` rows and their
+ * storage objects in bulk. No undo. Single auth check + single cache bust.
+ */
+export async function rejectPendingPhotosAction(
+  photoIds: string[],
+  eventId: string,
+): Promise<{ success: true; count: number }> {
+  const supabase = await createClient();
+  const ownerId = await requirePendingQueueOwner(supabase, eventId, 'reject');
+
+  // Collect the storage paths before the rows are gone. Delete the rows as one
+  // statement, then best-effort remove the objects (admin client so guest
+  // `collaborative/{event_id}/...` paths aren't blocked by storage RLS).
+  const paths = await getEventPhotoStoragePaths(adminClient, eventId, photoIds);
+  await deleteEventPhotosByIds(adminClient, eventId, photoIds);
+  if (paths.length > 0) {
+    await deleteStorageFiles(adminClient, 'photos', paths);
+  }
+
+  await revalidateAfterPendingQueueMutation(eventId, ownerId);
+  return { success: true, count: photoIds.length };
+}
+
+/**
+ * Approve a single pending photo. Thin wrapper over the batch action so the
+ * two paths never diverge.
  */
 export async function approvePendingPhotoAction(
   photoId: string,
   eventId: string,
 ): Promise<{ success: true }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error('You must be signed in to approve photos.');
-  }
-  if (!(await eventExists(supabase, eventId, user.id))) {
-    throw new Error('Event not found or access denied.');
-  }
-
-  await updatePhotoUploadStatus(supabase, {
-    photoId,
-    eventId,
-    status: 'approved',
-  });
-
-  revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
-  revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
-  await revalidateEventPhotoCacheTags(eventId);
-  await revalidateEventListingTags(user.id);
+  await approvePendingPhotosAction([photoId], eventId);
   return { success: true };
 }
 
 /**
- * Reject a pending guest-uploaded photo: hard-delete the storage object and
- * the photos row. No undo.
+ * Reject a single pending photo (hard delete, no undo). Thin wrapper over the
+ * batch action.
  */
 export async function rejectPendingPhotoAction(
   photoId: string,
   eventId: string,
 ): Promise<{ success: true }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error('You must be signed in to reject photos.');
-  }
-  if (!(await eventExists(supabase, eventId, user.id))) {
-    throw new Error('Event not found or access denied.');
-  }
-
-  const photo = await getPhoto(supabase, photoId, eventId, user.id);
-  if (!photo) throw new Error('Photo not found.');
-
-  await deletePhoto(supabase, photoId, user.id);
-  if (photo.original_url) {
-    await deleteStorageFiles(supabase, 'photos', [photo.original_url]);
-  }
-
-  revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
-  revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
-  await revalidateEventPhotoCacheTags(eventId);
-  await revalidateEventListingTags(user.id);
+  await rejectPendingPhotosAction([photoId], eventId);
   return { success: true };
 }
 

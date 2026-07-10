@@ -123,7 +123,14 @@ export default async function EventDetailPage({
       offset: 0,
     }),
     showPendingTab
-      ? getEventPhotos(adminClient, id, user.id, { status: 'pending', skipUserIdFilter: true })
+      ? getEventPhotos(adminClient, id, user.id, {
+          status: 'pending',
+          skipUserIdFilter: true,
+          // The owner's own uploads auto-approve and must never sit in the
+          // moderation queue — exclude them regardless of the worker's
+          // transient state (race window or a worker that never promoted them).
+          excludeOwnerUploads: true,
+        })
       : Promise.resolve([]),
     event.type === 'organizer' ? getEventPhotographers(supabase, id) : Promise.resolve([]),
     countEventPhotos(adminClient, id),
@@ -318,7 +325,26 @@ export default async function EventDetailPage({
                     empty: dict.collaborativeEvent.pendingEmpty,
                     approveAria: dict.collaborativeEvent.approveAria,
                     rejectAria: dict.collaborativeEvent.rejectAria,
-                    rejectConfirm: dict.collaborativeEvent.rejectConfirm,
+                    select: dict.collaborativeEvent.pendingSelect,
+                    exitSelection: dict.collaborativeEvent.pendingExitSelection,
+                    countOne: dict.collaborativeEvent.pendingCountOne,
+                    countMany: dict.collaborativeEvent.pendingCountMany,
+                    approveAll: dict.collaborativeEvent.pendingApproveAll,
+                    approveSelected: dict.collaborativeEvent.pendingApproveSelected,
+                    rejectSelected: dict.collaborativeEvent.pendingRejectSelected,
+                    rejectConfirmTitle: dict.collaborativeEvent.rejectConfirmTitle,
+                    rejectConfirmTitleMany: dict.collaborativeEvent.rejectConfirmTitleMany,
+                    rejectConfirmDescription: dict.collaborativeEvent.rejectConfirmDescription,
+                    rejectConfirmDescriptionMany:
+                      dict.collaborativeEvent.rejectConfirmDescriptionMany,
+                    rejectConfirmAction: dict.collaborativeEvent.rejectConfirmAction,
+                    rejectConfirmCancel: dict.collaborativeEvent.rejectConfirmCancel,
+                    rejectConfirmPending: dict.collaborativeEvent.rejectConfirmPending,
+                    approveSuccessOne: dict.collaborativeEvent.approveSuccessOne,
+                    approveSuccessMany: dict.collaborativeEvent.approveSuccessMany,
+                    rejectSuccessOne: dict.collaborativeEvent.rejectSuccessOne,
+                    rejectSuccessMany: dict.collaborativeEvent.rejectSuccessMany,
+                    actionError: dict.collaborativeEvent.queueActionError,
                   }}
                 />
               </TabsContent>

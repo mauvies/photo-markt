@@ -72,6 +72,15 @@ export interface GetEventPhotosOptions {
   skipUserIdFilter?: boolean;
   /** Owner view: include freshly-uploaded photos still being validated. */
   includePending?: boolean;
+  /**
+   * Exclude the event owner's own uploads (`user_id === userId AND
+   * guest_name IS NULL`) — the same owner-vs-guest discrimination the face
+   * indexer uses for auto-approve. The moderation queue must only surface
+   * contributor/guest uploads: owner uploads auto-approve and must never appear
+   * there, whatever the worker's transient state (T-109). The owner id is the
+   * `userId` argument, so this composes with `skipUserIdFilter: true`.
+   */
+  excludeOwnerUploads?: boolean;
 }
 
 /** Pagination window for the `*Page` variants. */
@@ -343,6 +352,13 @@ export async function getEventPhotos(
   }
   if (!options?.skipUserIdFilter) {
     query = query.eq('user_id', userId);
+  }
+  if (options?.excludeOwnerUploads) {
+    // Keep a row only if it is NOT an owner upload: either it belongs to a
+    // different user (organizer-contributor) OR it carries a guest name
+    // (guest-collaborative, whose user_id is the owner). Mirrors `isOwnerUpload`
+    // in the face indexer's promote-upload-status step.
+    query = query.or(`user_id.neq.${userId},guest_name.not.is.null`);
   }
 
   const { data, error } = await query.order('taken_at', { ascending: true }).throwOnError();
@@ -852,6 +868,82 @@ export async function deletePhoto(
 
   if (error) {
     throw new Error(`Failed to delete photo: ${getErrorMessage(error)}`);
+  }
+}
+
+// ─── Moderation-queue bulk ops (T-109) ────────────────────────────────────────
+//
+// These are event-scoped (filter on `event_id`, NOT `user_id`) and are meant to
+// be called with the service-role client AFTER the caller has verified the
+// event owner. Scoping by user_id would silently skip organizer-contributor
+// uploads (whose `user_id` is the contributor, not the owner) — the RLS/filter
+// mismatch that let the moderation queue show photos it could neither approve
+// nor reject. Each is a single statement over the id set, so a batch either
+// applies as one write or fails as one (no partial-prefix left behind).
+
+/**
+ * Bulk-set `upload_status` for a set of photos within one event.
+ */
+export async function setEventPhotosUploadStatus(
+  supabase: SupabaseServerClient,
+  eventId: string,
+  photoIds: string[],
+  status: UploadStatus,
+): Promise<void> {
+  if (photoIds.length === 0) return;
+  const { error } = await supabase
+    .from('photos')
+    .update({ upload_status: status })
+    .eq('event_id', eventId)
+    .in('id', photoIds);
+
+  if (error) {
+    throw new Error(`Failed to set photo upload status: ${getErrorMessage(error)}`);
+  }
+}
+
+/**
+ * Storage paths (`original_url`) for a set of photos within one event — read
+ * before a bulk delete so the storage objects can be cleaned up too.
+ */
+export async function getEventPhotoStoragePaths(
+  supabase: SupabaseServerClient,
+  eventId: string,
+  photoIds: string[],
+): Promise<string[]> {
+  if (photoIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('photos')
+    .select('original_url')
+    .eq('event_id', eventId)
+    .in('id', photoIds);
+
+  if (error) {
+    throw new Error(`Failed to read photo storage paths: ${getErrorMessage(error)}`);
+  }
+  return (data ?? [])
+    .map((row) => (row as { original_url: string | null }).original_url)
+    .filter((url): url is string => Boolean(url));
+}
+
+/**
+ * Bulk hard-delete a specific set of photos within one event (no undo).
+ * Distinct from {@link deleteEventPhotos}, which clears a whole event.
+ */
+export async function deleteEventPhotosByIds(
+  supabase: SupabaseServerClient,
+  eventId: string,
+  photoIds: string[],
+): Promise<void> {
+  if (photoIds.length === 0) return;
+  const { error } = await supabase
+    .from('photos')
+    .delete()
+    .eq('event_id', eventId)
+    .in('id', photoIds);
+
+  if (error) {
+    throw new Error(`Failed to delete photos: ${getErrorMessage(error)}`);
   }
 }
 
