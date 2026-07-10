@@ -52,4 +52,22 @@ describe('PhotoAlbumViewer grid', () => {
     expect(manyGrid).not.toBeNull();
     expect(singleGrid?.className).toBe(manyGrid?.className);
   });
+
+  // Regression: the above-the-fold first row must load eagerly so the LCP tile
+  // isn't deferred (Next.js flags a lazy LCP image in dev). `next/image`
+  // renders priority tiles without a `loading` attribute and lazy tiles with
+  // `loading="lazy"`; the widest breakpoint shows 5 per row, so the first 5
+  // are primed and the rest stay lazy.
+  it('marks only the first row of tiles as priority (eager); later tiles stay lazy', () => {
+    const { container } = render(
+      <PhotoAlbumViewer items={makeBatch(['a', 'b', 'c', 'd', 'e', 'f'])} />,
+    );
+    const loadings = Array.from(container.querySelectorAll('.grid-cols-2 [role="button"]')).map(
+      (tile) => tile.querySelector('img')?.getAttribute('loading'),
+    );
+
+    expect(loadings).toHaveLength(6);
+    expect(loadings.slice(0, 5).every((l) => l !== 'lazy')).toBe(true);
+    expect(loadings[5]).toBe('lazy');
+  });
 });
