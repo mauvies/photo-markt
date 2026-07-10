@@ -62,8 +62,10 @@ vi.mock('next/headers', () => ({
 
 import {
   approvePendingPhotoAction,
+  approvePendingPhotosAction,
   inviteEventPhotographerAction,
   rejectPendingPhotoAction,
+  rejectPendingPhotosAction,
   respondToEventInvitationAction,
   tagPhotosForTalentAction,
   untagPhotoForTalentAction,
@@ -534,6 +536,121 @@ describe('rejectPendingPhotoAction', () => {
     const sb = createServiceClient();
     const { data } = await sb.from('photos').select('id').eq('id', photoId).maybeSingle();
     expect(data).toBeNull();
+  });
+});
+
+// ─── Batch approve/reject (T-109) ─────────────────────────────────────────────
+
+describe('approvePendingPhotosAction (batch)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    mockSession.userId = null;
+    mockSession.activeRole = 'photographer';
+  });
+
+  it('rejects unauthenticated callers', async () => {
+    mockSession.userId = null;
+    await expect(
+      approvePendingPhotosAction(
+        ['00000000-0000-0000-0000-000000000000'],
+        '00000000-0000-0000-0000-000000000001',
+      ),
+    ).rejects.toThrow(/signed in/i);
+  });
+
+  it('flips every selected photo from pending to approved in one call', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    const a = await seedPendingPhoto(event.id, owner.id);
+    const b = await seedPendingPhoto(event.id, owner.id);
+
+    mockSession.userId = owner.id;
+    const result = await approvePendingPhotosAction([a.photoId, b.photoId], event.id);
+    expect(result).toEqual({ success: true, count: 2 });
+
+    const sb = createServiceClient();
+    const { data } = await sb
+      .from('photos')
+      .select('upload_status')
+      .in('id', [a.photoId, b.photoId]);
+    expect(data?.every((row) => row.upload_status === 'approved')).toBe(true);
+  });
+
+  // Regression (T-109): a contributor upload has user_id = contributor (≠ owner).
+  // The old user-scoped UPDATE hit RLS `own_photos_mutate` and silently updated
+  // 0 rows — the owner could "approve" it but it stayed pending. The admin,
+  // event-scoped write must actually flip it.
+  it("approves an organizer-contributor's pending upload (user_id ≠ owner)", async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const contributor = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    const { photoId } = await seedPendingPhoto(event.id, contributor.id);
+
+    mockSession.userId = owner.id;
+    await approvePendingPhotosAction([photoId], event.id);
+
+    const sb = createServiceClient();
+    const { data } = await sb.from('photos').select('upload_status').eq('id', photoId).single();
+    expect(data?.upload_status).toBe('approved');
+  });
+});
+
+describe('rejectPendingPhotosAction (batch)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    await ensurePhotosBucket();
+    mockSession.userId = null;
+    mockSession.activeRole = 'photographer';
+  });
+
+  it('hard-deletes every selected photo in one call', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    const a = await seedPendingPhoto(event.id, owner.id);
+    const b = await seedPendingPhoto(event.id, owner.id);
+
+    mockSession.userId = owner.id;
+    const result = await rejectPendingPhotosAction([a.photoId, b.photoId], event.id);
+    expect(result).toEqual({ success: true, count: 2 });
+
+    const sb = createServiceClient();
+    const { data } = await sb.from('photos').select('id').in('id', [a.photoId, b.photoId]);
+    expect(data).toHaveLength(0);
+  });
+
+  // Regression (T-109): the old user-scoped getPhoto/deletePhoto filtered
+  // user_id = owner, so a contributor's pending photo (user_id ≠ owner) threw
+  // "Photo not found" and could never be rejected. The admin, event-scoped
+  // delete must remove it.
+  it("hard-deletes an organizer-contributor's pending upload (user_id ≠ owner)", async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const contributor = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    const { photoId } = await seedPendingPhoto(event.id, contributor.id);
+
+    mockSession.userId = owner.id;
+    const result = await rejectPendingPhotosAction([photoId], event.id);
+    expect(result).toEqual({ success: true, count: 1 });
+
+    const sb = createServiceClient();
+    const { data } = await sb.from('photos').select('id').eq('id', photoId).maybeSingle();
+    expect(data).toBeNull();
+  });
+
+  it('rejects when the event is not owned by the caller', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const attacker = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    const { photoId } = await seedPendingPhoto(event.id, owner.id);
+
+    mockSession.userId = attacker.id;
+    await expect(rejectPendingPhotosAction([photoId], event.id)).rejects.toThrow(
+      /not found|access denied/i,
+    );
+
+    const sb = createServiceClient();
+    const { data } = await sb.from('photos').select('id').eq('id', photoId).maybeSingle();
+    expect(data?.id).toBe(photoId);
   });
 });
 

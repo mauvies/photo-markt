@@ -173,6 +173,66 @@ describe('database/queries/photos', () => {
       });
       expect(skipFilter).toHaveLength(1);
     });
+
+    // T-109: the moderation queue must exclude the owner's own uploads —
+    // they auto-approve and must never appear in "Pending", whatever the
+    // worker's transient state (race window or a worker that never promoted).
+    it('excludes owner uploads from the pending queue when excludeOwnerUploads is set', async () => {
+      const owner = await createTestUser('PHOTOGRAPHER');
+      const contributor = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(owner.id);
+      const sb = createServiceClient();
+
+      // Owner's own pending upload (user_id === owner, guest_name NULL) — the bug.
+      await sb.from('photos').insert({
+        user_id: owner.id,
+        event_id: event.id,
+        original_url: `${owner.id}/${event.id}/owner-pending.jpg`,
+        upload_status: 'pending',
+        taken_at: new Date().toISOString(),
+      });
+      // Contributor pending upload (different user_id) — must stay in the queue.
+      const { data: contribRow } = await sb
+        .from('photos')
+        .insert({
+          user_id: contributor.id,
+          event_id: event.id,
+          original_url: `${contributor.id}/${event.id}/contrib-pending.jpg`,
+          upload_status: 'pending',
+          taken_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
+      // Guest pending upload (user_id === owner but guest_name set) — must stay.
+      const { data: guestRow } = await sb
+        .from('photos')
+        .insert({
+          user_id: owner.id,
+          event_id: event.id,
+          guest_name: 'Race Fan',
+          original_url: `collaborative/${event.id}/guest-pending.jpg`,
+          upload_status: 'pending',
+          taken_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
+
+      const queue = await getEventPhotos(sb, event.id, owner.id, {
+        status: 'pending',
+        skipUserIdFilter: true,
+        excludeOwnerUploads: true,
+      });
+
+      const ids = queue.map((p) => p.id).sort();
+      expect(ids).toEqual([contribRow?.id, guestRow?.id].sort());
+
+      // Without the flag, the owner's own upload leaks back into the queue.
+      const withoutFlag = await getEventPhotos(sb, event.id, owner.id, {
+        status: 'pending',
+        skipUserIdFilter: true,
+      });
+      expect(withoutFlag).toHaveLength(3);
+    });
   });
 
   describe('getEventPhotosPublic', () => {
