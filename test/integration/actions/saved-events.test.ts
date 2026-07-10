@@ -29,28 +29,9 @@ vi.mock('@/app/[lang]/actions/roles', () => ({
 }));
 
 vi.mock('@/database/server', async () => {
-  const { createClient } = await import('@supabase/supabase-js');
-  return {
-    createClient: vi.fn(async () => {
-      const sb = createClient(
-        'http://127.0.0.1:54321',
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU',
-        { auth: { autoRefreshToken: false, persistSession: false } },
-      );
-      sb.auth.getUser = vi.fn(async () => {
-        if (!mockSession.userId) {
-          return { data: { user: null }, error: null } as never;
-        }
-        return {
-          data: {
-            user: { id: mockSession.userId, email: `${mockSession.userId}@photomarkt.test` },
-          },
-          error: null,
-        } as never;
-      });
-      return sb;
-    }),
-  };
+  const { buildDatabaseServerMock } = await import('../../helpers/database-server-mock');
+  const { mockSession } = await import('../../helpers/server-action-mocks');
+  return buildDatabaseServerMock(mockSession);
 });
 
 vi.mock('next/cache', () => ({
