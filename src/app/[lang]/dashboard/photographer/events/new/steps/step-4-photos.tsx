@@ -64,41 +64,38 @@ export function Step4Photos({
           onSelect={onFiles}
           className="min-h-48 rounded-lg"
         />
-        {isCollaborative && (
+        {isCollaborative && previews.length < 0 && (
           <p className="text-xs text-muted-foreground">{t('collaborativePhotosOptional')}</p>
         )}
         {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
 
       {previews.length > 0 && (
-        <div className="grid gap-2">
-          <h3 className="text-sm font-medium">{t('eventPhotosHeading')}</h3>
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
-            {previews.map((preview) => (
-              <div
-                key={preview.id}
-                className="group relative aspect-square overflow-visible rounded-lg"
-              >
-                <div className="absolute inset-0 overflow-hidden rounded-lg border border-dashed border-primary/50 bg-muted">
-                  <Image
-                    src={preview.url}
-                    alt={`Preview ${preview.file.name}`}
-                    fill
-                    sizes="(max-width: 640px) 33vw, (max-width: 1024px) 20vw, 14vw"
-                    className="object-cover"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onRemove(preview.file)}
-                  className="absolute -right-1 -top-1 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-foreground/85 text-gray-100 shadow-sm transition-opacity hover:bg-foreground md:opacity-0 md:group-hover:opacity-100"
-                  aria-label={t('removePhotoAriaLabel')}
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+          {previews.map((preview) => (
+            <div
+              key={preview.id}
+              className="group relative aspect-square overflow-visible rounded-lg"
+            >
+              <div className="absolute inset-0 overflow-hidden rounded-lg border border-dashed border-primary/50 bg-muted">
+                <Image
+                  src={preview.url}
+                  alt={`Preview ${preview.file.name}`}
+                  fill
+                  sizes="(max-width: 640px) 33vw, (max-width: 1024px) 20vw, 14vw"
+                  className="object-cover"
+                />
               </div>
-            ))}
-          </div>
+              <button
+                type="button"
+                onClick={() => onRemove(preview.file)}
+                className="absolute -right-1 -top-1 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-foreground/85 text-gray-100 shadow-sm transition-opacity hover:bg-foreground md:opacity-0 md:group-hover:opacity-100"
+                aria-label={t('removePhotoAriaLabel')}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
         </div>
       )}
     </div>
