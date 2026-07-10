@@ -66,6 +66,15 @@ export interface PhotoUploadedPayload {
   photoId: string;
   eventId: string;
   storagePath: string;
+  /**
+   * Only meaningful on the `photo.processed` fan-out consumed by
+   * `generate-photo-thumbnails`. When true, force a thumbnail re-bake even if
+   * `thumbnail_status='ready'` — set when this indexing run (re)wrote the
+   * photo's face boxes, so the baked-in blur may have changed (the T-078
+   * scenario: AI enabled after upload → re-index → thumbnail must re-bake WITH
+   * blur). Absent/false lets the ready-guard skip an unchanged re-emission.
+   */
+  force?: boolean;
 }
 
 /**
@@ -621,9 +630,19 @@ export async function runIndexPhotoFacesFlow(
   // missed emit only means no pre-baked thumbnail; the gallery still serves the
   // on-the-fly `/api/watermark` preview (also face-blurred) via the thumb-404
   // fallback until a later re-index re-emits.
+  //
+  // `force`: re-bake even a `ready` thumbnail only when THIS run indexed faces
+  // (`generate-photo-thumbnails` skips ready thumbnails otherwise, T-092). Face
+  // blur is the only content that changes a thumbnail across bakes, so a run
+  // that (re)wrote face boxes must re-bake to carry the updated blur (T-078).
+  // no-ai / no_faces runs change no blur → let the ready-guard skip them.
+  const facesChanged = result.outcome === 'indexed' && result.faces.length > 0;
   await step.run('emit-processed', async () => {
     try {
-      await send({ name: 'photo.processed', data: { photoId, eventId, storagePath } });
+      await send({
+        name: 'photo.processed',
+        data: { photoId, eventId, storagePath, force: facesChanged },
+      });
     } catch (err) {
       console.error('[index-photo-faces] emit photo.processed failed', err);
     }
