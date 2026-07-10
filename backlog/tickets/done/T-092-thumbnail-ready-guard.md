@@ -1,11 +1,11 @@
 # T-092 · [Inngest/Perf] Guard `thumbnail_status='ready'` en el re-horneado de thumbnails (evita re-bake + churn del CDN)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `perf/thumbnail-ready-guard`  (tipo = perf → usar prefijo `fix/` si se prefiere consistencia)
 - **OpenSpec change:** —
-- **PR:** —
+- **PR:** #152
 - **Origen:** auditoría de caching T-083 (`docs/CACHING_AUDIT.md`, **F-14**, ítem #9 del plan)
 
 ## Requerimiento
