@@ -8,7 +8,7 @@ import {
   getProfileActiveRole,
   getUserRoles,
 } from '@/database/queries';
-import { createClient } from '@/database/server';
+import { createClient, getUser } from '@/database/server';
 import { getLangFromHeaders } from '@/lib/i18n/get-lang-from-headers';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 import {
@@ -31,10 +31,7 @@ type SwitchRoleResult = {
 };
 
 async function getAuthenticatedClient() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [supabase, user] = await Promise.all([createClient(), getUser()]);
 
   if (!user) {
     throw new Error('You must be signed in to manage roles.');
