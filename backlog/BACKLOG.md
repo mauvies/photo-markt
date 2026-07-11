@@ -11,7 +11,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 37 | P2 | T-097 | [Cache] `expire` duro en la caché del listado de eventos del dashboard (signed URLs vencidas) | — | todo |
 | 38 | P2 | T-098 | [Observabilidad] Alerta Sentry cuando el rate limiter falla open | — | todo |
 | 39 | P2 | T-099 | [Inngest] Sweeper cron de reconciliación para estados colgados (`indexing` eterno / thumb nunca horneado) | T-092 | todo |
 | 40 | P2 | T-100 | [Cache/Perf] Quitar tag `events-public` de las cachés de detalle de evento (sobre-invalidación) | T-088 | todo |
@@ -42,6 +41,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-097** · Cache (P2): `getCachedEventsData` (listado de eventos del dashboard del fotógrafo) embebía covers firmados a 55 min (`SIGNED_URL_TTL`) pero seteaba `cacheLife({ revalidate: 60*50 })` **sin `expire`** → con stale-while-revalidate una entrada podía servirse pasados los 55 min y mostrar covers rotos hasta que completara la revalidación de fondo (F-06 de la auditoría T-083). Era la única caché pública sin `expire === revalidate` como cutoff duro. Extraídos `SIGNED_URL_TTL` y `EVENTS_CACHE_LIFE` (`{ revalidate, expire }`, ambos 50 min) a un módulo colocado `cache-config.ts` y aplicado `cacheLife(EVENTS_CACHE_LIFE)`. Test unit que fija la invariante `expire ≤ SIGNED_URL_TTL` (y `expire === revalidate`) — roja antes del fix (no existía `expire`), verde después. Verde: 508 unit + 450 integración — PR #161
 
 - **T-096** · Perf/Cache (P2): `src/app/sitemap.ts` consultaba **todos** los eventos públicos de Supabase en **cada** request (sin `'use cache'` ni `revalidate`), así que el tráfico de crawlers pegaba directo a la DB repetidamente (F-04 de la auditoría T-083). Extraído el fetch a una función `'use cache'` tagueada `events-public` con `cacheLife('hours')` → dos requests seguidos comparten una query, y crear/borrar un evento público (que ya revalida `events-public`) refresca el sitemap antes del TTL. El armado de URLs se aisló en un helper puro `buildSitemapEntries(siteUrl, events)` para caracterizar el contenido exacto en tests — **la salida del sitemap es idéntica**. Tests: caracterización de páginas estáticas + URL por evento (slug ?? id, prioridades), el filtro de query (solo públicos/no borrados, orden por `updated_at`), y regresión de que el fetch corre bajo `cacheTag('events-public')` + `cacheLife('hours')` (nunca llamados antes del fix). Verde: 505 unit + 450 integración — PR #160
 

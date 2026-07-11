@@ -19,6 +19,7 @@ import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { getUsageStats } from '@/lib/plan-limits';
 import { deleteEventAction as deleteEvent } from './actions';
+import { EVENTS_CACHE_LIFE, SIGNED_URL_TTL } from './cache-config';
 import { EventCardActions } from './event-card-actions';
 import { EventLimitReachedDialog } from './event-limit-reached-dialog';
 import { PendingInvitationsPanel } from './pending-invitations-panel';
@@ -30,9 +31,6 @@ type PhotoStat = {
   lastTakenAt: string | null;
 };
 
-// Sign URLs for 55 min so they never expire within the 50-min cache window
-const SIGNED_URL_TTL = 60 * 55;
-
 async function getCachedEventsData(userId: string): Promise<{
   events: Awaited<ReturnType<typeof getUserEvents>>;
   stats: Map<string, PhotoStat>;
@@ -40,7 +38,7 @@ async function getCachedEventsData(userId: string): Promise<{
 }> {
   'use cache';
   cacheTag(`photographer-events-${userId}`);
-  cacheLife({ revalidate: 60 * 50 });
+  cacheLife(EVENTS_CACHE_LIFE);
 
   const events = await getUserEvents(supabaseAdmin, userId);
   const eventIds = events.map((e) => e.id).filter(Boolean);

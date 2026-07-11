@@ -1,7 +1,7 @@
 # T-097 · [Cache] `expire` duro en la caché del listado de eventos del dashboard (puede servir signed URLs vencidas)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done (PR #161)
 - **Blockers:** ninguno
 - **Rama:** `fix/dashboard-events-cache-expire`  (tipo = fix)
 - **OpenSpec change:** —  (one-liner de config)
