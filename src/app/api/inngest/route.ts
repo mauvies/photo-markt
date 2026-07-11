@@ -21,6 +21,7 @@ import { detectPhotoBibs } from '@/lib/inngest/functions/detect-photo-bibs';
 import { disableEventIndexing } from '@/lib/inngest/functions/disable-event-indexing';
 import { generatePhotoThumbnails } from '@/lib/inngest/functions/generate-photo-thumbnails';
 import { indexPhotoFaces } from '@/lib/inngest/functions/index-photo-faces';
+import { reconcileIndexingState } from '@/lib/inngest/functions/reconcile-indexing';
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
@@ -34,5 +35,6 @@ export const { GET, POST, PUT } = serve({
     cleanupOnEventDelete,
     cleanupOrphanedStorageFiles,
     cleanupOrphanedStorageFromMigration,
+    reconcileIndexingState,
   ],
 });

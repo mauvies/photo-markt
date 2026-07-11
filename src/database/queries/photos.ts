@@ -677,6 +677,45 @@ export async function updatePhotoDimensions(
   }
 }
 
+/**
+ * Service-role only. List photos whose thumbnail never got baked: face indexing
+ * reached a terminal state (`indexed` / `no_faces` / `not_applicable`, so a
+ * `photo.processed` was due) but `thumbnail_status` is still `'pending'`, and
+ * the photo was uploaded before `staleBeforeIso`. Used by the reconciliation
+ * cron (T-099) to re-emit the bake for photos whose `photo.processed` emit was
+ * lost — otherwise the gallery serves the per-view `/api/watermark` fallback
+ * (paying its cost) forever.
+ *
+ * The age gate uses `created_at` (upload time). A photo mid-index is excluded by
+ * the terminal-status filter (its `face_index_status` is still `pending` /
+ * `indexing`), so a live re-index of an old photo can't be swept until it
+ * genuinely settles — by which point its bake has been (re-)emitted.
+ */
+export async function listPhotosWithStuckThumbnails(
+  supabase: SupabaseServerClient,
+  staleBeforeIso: string,
+  limit: number,
+): Promise<Array<{ id: string; eventId: string; storagePath: string }>> {
+  const { data, error } = await supabase
+    .from('photos')
+    .select('id, event_id, original_url')
+    .eq('thumbnail_status', 'pending')
+    .in('face_index_status', ['indexed', 'no_faces', 'not_applicable'])
+    .lt('created_at', staleBeforeIso)
+    .not('original_url', 'is', null)
+    .limit(limit);
+  if (error) {
+    throw new Error(`Failed to list photos with stuck thumbnails: ${getErrorMessage(error)}`);
+  }
+  return (data ?? [])
+    .filter((row) => row.original_url)
+    .map((row) => ({
+      id: row.id as string,
+      eventId: row.event_id as string,
+      storagePath: row.original_url as string,
+    }));
+}
+
 export async function updatePhotoThumbnailStatus(
   supabase: SupabaseServerClient,
   photoId: string,
