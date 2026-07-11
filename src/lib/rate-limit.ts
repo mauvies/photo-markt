@@ -66,10 +66,49 @@ export const pgBackend: RateLimitBackend = async (key, windowStart) => {
 };
 
 /**
+ * Fail-open is invisible by design: a sustained backend outage silently disables
+ * every limiter (including face search, which gates AWS spend) with only a
+ * `console.error`. Surface it to Sentry so the degradation is observable — but
+ * throttle so an outage doesn't emit one event per request. One event per
+ * process per window makes it visible; a stable fingerprint keeps them grouped
+ * as a single Sentry issue. The throttle is per-process (serverless), which
+ * still bounds volume meaningfully during an outage (F-20, caching audit T-083).
+ */
+const FAIL_OPEN_ALERT_THROTTLE_MS = 60_000;
+let lastFailOpenAlertMs = 0;
+
+async function reportFailOpen(config: RateLimitConfig, err: unknown, nowMs: number): Promise<void> {
+  // Always log; the Sentry alert is the throttled, higher-signal channel.
+  console.error('rateLimit backend error; failing open', { key: config.key, err });
+
+  if (nowMs - lastFailOpenAlertMs < FAIL_OPEN_ALERT_THROTTLE_MS) return;
+  lastFailOpenAlertMs = nowMs;
+
+  // Lazy import (like pgBackend) so the module stays importable without the
+  // Sentry SDK, and no-op when no DSN is configured. Only the limiter's action
+  // prefix is sent — the identity suffix (IP / user id) is deliberately dropped
+  // to honour the app's `sendDefaultPii: false` invariant (src/lib/observability/sentry.ts).
+  const limiter = config.key.split(':')[0];
+  try {
+    const Sentry = await import('@sentry/nextjs');
+    Sentry.captureException(err, {
+      level: 'warning',
+      fingerprint: ['rate-limit-fail-open'],
+      tags: { subsystem: 'rate-limit', outcome: 'fail-open', limiter },
+      extra: { limiter, limit: config.limit },
+    });
+  } catch (sentryErr) {
+    // Observability must never break the request path.
+    console.error('failed to report rateLimit fail-open to Sentry', sentryErr);
+  }
+}
+
+/**
  * Check and consume one request from the given bucket.
  *
  * Fails open (returns ok=true) if the backend errors — we'd rather serve a
- * request than 500 the whole app because rate-limit storage hiccuped.
+ * request than 500 the whole app because rate-limit storage hiccuped. The
+ * fail-open is reported to Sentry (throttled) so it isn't silent.
  */
 export async function rateLimit(
   config: RateLimitConfig,
@@ -80,7 +119,7 @@ export async function rateLimit(
   try {
     count = await backend(config.key, start);
   } catch (err) {
-    console.error('rateLimit backend error; failing open', { key: config.key, err });
+    await reportFailOpen(config, err, Date.now());
     return { ok: true, remaining: config.limit, resetAt };
   }
   return evaluate(count, config.limit, resetAt);
