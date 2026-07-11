@@ -41,6 +41,11 @@ export type PhotoAlbumItem = {
   thumbSmall?: string;
   /** /api/thumb/.../medium.webp — only set when thumbnail_status='ready'. */
   thumbMedium?: string;
+  /** Force `next/image` to skip the optimizer for this tile's effective src —
+   * used when the source is a large signed original (owner view of a
+   * watermarked event) that would otherwise time out the optimizer (T-110).
+   * Defaults to the URL-based `shouldSkipImageOptimization` heuristic. */
+  unoptimized?: boolean;
   alt?: string;
   width?: number;
   height?: number;
@@ -250,6 +255,7 @@ export default function PhotoAlbumViewer({
         id: p.id,
         src: p.thumbMedium ?? p.url,
         alt: p.alt ?? 'photo',
+        unoptimized: p.unoptimized,
       })),
     [items],
   );
@@ -260,6 +266,7 @@ export default function PhotoAlbumViewer({
         id: item.id,
         url: item.url,
         thumbMedium: item.thumbMedium,
+        unoptimized: item.unoptimized,
         alt: item.alt,
         width: dimensions[item.id]?.width ?? item.width,
         height: dimensions[item.id]?.height ?? item.height,
@@ -275,6 +282,7 @@ export default function PhotoAlbumViewer({
         id: item.id,
         url: item.url,
         thumbMedium: item.thumbMedium,
+        unoptimized: item.unoptimized,
         alt: item.alt,
         width: dimensions[item.id]?.width ?? item.width,
         height: dimensions[item.id]?.height ?? item.height,
@@ -450,7 +458,7 @@ export default function PhotoAlbumViewer({
                 fill
                 priority={index < PRIORITY_TILE_COUNT}
                 sizes={GRID_SIZES}
-                unoptimized={shouldSkipImageOptimization(photo.src)}
+                unoptimized={photo.unoptimized ?? shouldSkipImageOptimization(photo.src)}
                 className={cn(
                   'object-cover transition-opacity duration-200',
                   state === 'loaded' ? 'opacity-100' : 'opacity-0',

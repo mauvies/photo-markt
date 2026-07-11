@@ -33,12 +33,20 @@ function buildOwnerUploader(
  * Action so both produce the exact same tile shape (alt = storage path, talent
  * tags, uploader-with-email).
  *
- * The grid renders `thumbMedium ?? url`, so — mirroring the public builder — we
- * emit the immutable `/api/thumb` URLs when the thumbnail is baked. Without
- * them the grid falls back to the full-res signed original, which then hits the
- * Next.js image optimizer and times out on large files. The signed `url` stays
- * for the lightbox's full-res view; `thumb_version` busts the CDN cache when a
- * thumbnail is re-baked with face blur (T-078).
+ * Source selection depends on `watermarkEnabled`:
+ * - **Watermark off:** the grid renders `thumbMedium ?? url`, so — mirroring the
+ *   public builder — we emit the immutable `/api/thumb` URLs when the thumbnail
+ *   is baked. Those thumbnails carry no watermark here, and the optimizer skips
+ *   them, so they're the cheap, correct source. `thumb_version` busts the CDN
+ *   cache when a thumbnail is re-baked with face blur (T-078).
+ * - **Watermark on:** the baked thumbnail is watermarked (generate-photo-
+ *   thumbnails applies `addWatermarkToImage` before resizing) and is a role-
+ *   agnostic content-addressed artifact — there is no un-watermarked variant.
+ *   The owner must see their real, un-watermarked material, so we omit the thumb
+ *   and let the grid/lightbox fall back to the signed original (`url`). That
+ *   original is multi-MB, so we flag it `unoptimized` to keep it out of the
+ *   Next.js image optimizer, which timed out fetching large files — the very
+ *   reason the thumb path was introduced (T-110).
  */
 export function buildOwnerPhotoAlbumItem(
   photo: PhotoDetail,
@@ -46,17 +54,23 @@ export function buildOwnerPhotoAlbumItem(
     signed: Record<string, string>;
     uploaderProfiles: UploaderProfileMap;
     tags: Record<string, PhotoTag[]>;
+    watermarkEnabled: boolean;
   },
 ): PhotoAlbumItem | null {
   const url = photo.original_url ? opts.signed[photo.original_url] : null;
   if (!url) return null;
 
-  const thumbsReady = photo.thumbnail_status === 'ready' && Boolean(photo.original_url);
+  const thumbsReady =
+    !opts.watermarkEnabled && photo.thumbnail_status === 'ready' && Boolean(photo.original_url);
   const thumbVersion = photo.thumb_version ?? undefined;
 
   return {
     id: photo.id,
     url,
+    // The signed original must skip the optimizer; the /api/thumb URLs already
+    // do via `shouldSkipImageOptimization`, so only flag the watermark-off→on
+    // fallback path here.
+    unoptimized: opts.watermarkEnabled || undefined,
     thumbSmall:
       thumbsReady && photo.original_url
         ? thumbRelativeUrl(photo.original_url, 'small', thumbVersion)

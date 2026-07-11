@@ -37,6 +37,9 @@ export interface PhotoDetailModalItem {
   id: string;
   url: string;
   thumbMedium?: string;
+  /** Force `next/image` to skip the optimizer (large signed original — T-110).
+   * Defaults to the URL-based `shouldSkipImageOptimization` heuristic. */
+  unoptimized?: boolean;
   alt?: string;
   width?: number;
   height?: number;

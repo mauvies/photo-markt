@@ -154,7 +154,14 @@ export default async function EventDetailPage({
   ]);
 
   const albumItems = photos
-    .map((p) => buildOwnerPhotoAlbumItem(p, { signed, uploaderProfiles, tags: photoTags }))
+    .map((p) =>
+      buildOwnerPhotoAlbumItem(p, {
+        signed,
+        uploaderProfiles,
+        tags: photoTags,
+        watermarkEnabled: event.watermark_enabled,
+      }),
+    )
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
   const pendingItems = pendingPhotos
