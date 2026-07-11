@@ -1,7 +1,7 @@
 # T-111 · Bug: preview de foto no se renderiza en los ítems del carrito
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done (PR #164)
 - **Blockers:** ninguno
 - **Rama:** `fix/cart-preview-image-not-rendering`
 - **OpenSpec change:** —  (se crea al ejecutar, si el cambio toca >1 archivo o es ambiguo)
