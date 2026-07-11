@@ -283,6 +283,12 @@ export function CartContent({ initialCartData }: CartContentProps) {
                       fill
                       className="object-cover transition-transform group-hover:scale-105"
                       sizes="80px"
+                      // previewUrl is a signed original (createPhotoUrls,
+                      // useWatermark:false). Routing a multi-MB original through
+                      // the Vercel optimizer times it out → broken image (T-111,
+                      // same failure as T-110). Serve it directly, like the guest
+                      // cart already does.
+                      unoptimized
                     />
                   </button>
                 ) : (
