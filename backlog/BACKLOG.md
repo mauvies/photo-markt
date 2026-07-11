@@ -11,6 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
+| 35 | P0 | T-110 | [Bug] Grilla/lightbox del dueño muestra el thumbnail con marca de agua en vez del original (regresión en PR #158, sin mergear) | — | todo |
 | 36 | P2 | T-096 | [Perf/Cache] Cachear el sitemap (hoy scan completo de `events` por request de crawler) | — | todo |
 | 37 | P2 | T-097 | [Cache] `expire` duro en la caché del listado de eventos del dashboard (signed URLs vencidas) | — | todo |
 | 38 | P2 | T-098 | [Observabilidad] Alerta Sentry cuando el rate limiter falla open | — | todo |
