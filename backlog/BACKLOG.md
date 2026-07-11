@@ -11,7 +11,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 38 | P2 | T-098 | [Observabilidad] Alerta Sentry cuando el rate limiter falla open | — | todo |
 | 39 | P2 | T-099 | [Inngest] Sweeper cron de reconciliación para estados colgados (`indexing` eterno / thumb nunca horneado) | T-092 | todo |
 | 40 | P2 | T-100 | [Cache/Perf] Quitar tag `events-public` de las cachés de detalle de evento (sobre-invalidación) | T-088 | todo |
 | 41 | P2 | T-101 | [Carrito/Perf] Quitar `router.refresh()` del add-to-cart (doble refresh en hot path) | — | todo |
@@ -41,6 +40,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-098** · Observabilidad (P2): el rate limiter falla open por diseño (cualquier error del backend → `ok:true`), pero era **invisible** (solo `console.error`) — un outage sostenido de la DB desactiva silenciosamente TODOS los limiters (incluido face search, que protege gasto AWS) sin señal (F-20 de la auditoría T-083). Ahora el catch del fail-open reporta a Sentry preservando la semántica exacta (`ok:true`, `remaining:limit`), **throttleado** a un evento por proceso cada 60s con fingerprint estable `rate-limit-fail-open` (un outage no emite un evento por request). Import de Sentry **lazy** (como `pgBackend`) → el módulo sigue importable sin el SDK y es no-op sin DSN; el capture va envuelto en try/catch para que la observabilidad nunca rompa el request path. **PII-safe:** solo se envía el prefijo de acción de la key (primer segmento `:`, ej. `face-search`) — el sufijo de identidad (IP / user id) se descarta, respetando la invariante documentada `sendDefaultPii: false`. Tests: semántica fail-open preservada, capture con nivel warning + fingerprint, solo el prefijo (sin IP/share-code), ráfaga throttleada a un evento, re-emisión tras la ventana, y backend exitoso nunca toca Sentry. **Nota:** `/code-review high` (workflow) se lanzó por ser código de seguridad pero quedó colgado en la 1ª etapa >20min sin progreso; se detuvo y se hizo revisión manual del diff (throttle, preservación fail-open, no-fuga de PII) — sin hallazgos. Verde: 514 unit + 450 integración — PR #162
 
 - **T-097** · Cache (P2): `getCachedEventsData` (listado de eventos del dashboard del fotógrafo) embebía covers firmados a 55 min (`SIGNED_URL_TTL`) pero seteaba `cacheLife({ revalidate: 60*50 })` **sin `expire`** → con stale-while-revalidate una entrada podía servirse pasados los 55 min y mostrar covers rotos hasta que completara la revalidación de fondo (F-06 de la auditoría T-083). Era la única caché pública sin `expire === revalidate` como cutoff duro. Extraídos `SIGNED_URL_TTL` y `EVENTS_CACHE_LIFE` (`{ revalidate, expire }`, ambos 50 min) a un módulo colocado `cache-config.ts` y aplicado `cacheLife(EVENTS_CACHE_LIFE)`. Test unit que fija la invariante `expire ≤ SIGNED_URL_TTL` (y `expire === revalidate`) — roja antes del fix (no existía `expire`), verde después. Verde: 508 unit + 450 integración — PR #161
 
