@@ -1,7 +1,7 @@
 # T-110 · Bug: la grilla/lightbox del dueño muestra el thumbnail con marca de agua, no el original
 
 - **Prioridad:** P0
-- **Estado:** todo
+- **Estado:** done (PR #159)
 - **Blockers:** ninguno (accionable de inmediato)
 - **Rama:** **no crear rama nueva desde `main`** — el bug solo existe en la rama ya abierta `fix/owner-event-grid-uses-thumbnails` (PR #158, **sin mergear**). El fix va como commit adicional en esa misma rama, antes de mergear. `main` todavía no tiene este bug.
 - **OpenSpec change:** — (fix acotado a 2-3 archivos ya identificados, no amerita)
