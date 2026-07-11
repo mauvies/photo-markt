@@ -1,7 +1,7 @@
 # T-099 · [Inngest] Sweeper cron de reconciliación para estados colgados (`indexing` eterno / thumbnails nunca horneados)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done (PR #163)
 - **Blockers:** ninguno
 - **Rama:** `fix/indexing-reconcile-sweeper`  (tipo = fix)
 - **OpenSpec change:** evaluar al ejecutar (función Inngest nueva + queries)
