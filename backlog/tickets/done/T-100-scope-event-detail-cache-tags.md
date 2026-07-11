@@ -1,7 +1,7 @@
 # T-100 · [Cache/Perf] Quitar el tag `events-public` de las cachés de detalle de evento (sobre-invalidación)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done (PR #165)
 - **Blockers:** ninguno
 - **Rama:** `perf/scope-event-detail-cache-tags`  (tipo = perf)
 - **OpenSpec change:** —
