@@ -14,6 +14,9 @@ export interface PhotoCarouselItem {
   url: string;
   /** /api/thumb/.../medium.webp — shown as the visible image when available. */
   thumbMedium?: string;
+  /** Force `next/image` to skip the optimizer (large signed original — T-110).
+   * Defaults to the URL-based `shouldSkipImageOptimization` heuristic. */
+  unoptimized?: boolean;
   alt?: string;
 }
 
@@ -150,6 +153,7 @@ export function PhotoCarousel({
             if (!item) return null;
             const offset = slideOffset(i, currentIndex, items.length);
             const src = item.thumbMedium ?? item.url;
+            const skipOptimize = item.unoptimized ?? shouldSkipImageOptimization(src);
             return (
               <Image
                 key={item.id}
@@ -162,7 +166,7 @@ export function PhotoCarousel({
                 sizes="100vw"
                 draggable={false}
                 onLoad={() => markLoaded(item.id)}
-                unoptimized={shouldSkipImageOptimization(src)}
+                unoptimized={skipOptimize}
               />
             );
           })}

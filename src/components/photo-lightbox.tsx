@@ -17,6 +17,9 @@ export type PhotoLightboxItem = {
   /** /api/thumb/.../medium.webp — shown as the visible lightbox image when
    * available. The original (url) is only fetched on explicit Download. */
   thumbMedium?: string;
+  /** Force `next/image` to skip the optimizer (large signed original — T-110).
+   * Defaults to the URL-based `shouldSkipImageOptimization` heuristic. */
+  unoptimized?: boolean;
   alt?: string;
   width?: number;
   height?: number;

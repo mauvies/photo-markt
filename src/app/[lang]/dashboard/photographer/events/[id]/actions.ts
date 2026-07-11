@@ -371,7 +371,14 @@ export async function loadMoreOwnerEventPhotos(
   ]);
 
   const items = photos
-    .map((p) => buildOwnerPhotoAlbumItem(p, { signed, uploaderProfiles, tags }))
+    .map((p) =>
+      buildOwnerPhotoAlbumItem(p, {
+        signed,
+        uploaderProfiles,
+        tags,
+        watermarkEnabled: event.watermark_enabled,
+      }),
+    )
     .filter((item): item is PhotoAlbumItem => item !== null);
 
   return { items, hasMore, nextOffset: offset + photos.length };
