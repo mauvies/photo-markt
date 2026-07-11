@@ -1,7 +1,7 @@
 # T-096 · [Perf/Cache] Cachear el sitemap (hoy: scan completo de `events` por cada request de crawler)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done (PR #160)
 - **Blockers:** ninguno
 - **Rama:** `perf/cache-sitemap`  (tipo = perf)
 - **OpenSpec change:** —  (un archivo)
