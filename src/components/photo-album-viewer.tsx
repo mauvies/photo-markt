@@ -27,6 +27,12 @@ import { cn } from '@/lib/utils';
 const GRID_SIZES =
   '(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw';
 
+/** Eagerly load the first row so the above-the-fold LCP tile isn't lazy — the
+ * widest breakpoint (`lg:grid-cols-5`) shows 5 per row, so priming the first 5
+ * covers the LCP candidate on every breakpoint. Load-more pages append after
+ * these, so they stay lazy. */
+const PRIORITY_TILE_COUNT = 5;
+
 export type PhotoAlbumItem = {
   id: string;
   /** Fallback URL — watermark route or signed original. Always present. */
@@ -415,7 +421,7 @@ export default function PhotoAlbumViewer({
           regardless of each photo's aspect ratio (unlike the previous
           justified-rows layout, which packed 4 vs 3 per row depending on it). */}
       <div className="grid w-full max-w-full min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-        {photos.map((photo) => {
+        {photos.map((photo, index) => {
           const photoId = photo.id;
           const isSelected = selectedSet.has(photoId);
           const state = loadStates[photoId] ?? 'loading';
@@ -442,6 +448,7 @@ export default function PhotoAlbumViewer({
                 src={photo.src}
                 alt={photo.alt}
                 fill
+                priority={index < PRIORITY_TILE_COUNT}
                 sizes={GRID_SIZES}
                 unoptimized={shouldSkipImageOptimization(photo.src)}
                 className={cn(
