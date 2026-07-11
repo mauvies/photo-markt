@@ -433,6 +433,37 @@ export async function countEventPhotosInFlight(
 }
 
 /**
+ * Service-role only. List events wedged in `ai_matching_status='indexing'`
+ * whose `updated_at` is older than `staleBeforeIso`. Used by the reconciliation
+ * cron (T-099) to find events that never drained to `ready` (a lost
+ * `maybe-mark-event-ready` step, or a `photo.uploaded` fan-out event that was
+ * never processed).
+ *
+ * The `updated_at` gate is deliberate: `events.updated_at` is trigger-maintained
+ * (`events_set_updated_at`), so it reflects when the event last entered/changed
+ * the `indexing` state. Only events stuck for longer than the staleness window
+ * are returned — a re-index in progress just bumped `updated_at` to ~now, so it
+ * is never mistaken for stuck and clobbered mid-flight.
+ */
+export async function listStuckIndexingEvents(
+  supabase: SupabaseServerClient,
+  staleBeforeIso: string,
+  limit: number,
+): Promise<Array<{ id: string }>> {
+  const { data, error } = await supabase
+    .from('events')
+    .select('id')
+    .eq('ai_matching_status', 'indexing')
+    .is('deleted_at', null)
+    .lt('updated_at', staleBeforeIso)
+    .limit(limit);
+  if (error) {
+    throw new Error(`Failed to list stuck indexing events: ${getErrorMessage(error)}`);
+  }
+  return (data ?? []).map((row) => ({ id: row.id as string }));
+}
+
+/**
  * Service-role only. Bulk delete all `photo_faces` rows for an event.
  * Used by the disable worker when tearing down a collection.
  */
