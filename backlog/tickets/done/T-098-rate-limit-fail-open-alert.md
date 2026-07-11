@@ -1,7 +1,7 @@
 # T-098 · [Observabilidad] Alerta Sentry cuando el rate limiter falla open (hoy: solo `console.error`)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done (PR #162)
 - **Blockers:** ninguno
 - **Rama:** `fix/rate-limit-fail-open-alert`  (tipo = fix)
 - **OpenSpec change:** —  (un módulo)
