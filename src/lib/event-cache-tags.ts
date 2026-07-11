@@ -11,6 +11,25 @@ export type EventDetailTagIdentity = {
 };
 
 /**
+ * The cache tags a single event-detail page is cached under, keyed by whichever
+ * param the viewer reached it with (UUID, slug, or share_code). Both public
+ * (`events/[shareCode]`) and talent (`dashboard/talent/events/[id]`) detail
+ * caches use this.
+ *
+ * Deliberately ONLY the per-event tag — NOT the shared `events-public` listing
+ * tag (T-100). Tagging a detail page `events-public` meant any create/edit/
+ * delete of ANY event nuked EVERY cached detail page at once (destroying hit
+ * rate) with no correctness gain: every mutation that must refresh an event's
+ * detail already busts these per-event tags via `revalidateEventDetailTags`
+ * below, so `events-public` was pure over-invalidation. Kept next to the
+ * revalidation helper so the set that's cached and the set that's busted can't
+ * drift apart.
+ */
+export function eventDetailCacheTags(param: string): string[] {
+  return [`event-${param}`];
+}
+
+/**
  * Revalidates the event-detail cache tag for every param a viewer might
  * have used to reach the event (UUID, slug, or share_code). Without this,
  * photo content changes only invalidate the UUID-keyed cache, so visitors

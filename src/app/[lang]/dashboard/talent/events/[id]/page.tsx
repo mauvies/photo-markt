@@ -29,6 +29,7 @@ import { getClaimedPhotoIdsForTalent } from '@/database/queries/talent-library';
 import type { SupabaseServerClient } from '@/database/queries/types';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { eventDetailCacheTags } from '@/lib/event-cache-tags';
 import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
 import { getEventStatus, isCollaborativeUploadOpen } from '@/lib/event-status';
 import { isFeatureEnabled } from '@/lib/feature-flags';
@@ -56,7 +57,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 // Cache invalidated by photographer photo mutations via revalidateTag('event-<id>').
 async function getCachedTalentEventData(param: string, baseUrl: string, viewerIsTalent: boolean) {
   'use cache';
-  cacheTag(`event-${param}`, 'events-public');
+  cacheTag(...eventDetailCacheTags(param));
   // 55 min — safely under the 60-min signed URL expiry
   cacheLife({ revalidate: 55 * 60, expire: 55 * 60 });
 
