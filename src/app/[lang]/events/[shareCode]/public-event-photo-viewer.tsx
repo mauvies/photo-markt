@@ -14,6 +14,7 @@ import {
 } from '@/app/[lang]/dashboard/talent/events/[id]/actions';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useBibSearch, useFaceSearch } from '@/components/event-gallery-with-face-search';
+import { EventPhotoCountLabel } from '@/components/event-photo-count-label';
 import { type EventPhotoFilter, EventPhotoFilterTabs } from '@/components/event-photo-filter-tabs';
 import { FaceSearchResults } from '@/components/face-search-results';
 import { useGuestCart } from '@/components/guest-cart-provider';
@@ -114,6 +115,12 @@ interface PublicEventPhotoViewerProps {
   /** Localized copy for the selection toolbar + bulk download. */
   bulkDownload: BulkDownloadLabels;
   imageUnavailableLabel: string;
+  /** True approved-photo total for the event (server-computed), shown in the
+   * gallery toolbar count — reflects the whole event, not the loaded page (T-104). */
+  totalCount: number;
+  /** "Photos ({n})" template for the standalone count on non-collaborative
+   * events (no tabs). */
+  photosCountLabel: string;
   /** Empty-state copy when a bib search returns no matches (T-032). */
   bibSearchEmptyLabel?: string;
   /** Whether more photos exist beyond the first batch (drives "Load more"). */
@@ -158,6 +165,8 @@ export function PublicEventPhotoViewer({
   purchasedPhotoIds = new Set(),
   bulkDownload,
   imageUnavailableLabel,
+  totalCount,
+  photosCountLabel,
   bibSearchEmptyLabel,
   initialHasMore = false,
   loadMoreLabel,
@@ -770,7 +779,11 @@ export function PublicEventPhotoViewer({
                 onValueChange={setFilter}
                 allLabel={filterLabels.all}
                 mineLabel={filterLabels.mine}
+                allCount={totalCount}
+                mineCount={myPhotoIds.size}
               />
+            ) : totalCount > 0 ? (
+              <EventPhotoCountLabel label={photosCountLabel.replace('{n}', String(totalCount))} />
             ) : undefined
           }
           emptyState={

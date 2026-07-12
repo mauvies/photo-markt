@@ -1,11 +1,11 @@
-# T-103 · Contador de fotos en la toolbar de la galería (izquierda, junto al botón "Select")
+# T-104 · Contador de fotos en la toolbar de la galería (izquierda, junto al botón "Select")
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/photo-count-in-gallery-toolbar`  (tipo = feat)
-- **OpenSpec change:** —  (posible al ejecutar: toca componentes compartidos + 3 vistas + 3 páginas; `/work-next` decide)
-- **PR:** —
+- **OpenSpec change:** —  (UI: componentes compartidos + 3 vistas + 3 páginas; se implementó directo)
+- **PR:** #169
 
 ## Requerimiento
 Mostrar el conteo de fotos en la fila de la toolbar de la galería (la fila que tiene el botón "Select" a

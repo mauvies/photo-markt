@@ -9,6 +9,10 @@ interface EventPhotoFilterTabsProps {
   onValueChange: (value: EventPhotoFilter) => void;
   allLabel: string;
   mineLabel: string;
+  /** Optional per-tab photo counts, appended as "label (N)" when provided
+   * (T-104). `allCount` is the event total; `mineCount` the viewer's uploads. */
+  allCount?: number;
+  mineCount?: number;
 }
 
 /**
@@ -22,10 +26,14 @@ export function EventPhotoFilterTabs({
   onValueChange,
   allLabel,
   mineLabel,
+  allCount,
+  mineCount,
 }: EventPhotoFilterTabsProps) {
+  const withCount = (label: string, count: number | undefined) =>
+    typeof count === 'number' ? `${label} (${count})` : label;
   const tabs: Array<{ key: EventPhotoFilter; label: string }> = [
-    { key: 'all', label: allLabel },
-    { key: 'mine', label: mineLabel },
+    { key: 'all', label: withCount(allLabel, allCount) },
+    { key: 'mine', label: withCount(mineLabel, mineCount) },
   ];
   return (
     <div className="flex shrink-0 items-center gap-4">

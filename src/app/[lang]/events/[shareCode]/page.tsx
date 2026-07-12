@@ -670,6 +670,8 @@ export default async function EventPage({
                     }}
                     resultsLabels={dict.aiSearch.results}
                     imageUnavailableLabel={dict.eventCard.imageUnavailable}
+                    totalCount={totalCount}
+                    photosCountLabel={dict.events.photosCount}
                     bibSearchEmptyLabel={dict.bibDetection.searchEmpty}
                     initialHasMore={hasMore}
                     loadMoreLabel={dict.events.loadMore}

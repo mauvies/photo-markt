@@ -319,6 +319,7 @@ export default async function EventDetailPage({
                   iconTooltips={dict.photoIconButtons}
                   items={albumItems}
                   imageUnavailableLabel={dict.eventCard.imageUnavailable}
+                  totalCount={visibleCount}
                   initialHasMore={hasMore}
                   loadMoreLabel={dict.events.loadMore}
                   loadMoreErrorLabel={dict.events.loadMoreFailed}
@@ -369,6 +370,7 @@ export default async function EventDetailPage({
               iconTooltips={dict.photoIconButtons}
               items={albumItems}
               imageUnavailableLabel={dict.eventCard.imageUnavailable}
+              totalCount={visibleCount}
               initialHasMore={hasMore}
               loadMoreLabel={dict.events.loadMore}
               loadMoreErrorLabel={dict.events.loadMoreFailed}
