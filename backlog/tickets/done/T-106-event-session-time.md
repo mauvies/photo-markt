@@ -1,11 +1,11 @@
 # T-106 · Añadir "hora de la sesión" al evento — hora **manual** que introduce el fotógrafo (independiente del time-sync de cámara)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno (decisión de producto tomada — ver Notas)
 - **Rama:** `feat/event-session-time`  (tipo = feat)
-- **OpenSpec change:** — (probable sí: toca schema/DB + wizard + página pública — crear al ejecutar)
-- **PR:** —
+- **OpenSpec change:** — (diseño ya fijado en el ticket — columna nullable additive + hora naive local; se implementó directo, con `/code-review high` por ser migración)
+- **PR:** #170
 - **Dep:** T-105 (el campo va en el paso Detalles rediseñado)
 
 ## Requerimiento
