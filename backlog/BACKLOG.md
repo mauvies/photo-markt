@@ -11,7 +11,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 42 | P2 | T-101 | [Carrito/Perf] Quitar `router.refresh()` del add-to-cart (doble refresh en hot path) | — | todo |
 | 43 | P2 | T-102 | "Añadir a favoritos" en el modal de detalle de foto a dos paneles (panel derecho, junto al CTA) | — | todo |
 | 44 | P2 | T-103 | Mostrar el nombre del fotógrafo (enlazado al perfil) + fecha en formato natural por idioma en la línea de metadatos del evento | — | todo |
 | 45 | P2 | T-104 | Contador de fotos en la toolbar de la galería (izquierda, junto al botón "Select") | — | todo |
@@ -40,6 +39,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-101** · Carrito/Perf (P2): `add-to-cart-button.tsx` llamaba en cada add/remove **ambos** `queryClient.invalidateQueries(['cart-count'])` **y** `router.refresh()` — la invalidación ya refresca el badge y el estado "en carrito" del botón es local, así que el `router.refresh()` solo forzaba un round-trip RSC completo del subtree en un hot path (F-09 de la auditoría T-083). El flujo optimista paralelo (`use-optimistic-photos-in-cart.ts`) ya lo omitía — las dos implementaciones de add-to-cart eran inconsistentes y esta era la pesada. Quitado el `router.refresh()` de ambos handlers (+ el import `useRouter` ya sin uso); verificado que nada del subtree dependía del refresh (badge vía `['cart-count']`, estado del botón vía `useState` local). Tests de caracterización (add → "In cart" + invalidación del badge, remove → "Add to cart" + invalidación) + regresión (`router.refresh()` nunca se llama en add ni remove — roja antes / verde después). Verde: 982 tests — PR #166
 
 - **T-100** · Cache/Perf (P2): las dos cachés de detalle de evento (pública `events/[shareCode]` y talento `dashboard/talent/events/[id]`) llevaban el tag compartido `events-public` además de su `event-${param}` scopeado → **cualquier** create/edit/delete de **cualquier** evento nucleaba **todas** las páginas de detalle cacheadas (+ búsqueda/filtros) de una vez, destruyendo el hit rate sin ganancia de corrección (F-07 de la auditoría T-083). **Auditoría (documentada en el PR):** ninguna mutación depende de `events-public` para alcanzar un detalle — edit/delete revalidan `event-${id|slug|share_code}` directo; las mutaciones de foto pasan por `revalidateEventPhotoCacheTags` → `revalidateEventDetailTags` (mismos tags); create no tiene detalle cacheado que invalidar; el nombre del fotógrafo en el detalle se refresca vía `photographer-${slug}` en edición de perfil, nunca vía `events-public`. Extraído `eventDetailCacheTags(param)` a `event-cache-tags.ts` (junto a `revalidateEventDetailTags`, para que el set bajo el que se cachea y el set que se bustea vivan en un solo módulo y no deriven) y quitado `events-public` de ambos `cacheTag`. El lado de revalidación (listados: search/explore/sitemap/filters) sigue usando `events-public` sin cambios. Tests: el set de tags del detalle excluye `events-public`, simetría read/write (mutar X bustea toda variante-param de X), y aislamiento cross-event (mutar Y no toca ningún tag de detalle de X). Verde: 521 unit + 457 integración — PR #165
 

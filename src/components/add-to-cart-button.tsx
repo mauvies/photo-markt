@@ -2,7 +2,6 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, Minus, Plus, ShoppingCart } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import {
@@ -39,7 +38,6 @@ export function AddToCartButton({
 }: AddToCartButtonProps) {
   const [isInCart, setIsInCart] = useState(initialInCart);
   const [isPending, startTransition] = useTransition();
-  const router = useRouter();
   const queryClient = useQueryClient();
 
   const handleAddToCart = (e?: React.MouseEvent) => {
@@ -58,7 +56,6 @@ export function AddToCartButton({
         setIsInCart(true);
         queryClient.invalidateQueries({ queryKey: ['cart-count'] });
         toast.success('Added to cart');
-        router.refresh();
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to add to cart';
         toast.error(message);
@@ -82,7 +79,6 @@ export function AddToCartButton({
         setIsInCart(false);
         queryClient.invalidateQueries({ queryKey: ['cart-count'] });
         toast.success('Removed from cart');
-        router.refresh();
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to remove from cart';
         toast.error(message);

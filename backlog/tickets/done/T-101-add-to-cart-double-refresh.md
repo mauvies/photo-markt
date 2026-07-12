@@ -1,11 +1,11 @@
 # T-101 · [Carrito/Perf] Quitar el `router.refresh()` del add-to-cart (doble refresh en hot path)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/add-to-cart-double-refresh`  (tipo = fix)
 - **OpenSpec change:** —  (un componente)
-- **PR:** —
+- **PR:** #166
 - **Origen:** auditoría de caching T-083 (`docs/CACHING_AUDIT.md`, **F-09**, ítem #22 del plan)
 
 ## Requerimiento
