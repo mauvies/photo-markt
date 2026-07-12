@@ -18,6 +18,7 @@ import {
 } from '@/app/[lang]/events/[shareCode]/face-search-shared';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useBibSearch, useFaceSearch } from '@/components/event-gallery-with-face-search';
+import { EventPhotoCountLabel } from '@/components/event-photo-count-label';
 import { type EventPhotoFilter, EventPhotoFilterTabs } from '@/components/event-photo-filter-tabs';
 import { FaceSearchResults } from '@/components/face-search-results';
 import type { PhotoDetailModalLabels } from '@/components/photo-detail-modal';
@@ -104,6 +105,12 @@ type EventPhotoViewerProps = {
   photosClaimedToProfile?: Set<string>;
   iconTooltips?: Partial<PhotoIconTooltips>;
   imageUnavailableLabel: string;
+  /** True approved-photo total for the event (server-computed) — the toolbar
+   * count reflects the whole event, not the loaded page (T-104). */
+  totalCount: number;
+  /** "Photos ({n})" template for the standalone count on non-collaborative
+   * events (no tabs). */
+  photosCountLabel: string;
   /** Whether more photos exist beyond the first batch (drives "Load more"). */
   initialHasMore?: boolean;
   /** "Load more" button label. */
@@ -142,6 +149,8 @@ export function EventPhotoViewer({
   photosClaimedToProfile: initialClaimedPhotos = new Set(),
   iconTooltips,
   imageUnavailableLabel,
+  totalCount,
+  photosCountLabel,
   initialHasMore = false,
   loadMoreLabel,
   loadMoreErrorLabel,
@@ -766,7 +775,11 @@ export function EventPhotoViewer({
               onValueChange={setFilter}
               allLabel={filterLabels.all}
               mineLabel={filterLabels.mine}
+              allCount={totalCount}
+              mineCount={uploadedPhotoIds.size}
             />
+          ) : totalCount > 0 ? (
+            <EventPhotoCountLabel label={photosCountLabel.replace('{n}', String(totalCount))} />
           ) : undefined
         }
         emptyState={

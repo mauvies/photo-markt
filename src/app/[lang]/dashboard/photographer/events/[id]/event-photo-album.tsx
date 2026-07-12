@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { EventPhotoCountLabel } from '@/components/event-photo-count-label';
 import type { PhotoAlbumItem } from '@/components/photo-album-viewer';
 import { PhotoGallery, type PhotoGalleryBulkAction } from '@/components/photo-gallery';
 import type { PhotoIconTooltips, PhotoMoreMenuConfig } from '@/components/photo-icon-buttons';
@@ -38,6 +39,9 @@ type EventPhotoAlbumProps = {
   uploaderLabels?: UploaderLabels;
   iconTooltips?: Partial<PhotoIconTooltips>;
   imageUnavailableLabel: string;
+  /** True non-rejected photo total for the event (server-computed) — the
+   * toolbar count reflects the whole event, not the loaded page (T-104). */
+  totalCount: number;
   /** Whether more photos exist beyond the first batch (drives "Load more"). */
   initialHasMore?: boolean;
   /** "Load more" button label. */
@@ -53,6 +57,7 @@ export function EventPhotoAlbum({
   uploaderLabels,
   iconTooltips,
   imageUnavailableLabel,
+  totalCount,
   initialHasMore = false,
   loadMoreLabel,
   loadMoreErrorLabel,
@@ -283,6 +288,11 @@ export function EventPhotoAlbum({
         selectionResetKey={selectionResetKey}
         bulkActions={bulkActions}
         labels={selectionLabels}
+        toolbarLeading={
+          totalCount > 0 ? (
+            <EventPhotoCountLabel label={t('photosCount').replace('{n}', String(totalCount))} />
+          ) : undefined
+        }
         toolbarClassName="sticky top-0 -mx-4 px-3"
         loadMore={{
           hasMore,

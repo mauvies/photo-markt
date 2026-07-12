@@ -204,6 +204,7 @@
     "private": "Private",
     "noPhotosYet": "No photos yet",
     "perPhoto": "per photo",
+    "photosCount": "Photos ({n})",
     "selectButton": "Select",
     "exitSelection": "Exit selection",
     "removeButton": "Remove",

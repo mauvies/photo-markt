@@ -12,6 +12,7 @@ import { EventSaveButton } from '@/components/event-save-button';
 import { EventShareButton } from '@/components/event-share-button';
 import { MarkEventSeen } from '@/components/mark-event-seen';
 import {
+  countEventPhotosByStatus,
   createPhotoUrlMap,
   getEventByShareCode,
   getEventBySlug,
@@ -96,11 +97,15 @@ async function getCachedTalentEventData(param: string, baseUrl: string, viewerIs
   if (!event) return null;
 
   // Only the first gallery page is fetched + signed up front; "Load more"
-  // fetches the rest via a Server Action.
-  const { photos, hasMore } = await getEventPhotosPublicPage(supabaseAdmin, event.id, {
-    limit: EVENT_GALLERY_PAGE_SIZE,
-    offset: 0,
-  });
+  // fetches the rest via a Server Action. `totalCount` is the true approved
+  // total (same count the public page uses), threaded to the toolbar count.
+  const [{ photos, hasMore }, totalCount] = await Promise.all([
+    getEventPhotosPublicPage(supabaseAdmin, event.id, {
+      limit: EVENT_GALLERY_PAGE_SIZE,
+      offset: 0,
+    }),
+    countEventPhotosByStatus(supabaseAdmin, event.id, ['approved']),
+  ]);
 
   // Watermark only when BOTH the photographer opted in (`watermark_enabled`)
   // AND the viewer is a talent. Photographers viewing their own events
@@ -119,7 +124,7 @@ async function getCachedTalentEventData(param: string, baseUrl: string, viewerIs
           baseUrl,
         });
 
-  return { event, photos, hasMore, signed };
+  return { event, photos, hasMore, totalCount, signed };
 }
 
 export default async function ExploreEventDetailPage({
@@ -150,7 +155,7 @@ export default async function ExploreEventDetailPage({
 
   const cached = await getCachedTalentEventData(param, baseUrl, viewerIsTalent);
   if (!cached) notFound();
-  const { event, photos, hasMore, signed } = cached;
+  const { event, photos, hasMore, totalCount, signed } = cached;
 
   const eventStatus = getEventStatus(event.date);
 
@@ -451,6 +456,8 @@ export default async function ExploreEventDetailPage({
                   photosClaimedToProfile={new Set(photosClaimedToProfile)}
                   iconTooltips={dict.photoIconButtons}
                   imageUnavailableLabel={dict.eventCard.imageUnavailable}
+                  totalCount={totalCount}
+                  photosCountLabel={dict.events.photosCount}
                   initialHasMore={hasMore}
                   loadMoreLabel={dict.events.loadMore}
                   loadMoreErrorLabel={dict.events.loadMoreFailed}
