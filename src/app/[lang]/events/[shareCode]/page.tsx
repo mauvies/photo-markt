@@ -24,6 +24,7 @@ import {
 } from '@/database/queries/rekognition';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { eventDetailCacheTags } from '@/lib/event-cache-tags';
 import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
 import { getEventStatus, isCollaborativeUploadOpen } from '@/lib/event-status';
 import { isFeatureEnabled } from '@/lib/feature-flags';
@@ -91,7 +92,7 @@ async function getCachedEventData(
   coverSignedUrl: string | null;
 } | null> {
   'use cache';
-  cacheTag(`event-${param}`, 'events-public');
+  cacheTag(...eventDetailCacheTags(param));
   // 55 min TTL — safely under the 60-min signed URL expiry
   cacheLife({ revalidate: 55 * 60, expire: 55 * 60 });
 
