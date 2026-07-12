@@ -44,6 +44,7 @@ export function Step3Details({
 }: Step3DetailsProps) {
   const { t } = useTranslations<NewEventT>();
   const dateInputId = useId();
+  const sessionTimeId = useId();
   const [datePopoverOpen, setDatePopoverOpen] = useState(false);
 
   return (
@@ -260,6 +261,26 @@ export function Step3Details({
                   {isInvalid && error && (
                     <p className="min-h-4 text-xs text-destructive">{error}</p>
                   )}
+                  {/* Optional manual session start time — separate from the
+                      camera time-sync feature (T-106). */}
+                  <form.Field name="session_time">
+                    {(timeField) => (
+                      <div className="mt-1 grid gap-1">
+                        <Label htmlFor={sessionTimeId} className="text-xs text-muted-foreground">
+                          {t('sessionTimeLabel')}
+                        </Label>
+                        <Input
+                          id={sessionTimeId}
+                          type="time"
+                          className="text-sm"
+                          value={timeField.state.value}
+                          onChange={(event) => timeField.handleChange(event.target.value)}
+                          onBlur={timeField.handleBlur}
+                          suppressHydrationWarning
+                        />
+                      </div>
+                    )}
+                  </form.Field>
                 </div>
               );
             }}

@@ -43,6 +43,7 @@ export function EventFormFields({
   setDatePopoverOpen,
 }: EventFormFieldsProps) {
   const dateInputId = useId();
+  const sessionTimeId = useId();
 
   return (
     <div className="space-y-4" suppressHydrationWarning>
@@ -195,6 +196,24 @@ export function EventFormFields({
                   suppressHydrationWarning
                 />
                 {isInvalid && error ? <p className="text-xs text-destructive">{error}</p> : null}
+                {/* Optional manual session start time (T-106). */}
+                <form.Field name="session_time">
+                  {(timeField) => (
+                    <div className="mt-1 grid gap-1">
+                      <Label htmlFor={sessionTimeId} className="text-xs text-muted-foreground">
+                        Session time (optional)
+                      </Label>
+                      <Input
+                        id={sessionTimeId}
+                        type="time"
+                        value={timeField.state.value}
+                        onChange={(event) => timeField.handleChange(event.target.value)}
+                        onBlur={timeField.handleBlur}
+                        suppressHydrationWarning
+                      />
+                    </div>
+                  )}
+                </form.Field>
               </div>
             );
           }}

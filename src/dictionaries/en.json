@@ -883,6 +883,7 @@
     "locationRequired": "Location is required.",
     "dateLabel": "Date",
     "dateSelectPlaceholder": "Select date",
+    "sessionTimeLabel": "Session time (optional)",
     "dateRequired": "Date is required.",
     "priceLabel": "Price per Photo (Optional)",
     "priceInvalidNumber": "Price must be a valid number.",

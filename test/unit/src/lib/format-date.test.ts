@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatEventDate } from '@/lib/format-date';
+import { formatEventDate, formatSessionTime, normalizeSessionTime } from '@/lib/format-date';
 
 // Noon UTC keeps the calendar day stable across the runner's timezone (the
 // suite doesn't pin TZ), so these assertions test the locale field ORDER, not
@@ -27,5 +27,51 @@ describe('formatEventDate (T-103)', () => {
     expect(formatEventDate(undefined, 'en')).toBeUndefined();
     expect(formatEventDate('', 'en')).toBeUndefined();
     expect(formatEventDate('not-a-date', 'en')).toBeUndefined();
+  });
+});
+
+describe('normalizeSessionTime (T-106)', () => {
+  it('passes a valid "HH:mm" through unchanged', () => {
+    expect(normalizeSessionTime('09:30')).toBe('09:30');
+    expect(normalizeSessionTime('  23:59  ')).toBe('23:59');
+  });
+
+  it('accepts a seconds-bearing "HH:mm:ss" and drops the seconds (no silent wipe)', () => {
+    expect(normalizeSessionTime('09:30:00')).toBe('09:30');
+    expect(normalizeSessionTime('23:59:45')).toBe('23:59');
+  });
+
+  it('returns null for empty / nullish input', () => {
+    expect(normalizeSessionTime('')).toBeNull();
+    expect(normalizeSessionTime('   ')).toBeNull();
+    expect(normalizeSessionTime(null)).toBeNull();
+    expect(normalizeSessionTime(undefined)).toBeNull();
+  });
+
+  it('returns null for malformed or out-of-range times', () => {
+    expect(normalizeSessionTime('9:30')).toBeNull(); // needs two-digit hour
+    expect(normalizeSessionTime('24:00')).toBeNull(); // hour out of range
+    expect(normalizeSessionTime('12:60')).toBeNull(); // minute out of range
+    expect(normalizeSessionTime('nope')).toBeNull();
+  });
+});
+
+describe('formatSessionTime (T-106)', () => {
+  it('formats a naive time in the locale clock convention', () => {
+    // en → 12-hour with AM/PM; es → 24-hour. Assert the shape, not exact glyphs.
+    expect(formatSessionTime('09:30', 'en')).toMatch(/9:30\s?AM/i);
+    expect(formatSessionTime('09:30', 'es')).toContain('9:30');
+    expect(formatSessionTime('09:30', 'en')).not.toBe(formatSessionTime('09:30', 'es'));
+  });
+
+  it('accepts the DB "HH:MM:SS" form', () => {
+    expect(formatSessionTime('09:30:00', 'en')).toMatch(/9:30\s?AM/i);
+  });
+
+  it('returns undefined for empty / invalid input', () => {
+    expect(formatSessionTime(null, 'en')).toBeUndefined();
+    expect(formatSessionTime('', 'en')).toBeUndefined();
+    expect(formatSessionTime('25:00', 'en')).toBeUndefined();
+    expect(formatSessionTime('nope', 'en')).toBeUndefined();
   });
 });

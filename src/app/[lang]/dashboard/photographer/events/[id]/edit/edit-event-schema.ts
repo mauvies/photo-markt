@@ -12,6 +12,8 @@ export const eventSchema = z.object({
       'Activity is required.',
     ),
   date: z.string().min(1, 'Date is required.'),
+  // Optional manual session start time ("HH:mm"), separate from time-sync (T-106).
+  session_time: z.string().trim().optional().default(''),
   city: z.string().trim().optional(),
   is_public: z.boolean().default(true),
   watermark_enabled: z.boolean().default(true),

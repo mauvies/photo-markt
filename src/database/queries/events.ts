@@ -10,6 +10,8 @@ export interface Event {
   user_id: string;
   name: string;
   date: string;
+  /** Manual session start time (naive local "HH:MM:SS"), or null (T-106). */
+  session_time?: string | null;
   city: string;
   country: string;
   state: string;
@@ -158,6 +160,7 @@ export async function createEvent(
   eventData: {
     name: string;
     date: string;
+    session_time?: string | null;
     city: string;
     country: string;
     state: string;
@@ -187,9 +190,13 @@ export async function createEvent(
     ai_matching_enabled,
     contains_minors,
     bib_detection_enabled,
+    session_time,
     ...rest
   } = eventData;
   const insertPayload: Record<string, unknown> = { user_id: userId, ...rest };
+  // Optional, migration-gated (like the AI columns) — only include when set so
+  // the insert still works against a DB without the session_time migration.
+  if (session_time) insertPayload.session_time = session_time;
   if (type && type !== 'solo') insertPayload.type = type;
   if (organizer_fee_per_photo_cents !== null && organizer_fee_per_photo_cents !== undefined) {
     insertPayload.organizer_fee_per_photo_cents = organizer_fee_per_photo_cents;
@@ -516,6 +523,7 @@ export async function updateEvent(
   eventData: {
     name?: string;
     date?: string;
+    session_time?: string | null;
     city?: string;
     country?: string;
     state?: string | null;

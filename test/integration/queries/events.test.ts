@@ -137,6 +137,40 @@ describe('database/queries/events', () => {
       expect(row?.name).toBe('Photo Sprint 2026');
     });
 
+    it('persists and clears the optional session_time (T-106)', async () => {
+      const owner = await createTestUser('PHOTOGRAPHER');
+      const created = await createEvent(createServiceClient(), owner.id, {
+        name: 'Dawn Session',
+        date: '2026-09-01',
+        session_time: '06:45',
+        city: 'Madrid',
+        country: 'ES',
+        state: 'Madrid',
+        activity: 'SURF',
+        is_public: true,
+        share_code: 'DAWN26',
+        price_per_photo: null,
+        watermark_enabled: false,
+      });
+
+      const { data: created_row } = await createServiceClient()
+        .from('events')
+        .select('session_time')
+        .eq('id', created.id)
+        .single();
+      // Postgres `time` serializes as "HH:MM:SS".
+      expect(created_row?.session_time).toBe('06:45:00');
+
+      // Clearing it (null) persists.
+      await updateEvent(createServiceClient(), created.id, owner.id, { session_time: null });
+      const { data: cleared_row } = await createServiceClient()
+        .from('events')
+        .select('session_time')
+        .eq('id', created.id)
+        .single();
+      expect(cleared_row?.session_time).toBeNull();
+    });
+
     it('updates only the supplied columns', async () => {
       const owner = await createTestUser('PHOTOGRAPHER');
       const event = await createTestEvent(owner.id, { name: 'Old Name' });

@@ -81,6 +81,30 @@ describe('EventMetaLine', () => {
     expect(container.textContent).not.toContain('• •');
   });
 
+  it('shows the session time (after the date) when provided (T-106)', () => {
+    const { container } = render(
+      <EventMetaLine
+        date={JUNE_6}
+        sessionTime="09:30"
+        city="lisbon"
+        locale="en"
+        perPhotoLabel="per photo"
+      />,
+    );
+    const text = container.textContent ?? '';
+    expect(text).toMatch(/9:30\s?AM/i);
+    // Between the date and the city.
+    expect(text.indexOf('June 6, 2026')).toBeLessThan(text.search(/9:30/));
+    expect(text.search(/9:30/)).toBeLessThan(text.indexOf('Lisbon'));
+  });
+
+  it('omits the session time segment when absent (T-106)', () => {
+    const { container } = render(
+      <EventMetaLine date={JUNE_6} city="lisbon" locale="en" perPhotoLabel="per photo" />,
+    );
+    expect(container.textContent).not.toMatch(/\d:\d{2}/);
+  });
+
   it('omits the price segment when pricePerPhoto is null', () => {
     const { container } = render(
       <EventMetaLine
