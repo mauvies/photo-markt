@@ -7,6 +7,7 @@ import { buildPublicPhotoAlbumItem } from '@/app/[lang]/events/[shareCode]/photo
 import { UploadProgressProvider } from '@/app/[lang]/events/[shareCode]/upload-progress-provider';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { EventGalleryWithFaceSearch } from '@/components/event-gallery-with-face-search';
+import { EventMetaLine } from '@/components/event-meta-line';
 import { EventSaveButton } from '@/components/event-save-button';
 import { EventShareButton } from '@/components/event-share-button';
 import { MarkEventSeen } from '@/components/mark-event-seen';
@@ -317,16 +318,15 @@ export default async function ExploreEventDetailPage({
             </div>
           }
         />
-        <div className="mt-1 text-sm leading-relaxed text-muted-foreground">
-          {new Date(event.date).toDateString().split(' ').slice(1).join(' ')} •{' '}
-          {event.city[0]?.toUpperCase() + event.city.slice(1)}
-          {event.price_per_photo !== null && (
-            <>
-              {' '}
-              • ${event.price_per_photo.toFixed(2)} {dict.talentDashboard.perPhoto}
-            </>
-          )}
-        </div>
+        <EventMetaLine
+          className="mt-1"
+          date={event.date}
+          city={event.city}
+          locale={lang}
+          perPhotoLabel={dict.talentDashboard.perPhoto}
+          pricePerPhoto={event.price_per_photo}
+          photographerName={uploaderProfiles[event.user_id]?.username}
+        />
       </div>
 
       {/* Contribute affordance — collaborative events with guest-upload on,

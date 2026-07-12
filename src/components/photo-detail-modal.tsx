@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { useCarouselNavigation } from '@/hooks/use-carousel-navigation';
 import { useImageLoad } from '@/hooks/use-image-load';
 import { useKeyboardNav } from '@/hooks/use-keyboard-nav';
+import { formatEventDate } from '@/lib/format-date';
 import { resolvePhotoCta } from '@/lib/photo-detail-cta';
 import { shareUrl } from '@/lib/share-url';
 
@@ -74,17 +75,6 @@ interface PhotoDetailModalProps {
   onRemoveFromCart?: (photoId: string) => void;
   onDownload?: (photoId: string) => void;
   onShare?: (photoId: string) => void;
-}
-
-function formatDate(iso: string | undefined, locale: string): string | undefined {
-  if (!iso) return undefined;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return undefined;
-  return new Intl.DateTimeFormat(locale, {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  }).format(date);
 }
 
 /** One icon + value row in the info panel. */
@@ -156,7 +146,7 @@ export function PhotoDetailModal({
   const uploaderName = current.uploader?.name;
   const dimensions =
     current.width && current.height ? `${current.width} × ${current.height}px` : undefined;
-  const dateLabel = formatDate(current.takenAt, locale);
+  const dateLabel = formatEventDate(current.takenAt, locale);
   const priceLabel =
     pricePerPhoto != null && pricePerPhoto > 0 ? `${pricePerPhoto.toFixed(2)} USD` : undefined;
 
