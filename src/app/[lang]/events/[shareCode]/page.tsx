@@ -6,6 +6,7 @@ import { Suspense } from 'react';
 import { getActiveRole } from '@/app/[lang]/actions/roles';
 import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/activity-options';
 import { EventGalleryWithFaceSearch } from '@/components/event-gallery-with-face-search';
+import { EventMetaLine } from '@/components/event-meta-line';
 import { EventShareButton } from '@/components/event-share-button';
 import {
   countEventPhotosByStatus,
@@ -517,16 +518,15 @@ export default async function EventPage({
           <div className="mb-6 flex items-start justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold">{event.name}</h1>
-              <div className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                {new Date(event.date).toDateString().split(' ').slice(1).join(' ')} •{' '}
-                {event.city[0]?.toUpperCase() + event.city.slice(1)}
-                {event.price_per_photo !== null && (
-                  <>
-                    {' '}
-                    • ${event.price_per_photo.toFixed(2)} {dict.events.perPhoto}
-                  </>
-                )}
-              </div>
+              <EventMetaLine
+                className="mt-2"
+                date={event.date}
+                city={event.city}
+                locale={lang}
+                perPhotoLabel={dict.events.perPhoto}
+                pricePerPhoto={event.price_per_photo}
+                photographerName={uploaderProfiles[event.user_id]?.username}
+              />
             </div>
             <EventShareButton
               eventName={event.name}
