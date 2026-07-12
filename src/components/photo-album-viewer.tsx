@@ -499,6 +499,10 @@ export default function PhotoAlbumViewer({
           onRemoveFromCart={onRemoveFromCart}
           onDownload={onDownload}
           onShare={onShare}
+          showAddToFavorites={showAddToPhotos}
+          photosInMyPhotos={photosInMyPhotos}
+          onAddToPhotos={onAddToPhotos}
+          onRemoveFromPhotos={onRemoveFromPhotos}
         />
       ) : (
         <PhotoLightbox
