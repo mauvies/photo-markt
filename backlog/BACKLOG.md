@@ -12,7 +12,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
 | 43 | P2 | T-102 | "Añadir a favoritos" en el modal de detalle de foto a dos paneles (panel derecho, junto al CTA) | — | todo |
-| 44 | P2 | T-103 | Mostrar el nombre del fotógrafo (enlazado al perfil) + fecha en formato natural por idioma en la línea de metadatos del evento | — | todo |
+| 44 | P2 | T-103 | Mostrar el nombre del fotógrafo (enlazado al perfil) + fecha en formato natural por idioma en la línea de metadatos del evento | — | doing |
 | 45 | P2 | T-104 | Contador de fotos en la toolbar de la galería (izquierda, junto al botón "Select") | — | todo |
 | 46 | P2 | T-106 | Añadir "hora de la sesión" manual (fotógrafo) al evento — independiente del time-sync de cámara | T-105 | todo |
 | 47 | P2 | T-107 | Capturar y persistir estado/provincia (+ ciudad + país) del evento vía Google Places | T-105 | todo |
