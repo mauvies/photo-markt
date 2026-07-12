@@ -1338,7 +1338,9 @@
     "inCart": "Remove from cart",
     "download": "Download",
     "share": "Share",
-    "close": "Close"
+    "close": "Close",
+    "addToFavorites": "Add to favorites",
+    "removeFromFavorites": "Remove from favorites"
   },
   "aiSearch": {
     "banner": {

@@ -372,6 +372,21 @@ export default async function EventPage({
     }
   }
 
+  // Favorites the signed-in viewer already has among the loaded photos — seeds
+  // the optimistic state so the purchase modal's heart renders filled (T-102).
+  const photosInMyPhotos: string[] = [];
+  if (user && eventStatus !== 'upcoming') {
+    const photoIds = photos.map((p) => p.id);
+    if (photoIds.length > 0) {
+      const { data: favTags } = await supabase
+        .from('talent_photo_tags')
+        .select('photo_id')
+        .eq('talent_user_id', user.id)
+        .in('photo_id', photoIds);
+      for (const tag of favTags ?? []) photosInMyPhotos.push(tag.photo_id);
+    }
+  }
+
   const bulkDownloadLabels = {
     select: dict.events.selectButton,
     exitSelection: dict.events.exitSelection,
@@ -602,6 +617,13 @@ export default async function EventPage({
                     shareCode={event.share_code ?? null}
                     isCollaborative={event.is_collaborative}
                     initialPhotosInCart={photosInCart}
+                    initialPhotosInMyPhotos={photosInMyPhotos}
+                    favoriteToastLabels={{
+                      added: dict.eventPhotoViewer.addedToPhotos,
+                      removed: dict.eventPhotoViewer.removedFromPhotos,
+                      failedAdd: dict.eventPhotoViewer.failedAddPhotos,
+                      failedRemove: dict.eventPhotoViewer.failedRemovePhotos,
+                    }}
                     iconTooltips={dict.photoIconButtons}
                     showAddToCart={showCartUi}
                     emptyText={dict.events.galleryEmpty}
