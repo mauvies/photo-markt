@@ -367,6 +367,7 @@ export default function NewEventForm({
     formData.append('name', parsed.name.trim());
     formData.append('activity', parsed.activity);
     formData.append('date', parsed.date);
+    if (parsed.session_time?.trim()) formData.append('session_time', parsed.session_time.trim());
     if (parsed.city?.trim()) formData.append('city', parsed.city.trim());
     formData.append('event_type', parsed.event_type);
     formData.append('is_public', parsed.is_public ? 'true' : 'false');

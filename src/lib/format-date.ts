@@ -18,3 +18,43 @@ export function formatEventDate(iso: string | undefined, locale: string): string
     day: 'numeric',
   }).format(date);
 }
+
+/**
+ * Normalizes a form-supplied session time to a canonical "HH:mm" string, or
+ * `null` when empty / not a valid time-of-day. Shared by the create and edit
+ * event actions so both gate the value identically before it hits the DB (T-106).
+ */
+export function normalizeSessionTime(value: string | null | undefined): string | null {
+  const trimmed = (value ?? '').trim();
+  // Accept "HH:mm" and "HH:mm:ss" (some inputs/locales append seconds) — always
+  // normalize to "HH:mm" so a seconds-bearing value never fails to parse and
+  // silently wipes a stored time.
+  const match = /^(\d{2}):(\d{2})(?::\d{2})?$/.exec(trimmed);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return `${match[1]}:${match[2]}`;
+}
+
+/**
+ * Formats a naive local time-of-day (the event's manual session time, stored as
+ * "HH:MM" or "HH:MM:SS") into the locale's short clock format — "9:30 AM" (en),
+ * "9:30" (es). Returns `undefined` for empty/unparseable input so the segment
+ * can be omitted (T-106). No timezone is applied: the stored value is already
+ * "the local time the photographer typed".
+ */
+export function formatSessionTime(
+  value: string | null | undefined,
+  locale: string,
+): string | undefined {
+  if (!value) return undefined;
+  const match = /^(\d{1,2}):(\d{2})/.exec(value.trim());
+  if (!match) return undefined;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return undefined;
+  // Anchor to an arbitrary date — only the time fields are formatted.
+  const date = new Date(2000, 0, 1, hours, minutes);
+  return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(date);
+}

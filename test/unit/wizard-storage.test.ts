@@ -144,6 +144,7 @@ const PRISTINE_VALUES: FormValues = {
   name: '',
   activity: 'OTHER',
   date: '',
+  session_time: '',
   country: '',
   state: '',
   city: '',

@@ -1,10 +1,13 @@
 import Link from 'next/link';
-import { formatEventDate } from '@/lib/format-date';
+import { formatEventDate, formatSessionTime } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
 
 interface EventMetaLineProps {
   /** ISO event date. */
   date: string;
+  /** Manual session start time ("HH:MM"/"HH:MM:SS"); shown right after the
+   * date when present, omitted otherwise (T-106). */
+  sessionTime?: string | null;
   /** Event city (capitalized for display). */
   city: string;
   /** Page locale (`lang`) — drives the natural date format. */
@@ -26,6 +29,7 @@ interface EventMetaLineProps {
  */
 export function EventMetaLine({
   date,
+  sessionTime,
   city,
   locale,
   perPhotoLabel,
@@ -34,11 +38,13 @@ export function EventMetaLine({
   className,
 }: EventMetaLineProps) {
   const formattedDate = formatEventDate(date, locale);
+  const formattedTime = formatSessionTime(sessionTime, locale);
   const formattedCity = city ? city[0]?.toUpperCase() + city.slice(1) : '';
 
   return (
     <div className={cn('text-sm leading-relaxed text-muted-foreground', className)}>
       {formattedDate}
+      {formattedTime ? <> • {formattedTime}</> : null}
       {formattedCity ? <> • {formattedCity}</> : null}
       {photographerName ? (
         <>

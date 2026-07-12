@@ -52,6 +52,8 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
   }, [initialPhotos]);
 
   const eventDate = event.date ? format(new Date(event.date), 'yyyy-MM-dd') : '';
+  // DB stores a `time` ("HH:MM:SS"); the <input type="time"> wants "HH:mm".
+  const eventSessionTime = event.session_time?.slice(0, 5);
 
   // `Event` is typed broadly enough that the AI columns may be optional
   // depending on whether the migration has been applied — read defensively.
@@ -67,6 +69,7 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
     name: event.name,
     activity: event.activity as FormValues['activity'],
     date: eventDate,
+    session_time: eventSessionTime ?? '',
     city: event.city,
     is_public: event.is_public,
     watermark_enabled: event.watermark_enabled,
@@ -136,6 +139,8 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
         formData.append('name', parsed.name.trim());
         formData.append('activity', parsed.activity);
         formData.append('date', parsed.date);
+        // Always send session_time (even empty) so clearing it persists as null.
+        formData.append('session_time', parsed.session_time?.trim() ?? '');
         if (parsed.city?.trim()) {
           formData.append('city', parsed.city.trim());
         }

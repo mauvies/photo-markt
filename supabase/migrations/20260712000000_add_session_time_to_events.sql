@@ -1,0 +1,15 @@
+-- Manual event session start time (T-106).
+--
+-- The photographer enters this by hand (e.g. "09:30") to show when the session
+-- took place. It is DISTINCT from the camera time-sync fields
+-- (`time_offset` / `time_sync_enabled`), which capture when each PHOTO was
+-- taken for time-based matching — a separate, currently-disabled feature.
+--
+-- Stored as a naive local time-of-day (`time without time zone`): no timezone
+-- is recorded, matching how the photographer thinks about "the session started
+-- at 9:30" in the event's own locale. The event already carries `lat`/`lng` if
+-- a timezone ever needs to be derived.
+--
+-- Nullable: not every event has one. When null, behavior is unchanged, so
+-- existing events are unaffected and rollback is inert.
+alter table events add column if not exists session_time time;

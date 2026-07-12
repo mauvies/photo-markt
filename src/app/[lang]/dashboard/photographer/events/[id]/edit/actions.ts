@@ -13,6 +13,7 @@ import {
 } from '@/database/queries';
 import type { SupabaseServerClient } from '@/database/queries/types';
 import { createClient } from '@/database/server';
+import { normalizeSessionTime } from '@/lib/format-date';
 import { inngest } from '@/lib/inngest/client';
 
 // --- Constants ---
@@ -33,6 +34,11 @@ const eventSchema = z.object({
       'Activity is required.',
     ),
   date: z.string().min(1, 'Date is required.'),
+  // Optional manual session time — normalized to "HH:mm" or null (T-106).
+  session_time: z
+    .string()
+    .optional()
+    .transform((val) => normalizeSessionTime(val)),
   country: z.string().trim().optional().default(''),
   state: z.string().trim().optional().default(''),
   city: z.string().trim().optional(),
@@ -146,6 +152,7 @@ export async function updateEventAction(
     name: formData.get('name')?.toString() ?? '',
     activity: formData.get('activity')?.toString() ?? '',
     date: formData.get('date')?.toString() ?? '',
+    session_time: formData.get('session_time')?.toString(),
     country: formData.get('country')?.toString() ?? '',
     state: formData.get('state')?.toString(),
     city: formData.get('city')?.toString(),
@@ -198,7 +205,7 @@ export async function updateEventAction(
 
   const watermarkEnabled = payload.is_public && payload.watermark_enabled;
 
-  await updateEvent(supabase, eventId, user.id, {
+  const updateData: Parameters<typeof updateEvent>[3] = {
     name: payload.name,
     activity: payload.activity,
     date: payload.date,
@@ -214,7 +221,17 @@ export async function updateEventAction(
     require_upload_approval: payload.require_upload_approval,
     ai_matching_enabled: aiMatchingEnabled,
     bib_detection_enabled: bibDetectionEnabled,
-  });
+  };
+  // Only write the migration-gated session_time column when it's actually in
+  // play — a value is being set, or an existing one cleared. A plain edit
+  // (rename, price change, …) on an event with no session time never touches
+  // the column, so such edits still work if the migration hasn't reached the
+  // target DB yet (createEvent guards the same way).
+  if (payload.session_time !== null || currentEvent.session_time != null) {
+    updateData.session_time = payload.session_time;
+  }
+
+  await updateEvent(supabase, eventId, user.id, updateData);
 
   // AI matching state transitions — kick the Inngest worker on change.
   // Same payloads the dedicated server actions emit.

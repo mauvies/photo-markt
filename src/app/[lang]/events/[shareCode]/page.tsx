@@ -48,6 +48,7 @@ type EventRow = {
   id: string;
   name: string;
   date: string;
+  session_time: string | null;
   city: string;
   country: string;
   state: string;
@@ -521,6 +522,7 @@ export default async function EventPage({
               <EventMetaLine
                 className="mt-2"
                 date={event.date}
+                sessionTime={event.session_time}
                 city={event.city}
                 locale={lang}
                 perPhotoLabel={dict.events.perPhoto}

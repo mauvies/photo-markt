@@ -28,6 +28,9 @@ export const eventSchema = z.object({
       'Activity is required.',
     ),
   date: z.string().min(1, 'Date is required.'),
+  // Optional manual session start time ("HH:mm"), separate from camera
+  // time-sync. Empty when the photographer doesn't set one (T-106).
+  session_time: z.string().trim().optional().default(''),
   country: z.string().trim().optional().default(''),
   state: z.string().trim().optional().default(''),
   city: z.string().trim().min(1, 'Location is required.'),

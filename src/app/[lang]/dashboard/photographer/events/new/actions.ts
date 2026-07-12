@@ -8,6 +8,7 @@ import { deleteStorageFiles, uploadFile } from '@/database/queries/storage';
 import type { SupabaseServerClient } from '@/database/queries/types';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { normalizeSessionTime } from '@/lib/format-date';
 import { inngest } from '@/lib/inngest/client';
 import { validatePhotoUpload } from '@/lib/photo-upload';
 import { assertCanCreateEvent } from '@/lib/plan-limits';
@@ -39,6 +40,11 @@ const eventSchema = z.object({
       'Activity is required.',
     ),
   date: z.string().min(1, 'Date is required.'),
+  // Optional manual session time — normalized to "HH:mm" or null (T-106).
+  session_time: z
+    .string()
+    .optional()
+    .transform((val) => normalizeSessionTime(val)),
   country: z.string().trim().optional().default(''),
   state: z.string().trim().optional().default(''),
   city: z.string().trim().optional(),
@@ -170,6 +176,7 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     name: formData.get('name')?.toString() ?? '',
     activity: formData.get('activity')?.toString() ?? '',
     date: formData.get('date')?.toString() ?? '',
+    session_time: formData.get('session_time')?.toString(),
     country: formData.get('country')?.toString() ?? '',
     state: formData.get('state')?.toString(),
     city: formData.get('city')?.toString(),
@@ -220,6 +227,7 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     name: payload.name,
     activity: payload.activity,
     date: payload.date,
+    session_time: payload.session_time,
     country: payload.country,
     state: payload.state,
     city: payload.city || '',

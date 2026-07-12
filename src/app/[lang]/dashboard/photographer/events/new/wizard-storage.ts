@@ -115,6 +115,8 @@ export function readStoredState(): StoredWizardState | null {
       name: typeof candidateValues.name === 'string' ? candidateValues.name : '',
       activity: validActivity,
       date: typeof candidateValues.date === 'string' ? candidateValues.date : '',
+      session_time:
+        typeof candidateValues.session_time === 'string' ? candidateValues.session_time : '',
       country: typeof candidateValues.country === 'string' ? candidateValues.country : '',
       state: typeof candidateValues.state === 'string' ? candidateValues.state : '',
       city: typeof candidateValues.city === 'string' ? candidateValues.city : '',

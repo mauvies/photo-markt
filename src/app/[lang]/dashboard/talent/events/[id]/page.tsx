@@ -326,6 +326,7 @@ export default async function ExploreEventDetailPage({
         <EventMetaLine
           className="mt-1"
           date={event.date}
+          sessionTime={event.session_time}
           city={event.city}
           locale={lang}
           perPhotoLabel={dict.talentDashboard.perPhoto}
