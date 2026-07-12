@@ -8,6 +8,10 @@ import {
   addPhotoToCartAction,
   removePhotoFromCartAction,
 } from '@/app/[lang]/dashboard/talent/cart/actions';
+import {
+  addPhotoToMyPhotosAction,
+  removePhotoFromMyPhotosAction,
+} from '@/app/[lang]/dashboard/talent/events/[id]/actions';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useBibSearch, useFaceSearch } from '@/components/event-gallery-with-face-search';
 import { type EventPhotoFilter, EventPhotoFilterTabs } from '@/components/event-photo-filter-tabs';
@@ -59,6 +63,16 @@ interface PublicEventPhotoViewerProps {
   /** Collaborative events get the "All photos / My photos" filter. */
   isCollaborative?: boolean;
   initialPhotosInCart: string[];
+  /** Photo IDs the (authenticated) viewer has already favorited — seeds the
+   * optimistic favorites state for the purchase modal (T-102). */
+  initialPhotosInMyPhotos?: string[];
+  /** Success/error toasts for the favorites toggle (auth-only). */
+  favoriteToastLabels?: {
+    added: string;
+    removed: string;
+    failedAdd: string;
+    failedRemove: string;
+  };
   iconTooltips?: Partial<PhotoIconTooltips>;
   /**
    * When false, the cart action is hidden on every photo. Used for free
@@ -129,6 +143,8 @@ export function PublicEventPhotoViewer({
   shareCode,
   isCollaborative = false,
   initialPhotosInCart,
+  initialPhotosInMyPhotos = [],
+  favoriteToastLabels,
   iconTooltips,
   showAddToCart = true,
   emptyText,
@@ -366,6 +382,54 @@ export function PublicEventPhotoViewer({
     [isAuthenticated, removeAuthCart, guestCart],
   );
 
+  // ── Favorites (auth-only) — optimistic, seeded from the server prop. Reuses
+  // the talent "My Photos" server actions (T-102). Guests never see the button.
+  const authFavInitial = useMemo(() => new Set(initialPhotosInMyPhotos), [initialPhotosInMyPhotos]);
+  const [myPhotos, setMyPhotos] = useState<Set<string>>(authFavInitial);
+  useEffect(() => {
+    setMyPhotos(authFavInitial);
+  }, [authFavInitial]);
+
+  const handleAddToPhotos = useCallback(
+    async (photoId: string) => {
+      setMyPhotos((prev) => new Set([...prev, photoId]));
+      try {
+        await addPhotoToMyPhotosAction(photoId);
+        if (favoriteToastLabels) toast.success(favoriteToastLabels.added);
+      } catch (error) {
+        setMyPhotos((prev) => {
+          const next = new Set(prev);
+          next.delete(photoId);
+          return next;
+        });
+        toast.error(
+          error instanceof Error ? error.message : (favoriteToastLabels?.failedAdd ?? 'Error'),
+        );
+      }
+    },
+    [favoriteToastLabels],
+  );
+
+  const handleRemoveFromPhotos = useCallback(
+    async (photoId: string) => {
+      setMyPhotos((prev) => {
+        const next = new Set(prev);
+        next.delete(photoId);
+        return next;
+      });
+      try {
+        await removePhotoFromMyPhotosAction(photoId);
+        if (favoriteToastLabels) toast.success(favoriteToastLabels.removed);
+      } catch (error) {
+        setMyPhotos((prev) => new Set([...prev, photoId]));
+        toast.error(
+          error instanceof Error ? error.message : (favoriteToastLabels?.failedRemove ?? 'Error'),
+        );
+      }
+    },
+    [favoriteToastLabels],
+  );
+
   // Optimistic removal after a bulk delete: drop the tiles, clean any guest
   // tokens for guest-owned deletions, then reconcile with the server.
   const handlePhotosDeleted = useCallback(
@@ -529,6 +593,13 @@ export function PublicEventPhotoViewer({
       photosInCart,
       onAddToCart: handleAddToCart,
       onRemoveFromCart: handleRemoveFromCart,
+      // Favorites is auth-only and scoped to the paid-event purchase modal —
+      // guests never see it, and free events keep the lightbox (out of scope
+      // for T-102, where favorites already live).
+      showAddToPhotos: isAuthenticated && !isFreeEvent,
+      photosInMyPhotos: myPhotos,
+      onAddToPhotos: handleAddToPhotos,
+      onRemoveFromPhotos: handleRemoveFromPhotos,
       iconTooltips,
       uploaderLabels,
       moreMenu: isCollaborative ? undefined : moreMenu,
@@ -557,6 +628,11 @@ export function PublicEventPhotoViewer({
       photosInCart,
       handleAddToCart,
       handleRemoveFromCart,
+      isAuthenticated,
+      isFreeEvent,
+      myPhotos,
+      handleAddToPhotos,
+      handleRemoveFromPhotos,
       iconTooltips,
       uploaderLabels,
       isCollaborative,
@@ -566,7 +642,6 @@ export function PublicEventPhotoViewer({
       handleDownloadPhoto,
       imageUnavailableLabel,
       menuLabels,
-      isFreeEvent,
       pricePerPhoto,
       locale,
       photographerName,

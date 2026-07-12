@@ -28,6 +28,8 @@ const labels = {
   download: 'Download',
   share: 'Share',
   close: 'Close',
+  addToFavorites: 'Add to favorites',
+  removeFromFavorites: 'Remove from favorites',
 };
 
 const items = [
@@ -110,6 +112,96 @@ describe('PhotoDetailModal', () => {
 
     expect(screen.getByText('Download')).toBeTruthy();
     expect(screen.queryByText('Add to Cart')).toBeNull();
+  });
+
+  // T-102 — favorites is a purchase-adjacent secondary action in the right
+  // panel (next to the CTA), shown only when the caller opts in (auth-gated).
+  describe('favorites (T-102)', () => {
+    it('shows the favorites button when showAddToFavorites is set', () => {
+      render(
+        <PhotoDetailModal
+          items={items}
+          open
+          onClose={() => {}}
+          labels={labels}
+          locale="en"
+          pricePerPhoto={10}
+          showAddToCart
+          showAddToFavorites
+          photosInMyPhotos={new Set()}
+          onAddToPhotos={() => {}}
+          onRemoveFromPhotos={() => {}}
+        />,
+      );
+
+      // Both the CTA and the secondary favorites button are present.
+      expect(screen.getByText('Add to Cart')).toBeTruthy();
+      expect(screen.getByText('Add to favorites')).toBeTruthy();
+    });
+
+    it('hides the favorites button for a guest (showAddToFavorites unset)', () => {
+      render(
+        <PhotoDetailModal
+          items={items}
+          open
+          onClose={() => {}}
+          labels={labels}
+          locale="en"
+          pricePerPhoto={10}
+          showAddToCart
+        />,
+      );
+
+      expect(screen.queryByText('Add to favorites')).toBeNull();
+      expect(screen.queryByText('Remove from favorites')).toBeNull();
+    });
+
+    it('invokes onAddToPhotos when an un-favorited photo is clicked', () => {
+      const onAddToPhotos = vi.fn();
+      render(
+        <PhotoDetailModal
+          items={items}
+          open
+          onClose={() => {}}
+          labels={labels}
+          locale="en"
+          pricePerPhoto={10}
+          showAddToCart
+          showAddToFavorites
+          photosInMyPhotos={new Set()}
+          onAddToPhotos={onAddToPhotos}
+          onRemoveFromPhotos={() => {}}
+        />,
+      );
+
+      fireEvent.click(screen.getByText('Add to favorites'));
+      expect(onAddToPhotos).toHaveBeenCalledWith('p1');
+    });
+
+    it('shows the filled/remove state and calls onRemoveFromPhotos when already favorited', () => {
+      const onRemoveFromPhotos = vi.fn();
+      render(
+        <PhotoDetailModal
+          items={items}
+          open
+          onClose={() => {}}
+          labels={labels}
+          locale="en"
+          pricePerPhoto={10}
+          showAddToCart
+          showAddToFavorites
+          photosInMyPhotos={new Set(['p1'])}
+          onAddToPhotos={() => {}}
+          onRemoveFromPhotos={onRemoveFromPhotos}
+        />,
+      );
+
+      const button = screen.getByText('Remove from favorites');
+      expect(button).toBeTruthy();
+      expect(screen.queryByText('Add to favorites')).toBeNull();
+      fireEvent.click(button);
+      expect(onRemoveFromPhotos).toHaveBeenCalledWith('p1');
+    });
   });
 
   // T-077 — Radix's default open-autofocus landed on the carousel's Previous

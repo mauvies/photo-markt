@@ -5,6 +5,7 @@ import {
   Calendar,
   Camera,
   Download,
+  Heart,
   MapPin,
   Maximize2,
   Share2,
@@ -22,6 +23,7 @@ import { useKeyboardNav } from '@/hooks/use-keyboard-nav';
 import { formatEventDate } from '@/lib/format-date';
 import { resolvePhotoCta } from '@/lib/photo-detail-cta';
 import { shareUrl } from '@/lib/share-url';
+import { cn } from '@/lib/utils';
 
 export interface PhotoDetailModalLabels {
   /** Screen-reader dialog title. */
@@ -32,6 +34,8 @@ export interface PhotoDetailModalLabels {
   download: string;
   share: string;
   close: string;
+  addToFavorites: string;
+  removeFromFavorites: string;
 }
 
 export interface PhotoDetailModalItem {
@@ -75,6 +79,12 @@ interface PhotoDetailModalProps {
   onRemoveFromCart?: (photoId: string) => void;
   onDownload?: (photoId: string) => void;
   onShare?: (photoId: string) => void;
+  /** Favorites — a purchase-adjacent secondary action shown next to the CTA,
+   * gated to signed-in viewers by the caller (T-102). Hidden when false. */
+  showAddToFavorites?: boolean;
+  photosInMyPhotos?: Set<string>;
+  onAddToPhotos?: (photoId: string) => void;
+  onRemoveFromPhotos?: (photoId: string) => void;
 }
 
 /** One icon + value row in the info panel. */
@@ -113,6 +123,10 @@ export function PhotoDetailModal({
   onRemoveFromCart,
   onDownload,
   onShare,
+  showAddToFavorites = false,
+  photosInMyPhotos = new Set(),
+  onAddToPhotos,
+  onRemoveFromPhotos,
 }: PhotoDetailModalProps) {
   const nav = useCarouselNavigation({ items, open, initialIndex, onIndexChange });
   const { isLoaded, markLoaded } = useImageLoad();
@@ -125,6 +139,7 @@ export function PhotoDetailModal({
   if (!current) return null;
 
   const isInCart = photosInCart.has(current.id);
+  const isFavorited = photosInMyPhotos.has(current.id);
   const cta = resolvePhotoCta({
     showAddToCart,
     showDownload,
@@ -271,6 +286,25 @@ export function PhotoDetailModal({
                   <span className="text-sm text-neutral-500">{labels.pricePerPhoto}</span>
                   <span className="text-base font-bold text-neutral-900">{priceLabel}</span>
                 </div>
+              ) : null}
+              {/* Favorites — a secondary, purchase-adjacent action sitting just
+                  above the primary CTA. Never competes with "Add to Cart". */}
+              {showAddToFavorites ? (
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="mb-2 w-full"
+                  aria-pressed={isFavorited}
+                  onClick={() =>
+                    isFavorited ? onRemoveFromPhotos?.(current.id) : onAddToPhotos?.(current.id)
+                  }
+                >
+                  <Heart
+                    className={cn('mr-2 h-4 w-4', isFavorited && 'fill-current')}
+                    aria-hidden
+                  />
+                  {isFavorited ? labels.removeFromFavorites : labels.addToFavorites}
+                </Button>
               ) : null}
               {renderCta()}
             </div>

@@ -1,11 +1,11 @@
 # T-102 · "Añadir a favoritos" en el modal de detalle de foto a dos paneles (panel derecho, junto al CTA)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/favorites-in-photo-detail-modal`  (tipo = feat)
-- **OpenSpec change:** —  (posible al ejecutar: toca ~5 archivos y añade plumbing net-new en la vista pública; `/work-next` decide)
-- **PR:** —
+- **OpenSpec change:** —  (UI reusando acción existente; se implementó directo sin OpenSpec)
+- **PR:** #167
 
 ## Requerimiento
 El modal de detalle de foto a dos paneles (imagen a la izquierda, panel de compra + CTA a la derecha —
