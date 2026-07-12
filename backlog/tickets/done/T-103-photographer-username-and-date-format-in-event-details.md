@@ -1,11 +1,11 @@
 # T-103 · Mostrar el nombre del fotógrafo + fecha en formato natural por idioma en la línea de metadatos del evento
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/photographer-username-in-event-details`  (tipo = feat)
 - **OpenSpec change:** —  (UI acotada, dos archivos con el mismo patrón)
-- **PR:** —
+- **PR:** #168
 
 ## Requerimiento
 Las páginas de evento (vista pública `/events/[code]` **y** dashboard de talento
