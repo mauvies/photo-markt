@@ -56,7 +56,14 @@ export function Nav() {
         </Link>
 
         <div className="flex items-center gap-2 md:gap-5">
-          {showCart && <CartLinkButton guest={!user} />}
+          {/* Fixed-size slot regardless of `showCart` — soft navigation
+              between cart and non-cart surfaces keeps this Nav instance
+              mounted (see [lang]/layout.tsx), so gating the whole
+              CartLinkButton on `showCart` without a reserved slot would
+              still shift LanguageSwitcher/avatar on route change. */}
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center">
+            {showCart && <CartLinkButton guest={!user} />}
+          </div>
           <LanguageSwitcher />
           {user === undefined ? (
             // Auth not yet resolved — reserve space, no logged-out flash.
