@@ -1,7 +1,7 @@
 'use client';
 
 import { format } from 'date-fns';
-import { ChevronDown, Image as ImageIcon, ShoppingBag } from 'lucide-react';
+import { ChevronDown, Image as ImageIcon, ImageOff, ShoppingBag } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -56,7 +56,65 @@ function StatusBadge({ status, t }: { status: string; t: (k: keyof OrdersListT) 
   }
 }
 
-function ThumbnailStack({ thumbnails, itemCount }: { thumbnails: string[]; itemCount: number }) {
+/**
+ * Renders a single thumbnail slot: the photo when its signed URL loads, or an
+ * icon fallback (T-116) when the slot has no photo at all (its row was
+ * deleted server-side — `url === null`) or the image fails to load client-side
+ * (the row survives but the storage object is gone — a 404 on a validly
+ * signed URL, since Supabase signs URLs without checking object existence).
+ * Both converge on the same "photo no longer available" fallback — we can't
+ * reliably tell a real 404 apart from a transient network error, but a broken
+ * `<img>` icon or blank slot is never acceptable either way.
+ */
+function OrderThumbnailTile({
+  url,
+  unavailableLabel,
+  showLabel,
+}: {
+  url: string | null;
+  unavailableLabel: string;
+  showLabel: boolean;
+}) {
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  if (url === null || loadFailed) {
+    return (
+      <div
+        className="flex h-full w-full flex-col items-center justify-center gap-1 bg-muted text-muted-foreground"
+        title={unavailableLabel}
+      >
+        <ImageOff className="h-4 w-4 shrink-0 opacity-60" aria-hidden />
+        {showLabel && (
+          <span className="px-1 text-center text-[9px] leading-tight">{unavailableLabel}</span>
+        )}
+        <span className="sr-only">{unavailableLabel}</span>
+      </div>
+    );
+  }
+
+  return (
+    <Image
+      src={url}
+      alt=""
+      fill
+      sizes="40px"
+      className="object-cover"
+      // Watermark API serves these — its own cache headers handle TTL.
+      unoptimized
+      onError={() => setLoadFailed(true)}
+    />
+  );
+}
+
+function ThumbnailStack({
+  thumbnails,
+  itemCount,
+  unavailableLabel,
+}: {
+  thumbnails: (string | null)[];
+  itemCount: number;
+  unavailableLabel: string;
+}) {
   // Fall back to a neutral placeholder block when there's no preview to show
   // (e.g. failed orders never produced order_items, or signed URLs all
   // expired/errored). Keeps the card layout consistent.
@@ -72,16 +130,8 @@ function ThumbnailStack({ thumbnails, itemCount }: { thumbnails: string[]; itemC
   return (
     <div className="grid h-20 w-20 shrink-0 grid-cols-2 grid-rows-2 gap-0.5 overflow-hidden rounded-lg border">
       {thumbnails.slice(0, 4).map((url, i) => (
-        <div key={url} className="relative bg-muted">
-          <Image
-            src={url}
-            alt=""
-            fill
-            sizes="40px"
-            className="object-cover"
-            // Watermark API serves these — its own cache headers handle TTL.
-            unoptimized
-          />
+        <div key={`${url ?? 'unavailable'}-${i}`} className="relative bg-muted">
+          <OrderThumbnailTile url={url} unavailableLabel={unavailableLabel} showLabel={false} />
           {/* Overflow chip sits on the last tile when there are more photos
               than thumbnails fetched. */}
           {i === 3 && overflow > 0 && (
@@ -106,11 +156,16 @@ function OrderCard({
   const hasExtras = order.thumbnails.length > 0;
   const orderDate = format(new Date(order.created_at), 'MMM d, yyyy');
   const photoLabel = order.item_count === 1 ? t('photo') : t('photos');
+  const unavailableLabel = t('photoNoLongerAvailable');
 
   return (
     <Card className="overflow-hidden p-0 transition-colors hover:bg-accent/30">
       <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5">
-        <ThumbnailStack thumbnails={order.thumbnails} itemCount={order.item_count} />
+        <ThumbnailStack
+          thumbnails={order.thumbnails}
+          itemCount={order.item_count}
+          unavailableLabel={unavailableLabel}
+        />
 
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -151,19 +206,12 @@ function OrderCard({
       {expanded && hasExtras && (
         <div className="border-t bg-muted/30 px-4 py-4 sm:px-5">
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
-            {order.thumbnails.map((url) => (
+            {order.thumbnails.map((url, i) => (
               <div
-                key={url}
+                key={`${url ?? 'unavailable'}-${i}`}
                 className="relative aspect-square overflow-hidden rounded-md border bg-muted"
               >
-                <Image
-                  src={url}
-                  alt=""
-                  fill
-                  sizes="(max-width: 640px) 33vw, 96px"
-                  className="object-cover"
-                  unoptimized
-                />
+                <OrderThumbnailTile url={url} unavailableLabel={unavailableLabel} showLabel />
               </div>
             ))}
           </div>

@@ -22,11 +22,13 @@ export interface OrderWithItemCount {
   completed_at: string | null;
   item_count: number;
   /**
-   * Up to THUMBNAILS_PER_ORDER preview URLs. For `completed` orders these are
+   * Up to THUMBNAILS_PER_ORDER preview slots. For `completed` orders these are
    * short-lived signed URLs to the original (un-watermarked) photo — the buyer
-   * paid for it. For any other status they are watermarked previews.
+   * paid for it. For any other status they are watermarked previews. `null`
+   * means the order_item's photo row no longer exists (T-116) — the caller
+   * renders a fallback instead of skipping the slot silently.
    */
-  thumbnails: string[];
+  thumbnails: (string | null)[];
 }
 
 export async function getTalentOrders(): Promise<OrderWithItemCount[]> {
@@ -59,13 +61,17 @@ export async function getTalentOrders(): Promise<OrderWithItemCount[]> {
     throw new Error(`Failed to get order items: ${getErrorMessage(error)}`);
   }
 
+  // A slot is `null` when the order_item's photo row no longer exists — the
+  // join returns no `photos` row (e.g. a hard-deleted photo bypassing the
+  // normal `on delete restrict` FK, such as manual DB cleanup). We keep the
+  // slot instead of dropping it so the UI can render an explicit fallback
+  // rather than silently showing fewer thumbnails than `item_count`.
   const countsByOrderId = new Map<string, number>();
-  const pathsByOrderId = new Map<string, string[]>();
+  const pathsByOrderId = new Map<string, (string | null)[]>();
   for (const row of itemRows ?? []) {
     countsByOrderId.set(row.order_id, (countsByOrderId.get(row.order_id) ?? 0) + 1);
     const photo = Array.isArray(row.photos) ? row.photos[0] : row.photos;
-    const path = photo?.original_url;
-    if (!path) continue;
+    const path = photo?.original_url ?? null;
     const current = pathsByOrderId.get(row.order_id) ?? [];
     if (current.length < THUMBNAILS_PER_ORDER) {
       current.push(path);
@@ -82,7 +88,7 @@ export async function getTalentOrders(): Promise<OrderWithItemCount[]> {
   for (const order of orders) {
     const target = order.status === 'completed' ? originalPaths : watermarkedPaths;
     for (const path of pathsByOrderId.get(order.id) ?? []) {
-      target.add(path);
+      if (path) target.add(path);
     }
   }
 
@@ -108,7 +114,7 @@ export async function getTalentOrders(): Promise<OrderWithItemCount[]> {
   return orders.map((order) => {
     const paths = pathsByOrderId.get(order.id) ?? [];
     const urls = order.status === 'completed' ? originalUrls : watermarkedUrls;
-    const thumbnails = paths.map((p) => urls[p]).filter((url): url is string => Boolean(url));
+    const thumbnails = paths.map((p) => (p ? (urls[p] ?? null) : null));
     return {
       id: order.id,
       status: order.status,
