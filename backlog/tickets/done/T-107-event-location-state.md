@@ -1,11 +1,11 @@
 # T-107 · Capturar y persistir ciudad + estado/provincia + país del evento (hoy solo ciudad+país)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/event-location-state`  (tipo = feat)
-- **OpenSpec change:** —
-- **PR:** —
+- **OpenSpec change:** — (UI reusando columnas existentes; sin migración; se implementó directo)
+- **PR:** #171
 - **Dep:** T-105 (toca el paso Detalles del wizard)
 
 ## Requerimiento
