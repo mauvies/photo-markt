@@ -1,11 +1,11 @@
 # T-114 · Fix: el ícono del carrito en el header desplaza los items del nav al aparecer (layout shift)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/nav-cart-icon-layout-shift`
 - **OpenSpec change:** —  (fix de layout acotado)
-- **PR:** —
+- **PR:** #176
 
 ## Requerimiento
 En el navbar/header, los links/controles del nav hacen un **salto en el eje horizontal** justo antes y
