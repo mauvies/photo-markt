@@ -112,7 +112,10 @@ export async function completeOnboarding(
 
   revalidatePath('/es/dashboard');
   revalidatePath('/en/dashboard');
-  const dashboardPath = role === ROLES.TALENT ? '/dashboard/talent' : '/dashboard/photographer';
+  // T-118: a talent's home is the unified `/` — land there directly instead of
+  // `/dashboard/talent`, which just redirects to `/` (avoids a double hop on
+  // the user's first-ever page load).
+  const dashboardPath = role === ROLES.TALENT ? '/' : '/dashboard/photographer';
   const lang = await getLangFromHeaders();
   localizedRedirect(lang, dashboardPath);
 }
@@ -275,10 +278,13 @@ export async function getActiveRole(): Promise<{
 }
 
 /**
- * Gets the dashboard path for the user's active role
- * @returns The dashboard path (e.g., "/dashboard/talent" or "/dashboard/photographer")
+ * Gets the landing destination for the user's active role after
+ * login/signup/onboarding.
+ *
+ * Talent (T-118): `/` is the unified talent home/explore page now.
+ * @returns The destination path (e.g., "/" or "/dashboard/photographer")
  */
 export async function getDashboardPath(): Promise<string> {
   const { activeRole } = await getActiveRole();
-  return activeRole === 'talent' ? '/dashboard/talent/events' : '/dashboard/photographer';
+  return activeRole === 'talent' ? '/' : '/dashboard/photographer';
 }

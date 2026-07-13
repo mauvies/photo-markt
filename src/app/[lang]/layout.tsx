@@ -41,7 +41,20 @@ export default async function LangLayout({
         <GuestCartProvider>
           <GuestCartMerge cartRestoredMessage={dict.cart.cartRestored} />
           <ConditionalHeader>
-            <TranslationsProvider translations={dict.nav}>
+            {/* T-118: Nav's talent-authenticated branch reuses
+                `DashboardUserMenu` (via `TalentHeaderActions`), which needs a
+                few keys beyond `dict.nav` — merged in here so Nav only deals
+                with one translations context. */}
+            <TranslationsProvider
+              translations={{
+                ...dict.nav,
+                activeRole: dict.dashboard.activeRole,
+                switchTo: dict.dashboard.switchTo,
+                logOut: dict.dashboard.logOut,
+                rolePhotographer: dict.photographerDashboard.rolePhotographer,
+                roleTalent: dict.talentDashboard.talentRole,
+              }}
+            >
               {/* Nav reads `useSearchParams()` (login-href + language switcher);
                 the Suspense boundary keeps the surrounding page statically
                 prerenderable. The fallback reserves the header height so the

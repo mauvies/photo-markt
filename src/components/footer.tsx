@@ -24,18 +24,8 @@ export function Footer({ dict, lang }: { dict: Dictionary; lang: string }) {
 
   const groups = [
     {
-      title: t.productTitle,
-      links: [
-        { label: t.howItWorks, href: lp('/#how-it-works') },
-        { label: t.pricing, href: lp('/#pricing') },
-      ],
-    },
-    {
       title: t.photographersTitle,
-      links: [
-        { label: t.becomePhotographer, href: lp('/signup') },
-        { label: t.photographerPricing, href: lp('/#pricing') },
-      ],
+      links: [{ label: t.becomePhotographer, href: lp('/signup') }],
     },
     {
       title: t.athletesTitle,

@@ -48,8 +48,7 @@ const photographerLabels = {
 };
 
 const talentLabels = {
-  explore: 'Explore',
-  myPhotos: 'My photos',
+  favorites: 'Favorites',
   orders: 'Orders',
   profile: 'Profile',
   privacy: 'Privacy',
@@ -72,7 +71,11 @@ describe('dashboard logo link (T-061)', () => {
     expect(logo?.getAttribute('href')).toBe('/es/dashboard/photographer');
   });
 
-  it('talent header logo points at the talent dashboard, not home', () => {
+  // T-118: the unified home (`/`) is the talent's home/explore surface now, so
+  // the talent header logo links straight there — not to `/dashboard/talent`,
+  // which just redirects to `/` (avoids a double hop). The photographer
+  // sidebar logo (above) still points at its own dashboard overload (T-061).
+  it('talent header logo points at the unified home', () => {
     render(
       <TalentDashboardHeader
         user={{ name: 'Ana', email: 'ana@example.com', avatar: null }}
@@ -81,6 +84,6 @@ describe('dashboard logo link (T-061)', () => {
       />,
     );
     const logo = screen.getByRole('img', { name: 'Photo Markt' }).closest('a');
-    expect(logo?.getAttribute('href')).toBe('/es/dashboard/talent');
+    expect(logo?.getAttribute('href')).toBe('/es');
   });
 });

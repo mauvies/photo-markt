@@ -1,5 +1,7 @@
 'use client';
 
+// T-118: unreferenced since the landing (`/`) dropped its pricing section —
+// kept for a future photographer-facing landing page. Do not delete.
 import { CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';

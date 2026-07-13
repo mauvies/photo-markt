@@ -52,8 +52,7 @@ export default async function TalentLayout({ children }: { children: React.React
         user={sidebarUser}
         activeRole={activeRole}
         navLabels={{
-          explore: dict.nav.explore,
-          myPhotos: dict.nav.favorites,
+          favorites: dict.nav.favorites,
           orders: dict.nav.orders,
           profile: dict.nav.profile,
           privacy: dict.nav.privacy,

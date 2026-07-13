@@ -11,8 +11,10 @@ describe('homeRedirectPath', () => {
     expect(homeRedirectPath(true, 'PHOTOGRAPHER')).toBe('/dashboard/photographer');
   });
 
-  it('sends an authenticated talent to the talent dashboard (explore)', () => {
-    expect(homeRedirectPath(true, 'TALENT')).toBe('/dashboard/talent');
+  // T-118: the public home is now the unified talent home — an authenticated
+  // talent stays on `/` instead of being bounced to a dashboard route.
+  it('keeps an authenticated talent on the public home', () => {
+    expect(homeRedirectPath(true, 'TALENT')).toBeNull();
   });
 
   it('defaults an authenticated user with no/unknown role to the talent dashboard', () => {

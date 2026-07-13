@@ -1,6 +1,7 @@
 'use client';
 
-import { Camera, LifeBuoy, LogOut, Send, Settings, Shield, User } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { Camera, LifeBuoy, LogOut, Send, Settings, Shield, ShoppingBag, User } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useOptimistic, useTransition } from 'react';
@@ -16,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { createClient } from '@/database/client';
+import { ACTIVE_ROLE_KEY } from '@/hooks/use-active-role';
 import type { RoleSlug } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 
@@ -46,6 +48,9 @@ export function DashboardUserMenu({
   navLabels?: {
     activeRole?: string;
     profile?: string;
+    /** Talent-only — rendered next to Profile (T-118: Orders no longer has
+     *  its own nav link/tab, so it lives in the account dropdown). */
+    orders?: string;
     /** Talent-only — rendered as a dropdown item under the support group.
      *  Photographer menus hide the item entirely (the privacy page is
      *  talent-facing). */
@@ -61,6 +66,7 @@ export function DashboardUserMenu({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const queryClient = useQueryClient();
   const [optimisticRole, addOptimisticRole] = useOptimistic<RoleSlug, RoleSlug>(
     activeRole,
     (_, role) => role,
@@ -90,6 +96,10 @@ export function DashboardUserMenu({
       try {
         const result = await switchRole(role);
         addOptimisticRole(result.activeRole);
+        // Bust the client active-role cache so the public Nav (mounted
+        // globally) doesn't render the old role's header until staleTime
+        // lapses — switchRole only revalidates server routes.
+        queryClient.invalidateQueries({ queryKey: ACTIVE_ROLE_KEY });
         router.push(role === 'photographer' ? '/dashboard/photographer' : '/dashboard/talent');
       } catch {
         addOptimisticRole(activeRole);
@@ -111,6 +121,7 @@ export function DashboardUserMenu({
 
   const isProfileActive = pathname.startsWith(profileUrl);
   const isSettingsActive = pathname.startsWith(settingsUrl);
+  const isOrdersActive = pathname.startsWith('/dashboard/talent/orders');
 
   const otherRole: RoleSlug = optimisticRole === 'photographer' ? 'talent' : 'photographer';
   const photographerLabel = navLabels.rolePhotographer ?? 'Photographer';
@@ -189,10 +200,12 @@ export function DashboardUserMenu({
           </span>
         </DropdownMenuItem>
 
-        {/* Profile + Settings — surfaced in the dropdown on every role/viewport
-            (the photographer sidebar links them too; having them here as well
-            is intentional). Payouts/Billing are not — they live inside
-            Settings. */}
+        {/* Profile + Orders (talent-only) + Settings — surfaced in the
+            dropdown on every role/viewport (the photographer sidebar links
+            Profile/Settings too; having them here as well is intentional).
+            Orders (T-118) no longer has its own nav link/tab — this dropdown
+            is its only entry point. Payouts/Billing are not here — they live
+            inside Settings. */}
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem asChild className={cn(MENU_ITEM_CLASS, isProfileActive && 'bg-accent')}>
@@ -201,6 +214,17 @@ export function DashboardUserMenu({
               <span>{navLabels.profile ?? 'Profile'}</span>
             </Link>
           </DropdownMenuItem>
+          {optimisticRole === 'talent' && navLabels.orders ? (
+            <DropdownMenuItem
+              asChild
+              className={cn(MENU_ITEM_CLASS, isOrdersActive && 'bg-accent')}
+            >
+              <Link href="/dashboard/talent/orders">
+                <ShoppingBag className="mr-2 h-4 w-4" />
+                <span>{navLabels.orders}</span>
+              </Link>
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem
             asChild
             className={cn(MENU_ITEM_CLASS, isSettingsActive && 'bg-accent')}

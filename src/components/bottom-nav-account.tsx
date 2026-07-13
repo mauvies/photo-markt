@@ -1,6 +1,7 @@
 'use client';
 
-import { Camera, LifeBuoy, LogOut, Send, Settings, Shield, User } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { Camera, LifeBuoy, LogOut, Send, Settings, Shield, ShoppingBag, User } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTransition } from 'react';
@@ -16,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { createClient } from '@/database/client';
+import { ACTIVE_ROLE_KEY } from '@/hooks/use-active-role';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { RoleSlug } from '@/lib/roles';
 import { cn } from '@/lib/utils';
@@ -43,6 +45,8 @@ export interface BottomNavAccountLabels {
   /** Full localized "Switch to <other role>" string. */
   switchRoleLabel: string;
   profile: string;
+  /** Talent-only menu item (T-118: Orders has no dedicated nav link/tab). */
+  orders?: string;
   settings: string;
   /** Talent-only menu item. */
   privacy?: string;
@@ -69,6 +73,7 @@ export function BottomNavAccount({
   const pathname = usePathname();
   const router = useRouter();
   const lp = useLocalizedPath();
+  const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
 
   const pathWithoutLang = pathname.replace(/^\/(es|en)/, '') || '/';
@@ -85,6 +90,7 @@ export function BottomNavAccount({
   const accountActiveRoutes = [
     `/dashboard/${activeRole}/profile`,
     `/dashboard/${activeRole}/settings`,
+    ...(isPhotographer ? [] : ['/dashboard/talent/orders']),
   ];
   const isAccountActive = accountActiveRoutes.some((r) => pathWithoutLang.startsWith(r));
 
@@ -107,6 +113,9 @@ export function BottomNavAccount({
     startTransition(async () => {
       try {
         await switchRole(otherRole);
+        // Bust the client active-role cache so the public Nav header reflects
+        // the new role immediately (switchRole only revalidates server routes).
+        queryClient.invalidateQueries({ queryKey: ACTIVE_ROLE_KEY });
         router.push(lp(`/dashboard/${otherRole}`));
       } catch {
         // Stay on the current role — the server action rejected the switch.
@@ -192,9 +201,9 @@ export function BottomNavAccount({
           <span>{labels.switchRoleLabel}</span>
         </DropdownMenuItem>
 
-        {/* Profile + Settings — always surfaced. On mobile the bottom nav only
-            holds the primary work links, so this is their access point;
-            Payouts/Billing live inside Settings. */}
+        {/* Profile + Orders (talent-only) + Settings — always surfaced. On
+            mobile the bottom nav only holds the primary work links, so this
+            is their access point; Payouts/Billing live inside Settings. */}
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
@@ -203,6 +212,14 @@ export function BottomNavAccount({
               <span>{labels.profile}</span>
             </Link>
           </DropdownMenuItem>
+          {!isPhotographer && labels.orders ? (
+            <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
+              <Link href={lp('/dashboard/talent/orders')}>
+                <ShoppingBag className="mr-2 h-4 w-4" />
+                <span>{labels.orders}</span>
+              </Link>
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
             <Link href={lp(settingsHref)}>
               <Settings className="mr-2 h-4 w-4" />

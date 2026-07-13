@@ -1,67 +1,35 @@
-import { EventSearchBar } from '@/components/event-search-bar';
-import type { Locale } from '@/lib/i18n/config';
-import { getDictionary } from '@/lib/i18n/get-dictionary';
-import { TranslationsProvider } from '@/lib/i18n/translations-provider';
-import { getFilterOptionsAction } from './actions';
-import { ExplorePageContent } from './explore-page-content';
+import { localizedRedirect } from '@/lib/i18n/redirect';
 
+// T-118: `/` is the unified talent home/explore page now. This dedicated
+// explore route is kept only so old links/bookmarks land somewhere real —
+// `explore-page-content.tsx`/`actions.ts` in this directory are still used
+// by `/` and `/events`. `/dashboard/talent/events/[id]` (event detail) is
+// untouched.
+//
+// A *bare* visit lands on the unified home (`/`). A *filtered* link (old
+// bookmark/share with `?where=…&activity=…`) forwards to `/events` with its
+// query string preserved — `/events` runs the same `ExplorePageContent` and
+// reads the same params, so the filters survive instead of being silently
+// dropped (`/` is statically prerendered and ignores search params).
 export default async function TalentExplorePage({
   params,
   searchParams,
 }: {
   params: Promise<{ lang: string }>;
-  searchParams: Promise<{
-    where?: string;
-    activity?: string;
-    dateFrom?: string;
-    dateTo?: string;
-    preset?: string;
-  }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { lang } = await params;
-  const { where, activity, dateFrom, dateTo, preset } = await searchParams;
+  const sp = await searchParams;
 
-  const dict = await getDictionary(lang as Locale);
-  const filterOptions = await getFilterOptionsAction();
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(sp)) {
+    if (Array.isArray(value)) {
+      for (const v of value) query.append(key, v);
+    } else if (value !== undefined) {
+      query.append(key, value);
+    }
+  }
 
-  const key = `${where ?? ''}-${activity ?? ''}-${dateFrom ?? ''}-${dateTo ?? ''}`;
-
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-center">
-        <TranslationsProvider translations={dict.eventSearchBar}>
-          <EventSearchBar
-            key={key}
-            variant="hero"
-            initialWhere={where ?? ''}
-            initialActivity={activity ?? ''}
-            initialDateFrom={dateFrom ?? ''}
-            initialDateTo={dateTo ?? ''}
-            initialPreset={preset}
-            searchHref="/dashboard/talent/events"
-          />
-        </TranslationsProvider>
-      </div>
-
-      <TranslationsProvider
-        translations={{ ...dict.eventFilterBar, ...dict.eventCard, activities: dict.activities }}
-      >
-        <ExplorePageContent
-          key={key}
-          initialFilterOptions={filterOptions}
-          loadOnMount={true}
-          initialWhere={where}
-          initialActivity={activity}
-          initialDateFrom={dateFrom}
-          initialDateTo={dateTo}
-          hideTopFilters={true}
-          showFindMe={false}
-          // Forwarded into the inner EventSearchBar so access codes typed
-          // here land on the talent-dashboard event detail route (which
-          // now resolves share codes — see `events/[id]/page.tsx`).
-          eventLinkPrefix="/dashboard/talent/events"
-        />
-      </TranslationsProvider>
-    </div>
-  );
+  const qs = query.toString();
+  localizedRedirect(lang, qs ? `/events?${qs}` : '/');
 }

@@ -1,18 +1,14 @@
 'use client';
 
-import { Package, Search, ShoppingBag, ShoppingCart, User } from 'lucide-react';
+import { Heart, ShoppingCart } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { BottomNav } from '@/components/bottom-nav';
 import { BottomNavAccount } from '@/components/bottom-nav-account';
-import { CartLinkButton } from '@/components/cart-link-button';
-import { DashboardUserMenu } from '@/components/dashboard-user-menu';
+import { TalentHeaderActions } from '@/components/talent-header-actions';
 import { useCartItemCount } from '@/hooks/use-cart-item-count';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
-import { dashboardHomeForRole } from '@/lib/auth/dashboard-home';
 import type { RoleSlug } from '@/lib/roles';
-import { cn } from '@/lib/utils';
 
 export function TalentDashboardHeader({
   user,
@@ -26,14 +22,13 @@ export function TalentDashboardHeader({
   };
   activeRole: RoleSlug;
   navLabels: {
-    explore: string;
-    myPhotos: string;
+    /** T-118: no longer a nav link — the header-actions favorites icon
+     *  (desktop) / bottom-nav tab (mobile) label. */
+    favorites: string;
+    /** T-118: no longer a nav link — lives in the account dropdown. */
     orders: string;
     profile: string;
     privacy: string;
-    /** Passed to the avatar dropdown only — the talent-side privacy page
-     *  is surfaced there instead of in the top nav. The key stays on this
-     *  type for ergonomics so the layout can pass it through unchanged. */
     settings: string;
     support: string;
     feedback: string;
@@ -48,21 +43,8 @@ export function TalentDashboardHeader({
     cart: string;
   };
 }) {
-  const pathname = usePathname();
   const lp = useLocalizedPath();
-  const pathWithoutLang = pathname.replace(/^\/(es|en)/, '') || '/';
   const cartCount = useCartItemCount();
-
-  const talentNavLinks = [
-    { href: '/dashboard/talent/events', label: navLabels.explore, icon: Search },
-    { href: '/dashboard/talent/favorites', label: navLabels.myPhotos, icon: Package },
-    { href: '/dashboard/talent/orders', label: navLabels.orders, icon: ShoppingBag },
-    { href: '/dashboard/talent/profile', label: navLabels.profile, icon: User },
-    // Privacy lives in the avatar dropdown, not the top nav — it's a
-    // reference page that doesn't earn primary-nav real estate.
-  ];
-
-  const isActive = (href: string) => pathWithoutLang.startsWith(href);
 
   return (
     <>
@@ -71,11 +53,10 @@ export function TalentDashboardHeader({
           logo. Freeing the 4.5rem bar gives mobile content more vertical room. */}
       <header className="sticky top-0 z-50 hidden w-full border-b bg-background/80 backdrop-blur supports-backdrop-filter:bg-background/80 md:block">
         <div className="mx-auto flex h-(--header-height) max-w-[1400px] items-center justify-between px-4 sm:px-6 lg:px-8">
-          {/* Left: Logo */}
-          <Link
-            href={lp(dashboardHomeForRole(activeRole))}
-            className="flex shrink-0 items-center gap-2"
-          >
+          {/* Left: Logo → the unified home/explore page directly (T-118).
+              Links straight to `/` rather than `/dashboard/talent` (which now
+              just redirects to `/`) to avoid a double redirect hop. */}
+          <Link href={lp('/')} className="flex shrink-0 items-center gap-2">
             <Image
               src="/logo.svg"
               alt="Photo Markt"
@@ -86,63 +67,25 @@ export function TalentDashboardHeader({
             />
           </Link>
 
-          {/* Center: Nav Links (desktop only) */}
-          <nav className="hidden md:flex items-center gap-0.5">
-            {talentNavLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={lp(link.href)}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-                  isActive(link.href)
-                    ? 'bg-accent text-accent-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
-                )}
-              >
-                <link.icon className="h-4 w-4 shrink-0" />
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-
-          {/* Right: cart (all viewports) + account avatar. The avatar is
-              desktop-only — on mobile the account dropdown lives in the
-              bottom nav, so rendering it here too would duplicate it. */}
-          <div className="flex items-center gap-5">
-            <div className="-ml-2">
-              <CartLinkButton />
-            </div>
-            <div className="hidden md:block">
-              <DashboardUserMenu
-                user={user}
-                activeRole={activeRole}
-                navLabels={{
-                  activeRole: navLabels.activeRole,
-                  profile: navLabels.profile,
-                  privacy: navLabels.privacy,
-                  settings: navLabels.settings,
-                  support: navLabels.support,
-                  feedback: navLabels.feedback,
-                  switchTo: navLabels.switchTo,
-                  logOut: navLabels.logOut,
-                  rolePhotographer: navLabels.rolePhotographer,
-                  roleTalent: navLabels.roleTalent,
-                }}
-              />
-            </div>
+          {/* Right: same cart/favorites/avatar-dropdown pattern as the
+              unified public Nav's talent branch (T-118) — one header, not
+              two hand-synced ones. */}
+          <div className="hidden md:block">
+            <TalentHeaderActions user={user} activeRole={activeRole} labels={navLabels} />
           </div>
         </div>
       </header>
 
-      {/* Mobile bottom nav: the "Profile" link is dropped here — the profile
-          page is reachable from the avatar account dropdown instead. The cart
-          (a header icon on desktop) becomes a tab here, with its item-count
-          badge, since the header is hidden on mobile. */}
+      {/* Mobile bottom nav: favorites is a tab (its header icon is hidden on
+          mobile along with the rest of the header above); orders/profile
+          live in the account dropdown only, on both desktop and mobile. */}
       <BottomNav
         items={[
-          ...talentNavLinks
-            .filter((item) => item.href !== '/dashboard/talent/profile')
-            .map((item) => ({ ...item, href: lp(item.href) })),
+          {
+            href: lp('/dashboard/talent/favorites'),
+            label: navLabels.favorites,
+            icon: Heart,
+          },
           {
             href: lp('/dashboard/talent/cart'),
             label: navLabels.cart,
@@ -165,6 +108,7 @@ export function TalentDashboardHeader({
               currentRoleName: navLabels.roleTalent,
               switchRoleLabel: `${navLabels.switchTo} ${navLabels.rolePhotographer}`,
               profile: navLabels.profile,
+              orders: navLabels.orders,
               settings: navLabels.settings,
               privacy: navLabels.privacy,
               support: navLabels.support,
