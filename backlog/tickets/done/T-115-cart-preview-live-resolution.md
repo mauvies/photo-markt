@@ -1,11 +1,11 @@
 # T-115 · Fix: previews del carrito rotas para fotos activas — resolver la URL en vivo (no snapshot guardado)
 
 - **Prioridad:** P1
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/cart-preview-live-resolution`
 - **OpenSpec change:** —  (bug de resolución de imagen)
-- **PR:** —
+- **PR:** #174
 - **Cluster:** Carrito/previews & integridad — T-115 → T-116 → T-117 (ver notas; ejecutar en serie con merge previo, tocan el mismo código de carrito)
 
 ## Requerimiento (Parte 1 del reporte)
