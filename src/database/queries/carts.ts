@@ -159,6 +159,54 @@ export async function clearCart(supabase: SupabaseServerClient, cartId: string):
 }
 
 /**
+ * Raw, unfiltered `photo_id` list for a cart (T-117) — no join, no
+ * purchasability filter. Paired with {@link deleteCartItemsByPhotoIds} so the
+ * caller can diff the full list against `getPurchasablePhotoIds` and clean up
+ * exactly what's gone bad, instead of `getCartItemsWithDetails`'s
+ * already-filtered (display-oriented) view silently hiding it.
+ */
+export async function getCartItemPhotoIds(
+  supabase: SupabaseServerClient,
+  cartId: string,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('cart_items')
+    .select('photo_id')
+    .eq('cart_id', cartId);
+
+  if (error) {
+    throw new Error(`Failed to get cart item photo ids: ${getErrorMessage(error)}`);
+  }
+
+  return (data ?? []).map((row) => row.photo_id as string);
+}
+
+/**
+ * Delete the `cart_items` rows in one cart that reference the given photo
+ * ids (T-117) — the self-heal step for items that have gone unpurchasable
+ * (event soft-deleted, or `upload_status` no longer approved) since being
+ * added. Hard-deleted photos are already gone from `cart_items` via the
+ * `on delete cascade` FK — this is only for the cases the FK doesn't cover.
+ */
+export async function deleteCartItemsByPhotoIds(
+  supabase: SupabaseServerClient,
+  cartId: string,
+  photoIds: string[],
+): Promise<void> {
+  if (photoIds.length === 0) return;
+
+  const { error } = await supabase
+    .from('cart_items')
+    .delete()
+    .eq('cart_id', cartId)
+    .in('photo_id', photoIds);
+
+  if (error) {
+    throw new Error(`Failed to delete unpurchasable cart items: ${getErrorMessage(error)}`);
+  }
+}
+
+/**
  * Get cart items with photo and event details
  */
 export async function getCartItemsWithDetails(
@@ -283,11 +331,16 @@ export async function getCartItemCount(
 
   const { count, error } = await supabase
     .from('cart_items')
-    .select('id, photos!inner(events!inner(deleted_at))', { count: 'exact', head: true })
+    .select('id, photos!inner(upload_status, events!inner(deleted_at))', {
+      count: 'exact',
+      head: true,
+    })
     .in('cart_id', cartIds)
     // Keep the badge consistent with the rendered cart: don't count items whose
-    // event was soft-deleted (T-040).
-    .is('photos.events.deleted_at', null);
+    // event was soft-deleted (T-040) or whose photo is no longer approved
+    // (T-117 — matches getPurchasablePhotoIds, the single source of truth).
+    .is('photos.events.deleted_at', null)
+    .eq('photos.upload_status', 'approved');
 
   if (error) {
     throw new Error(`Failed to get cart item count: ${getErrorMessage(error)}`);

@@ -7,10 +7,13 @@ import {
   addPhotoToCart as dbAddPhotoToCart,
   clearCart as dbClearCart,
   removePhotoFromCart as dbRemovePhotoFromCart,
+  deleteCartItemsByPhotoIds,
   getCartItemCount,
+  getCartItemPhotoIds,
   getCartItemsWithDetails,
   getOrCreateCart,
   getPhotographerConnectStatuses,
+  getPurchasablePhotoIds,
   isPhotoInCart,
 } from '@/database/queries';
 import { createClient } from '@/database/server';
@@ -39,6 +42,8 @@ export interface CartData {
   items: CartItemDetail[];
   subtotalCents: number;
   itemCount: number;
+  /** Cart items just removed because their photo is no longer purchasable (T-117). */
+  removedCount: number;
 }
 
 /**
@@ -60,6 +65,18 @@ export async function getCurrentCart(): Promise<CartData> {
   }
 
   const cart = await getOrCreateCart(supabase, user.id);
+
+  // Self-heal (T-117): a hard-deleted photo is already gone from cart_items
+  // via the `on delete cascade` FK, but a soft-deleted event or an
+  // upload_status regression (approved -> rejected) is not — diff the raw,
+  // unfiltered id list against the purchasable set and delete what's gone bad.
+  const rawPhotoIds = await getCartItemPhotoIds(supabase, cart.id);
+  const purchasableIds = await getPurchasablePhotoIds(supabaseAdmin, rawPhotoIds);
+  const unpurchasableIds = rawPhotoIds.filter((id) => !purchasableIds.has(id));
+  if (unpurchasableIds.length > 0) {
+    await deleteCartItemsByPhotoIds(supabaseAdmin, cart.id, unpurchasableIds);
+  }
+
   const items = await getCartItemsWithDetails(supabase, cart.id, user.id);
 
   // Generate signed URLs for preview images
@@ -98,6 +115,7 @@ export async function getCurrentCart(): Promise<CartData> {
     })),
     subtotalCents,
     itemCount: items.length,
+    removedCount: unpurchasableIds.length,
   };
 }
 
@@ -279,6 +297,29 @@ export async function createCheckoutSessionAction(): Promise<{ url: string }> {
 
   // Get user's cart
   const cart = await getOrCreateCart(supabase, user.id);
+
+  // Defense in depth (T-117): re-validate purchasability immediately before
+  // charging, against the RAW cart_items list — never charge for a photo
+  // that's since become unpurchasable. `getCartItemsWithDetails` below
+  // already silently excludes soft-deleted-event items, so checking against
+  // its (pre-filtered) output would miss exactly that case in a mixed cart
+  // and silently charge for a smaller cart than the user saw. Self-heal by
+  // deleting the bad rows so the next cart load is already clean.
+  const rawPhotoIds = await getCartItemPhotoIds(supabase, cart.id);
+  if (rawPhotoIds.length === 0) {
+    throw new Error('Cart is empty');
+  }
+
+  const purchasableIds = await getPurchasablePhotoIds(supabaseAdmin, rawPhotoIds);
+  const unpurchasablePhotoIds = rawPhotoIds.filter((id) => !purchasableIds.has(id));
+  if (unpurchasablePhotoIds.length > 0) {
+    await deleteCartItemsByPhotoIds(supabaseAdmin, cart.id, unpurchasablePhotoIds);
+    const h = await headers();
+    const referer = h.get('referer') ?? '';
+    const lang = (referer.match(/\/(es|en)\//)?.[1] ?? 'en') as Locale;
+    const dict = await getDictionary(lang);
+    throw new Error(dict.cart.itemsUnavailableRemoved);
+  }
 
   // Get cart items
   const cartItems = await getCartItemsWithDetails(supabase, cart.id, user.id);

@@ -101,6 +101,19 @@ describe('database/queries/carts', () => {
       const talent = await createTestUser('TALENT');
       expect(await getCartItemCount(createServiceClient(), talent.id)).toBe(0);
     });
+
+    // T-117: the badge must agree with the same purchasability rule
+    // (getPurchasablePhotoIds) the cart page self-heals against — otherwise
+    // the header count and the cart page count can visibly disagree.
+    it('excludes a cart item whose photo is no longer approved', async () => {
+      const { photo, photographer, talent } = await setupCartFixtures();
+      const sb = createServiceClient();
+      const cart = await getOrCreateCart(sb, talent.id);
+      await addPhotoToCart(sb, cart.id, photo.id, photographer.id, 500);
+      await sb.from('photos').update({ upload_status: 'rejected' }).eq('id', photo.id);
+
+      expect(await getCartItemCount(sb, talent.id)).toBe(0);
+    });
   });
 
   describe('removePhotoFromCart', () => {

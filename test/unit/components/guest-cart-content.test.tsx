@@ -6,13 +6,18 @@
  * more than an hour ago showed a broken image even though it was still
  * active. The cart must resolve the CURRENT preview live instead.
  *
+ * T-117 — a guest cart item whose photo has since become unpurchasable
+ * (deleted, event soft-deleted, or no longer approved) must be dropped from
+ * the cart and the user notified, instead of lingering forever in
+ * localStorage.
+ *
  * Regression: the rendered <img> must use the freshly-resolved preview URL
- * (from `resolveGuestCartPreviewsAction`), not the stale `item.previewUrl`
+ * (from `loadGuestCartStateAction`), not the stale `item.previewUrl`
  * snapshot — even when the two differ. Fails before the fix, passes after.
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('next/image', () => ({
@@ -44,17 +49,24 @@ vi.mock('@/lib/i18n/translations-provider', () => ({
 // PhotoLightbox pulls a heavy import tree and only renders on interaction.
 vi.mock('@/components/photo-lightbox', () => ({ PhotoLightbox: () => null }));
 
+const { toastMock } = vi.hoisted(() => ({
+  toastMock: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
+}));
+vi.mock('sonner', () => ({ toast: toastMock }));
+
 const STALE_SNAPSHOT_URL =
   'https://ref.supabase.co/storage/v1/object/sign/photos/owner/event/photo.jpg?token=expired';
 const LIVE_PREVIEW_URL = '/api/thumb/owner/event/thumbs/photo/medium.webp';
 
-const resolveGuestCartPreviewsAction = vi.fn();
+const loadGuestCartStateAction = vi.fn();
+const createGuestCheckoutSessionAction = vi.fn();
 
 // `./actions` is a "use server" module — mock it so the client test doesn't
 // pull server-only code.
 vi.mock('@/app/[lang]/cart/actions', () => ({
-  createGuestCheckoutSessionAction: vi.fn(),
-  resolveGuestCartPreviewsAction: (...args: unknown[]) => resolveGuestCartPreviewsAction(...args),
+  createGuestCheckoutSessionAction: (...args: unknown[]) =>
+    createGuestCheckoutSessionAction(...args),
+  loadGuestCartStateAction: (...args: unknown[]) => loadGuestCartStateAction(...args),
 }));
 
 const CART_ITEM = {
@@ -68,13 +80,15 @@ const CART_ITEM = {
   previewUrl: STALE_SNAPSHOT_URL,
 };
 
+const removeItemMock = vi.fn();
+
 vi.mock('@/components/guest-cart-provider', () => ({
   useGuestCart: () => ({
     items: [CART_ITEM],
     itemCount: 1,
     subtotalCents: 1500,
     addItem: vi.fn(),
-    removeItem: vi.fn(),
+    removeItem: removeItemMock,
     clearCart: vi.fn(),
     hasItem: () => false,
   }),
@@ -95,12 +109,18 @@ function renderCart() {
 
 afterEach(() => {
   cleanup();
-  resolveGuestCartPreviewsAction.mockReset();
+  loadGuestCartStateAction.mockReset();
+  createGuestCheckoutSessionAction.mockReset();
+  removeItemMock.mockReset();
+  toastMock.mockClear();
 });
 
 describe('GuestCartContent — live preview resolution (T-115)', () => {
   it('renders the freshly-resolved preview, not the stale localStorage snapshot', async () => {
-    resolveGuestCartPreviewsAction.mockResolvedValue({ 'photo-1': LIVE_PREVIEW_URL });
+    loadGuestCartStateAction.mockResolvedValue({
+      removedPhotoIds: [],
+      previews: { 'photo-1': LIVE_PREVIEW_URL },
+    });
 
     renderCart();
 
@@ -110,10 +130,64 @@ describe('GuestCartContent — live preview resolution (T-115)', () => {
   });
 
   it('resolves preview URLs by the current photo ids, not from the cached item', () => {
-    resolveGuestCartPreviewsAction.mockResolvedValue({ 'photo-1': LIVE_PREVIEW_URL });
+    loadGuestCartStateAction.mockResolvedValue({
+      removedPhotoIds: [],
+      previews: { 'photo-1': LIVE_PREVIEW_URL },
+    });
 
     renderCart();
 
-    expect(resolveGuestCartPreviewsAction).toHaveBeenCalledWith(['photo-1']);
+    expect(loadGuestCartStateAction).toHaveBeenCalledWith(['photo-1']);
+  });
+});
+
+describe('GuestCartContent — unavailable item cleanup (T-117)', () => {
+  it('removes an item reported as no longer purchasable and shows a notice', async () => {
+    loadGuestCartStateAction.mockResolvedValue({
+      removedPhotoIds: ['photo-1'],
+      previews: {},
+    });
+
+    renderCart();
+
+    await waitFor(() => expect(removeItemMock).toHaveBeenCalledWith('photo-1'));
+    expect(toastMock).toHaveBeenCalledWith('itemsUnavailableRemoved');
+  });
+
+  it('does not remove anything or notify when every item is still purchasable', async () => {
+    loadGuestCartStateAction.mockResolvedValue({
+      removedPhotoIds: [],
+      previews: { 'photo-1': LIVE_PREVIEW_URL },
+    });
+
+    renderCart();
+
+    await waitFor(() => screen.getByAltText('Surf Cup'));
+    expect(removeItemMock).not.toHaveBeenCalled();
+    expect(toastMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('GuestCartContent — checkout failure re-validates the cart (T-117)', () => {
+  it('re-validates after a rejected checkout, instead of letting the user retry the same failing item indefinitely', async () => {
+    loadGuestCartStateAction.mockResolvedValue({
+      removedPhotoIds: [],
+      previews: { 'photo-1': LIVE_PREVIEW_URL },
+    });
+    createGuestCheckoutSessionAction.mockRejectedValue(new Error('itemsUnavailableRemoved'));
+
+    renderCart();
+    await waitFor(() => screen.getByAltText('Surf Cup'));
+    loadGuestCartStateAction.mockClear();
+
+    // Two checkout buttons render (desktop summary + mobile sticky footer).
+    fireEvent.click(screen.getAllByText('proceedToCheckout')[0]);
+
+    // Before the fix, a rejected checkout never invalidated the
+    // ['guest-cart-state', photoIds] query, so the same unpurchasable item
+    // stayed in the cart forever, letting the user retry the same failing
+    // (rate-limited) checkout indefinitely. After the fix, the failure
+    // triggers a fresh validation call.
+    await waitFor(() => expect(loadGuestCartStateAction).toHaveBeenCalled());
   });
 });

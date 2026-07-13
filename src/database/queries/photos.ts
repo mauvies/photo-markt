@@ -1050,3 +1050,30 @@ export async function deleteEventPhotos(
     throw new Error(`Failed to delete event photos: ${getErrorMessage(error)}`);
   }
 }
+
+/**
+ * The single source of truth for "is this photo currently purchasable" (T-117):
+ * its row exists, `upload_status = 'approved'`, and its event hasn't been
+ * soft-deleted. Used by guest-cart validation, the authenticated cart's
+ * self-heal-on-load, and both checkout paths' pre-charge re-validation — never
+ * re-derive this filter inline at a call site.
+ */
+export async function getPurchasablePhotoIds(
+  supabase: SupabaseServerClient,
+  photoIds: string[],
+): Promise<Set<string>> {
+  if (photoIds.length === 0) return new Set();
+
+  const { data, error } = await supabase
+    .from('photos')
+    .select('id, events!inner(deleted_at)')
+    .in('id', photoIds)
+    .eq('upload_status', 'approved')
+    .is('events.deleted_at', null);
+
+  if (error) {
+    throw new Error(`Failed to get purchasable photo ids: ${getErrorMessage(error)}`);
+  }
+
+  return new Set((data ?? []).map((row) => row.id as string));
+}

@@ -265,7 +265,8 @@
     "emptyCartAuthDesc": "Comienza a agregar fotos a tu carrito desde los eventos a los que has asistido o descubierto.",
     "viewMyPhotos": "Ver mis fotos",
     "allItemsFree": "Todos los artículos en tu carrito son gratuitos",
-    "cartRestored": "Tu carrito ha sido recuperado"
+    "cartRestored": "Tu carrito ha sido recuperado",
+    "itemsUnavailableRemoved": "Uno o más artículos de tu carrito ya no están disponibles y fueron eliminados."
   },
   "signup": {
     "title": "Crear una cuenta",

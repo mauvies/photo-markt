@@ -265,7 +265,8 @@
     "emptyCartAuthDesc": "Start adding photos to your cart from events you've attended or discovered.",
     "viewMyPhotos": "View My Photos",
     "allItemsFree": "All items in your cart are free",
-    "cartRestored": "Your cart has been restored"
+    "cartRestored": "Your cart has been restored",
+    "itemsUnavailableRemoved": "One or more items in your cart are no longer available and were removed."
   },
   "signup": {
     "title": "Create an account",
