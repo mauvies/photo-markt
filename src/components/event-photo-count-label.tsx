@@ -6,8 +6,6 @@
  */
 export function EventPhotoCountLabel({ label }: { label: string }) {
   return (
-    <span className="shrink-0 whitespace-nowrap py-1.5 text-sm font-medium text-foreground">
-      {label}
-    </span>
+    <span className="shrink-0 whitespace-nowrap text-sm font-medium text-foreground">{label}</span>
   );
 }

@@ -299,7 +299,7 @@ export function EventPhotoAlbum({
             <EventPhotoCountLabel label={t('photosCount').replace('{n}', String(totalCount))} />
           ) : undefined)
         }
-        toolbarClassName="sticky top-0 -mx-4 px-3"
+        toolbarClassName="sticky top-0"
         loadMore={{
           hasMore,
           isLoading: isLoadingMore,
