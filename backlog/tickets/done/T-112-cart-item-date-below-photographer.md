@@ -1,11 +1,11 @@
 # T-112 · UI: mover la fecha del evento debajo del fotógrafo en los ítems del carrito
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/cart-item-date-below-photographer`
-- **OpenSpec change:** —  (se crea al ejecutar, si el cambio toca >1 archivo o es ambiguo)
-- **PR:** —
+- **OpenSpec change:** —  (un className, cambio puramente de layout)
+- **PR:** #172
 
 ## Requerimiento
 En cada ítem del carrito, el orden actual es: título del evento, debajo el fotógrafo, y **a la derecha**
