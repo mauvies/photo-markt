@@ -105,3 +105,19 @@ describe('CartContent — item preview (T-111)', () => {
     expect(img.getAttribute('data-unoptimized')).toBe('true');
   });
 });
+
+describe('CartContent — metadata layout (T-112)', () => {
+  it('stacks the photographer and date vertically (date below photographer)', () => {
+    renderCart();
+    // The photographer link and the date share one metadata block — its direct
+    // wrapper is now a vertical stack. Previously it was a horizontal row
+    // (flex-wrap items-center), so the immediate parent is asserted directly
+    // (not `closest`, which would climb to the outer flex-col content column).
+    const wrapper = screen.getByTitle('viewPhotographer').parentElement as HTMLElement;
+    expect(wrapper.className).toContain('flex-col');
+    expect(wrapper.className).not.toContain('flex-wrap');
+    expect(wrapper.className).not.toContain('items-center');
+    // Two stacked children: the photographer row and the date row.
+    expect(wrapper.childElementCount).toBe(2);
+  });
+});

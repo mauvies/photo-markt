@@ -313,7 +313,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
                           {item.eventTitle}
                         </h4>
                       ))}
-                    <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                    <div className="flex flex-col items-start gap-1 text-sm text-muted-foreground">
                       {item.photographerName &&
                         (item.photographerSlug ? (
                           <Link
