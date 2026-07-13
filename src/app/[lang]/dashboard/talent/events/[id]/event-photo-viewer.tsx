@@ -688,7 +688,7 @@ export function EventPhotoViewer({
   // side (8px total scrollWidth over the viewport, confirmed via DevTools),
   // which mobile browsers rendered as a small, permanent zoom-in on load —
   // real horizontal overflow, not a viewport/scale bug.
-  const toolbarClassName = 'sticky top-[var(--header-height)]';
+  const toolbarClassName = 'sticky top-[var(--header-height)] -mx-3 px-3 md:mx-0 md:px-0';
   // Bleed the grid nearly full-width on mobile, leaving a 2px gap at each edge
   // (-mx-3.5 against the page's px-4); padded again from sm up so the toolbar
   // stays the only inset chrome on phones.
