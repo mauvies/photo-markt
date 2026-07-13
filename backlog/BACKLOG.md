@@ -11,13 +11,17 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 50 | P2 | T-114 | [Header/UI] El ícono del carrito desplaza los items del nav al aparecer (layout shift) | — | todo |
+| 50 | P1 | T-115 | [Carrito] Previews rotas para fotos activas — resolver la URL de preview en vivo (no snapshot) | — | todo |
+| 51 | P1 | T-117 | [Carrito/Pagos] Quitar ítems del carrito al borrar foto/evento + validación de invitado, aviso y re-validación en checkout | — | todo |
+| 52 | P2 | T-114 | [Header/UI] El ícono del carrito desplaza los items del nav al aparecer (layout shift) | — | todo |
+| 53 | P2 | T-116 | [Órdenes] Fallback elegante en el historial cuando la foto ya no existe (sin tocar la orden) | — | todo |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
 ### Clusters (tocan el mismo código — ejecutar contiguos y en orden)
+- **Carrito/previews & integridad:** **T-115 → T-117** tocan el mismo código de carrito (`guest-cart.ts`, `cart-content.tsx`/`guest-cart-content.tsx`, `cart/actions.ts`, `queries/carts.ts`) → ejecutar en serie con **merge previo**; la validación server-side del guest cart de T-117 alimenta la resolución en vivo de la preview de T-115 (reusar el mismo lookup batch, no duplicar). **T-116** (fallback en el historial de **órdenes**) es del mismo tema pero toca archivos distintos (página de órdenes, no el carrito) → independiente, puede ir en cualquier orden. Reporte de origen: bug de previews rotas en carrito/órdenes + gap de ítems huérfanos al borrar inventario. T-117 es el grande (OpenSpec + `/code-review`: toca DB `cart_items`, borrado y pagos).
 - **Producción / lanzamiento:** ✅ completado — T-021 Términos (PR #78), T-022 Sentry (PR #79), T-023 Analytics (PR #80), T-024 Cookies (PR #81), T-026 Docs go-live (PR #82), T-025 Health endpoint (PR #83). No quedan tickets de este cluster.
 - **Galería del evento (mobile):** T-007 → T-010 → T-008. T-007 reestructura la toolbar; los otros dos dependen de esa base.
 - **Header / nav:** T-002 → T-003 → T-006. T-003 reusa el borde de T-002; T-006 oculta el header en mobile (coordinar con T-003).
