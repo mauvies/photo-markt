@@ -2,7 +2,7 @@
 
 import { Check, X } from 'lucide-react';
 import Image from 'next/image';
-import { useMemo, useState, useTransition } from 'react';
+import { type ReactNode, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { PhotoSelectionToolbar } from '@/components/photo-selection-toolbar';
@@ -51,11 +51,20 @@ type PendingPhotosTabProps = {
   eventId: string;
   photos: PendingPhoto[];
   labels: PendingPhotosLabels;
+  /** Node for the toolbar's left slot (same row as "Select") — the
+   * Approved/Pending tab switcher, shown even when the queue is empty so the
+   * owner can switch back (T-113). */
+  toolbarLeading?: ReactNode;
 };
 
 const withCount = (template: string, n: number) => template.replace('{n}', String(n));
 
-export function PendingPhotosTab({ eventId, photos, labels }: PendingPhotosTabProps) {
+export function PendingPhotosTab({
+  eventId,
+  photos,
+  labels,
+  toolbarLeading,
+}: PendingPhotosTabProps) {
   const [removed, setRemoved] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
   const selection = usePhotoSelection();
@@ -65,10 +74,27 @@ export function PendingPhotosTab({ eventId, photos, labels }: PendingPhotosTabPr
   const visible = useMemo(() => photos.filter((p) => !removed.has(p.id)), [photos, removed]);
 
   if (visible.length === 0) {
+    // Keep the tab switcher (toolbarLeading) on screen even with an empty queue,
+    // so the owner can switch back to Approved. No Select here — nothing to
+    // select (T-113). Standalone usage (no switcher) keeps the plain message.
     return (
-      <p className="rounded-lg border border-dashed border-input p-6 text-center text-sm text-muted-foreground">
-        {labels.empty}
-      </p>
+      <div className="space-y-1">
+        {toolbarLeading ? (
+          <PhotoSelectionToolbar
+            isSelecting={false}
+            countLabel=""
+            selectLabel={labels.select}
+            exitLabel={labels.exitSelection}
+            onStartSelecting={() => {}}
+            onClear={() => {}}
+            selectable={false}
+            leading={toolbarLeading}
+          />
+        ) : null}
+        <p className="rounded-lg border border-dashed border-input p-6 text-center text-sm text-muted-foreground">
+          {labels.empty}
+        </p>
+      </div>
     );
   }
 
@@ -161,16 +187,20 @@ export function PendingPhotosTab({ eventId, photos, labels }: PendingPhotosTabPr
         onStartSelecting={selection.startSelecting}
         onClear={selection.clear}
         leading={
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={isPending}
-            onClick={() => runApprove(visible.map((p) => p.id))}
-          >
-            <Check className="mr-2 h-4 w-4" />
-            {labels.approveAll}
-          </Button>
+          // Tab switcher (when present) then "Approve all", left of "Select".
+          <div className="flex items-center gap-3">
+            {toolbarLeading}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isPending}
+              onClick={() => runApprove(visible.map((p) => p.id))}
+            >
+              <Check className="mr-2 h-4 w-4" />
+              {labels.approveAll}
+            </Button>
+          </div>
         }
       >
         {bulkButtons}

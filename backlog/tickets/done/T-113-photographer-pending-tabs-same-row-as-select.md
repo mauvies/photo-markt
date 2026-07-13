@@ -1,11 +1,11 @@
 # T-113 · UI: tabs Aprobadas/Pendientes en la misma fila que el botón "Select"
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/photographer-pending-tabs-select-row`
-- **OpenSpec change:** —  (se crea al ejecutar, si el cambio toca >1 archivo o es ambiguo)
-- **PR:** —
+- **OpenSpec change:** —  (UI con requerimiento claro; se implementó directo)
+- **PR:** #173
 
 ## Requerimiento
 En el dashboard del fotógrafo, al ver un evento colaborativo con aprobación de administrador
