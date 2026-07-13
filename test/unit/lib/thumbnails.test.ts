@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { generateThumbnail, thumbRelativeUrl, thumbStoragePath } from '@/lib/thumbnails';
+import {
+  generateThumbnail,
+  resolvePhotoPreviewUrl,
+  thumbRelativeUrl,
+  thumbStoragePath,
+} from '@/lib/thumbnails';
 
 describe('thumbStoragePath', () => {
   it('derives thumbs path from a jpg original', () => {
@@ -63,6 +68,51 @@ describe('thumbRelativeUrl', () => {
     expect(thumbRelativeUrl('uid/eventId/abc123.jpg', 'small', 0)).toBe(base);
     expect(thumbRelativeUrl('uid/eventId/abc123.jpg', 'small', null)).toBe(base);
     expect(thumbRelativeUrl('uid/eventId/abc123.jpg', 'small', undefined)).toBe(base);
+  });
+});
+
+// T-115: cart previews must resolve the CURRENT thumbnail/preview, never a
+// stale signed URL snapshotted at add-to-cart time. This is the shared rule
+// both the guest and authenticated cart resolution now go through.
+describe('resolvePhotoPreviewUrl', () => {
+  it('prefers the baked (immutable, never-expiring) thumbnail when ready', () => {
+    const result = resolvePhotoPreviewUrl({
+      originalUrl: 'uid/eventId/abc123.jpg',
+      thumbnailStatus: 'ready',
+      thumbVersion: 2,
+      fallbackSignedUrl: 'https://signed.example.com/expiring-original.jpg',
+    });
+    expect(result).toBe('/api/thumb/uid/eventId/thumbs/abc123/medium.webp?v=2');
+  });
+
+  it('falls back to the fresh signed URL when the thumbnail has not baked yet', () => {
+    const result = resolvePhotoPreviewUrl({
+      originalUrl: 'uid/eventId/abc123.jpg',
+      thumbnailStatus: 'pending',
+      thumbVersion: null,
+      fallbackSignedUrl: 'https://signed.example.com/fresh-original.jpg',
+    });
+    expect(result).toBe('https://signed.example.com/fresh-original.jpg');
+  });
+
+  it('falls back to the signed URL when thumbnail generation failed', () => {
+    const result = resolvePhotoPreviewUrl({
+      originalUrl: 'uid/eventId/abc123.jpg',
+      thumbnailStatus: 'failed',
+      thumbVersion: null,
+      fallbackSignedUrl: 'https://signed.example.com/fresh-original.jpg',
+    });
+    expect(result).toBe('https://signed.example.com/fresh-original.jpg');
+  });
+
+  it('returns null when there is no original path and no fallback', () => {
+    const result = resolvePhotoPreviewUrl({
+      originalUrl: null,
+      thumbnailStatus: 'ready',
+      thumbVersion: null,
+      fallbackSignedUrl: null,
+    });
+    expect(result).toBeNull();
   });
 });
 
