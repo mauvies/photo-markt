@@ -6,7 +6,7 @@ import { Calendar, Image as ImageIcon, Loader2, ShoppingCart, Trash2, User, X } 
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useLayoutEffect, useState, useTransition } from 'react';
+import { useEffect, useLayoutEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { CART_MERGE_STATE_KEY } from '@/components/guest-cart-merge';
 import { PhotoLightbox } from '@/components/photo-lightbox';
@@ -127,7 +127,19 @@ export function CartContent({ initialCartData }: CartContentProps) {
     cartCleared: string;
     failedClearCart: string;
     failedStartCheckout: string;
+    itemsUnavailableRemoved: string;
   }>();
+
+  // T-117: getCurrentCart() self-heals cart_items whose photo has gone
+  // unpurchasable (event soft-deleted, or upload_status no longer approved)
+  // and reports how many via `removedCount`. Naturally one-shot: once
+  // cleaned, the next fetch reports 0 unless something new goes bad.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: fire only when the fetched removedCount changes, not on every render (t() is a new closure each render)
+  useEffect(() => {
+    if (cartData.removedCount > 0) {
+      toast(t('itemsUnavailableRemoved'));
+    }
+  }, [cartData.removedCount]);
 
   const handleRemove = (photoId: string) => {
     setRemovingId(photoId);
@@ -176,6 +188,11 @@ export function CartContent({ initialCartData }: CartContentProps) {
         const message = error instanceof Error ? error.message : t('failedStartCheckout');
         toast.error(message);
         setIsCheckingOut(false);
+        // T-117: a rejection here may mean createCheckoutSessionAction just
+        // self-healed the cart (deleted an unpurchasable row) — refetch so
+        // the on-screen items/subtotal match what's actually in the DB,
+        // instead of still showing the now-deleted item.
+        queryClient.invalidateQueries({ queryKey: ['cart-data'] });
       }
     });
   };

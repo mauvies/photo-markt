@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 51 | P1 | T-117 | [Carrito/Pagos] Quitar ítems del carrito al borrar foto/evento + validación de invitado, aviso y re-validación en checkout | — | todo |
+| 51 | P1 | T-117 | [Carrito/Pagos] Quitar ítems del carrito al borrar foto/evento + validación de invitado, aviso y re-validación en checkout | — | doing |
 | 52 | P2 | T-114 | [Header/UI] El ícono del carrito desplaza los items del nav al aparecer (layout shift) | — | todo |
 | 53 | P2 | T-116 | [Órdenes] Fallback elegante en el historial cuando la foto ya no existe (sin tocar la orden) | — | todo |
 | 54 | P2 | T-118 | [Landing] Rediseño enfocado en talento: home público/autenticado unificado + header simplificado (OpenSpec) | — | todo |

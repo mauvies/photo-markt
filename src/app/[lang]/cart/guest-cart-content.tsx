@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
   Calendar,
@@ -14,11 +14,11 @@ import {
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import {
   createGuestCheckoutSessionAction,
-  resolveGuestCartPreviewsAction,
+  loadGuestCartStateAction,
 } from '@/app/[lang]/cart/actions';
 import { useGuestCart } from '@/components/guest-cart-provider';
 import { PhotoLightbox } from '@/components/photo-lightbox';
@@ -43,15 +43,19 @@ import { useTranslations } from '@/lib/i18n/translations-provider';
 export function GuestCartContent() {
   const { items, removeItem, clearCart, subtotalCents } = useGuestCart();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const photoIds = useMemo(() => items.map((item) => item.photoId), [items]);
-  // Live preview lookup (T-115) — never render the `previewUrl` snapshot
-  // stashed in localStorage at add-to-cart time; it's a signed original that
-  // expires after ~1h. Resolved fresh on every cart load instead.
-  const { data: livePreviews } = useQuery({
-    queryKey: ['guest-cart-previews', photoIds],
-    queryFn: () => resolveGuestCartPreviewsAction(photoIds),
+  // Live preview lookup (T-115) + purchasability validation (T-117) in one
+  // round trip — never render the `previewUrl` snapshot stashed in
+  // localStorage at add-to-cart time (a signed original that expires after
+  // ~1h), and never keep an entry whose photo is no longer purchasable
+  // (deleted, event soft-deleted, or no longer approved).
+  const { data: guestCartState } = useQuery({
+    queryKey: ['guest-cart-state', photoIds],
+    queryFn: () => loadGuestCartStateAction(photoIds),
     enabled: photoIds.length > 0,
   });
+  const livePreviews = guestCartState?.previews;
   const lp = useLocalizedPath();
   const buildLoginHref = useLoginHref();
   const buildSignupHref = useSignupHref();
@@ -87,7 +91,19 @@ export function GuestCartContent() {
     photoAlt: string;
     viewPhoto: string;
     viewEvent: string;
+    itemsUnavailableRemoved: string;
   }>();
+
+  // Drop unpurchasable entries and notify (T-117) — naturally one-shot: once
+  // removed, the next validation (with the now-smaller id list) reports
+  // nothing left to remove.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: fire only when the fetched removed-id set changes, not on every render
+  useEffect(() => {
+    const removedIds = guestCartState?.removedPhotoIds;
+    if (!removedIds || removedIds.length === 0) return;
+    for (const id of removedIds) removeItem(id);
+    toast(t('itemsUnavailableRemoved'));
+  }, [guestCartState?.removedPhotoIds]);
 
   const handleCheckout = () => {
     setIsCheckingOut(true);
@@ -98,6 +114,11 @@ export function GuestCartContent() {
       } catch (err) {
         toast.error(err instanceof Error ? err.message : t('checkoutFailed'));
         setIsCheckingOut(false);
+        // T-117: a rejection here may mean an item just became unpurchasable
+        // — re-validate so the self-heal effect above drops it and notifies,
+        // instead of the user retrying the same failing checkout and burning
+        // guest-checkout rate-limit attempts on an item that'll never clear.
+        queryClient.invalidateQueries({ queryKey: ['guest-cart-state'] });
       }
     });
   };

@@ -12,7 +12,7 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // next/image stub that surfaces the `unoptimized` prop so the test can assert it.
@@ -32,6 +32,11 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
+const { toastMock } = vi.hoisted(() => ({
+  toastMock: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
+}));
+vi.mock('sonner', () => ({ toast: toastMock }));
+
 vi.mock('@/hooks/use-localized-path', () => ({
   useLocalizedPath: () => (path: string) => path,
 }));
@@ -43,12 +48,17 @@ vi.mock('@/lib/i18n/translations-provider', () => ({
 // PhotoLightbox pulls a heavy import tree and only renders on interaction.
 vi.mock('@/components/photo-lightbox', () => ({ PhotoLightbox: () => null }));
 
+const { getCurrentCartMock, createCheckoutSessionActionMock } = vi.hoisted(() => ({
+  getCurrentCartMock: vi.fn(),
+  createCheckoutSessionActionMock: vi.fn(),
+}));
+
 // `./actions` is a "use server" module — mock it so the client test doesn't pull
 // server-only code. Only the runtime functions matter (types are erased).
 vi.mock('@/app/[lang]/dashboard/talent/cart/actions', () => ({
-  getCurrentCart: vi.fn(),
+  getCurrentCart: getCurrentCartMock,
   clearCartAction: vi.fn(),
-  createCheckoutSessionAction: vi.fn(),
+  createCheckoutSessionAction: createCheckoutSessionActionMock,
   removePhotoFromCartAction: vi.fn(),
 }));
 
@@ -74,20 +84,26 @@ const initialCartData: CartData = {
   ],
   subtotalCents: 1500,
   itemCount: 1,
+  removedCount: 0,
 };
 
-function renderCart() {
+function renderCart(data: CartData = initialCartData) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <CartContent initialCartData={initialCartData} />
+      <CartContent initialCartData={data} />
     </QueryClientProvider>,
   );
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  toastMock.mockClear();
+  getCurrentCartMock.mockReset();
+  createCheckoutSessionActionMock.mockReset();
+});
 
 describe('CartContent — item preview (T-111)', () => {
   it('renders the preview image', () => {
@@ -119,5 +135,36 @@ describe('CartContent — metadata layout (T-112)', () => {
     expect(wrapper.className).not.toContain('items-center');
     // Two stacked children: the photographer row and the date row.
     expect(wrapper.childElementCount).toBe(2);
+  });
+});
+
+describe('CartContent — removal notice (T-117)', () => {
+  it('shows a notice when getCurrentCart() reports removed items', () => {
+    renderCart({ ...initialCartData, removedCount: 2 });
+    expect(toastMock).toHaveBeenCalledWith('itemsUnavailableRemoved');
+  });
+
+  it('shows no notice when nothing was removed', () => {
+    renderCart({ ...initialCartData, removedCount: 0 });
+    expect(toastMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('CartContent — checkout failure refetches the cart (T-117)', () => {
+  it('re-fetches cart-data after a rejected checkout, instead of leaving the stale (already self-healed) cart on screen', async () => {
+    createCheckoutSessionActionMock.mockRejectedValue(new Error('itemsUnavailableRemoved'));
+    getCurrentCartMock.mockResolvedValue({ ...initialCartData, items: [], itemCount: 0 });
+
+    renderCart();
+    // Two checkout buttons render (desktop summary + mobile sticky footer).
+    fireEvent.click(screen.getAllByText('proceedToCheckout')[0]);
+
+    // Before the fix, a rejected checkout never invalidated ['cart-data'],
+    // so getCurrentCart (called once for the initial query registration,
+    // matched by TanStack Query against `initialData` and never re-run) was
+    // never called again — the stale, already-server-side-deleted item kept
+    // rendering. After the fix, the failure invalidates the query and
+    // getCurrentCart is called to refresh it.
+    await waitFor(() => expect(getCurrentCartMock).toHaveBeenCalled());
   });
 });

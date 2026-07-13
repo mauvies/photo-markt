@@ -1,7 +1,7 @@
 # T-117 · Feat: quitar ítems del carrito cuando su foto/evento se borra (+ validación de invitado, aviso y red de seguridad en checkout)
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `feat/remove-orphaned-cart-items-on-deletion`
 - **OpenSpec change:** **probable sí** — toca **borrado/DB (`cart_items`), pagos (re-validación de checkout) y varios flujos** → crear el change al ejecutar (`/opsx:propose`). Correr `/code-review` antes de commit (toca pagos/DB).

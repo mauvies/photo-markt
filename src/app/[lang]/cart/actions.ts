@@ -1,6 +1,7 @@
 'use server';
 
 import { headers } from 'next/headers';
+import { getPurchasablePhotoIds } from '@/database/queries/photos';
 import { getPhotographerConnectStatuses } from '@/database/queries/profiles';
 import { createPhotoUrls } from '@/database/queries/storage';
 import { supabaseAdmin } from '@/database/supabase-admin';
@@ -60,6 +61,28 @@ export async function resolveGuestCartPreviewsAction(
 }
 
 /**
+ * Validate a guest (localStorage) cart's photo ids against the shared
+ * purchasability predicate (T-117) and resolve live preview URLs for what's
+ * still valid — one round trip from the client. Ids that are no longer
+ * purchasable (photo hard-deleted, event soft-deleted, or `upload_status` no
+ * longer approved) come back in `removedPhotoIds` so the caller can drop them
+ * and show a notice; `previews` only covers the surviving ids, reusing
+ * `resolveGuestCartPreviewsAction` (T-115) rather than re-deriving it.
+ */
+export async function loadGuestCartStateAction(
+  photoIds: string[],
+): Promise<{ removedPhotoIds: string[]; previews: Record<string, string | null> }> {
+  if (photoIds.length === 0) return { removedPhotoIds: [], previews: {} };
+
+  const purchasableIds = await getPurchasablePhotoIds(supabaseAdmin, photoIds);
+  const removedPhotoIds = photoIds.filter((id) => !purchasableIds.has(id));
+  const validPhotoIds = photoIds.filter((id) => purchasableIds.has(id));
+  const previews = await resolveGuestCartPreviewsAction(validPhotoIds);
+
+  return { removedPhotoIds, previews };
+}
+
+/**
  * Create a Stripe checkout session for guest (unauthenticated) cart purchases.
  * Validates all prices server-side and encodes cart items in Stripe metadata.
  */
@@ -95,6 +118,16 @@ export async function createGuestCheckoutSessionAction(
 
   if (photosError || !photos) {
     throw new Error('Failed to validate photos');
+  }
+
+  // Defense in depth (T-117): every requested photo must still be purchasable
+  // (row exists, approved, event not soft-deleted) — never charge otherwise.
+  // The prior select alone isn't enough: it doesn't filter `events.deleted_at`,
+  // so a photo whose event was soft-deleted would otherwise sail through.
+  const purchasableIds = await getPurchasablePhotoIds(supabaseAdmin, photoIds);
+  if (photoIds.some((id) => !purchasableIds.has(id))) {
+    const dict = await getDictionary(lang);
+    throw new Error(dict.cart.itemsUnavailableRemoved);
   }
 
   const validatedItems = items.map((item) => {
