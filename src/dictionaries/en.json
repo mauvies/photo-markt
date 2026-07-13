@@ -697,7 +697,8 @@
     "viewDetails": "View details",
     "hideDetails": "Hide details",
     "morePhotos": "+{count} more",
-    "orderShort": "Order"
+    "orderShort": "Order",
+    "photoNoLongerAvailable": "Photo no longer available"
   },
   "profileForm": {
     "username": "Username",

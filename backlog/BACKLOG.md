@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 53 | P2 | T-116 | [Órdenes] Fallback elegante en el historial cuando la foto ya no existe (sin tocar la orden) | — | todo |
+| 53 | P2 | T-116 | [Órdenes] Fallback elegante en el historial cuando la foto ya no existe (sin tocar la orden) | — | doing |
 | 54 | P2 | T-118 | [Landing] Rediseño enfocado en talento: home público/autenticado unificado + header simplificado (OpenSpec) | — | todo |
 | 55 | P2 | T-119 | [EventCard] Rediseño: portada arriba + info estructurada (título+share/heart, ubicación+bandera, fecha•hora, fotógrafo con divisor) | — | todo |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |

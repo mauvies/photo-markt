@@ -697,7 +697,8 @@
     "hideDetails": "Ocultar detalles",
     "morePhotos": "+{count} más",
     "orderShort": "Pedido",
-    "receipt": "Recibo"
+    "receipt": "Recibo",
+    "photoNoLongerAvailable": "Foto no disponible"
   },
   "profileForm": {
     "username": "Nombre de usuario",

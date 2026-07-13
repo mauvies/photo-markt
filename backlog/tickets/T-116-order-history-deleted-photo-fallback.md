@@ -1,7 +1,7 @@
 # T-116 · Fix: fallback elegante en el historial de órdenes cuando la foto ya no existe
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `fix/order-history-deleted-photo-fallback`
 - **OpenSpec change:** —  (fallback de render, acotado)
