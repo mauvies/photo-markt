@@ -15,6 +15,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | 51 | P1 | T-117 | [Carrito/Pagos] Quitar ítems del carrito al borrar foto/evento + validación de invitado, aviso y re-validación en checkout | — | todo |
 | 52 | P2 | T-114 | [Header/UI] El ícono del carrito desplaza los items del nav al aparecer (layout shift) | — | todo |
 | 53 | P2 | T-116 | [Órdenes] Fallback elegante en el historial cuando la foto ya no existe (sin tocar la orden) | — | todo |
+| 54 | P2 | T-118 | [Landing] Rediseño enfocado en talento: home público/autenticado unificado + header simplificado (OpenSpec) | — | todo |
+| 55 | P2 | T-119 | [EventCard] Rediseño: portada arriba + info estructurada (título+share/heart, ubicación+bandera, fecha•hora, fotógrafo con divisor) | — | todo |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
