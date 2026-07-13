@@ -1,5 +1,6 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
   Calendar,
@@ -13,9 +14,12 @@ import {
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { createGuestCheckoutSessionAction } from '@/app/[lang]/cart/actions';
+import {
+  createGuestCheckoutSessionAction,
+  resolveGuestCartPreviewsAction,
+} from '@/app/[lang]/cart/actions';
 import { useGuestCart } from '@/components/guest-cart-provider';
 import { PhotoLightbox } from '@/components/photo-lightbox';
 import {
@@ -30,6 +34,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { useLoginHref, useSignupHref } from '@/hooks/use-login-href';
 import type { GuestCartItem } from '@/lib/guest-cart';
@@ -38,6 +43,15 @@ import { useTranslations } from '@/lib/i18n/translations-provider';
 export function GuestCartContent() {
   const { items, removeItem, clearCart, subtotalCents } = useGuestCart();
   const router = useRouter();
+  const photoIds = useMemo(() => items.map((item) => item.photoId), [items]);
+  // Live preview lookup (T-115) — never render the `previewUrl` snapshot
+  // stashed in localStorage at add-to-cart time; it's a signed original that
+  // expires after ~1h. Resolved fresh on every cart load instead.
+  const { data: livePreviews } = useQuery({
+    queryKey: ['guest-cart-previews', photoIds],
+    queryFn: () => resolveGuestCartPreviewsAction(photoIds),
+    enabled: photoIds.length > 0,
+  });
   const lp = useLocalizedPath();
   const buildLoginHref = useLoginHref();
   const buildSignupHref = useSignupHref();
@@ -163,74 +177,80 @@ export function GuestCartContent() {
       <div className="flex flex-col md:flex-row gap-6 pb-20 md:pb-0">
         {/* Left — cart items */}
         <div className="flex-2 min-w-0 space-y-3">
-          {items.map((item) => (
-            <div
-              key={item.photoId}
-              className="group flex gap-4 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/50 hover:shadow-md"
-            >
-              {item.previewUrl ? (
-                <button
-                  type="button"
-                  onClick={() => setLightboxItem(item)}
-                  aria-label={t('viewPhoto')}
-                  className="relative h-32 w-32 shrink-0 cursor-zoom-in overflow-hidden rounded-lg bg-muted"
-                >
-                  <Image
-                    src={item.previewUrl}
-                    alt={item.eventName ?? t('photoAlt')}
-                    fill
-                    className="object-cover transition-transform group-hover:scale-105"
-                    sizes="128px"
-                    unoptimized
-                  />
-                </button>
-              ) : (
-                <div className="relative flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground">
-                  <ImageIcon className="h-8 w-8" />
-                </div>
-              )}
-
-              <div className="flex flex-1 flex-col gap-2 min-w-0">
-                <div>
-                  {item.eventName &&
-                    (item.eventShareCode ? (
-                      <Link
-                        href={lp(`/events/${item.eventShareCode}`)}
-                        title={t('viewEvent')}
-                        className="font-semibold text-base text-foreground line-clamp-1 hover:underline"
-                      >
-                        {item.eventName}
-                      </Link>
-                    ) : (
-                      <h4 className="font-semibold text-base text-foreground line-clamp-1">
-                        {item.eventName}
-                      </h4>
-                    ))}
-                  {item.eventDate && (
-                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <Calendar className="h-3.5 w-3.5" />
-                      <span>{format(new Date(item.eventDate), 'MMM d, yyyy')}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-auto flex items-center justify-between gap-4">
-                  <span className="text-xl font-bold text-foreground">
-                    {formatPrice(item.unitPriceCents)}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeItem(item.photoId)}
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
+          {items.map((item) => {
+            const livePreviewUrl = livePreviews?.[item.photoId];
+            const previewsPending = livePreviews === undefined;
+            return (
+              <div
+                key={item.photoId}
+                className="group flex gap-4 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/50 hover:shadow-md"
+              >
+                {livePreviewUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => setLightboxItem(item)}
+                    aria-label={t('viewPhoto')}
+                    className="relative h-32 w-32 shrink-0 cursor-zoom-in overflow-hidden rounded-lg bg-muted"
                   >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    <span className="hidden sm:inline">{t('remove')}</span>
-                  </Button>
+                    <Image
+                      src={livePreviewUrl}
+                      alt={item.eventName ?? t('photoAlt')}
+                      fill
+                      className="object-cover transition-transform group-hover:scale-105"
+                      sizes="128px"
+                      unoptimized
+                    />
+                  </button>
+                ) : previewsPending ? (
+                  <Skeleton className="h-32 w-32 shrink-0 rounded-lg" />
+                ) : (
+                  <div className="relative flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground">
+                    <ImageIcon className="h-8 w-8" />
+                  </div>
+                )}
+
+                <div className="flex flex-1 flex-col gap-2 min-w-0">
+                  <div>
+                    {item.eventName &&
+                      (item.eventShareCode ? (
+                        <Link
+                          href={lp(`/events/${item.eventShareCode}`)}
+                          title={t('viewEvent')}
+                          className="font-semibold text-base text-foreground line-clamp-1 hover:underline"
+                        >
+                          {item.eventName}
+                        </Link>
+                      ) : (
+                        <h4 className="font-semibold text-base text-foreground line-clamp-1">
+                          {item.eventName}
+                        </h4>
+                      ))}
+                    {item.eventDate && (
+                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <Calendar className="h-3.5 w-3.5" />
+                        <span>{format(new Date(item.eventDate), 'MMM d, yyyy')}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-auto flex items-center justify-between gap-4">
+                    <span className="text-xl font-bold text-foreground">
+                      {formatPrice(item.unitPriceCents)}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeItem(item.photoId)}
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      <span className="hidden sm:inline">{t('remove')}</span>
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Right — summary sticky (desktop) */}
@@ -295,12 +315,12 @@ export function GuestCartContent() {
       </div>
 
       {/* Close-only lightbox: a bigger look at the cart photo, no actions. */}
-      {lightboxItem?.previewUrl && (
+      {lightboxItem && livePreviews?.[lightboxItem.photoId] && (
         <PhotoLightbox
           items={[
             {
               id: lightboxItem.photoId,
-              url: lightboxItem.previewUrl,
+              url: livePreviews[lightboxItem.photoId] as string,
               alt: lightboxItem.eventName ?? t('photoAlt'),
             },
           ]}

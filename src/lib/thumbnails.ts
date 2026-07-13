@@ -1,5 +1,6 @@
 import path from 'node:path';
 import sharp from 'sharp';
+import type { ThumbnailStatus } from '@/database/queries/photos';
 
 export type ThumbSize = 'small' | 'medium';
 
@@ -83,4 +84,25 @@ export function thumbRelativeUrl(
   version?: number | null,
 ): string {
   return `/api/thumb/${thumbStoragePath(storagePath, size)}${versionSuffix(version)}`;
+}
+
+/**
+ * Resolve the current, live preview URL for a photo — the same
+ * thumbnail-first rule the galleries use (`thumbMedium ?? url`, T-115): a
+ * baked `/api/thumb` URL when the immutable thumbnail is ready (never
+ * expires), falling back to the caller-supplied signed URL otherwise (e.g.
+ * a just-uploaded photo whose thumbnail hasn't baked yet). Callers must mint
+ * `fallbackSignedUrl` fresh at render/resolution time — a value cached at
+ * add-to-cart time defeats the point of this helper.
+ */
+export function resolvePhotoPreviewUrl(opts: {
+  originalUrl: string | null;
+  thumbnailStatus?: ThumbnailStatus | null;
+  thumbVersion?: number | null;
+  fallbackSignedUrl: string | null;
+}): string | null {
+  if (opts.originalUrl && opts.thumbnailStatus === 'ready') {
+    return thumbRelativeUrl(opts.originalUrl, 'medium', opts.thumbVersion);
+  }
+  return opts.fallbackSignedUrl;
 }

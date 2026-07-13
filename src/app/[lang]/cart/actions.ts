@@ -2,6 +2,7 @@
 
 import { headers } from 'next/headers';
 import { getPhotographerConnectStatuses } from '@/database/queries/profiles';
+import { createPhotoUrls } from '@/database/queries/storage';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { getBaseUrl } from '@/lib/get-base-url';
 import type { GuestCartItem } from '@/lib/guest-cart';
@@ -9,6 +10,54 @@ import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { getClientIp, rateLimit } from '@/lib/rate-limit';
 import { stripe } from '@/lib/stripe/config';
+import { resolvePhotoPreviewUrl } from '@/lib/thumbnails';
+
+/**
+ * Resolve the current, live preview URL for each guest cart photo — never the
+ * snapshot `previewUrl` stashed in localStorage at add-to-cart time, which is
+ * a signed original that expires after ~1h (T-115). Mirrors the authenticated
+ * cart's resolution (`getCurrentCart`): thumbnail-first when baked (immutable,
+ * never expires), falling back to a freshly-signed original — unwatermarked,
+ * matching the existing "no watermark for cart previews" convention — for
+ * photos whose thumbnail hasn't baked yet.
+ */
+export async function resolveGuestCartPreviewsAction(
+  photoIds: string[],
+): Promise<Record<string, string | null>> {
+  if (photoIds.length === 0) return {};
+
+  const { data: photos, error } = await supabaseAdmin
+    .from('photos')
+    .select('id, original_url, thumbnail_status, thumb_version')
+    .in('id', photoIds);
+
+  if (error || !photos) return {};
+
+  const paths = photos
+    .map((photo) => photo.original_url)
+    .filter((url): url is string => url !== null);
+
+  const signedUrls = await createPhotoUrls(supabaseAdmin, 'photos', paths, {
+    expiresIn: 3600,
+    useWatermark: false,
+  });
+  const signedMap: Record<string, string> = {};
+  for (const item of signedUrls) {
+    if (item.signedUrl) signedMap[item.path] = item.signedUrl;
+  }
+
+  const result: Record<string, string | null> = {};
+  for (const photo of photos) {
+    result[photo.id] = resolvePhotoPreviewUrl({
+      originalUrl: photo.original_url,
+      thumbnailStatus: photo.thumbnail_status,
+      thumbVersion: photo.thumb_version,
+      fallbackSignedUrl: photo.original_url ? (signedMap[photo.original_url] ?? null) : null,
+    });
+  }
+
+  return result;
+}
 
 /**
  * Create a Stripe checkout session for guest (unauthenticated) cart purchases.
