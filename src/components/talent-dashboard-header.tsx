@@ -70,7 +70,7 @@ export function TalentDashboardHeader({
           and the account avatar already lives there, so the only loss is the
           logo. Freeing the 4.5rem bar gives mobile content more vertical room. */}
       <header className="sticky top-0 z-50 hidden w-full border-b bg-background/80 backdrop-blur supports-backdrop-filter:bg-background/80 md:block">
-        <div className="mx-auto flex h-(--header-height) max-w-screen-2xl items-center justify-between px-4 md:px-6">
+        <div className="mx-auto flex h-(--header-height) max-w-[1400px] items-center justify-between px-4 sm:px-6 lg:px-8">
           {/* Left: Logo */}
           <Link
             href={lp(dashboardHomeForRole(activeRole))}

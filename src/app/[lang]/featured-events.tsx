@@ -54,7 +54,7 @@ export function FeaturedEvents({ events, lang, activities, t }: FeaturedEventsPr
 
   return (
     <section className="bg-background py-16 sm:py-20">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">{t.title}</h2>
           <div className="flex items-center gap-6">

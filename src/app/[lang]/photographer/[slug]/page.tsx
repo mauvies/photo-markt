@@ -67,7 +67,7 @@ export default async function PhotographerProfilePage({ params }: { params: Para
 
   return (
     <div className="flex min-h-screen flex-col">
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-10 sm:py-14 md:py-16">
+      <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-10 sm:py-14 md:py-16">
         <PhotographerPublicProfile slug={slug} lang={lang} dict={dict} isOwner={isOwner} />
       </main>
     </div>

@@ -60,7 +60,7 @@ export function PricingSection({ isAuthenticated, t }: { isAuthenticated: boolea
 
   return (
     <section className="bg-linear-to-b from-muted/20 via-background to-background py-16 sm:py-20">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="mt-4 text-3xl font-semibold text-foreground sm:text-4xl">{t.headline}</h2>
