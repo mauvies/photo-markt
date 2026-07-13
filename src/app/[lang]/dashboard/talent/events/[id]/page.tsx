@@ -328,6 +328,8 @@ export default async function ExploreEventDetailPage({
           date={event.date}
           sessionTime={event.session_time}
           city={event.city}
+          state={event.state}
+          country={event.country}
           locale={lang}
           perPhotoLabel={dict.talentDashboard.perPhoto}
           pricePerPhoto={event.price_per_photo}

@@ -16,6 +16,10 @@ export type PlaceDetails = {
   lat: number;
   lng: number;
   city: string;
+  /** administrative_area_level_1 (state / province / region), or '' (T-107). */
+  state: string;
+  /** Country long name, or '' (T-107). */
+  country: string;
   formattedAddress: string;
 };
 
@@ -62,25 +66,66 @@ const MOCK_DETAILS: Record<string, PlaceDetails> = {
     lat: 41.3851,
     lng: 2.1734,
     city: 'Barcelona',
+    state: 'Catalonia',
+    country: 'Spain',
     formattedAddress: 'Barcelona, Spain',
   },
-  'mock-mad': { lat: 40.4168, lng: -3.7038, city: 'Madrid', formattedAddress: 'Madrid, Spain' },
+  'mock-mad': {
+    lat: 40.4168,
+    lng: -3.7038,
+    city: 'Madrid',
+    state: 'Community of Madrid',
+    country: 'Spain',
+    formattedAddress: 'Madrid, Spain',
+  },
   'mock-tar': {
     lat: 41.1189,
     lng: 1.2445,
     city: 'Tarragona',
+    state: 'Catalonia',
+    country: 'Spain',
     formattedAddress: 'Tarragona, Spain',
   },
   'mock-nyc': {
     lat: 40.7128,
     lng: -74.006,
     city: 'New York',
+    state: 'New York',
+    country: 'United States',
     formattedAddress: 'New York, NY, USA',
   },
-  'mock-ldn': { lat: 51.5074, lng: -0.1278, city: 'London', formattedAddress: 'London, UK' },
-  'mock-par': { lat: 48.8566, lng: 2.3522, city: 'Paris', formattedAddress: 'Paris, France' },
-  'mock-lis': { lat: 38.7169, lng: -9.1395, city: 'Lisbon', formattedAddress: 'Lisbon, Portugal' },
-  'mock-mia': { lat: 25.7617, lng: -80.1918, city: 'Miami', formattedAddress: 'Miami, FL, USA' },
+  'mock-ldn': {
+    lat: 51.5074,
+    lng: -0.1278,
+    city: 'London',
+    state: 'England',
+    country: 'United Kingdom',
+    formattedAddress: 'London, UK',
+  },
+  'mock-par': {
+    lat: 48.8566,
+    lng: 2.3522,
+    city: 'Paris',
+    state: 'Île-de-France',
+    country: 'France',
+    formattedAddress: 'Paris, France',
+  },
+  'mock-lis': {
+    lat: 38.7169,
+    lng: -9.1395,
+    city: 'Lisbon',
+    state: 'Lisbon',
+    country: 'Portugal',
+    formattedAddress: 'Lisbon, Portugal',
+  },
+  'mock-mia': {
+    lat: 25.7617,
+    lng: -80.1918,
+    city: 'Miami',
+    state: 'Florida',
+    country: 'United States',
+    formattedAddress: 'Miami, FL, USA',
+  },
 };
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -202,20 +247,25 @@ export function usePlacesAutocomplete() {
             const lat = place.geometry?.location?.lat() ?? 0;
             const lng = place.geometry?.location?.lng() ?? 0;
 
+            const components = place.address_components ?? [];
+            const findComponent = (type: string) =>
+              components.find((c) => c.types.includes(type))?.long_name ?? '';
+
             const city =
-              place.address_components?.find(
-                (c) =>
-                  c.types.includes('locality') ||
-                  c.types.includes('administrative_area_level_2') ||
-                  c.types.includes('administrative_area_level_1'),
-              )?.long_name ??
-              place.name ??
+              findComponent('locality') ||
+              findComponent('administrative_area_level_2') ||
+              findComponent('administrative_area_level_1') ||
+              place.name ||
               '';
+            const state = findComponent('administrative_area_level_1');
+            const country = findComponent('country');
 
             resolve({
               lat,
               lng,
               city,
+              state,
+              country,
               formattedAddress: place.formatted_address ?? city,
             });
           },

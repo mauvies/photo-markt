@@ -130,11 +130,15 @@ describe('database/queries/events', () => {
       // createEvent's return type only includes `id` — re-fetch to assert the rest.
       const { data: row } = await createServiceClient()
         .from('events')
-        .select('user_id, name')
+        .select('user_id, name, city, state, country')
         .eq('id', created.id)
         .single();
       expect(row?.user_id).toBe(owner.id);
       expect(row?.name).toBe('Photo Sprint 2026');
+      // City, state and country persist as three separate columns (T-107).
+      expect(row?.city).toBe('Madrid');
+      expect(row?.state).toBe('Madrid');
+      expect(row?.country).toBe('ES');
     });
 
     it('persists and clears the optional session_time (T-106)', async () => {

@@ -71,6 +71,8 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
     date: eventDate,
     session_time: eventSessionTime ?? '',
     city: event.city,
+    state: event.state ?? '',
+    country: event.country ?? '',
     is_public: event.is_public,
     watermark_enabled: event.watermark_enabled,
     is_collaborative: event.is_collaborative,
@@ -144,6 +146,10 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
         if (parsed.city?.trim()) {
           formData.append('city', parsed.city.trim());
         }
+        // Always send state/country (even empty) so switching to a place
+        // without one, or clearing, persists (T-107).
+        formData.append('state', parsed.state?.trim() ?? '');
+        formData.append('country', parsed.country?.trim() ?? '');
         formData.append('is_public', parsed.is_public ? 'true' : 'false');
         formData.append('watermark_enabled', parsed.watermark_enabled ? 'true' : 'false');
         formData.append('is_collaborative', parsed.is_collaborative ? 'true' : 'false');

@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useCoarsePointer } from '@/hooks/use-coarse-pointer';
 import { getActivityIcon } from '@/lib/activity-icon';
 import { type EventStatus, isEventSoon } from '@/lib/event-status';
+import { formatEventLocation } from '@/lib/format-location';
 import { shouldSkipImageOptimization } from '@/lib/image-source';
 import { cn } from '@/lib/utils';
 
@@ -38,6 +39,8 @@ type EventCardProps = {
   date: string;
   city: string;
   country: string;
+  /** State/province, shown in the location line when present (T-107). */
+  state?: string | null;
   activity: string;
   // Localized name of the activity (e.g. "Mountain Bike"/"Bicicleta de Montaña").
   // Resolved by the caller from the locale's `activities` dictionary so the
@@ -201,6 +204,7 @@ export function EventCard({
   date,
   city,
   country,
+  state,
   activity,
   activityLabel,
   photoCount,
@@ -215,7 +219,7 @@ export function EventCard({
   t = DEFAULT_LABELS,
 }: EventCardProps) {
   const formattedDate = format(new Date(date), 'MMM d, yyyy');
-  const location = [city, country].filter(Boolean).join(', ');
+  const location = formatEventLocation({ city, state, country });
   const photographerHandle =
     photographer?.displayName || (photographer?.username ? `@${photographer.username}` : null);
   const isOwner = ownerStats !== undefined;
