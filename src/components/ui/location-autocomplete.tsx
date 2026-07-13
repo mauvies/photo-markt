@@ -20,9 +20,21 @@ import { cn } from '@/lib/utils';
 import { Input } from './input';
 import { Popover, PopoverAnchor, PopoverContent } from './popover';
 
+type LocationParts = {
+  city: string;
+  state: string;
+  country: string;
+  formattedAddress: string;
+};
+
 type LocationAutocompleteProps = {
   value: string;
   onChange: (value: string) => void;
+  /** Fired when a Google prediction is selected, with the resolved city /
+   * state / country parts so the form can persist them separately (T-107).
+   * When provided, the `city` field receives just the city name (not the full
+   * formatted address). Free-typed values still flow only through `onChange`. */
+  onPlaceSelect?: (parts: LocationParts) => void;
   onBlur?: () => void;
   placeholder?: string;
   noResultsText?: string;
@@ -34,6 +46,7 @@ type LocationAutocompleteProps = {
 export function LocationAutocomplete({
   value,
   onChange,
+  onPlaceSelect,
   onBlur,
   placeholder = 'Search for a location...',
   noResultsText = 'No locations found',
@@ -112,8 +125,24 @@ export function LocationAutocomplete({
 
     // Call getDetails to properly close the billing session token
     const details = await getDetails(prediction.placeId);
-    const formatted = details?.formattedAddress ?? prediction.description;
 
+    // With a structured consumer (event forms), store the city / state /
+    // country separately and show just the city name. Otherwise fall back to
+    // the previous behavior — the full formatted address into `onChange`.
+    if (details && onPlaceSelect) {
+      const displayCity = details.city || prediction.mainText;
+      setInputValue(displayCity);
+      setFetchedFor(displayCity);
+      onPlaceSelect({
+        city: displayCity,
+        state: details.state,
+        country: details.country,
+        formattedAddress: details.formattedAddress,
+      });
+      return;
+    }
+
+    const formatted = details?.formattedAddress ?? prediction.description;
     setInputValue(formatted);
     setFetchedFor(formatted);
     onChange(formatted);

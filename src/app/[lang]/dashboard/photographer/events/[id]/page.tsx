@@ -18,6 +18,7 @@ import { supabaseAdmin } from '@/database/supabase-admin';
 import { redirectToLogin } from '@/lib/auth/redirect-to-login';
 import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
 import { eventUsesModerationQueue } from '@/lib/event-status';
+import { formatEventLocation } from '@/lib/format-location';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedPath } from '@/lib/i18n/localized-path';
@@ -91,7 +92,7 @@ export default async function EventDetailPage({
         <DashboardHeader title={event.name} />
         <div className="mt-1 text-sm leading-relaxed text-muted-foreground">
           {new Date(event.date).toDateString().split(' ').slice(1).join(' ')} •{' '}
-          {event.city[0]?.toUpperCase() + event.city.slice(1)}
+          {formatEventLocation({ city: event.city, state: event.state, country: event.country })}
         </div>
         <div className="mt-4">
           <TranslationsProvider translations={dict.organizerEvent}>
@@ -208,9 +209,11 @@ export default async function EventDetailPage({
         dict.activities[event.activity as keyof typeof dict.activities] ?? event.activity
       }
       date={new Date(event.date).toDateString().split(' ').slice(1).join(' ')}
-      location={[event.city[0]?.toUpperCase() + event.city.slice(1), event.country]
-        .filter(Boolean)
-        .join(', ')}
+      location={formatEventLocation({
+        city: event.city,
+        state: event.state,
+        country: event.country,
+      })}
       pricePerPhoto={event.price_per_photo}
       isPublic={event.is_public}
       watermarkEnabled={event.watermark_enabled}

@@ -369,6 +369,8 @@ export default function NewEventForm({
     formData.append('date', parsed.date);
     if (parsed.session_time?.trim()) formData.append('session_time', parsed.session_time.trim());
     if (parsed.city?.trim()) formData.append('city', parsed.city.trim());
+    if (parsed.state?.trim()) formData.append('state', parsed.state.trim());
+    if (parsed.country?.trim()) formData.append('country', parsed.country.trim());
     formData.append('event_type', parsed.event_type);
     formData.append('is_public', parsed.is_public ? 'true' : 'false');
     formData.append('watermark_enabled', parsed.watermark_enabled ? 'true' : 'false');

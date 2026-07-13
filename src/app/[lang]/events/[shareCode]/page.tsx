@@ -29,6 +29,7 @@ import { eventDetailCacheTags } from '@/lib/event-cache-tags';
 import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
 import { getEventStatus, isCollaborativeUploadOpen } from '@/lib/event-status';
 import { isFeatureEnabled } from '@/lib/feature-flags';
+import { formatEventLocation } from '@/lib/format-location';
 import { getBaseUrl } from '@/lib/get-base-url';
 import { getSiteUrl } from '@/lib/get-site-url';
 import type { Locale } from '@/lib/i18n/config';
@@ -217,7 +218,7 @@ export async function generateMetadata({
 
   const activityLabel =
     activityOptions.find((o) => o.value === event.activity)?.label ?? event.activity;
-  const location = [event.city, event.country].filter(Boolean).join(', ');
+  const location = formatEventLocation(event);
   const formattedDate = new Date(event.date).toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
@@ -409,7 +410,7 @@ export default async function EventPage({
 
   const activityLabel =
     activityOptions.find((o) => o.value === event.activity)?.label ?? event.activity;
-  const location = [event.city, event.country].filter(Boolean).join(', ');
+  const location = formatEventLocation(event);
 
   const galleryAlt = `${activityLabel} photo at ${event.name} in ${location}`;
   const photoItems = photos
@@ -524,6 +525,8 @@ export default async function EventPage({
                 date={event.date}
                 sessionTime={event.session_time}
                 city={event.city}
+                state={event.state}
+                country={event.country}
                 locale={lang}
                 perPhotoLabel={dict.events.perPhoto}
                 pricePerPhoto={event.price_per_photo}

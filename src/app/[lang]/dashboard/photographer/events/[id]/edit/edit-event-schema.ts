@@ -15,6 +15,10 @@ export const eventSchema = z.object({
   // Optional manual session start time ("HH:mm"), separate from time-sync (T-106).
   session_time: z.string().trim().optional().default(''),
   city: z.string().trim().optional(),
+  // State/province + country, captured alongside the city from Google Places
+  // and persisted separately (T-107). Optional — legacy events have '' state.
+  state: z.string().trim().optional().default(''),
+  country: z.string().trim().optional().default(''),
   is_public: z.boolean().default(true),
   watermark_enabled: z.boolean().default(true),
   is_collaborative: z.boolean().default(false),

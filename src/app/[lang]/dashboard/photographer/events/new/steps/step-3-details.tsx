@@ -196,6 +196,11 @@ export function Step3Details({
                   id="city"
                   value={field.state.value || ''}
                   onChange={(val) => field.handleChange(val)}
+                  onPlaceSelect={(parts) => {
+                    field.handleChange(parts.city);
+                    form.setFieldValue('state', parts.state);
+                    form.setFieldValue('country', parts.country);
+                  }}
                   onBlur={field.handleBlur}
                   placeholder={t('locationSearchPlaceholder')}
                   noResultsText={t('locationNoResults')}

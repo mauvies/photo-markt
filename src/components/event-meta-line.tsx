@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { formatEventDate, formatSessionTime } from '@/lib/format-date';
+import { formatEventLocation } from '@/lib/format-location';
 import { cn } from '@/lib/utils';
 
 interface EventMetaLineProps {
@@ -8,8 +9,12 @@ interface EventMetaLineProps {
   /** Manual session start time ("HH:MM"/"HH:MM:SS"); shown right after the
    * date when present, omitted otherwise (T-106). */
   sessionTime?: string | null;
-  /** Event city (capitalized for display). */
+  /** Event city. */
   city: string;
+  /** State/province + country, joined with the city into the location segment
+   * when present (T-107). Legacy events (empty state/country) show city only. */
+  state?: string | null;
+  country?: string | null;
   /** Page locale (`lang`) — drives the natural date format. */
   locale: string;
   /** Localized "per photo" suffix for the price segment. */
@@ -31,6 +36,8 @@ export function EventMetaLine({
   date,
   sessionTime,
   city,
+  state,
+  country,
   locale,
   perPhotoLabel,
   pricePerPhoto,
@@ -39,7 +46,8 @@ export function EventMetaLine({
 }: EventMetaLineProps) {
   const formattedDate = formatEventDate(date, locale);
   const formattedTime = formatSessionTime(sessionTime, locale);
-  const formattedCity = city ? city[0]?.toUpperCase() + city.slice(1) : '';
+  const location = formatEventLocation({ city, state, country });
+  const formattedCity = location ? location[0]?.toUpperCase() + location.slice(1) : '';
 
   return (
     <div className={cn('text-sm leading-relaxed text-muted-foreground', className)}>
