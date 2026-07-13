@@ -1,7 +1,7 @@
 # T-118 · Rediseño del landing: enfocado en talento, home público/autenticado unificado, header simplificado
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `feat/landing-redesign-talent-focused`
 - **OpenSpec change:** **probable sí** — feature grande y algo ambigua (unifica landing + Explore, reestructura header/nav de talento en varias superficies); crear el change al ejecutar (`/opsx:propose` → `/opsx:apply`) para capturar el diseño del header unificado antes de codear.

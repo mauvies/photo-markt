@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 54 | P2 | T-118 | [Landing] Rediseño enfocado en talento: home público/autenticado unificado + header simplificado (OpenSpec) | — | todo |
+| 54 | P2 | T-118 | [Landing] Rediseño enfocado en talento: home público/autenticado unificado + header simplificado (OpenSpec) | — | doing |
 | 55 | P2 | T-119 | [EventCard] Rediseño: portada arriba + info estructurada (título+share/heart, ubicación+bandera, fecha•hora, fotógrafo con divisor) | — | todo |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |
