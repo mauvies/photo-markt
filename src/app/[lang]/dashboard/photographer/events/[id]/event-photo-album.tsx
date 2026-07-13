@@ -2,7 +2,7 @@
 
 import { Download, Trash2, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { EventPhotoCountLabel } from '@/components/event-photo-count-label';
@@ -42,6 +42,10 @@ type EventPhotoAlbumProps = {
   /** True non-rejected photo total for the event (server-computed) — the
    * toolbar count reflects the whole event, not the loaded page (T-104). */
   totalCount: number;
+  /** Optional node for the toolbar's left slot (same row as "Select"). When
+   * set (moderation view: the Approved/Pending tab switcher, T-113) it replaces
+   * the standalone photo count — the tab labels already carry the counts. */
+  toolbarLeading?: ReactNode;
   /** Whether more photos exist beyond the first batch (drives "Load more"). */
   initialHasMore?: boolean;
   /** "Load more" button label. */
@@ -58,6 +62,7 @@ export function EventPhotoAlbum({
   iconTooltips,
   imageUnavailableLabel,
   totalCount,
+  toolbarLeading,
   initialHasMore = false,
   loadMoreLabel,
   loadMoreErrorLabel,
@@ -289,9 +294,10 @@ export function EventPhotoAlbum({
         bulkActions={bulkActions}
         labels={selectionLabels}
         toolbarLeading={
-          totalCount > 0 ? (
+          toolbarLeading ??
+          (totalCount > 0 ? (
             <EventPhotoCountLabel label={t('photosCount').replace('{n}', String(totalCount))} />
-          ) : undefined
+          ) : undefined)
         }
         toolbarClassName="sticky top-0 -mx-4 px-3"
         loadMore={{

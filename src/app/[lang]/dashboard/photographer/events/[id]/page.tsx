@@ -1,6 +1,5 @@
 import { DashboardHeader } from '@/components/dashboard-header';
 import { EventShareCode } from '@/components/event-share-code';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   countEventPhotos,
   createPhotoUrlMap,
@@ -29,10 +28,10 @@ import { getPhotoTags } from './actions';
 import { AiStatusCard } from './ai-status-card';
 import { EventActionsMenu } from './event-actions-menu';
 import { EventDetailsCard } from './event-details-card';
+import { EventModerationTabs } from './event-moderation-tabs';
 import { EventPhotoAlbum } from './event-photo-album';
 import { OrganizerUploadSection } from './organizer-upload-section';
 import { buildOwnerPhotoAlbumItem } from './owner-album-item';
-import { PendingPhotosTab } from './pending-photos-tab';
 import { PhotographersSection } from './photographers-section';
 import { RejectedToast } from './rejected-toast';
 
@@ -302,64 +301,58 @@ export default async function EventDetailPage({
       <div className="mt-4">
         <TranslationsProvider translations={dict.events}>
           {showPendingTab ? (
-            <Tabs defaultValue="all">
-              <TabsList>
-                <TabsTrigger value="all">{dict.collaborativeEvent.tabAllPhotos}</TabsTrigger>
-                <TabsTrigger value="pending">
-                  {dict.collaborativeEvent.tabPending.replace('{n}', String(pendingItems.length))}
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="all" className="mt-4">
-                <EventPhotoAlbum
-                  eventId={id}
-                  isCollaborative={event.is_collaborative}
-                  uploaderLabels={{
-                    tooltip: dict.collaborativeEvent.uploaderTooltip,
-                    popoverHeading: dict.collaborativeEvent.uploaderPopoverHeading,
-                    guestLabel: dict.collaborativeEvent.uploaderGuestLabel,
-                    authenticatedLabel: dict.collaborativeEvent.uploaderAuthenticatedLabel,
-                  }}
-                  iconTooltips={dict.photoIconButtons}
-                  items={albumItems}
-                  imageUnavailableLabel={dict.eventCard.imageUnavailable}
-                  totalCount={visibleCount}
-                  initialHasMore={hasMore}
-                  loadMoreLabel={dict.events.loadMore}
-                  loadMoreErrorLabel={dict.events.loadMoreFailed}
-                />
-              </TabsContent>
-              <TabsContent value="pending" className="mt-4">
-                <PendingPhotosTab
-                  eventId={id}
-                  photos={pendingItems}
-                  labels={{
-                    empty: dict.collaborativeEvent.pendingEmpty,
-                    approveAria: dict.collaborativeEvent.approveAria,
-                    rejectAria: dict.collaborativeEvent.rejectAria,
-                    select: dict.collaborativeEvent.pendingSelect,
-                    exitSelection: dict.collaborativeEvent.pendingExitSelection,
-                    countOne: dict.collaborativeEvent.pendingCountOne,
-                    countMany: dict.collaborativeEvent.pendingCountMany,
-                    approveAll: dict.collaborativeEvent.pendingApproveAll,
-                    approveSelected: dict.collaborativeEvent.pendingApproveSelected,
-                    rejectSelected: dict.collaborativeEvent.pendingRejectSelected,
-                    rejectConfirmTitle: dict.collaborativeEvent.rejectConfirmTitle,
-                    rejectConfirmTitleMany: dict.collaborativeEvent.rejectConfirmTitleMany,
-                    rejectConfirmDescription: dict.collaborativeEvent.rejectConfirmDescription,
-                    rejectConfirmDescriptionMany:
-                      dict.collaborativeEvent.rejectConfirmDescriptionMany,
-                    rejectConfirmAction: dict.collaborativeEvent.rejectConfirmAction,
-                    rejectConfirmCancel: dict.collaborativeEvent.rejectConfirmCancel,
-                    rejectConfirmPending: dict.collaborativeEvent.rejectConfirmPending,
-                    approveSuccessOne: dict.collaborativeEvent.approveSuccessOne,
-                    approveSuccessMany: dict.collaborativeEvent.approveSuccessMany,
-                    rejectSuccessOne: dict.collaborativeEvent.rejectSuccessOne,
-                    rejectSuccessMany: dict.collaborativeEvent.rejectSuccessMany,
-                    actionError: dict.collaborativeEvent.queueActionError,
-                  }}
-                />
-              </TabsContent>
-            </Tabs>
+            <EventModerationTabs
+              approvedLabel={dict.collaborativeEvent.tabAllPhotos}
+              pendingLabelTemplate={dict.collaborativeEvent.tabPending}
+              approvedCount={visibleCount}
+              pendingCount={pendingItems.length}
+              albumProps={{
+                eventId: id,
+                isCollaborative: event.is_collaborative,
+                uploaderLabels: {
+                  tooltip: dict.collaborativeEvent.uploaderTooltip,
+                  popoverHeading: dict.collaborativeEvent.uploaderPopoverHeading,
+                  guestLabel: dict.collaborativeEvent.uploaderGuestLabel,
+                  authenticatedLabel: dict.collaborativeEvent.uploaderAuthenticatedLabel,
+                },
+                iconTooltips: dict.photoIconButtons,
+                items: albumItems,
+                imageUnavailableLabel: dict.eventCard.imageUnavailable,
+                totalCount: visibleCount,
+                initialHasMore: hasMore,
+                loadMoreLabel: dict.events.loadMore,
+                loadMoreErrorLabel: dict.events.loadMoreFailed,
+              }}
+              pendingProps={{
+                eventId: id,
+                photos: pendingItems,
+                labels: {
+                  empty: dict.collaborativeEvent.pendingEmpty,
+                  approveAria: dict.collaborativeEvent.approveAria,
+                  rejectAria: dict.collaborativeEvent.rejectAria,
+                  select: dict.collaborativeEvent.pendingSelect,
+                  exitSelection: dict.collaborativeEvent.pendingExitSelection,
+                  countOne: dict.collaborativeEvent.pendingCountOne,
+                  countMany: dict.collaborativeEvent.pendingCountMany,
+                  approveAll: dict.collaborativeEvent.pendingApproveAll,
+                  approveSelected: dict.collaborativeEvent.pendingApproveSelected,
+                  rejectSelected: dict.collaborativeEvent.pendingRejectSelected,
+                  rejectConfirmTitle: dict.collaborativeEvent.rejectConfirmTitle,
+                  rejectConfirmTitleMany: dict.collaborativeEvent.rejectConfirmTitleMany,
+                  rejectConfirmDescription: dict.collaborativeEvent.rejectConfirmDescription,
+                  rejectConfirmDescriptionMany:
+                    dict.collaborativeEvent.rejectConfirmDescriptionMany,
+                  rejectConfirmAction: dict.collaborativeEvent.rejectConfirmAction,
+                  rejectConfirmCancel: dict.collaborativeEvent.rejectConfirmCancel,
+                  rejectConfirmPending: dict.collaborativeEvent.rejectConfirmPending,
+                  approveSuccessOne: dict.collaborativeEvent.approveSuccessOne,
+                  approveSuccessMany: dict.collaborativeEvent.approveSuccessMany,
+                  rejectSuccessOne: dict.collaborativeEvent.rejectSuccessOne,
+                  rejectSuccessMany: dict.collaborativeEvent.rejectSuccessMany,
+                  actionError: dict.collaborativeEvent.queueActionError,
+                },
+              }}
+            />
           ) : (
             <EventPhotoAlbum
               eventId={id}
