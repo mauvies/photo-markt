@@ -50,6 +50,8 @@ export interface EventSummary {
   require_upload_approval: boolean;
   /** Not selected by every `EventSummary` producer — optional, check per call site. */
   ai_matching_enabled?: boolean;
+  /** Manual session time (T-106/T-119). Not selected by every producer — optional. */
+  session_time?: string | null;
 }
 
 /**
@@ -62,7 +64,7 @@ export async function getUserEvents(
   const { data, error } = await supabase
     .from('events')
     .select(
-      'id, name, date, city, country, activity, is_public, share_code, slug, price_per_photo, watermark_enabled, is_collaborative, allow_guest_upload, require_upload_approval',
+      'id, name, date, session_time, city, country, activity, is_public, share_code, slug, price_per_photo, watermark_enabled, is_collaborative, allow_guest_upload, require_upload_approval',
     )
     .eq('user_id', userId)
     .is('deleted_at', null)
@@ -353,7 +355,7 @@ export async function searchPublicEvents(
   let query = supabase
     .from('events')
     .select(
-      'id, user_id, name, date, city, country, state, activity, is_public, share_code, slug, price_per_photo, watermark_enabled, is_collaborative, allow_guest_upload, require_upload_approval, ai_matching_enabled',
+      'id, user_id, name, date, session_time, city, country, state, activity, is_public, share_code, slug, price_per_photo, watermark_enabled, is_collaborative, allow_guest_upload, require_upload_approval, ai_matching_enabled',
       { count: 'exact' },
     )
     .eq('is_public', true)

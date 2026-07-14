@@ -138,7 +138,7 @@ export async function PhotographerPublicProfile({
             <p className="mt-1 max-w-sm text-sm text-muted-foreground">{p.noEventsBody}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
             {photographerEvents.map((event, index) => (
               <EventCard
                 key={event.id}
@@ -161,6 +161,7 @@ export async function PhotographerPublicProfile({
                   photos: dict.eventCard.photos,
                   noPhotosYet: dict.eventCard.noPhotosYet,
                   imageUnavailable: dict.eventCard.imageUnavailable,
+                  share: dict.eventCard.share,
                 }}
               />
             ))}

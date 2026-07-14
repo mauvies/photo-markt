@@ -98,10 +98,13 @@ export async function searchEventsAction(filters: {
   const userIds = [...new Set(result.events.map((e) => e.user_id).filter(Boolean))];
   const { data: profileRows } = await supabaseAdmin
     .from('profiles')
-    .select('id, username, display_name')
+    .select('id, username, display_name, avatar_url')
     .in('id', userIds);
 
-  const profileMap = new Map<string, { username: string | null; display_name: string | null }>();
+  const profileMap = new Map<
+    string,
+    { username: string | null; display_name: string | null; avatar_url: string | null }
+  >();
   for (const p of profileRows ?? []) {
     profileMap.set(p.id, p);
   }
@@ -121,6 +124,7 @@ export async function searchEventsAction(filters: {
         })(),
         photographerUsername: profile?.username ?? null,
         photographerDisplayName: profile?.display_name ?? null,
+        photographerAvatarUrl: profile?.avatar_url ?? null,
       };
     }),
     total: result.total,

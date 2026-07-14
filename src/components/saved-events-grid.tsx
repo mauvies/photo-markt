@@ -4,7 +4,6 @@ import { Loader2 } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { listSavedEvents, type SavedEventCard } from '@/app/[lang]/actions/saved-events';
 import { EventCard, type EventCardLabels } from '@/components/event-card';
-import { EventSaveButton } from '@/components/event-save-button';
 import { Button } from '@/components/ui/button';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 
@@ -73,7 +72,7 @@ export function SavedEventsGrid({
 
   return (
     <div>
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
         {events.map((event, index) => (
           <EventCard
             key={event.id}
@@ -94,14 +93,9 @@ export function SavedEventsGrid({
             status={event.status}
             linkPrefix={eventLinkPrefix}
             priority={index < 4}
-            saveSlot={
-              <EventSaveButton
-                eventId={event.id}
-                onToggled={(saved) => {
-                  if (!saved) handleRemove(event.id);
-                }}
-              />
-            }
+            onSaveToggled={(saved) => {
+              if (!saved) handleRemove(event.id);
+            }}
             t={cardLabels}
           />
         ))}

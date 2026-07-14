@@ -624,7 +624,8 @@
     "publicEvent": "Public event",
     "privateEvent": "Private event",
     "moreOptions": "More options",
-    "imageUnavailable": "Image unavailable"
+    "imageUnavailable": "Image unavailable",
+    "share": "Share"
   },
   "activities": {
     "SURF": "Surf",

@@ -62,6 +62,7 @@ export default async function TalentFavoritesPage({
         noPhotosYet: dict.eventCard.noPhotosYet,
         comingSoon: dict.eventCard.comingSoon,
         imageUnavailable: dict.eventCard.imageUnavailable,
+        share: dict.eventCard.share,
       }}
       labels={{
         emptyTitle: dict.savedEvents.emptyTitle,
