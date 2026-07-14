@@ -1,11 +1,11 @@
 # T-119 · Rediseño del event card (portada arriba + sección de info estructurada)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/event-card-redesign`
 - **OpenSpec change:** —  (un componente + su plumbing de datos; UI con requerimiento claro, implementar directo)
-- **PR:** —
+- **PR:** #180
 
 ## Requerimiento
 Rediseñar el `EventCard` a un layout más limpio y estructurado (estilo referencia tipo SurfCloud, solo
