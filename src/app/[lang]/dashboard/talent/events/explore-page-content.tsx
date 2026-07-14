@@ -33,6 +33,7 @@ export function ExplorePageContent({
   showFindMe = false,
   eventSearchBarDict,
   searchKey,
+  gridHeading,
 }: {
   initialFilterOptions: FilterOptions;
   initialEvents?: EventWithStats[];
@@ -54,6 +55,8 @@ export function ExplorePageContent({
   filterBarLeftSlot?: React.ReactNode;
   eventSearchBarDict?: Dictionary['eventSearchBar'];
   searchKey?: string;
+  /** Optional section heading rendered directly above the events grid. */
+  gridHeading?: string;
 }) {
   const search = useEventSearch({
     initialFilterOptions,
@@ -135,6 +138,10 @@ export function ExplorePageContent({
         radiusKm={search.radiusKm}
         setRadiusKm={search.setRadiusKm}
       />
+
+      {gridHeading && (
+        <h2 className="text-xl font-bold tracking-wide sm:text-2xl">{gridHeading}</h2>
+      )}
 
       <EventGrid
         events={search.events}

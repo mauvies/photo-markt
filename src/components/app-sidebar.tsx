@@ -14,9 +14,8 @@ import {
   TrendingUp,
   User,
 } from 'lucide-react';
-import Image from 'next/image';
-import Link from 'next/link';
 import type { ComponentProps } from 'react';
+import { LogoLink } from '@/components/logo-link';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { dashboardHomeForRole } from '@/lib/auth/dashboard-home';
 import {
@@ -110,19 +109,12 @@ export function AppSidebar({
     <Sidebar collapsible="icon" className="h-svh" {...props}>
       <SidebarHeader>
         <div className="relative flex items-center py-1">
-          <Link
+          <LogoLink
             href={lp(dashboardHomeForRole(activeRole))}
             className="flex items-center gap-1 px-2"
-          >
-            <Image
-              src="/logo.svg"
-              alt="Photo Markt"
-              className="h-10 w-auto"
-              width={80}
-              height={80}
-              priority
-            />
-          </Link>
+            imgClassName="h-10 w-auto"
+            priority
+          />
         </div>
       </SidebarHeader>
       <SidebarContent>

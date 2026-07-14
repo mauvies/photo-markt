@@ -150,7 +150,7 @@ export function PhotographerProfileHeader({
             key={stat.label}
             className="flex flex-col items-center rounded-xl border bg-card px-3 py-4 text-center shadow-sm sm:py-5"
           >
-            <span className="text-2xl font-bold tracking-tight sm:text-3xl">{stat.value}</span>
+            <span className="text-xl font-bold tracking-tight sm:text-2xl">{stat.value}</span>
             <span className="mt-1 text-xs text-muted-foreground sm:text-sm">
               {stat.label.replace(/^\d+\s+/, '')}
             </span>

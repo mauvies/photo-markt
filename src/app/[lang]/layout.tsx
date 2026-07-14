@@ -9,6 +9,7 @@ import { GuestCartProvider } from '@/components/guest-cart-provider';
 import { HtmlLangSync } from '@/components/html-lang-sync';
 import { Main } from '@/components/main';
 import { Nav } from '@/components/nav';
+import { PhotographerBanner } from '@/components/photographer-banner';
 import { QueryProvider } from '@/components/query-provider';
 import { SavedEventsLabelsProvider } from '@/components/saved-events-labels-provider';
 import { ScrollToTop } from '@/components/scroll-to-top';
@@ -40,6 +41,7 @@ export default async function LangLayout({
         <ScrollToTop />
         <GuestCartProvider>
           <GuestCartMerge cartRestoredMessage={dict.cart.cartRestored} />
+          <PhotographerBanner label={dict.nav.imPhotographer} />
           <ConditionalHeader>
             <TranslationsProvider translations={dict.nav}>
               {/* Nav reads `useSearchParams()` (login-href + language switcher);
