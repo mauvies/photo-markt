@@ -1,4 +1,5 @@
 import { ExplorePageContent } from '@/app/[lang]/dashboard/talent/events/explore-page-content';
+import { prefetchInitialEvents } from '@/app/[lang]/dashboard/talent/events/prefetch-initial-events';
 import { EventSearchBar } from '@/components/event-search-bar';
 import type { FilterOptions } from '@/hooks/use-event-search';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
@@ -24,7 +25,7 @@ export type EventsExploreSearchParams = {
  * remount via `key` → `useEventSearch` refetch). `eventLinkPrefix` drives where
  * event cards and access codes resolve (public viewer vs dashboard wrapper).
  */
-export function EventsExploreView({
+export async function EventsExploreView({
   dict,
   filterOptions,
   searchParams,
@@ -38,6 +39,23 @@ export function EventsExploreView({
   eventLinkPrefix: string;
 }) {
   const { where, activity, dateFrom, dateTo, preset, photographer } = searchParams;
+
+  // T-124: server-render the first events page so the grid (and its
+  // `priority` cover images) travels in the initial HTML instead of waiting
+  // for hydration + a search-action POST (LCP driver #1 in T-123's audit).
+  // Ordering decision: SSR serves the default order (`date_desc`) — there is
+  // no geolocation-based "nearby first" path in the codebase today (nothing
+  // calls `navigator.geolocation`; `useEventSearch` merely accepts lat/lng),
+  // so this matches what the client fetch produced. If nearby-first lands
+  // later, it should re-order client-side after this seeded first paint.
+  const { initialEvents, initialTotal } = await prefetchInitialEvents({
+    filterOptions,
+    where,
+    activity,
+    dateFrom,
+    dateTo,
+    photographer,
+  });
 
   // Any filter change remounts the search bar + explore content so the initial
   // values (and the query key inside useEventSearch) reflect the new URL.
@@ -86,6 +104,11 @@ export function EventsExploreView({
         <ExplorePageContent
           key={key}
           initialFilterOptions={filterOptions}
+          initialEvents={initialEvents}
+          initialTotal={initialTotal}
+          // Fallback only: with `initialEvents` seeded the query renders from
+          // cache without a mount POST; if the prefetch failed the client
+          // fetches on mount exactly as before T-124.
           loadOnMount={true}
           hideTopFilters={true}
           showFindMe={false}
