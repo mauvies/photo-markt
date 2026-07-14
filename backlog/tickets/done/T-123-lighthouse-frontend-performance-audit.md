@@ -1,11 +1,11 @@
 # T-123 · Auditoría de rendimiento frontend (Lighthouse / Core Web Vitals) + fixes de alto impacto
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `perf/lighthouse-frontend-audit`
 - **OpenSpec change:** —  (auditoría + fixes acotados; el reporte es el punto de revisión)
-- **PR:** —
+- **PR:** #183
 
 ## Requerimiento
 El usuario corrió Lighthouse y hay cosas por mejorar. Quiere **optimizar al máximo el rendimiento de
