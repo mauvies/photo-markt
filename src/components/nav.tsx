@@ -43,7 +43,7 @@ export function Nav() {
 
   return (
     <HeaderShell>
-      <LogoLink href={lp('/')} imgClassName="mt-1 h-10 w-auto" priority />
+      <LogoLink href={lp('/')} imgClassName="mt-1 h-11 w-auto" priority />
 
       <div className="flex items-center gap-2 md:gap-5">
         {/* Fixed-size slot regardless of `showCart` — soft navigation

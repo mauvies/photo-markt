@@ -31,7 +31,7 @@ type EventGridProps = {
 
 function EventSkeleton({ skeletonKeys }: { skeletonKeys: string[] }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+    <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
       {skeletonKeys.map((key) => (
         <div key={key} className="group block">
           {/* Match ExploreEventCard spacing/layout */}
@@ -96,7 +96,7 @@ export function EventGrid({
 
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
         {events.map((event, index) => (
           <EventCard
             key={event.id}

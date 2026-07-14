@@ -196,13 +196,13 @@ function PhotographerRow({
         <Image
           src={avatarUrl}
           alt=""
-          width={24}
-          height={24}
+          width={20}
+          height={20}
           unoptimized={shouldSkipImageOptimization(avatarUrl)}
-          className="h-6 w-6 shrink-0 rounded-full object-cover"
+          className="h-5 w-5 shrink-0 rounded-full object-cover"
         />
       ) : (
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[9px] font-semibold text-muted-foreground">
           {initial}
         </span>
       )}
@@ -215,7 +215,7 @@ function PhotographerRow({
   // never nest an anchor inside another anchor.
   if (username) {
     return (
-      <div className="mt-3 border-t pt-3">
+      <div className="mt-2 border-t pt-2">
         <Link
           href={`/${locale}/photographer/${username}`}
           className="inline-flex max-w-full transition-opacity hover:opacity-80"
@@ -277,7 +277,7 @@ export function EventCard({
     <div className="group relative overflow-hidden rounded-2xl border bg-card">
       {/* Cover */}
       <Link href={eventHref} className="block">
-        <div className="relative aspect-[16/10] w-full overflow-hidden bg-muted">
+        <div className="relative aspect-[16/11] w-full overflow-hidden bg-muted">
           {coverSrc ? (
             <>
               <Image
@@ -357,12 +357,12 @@ export function EventCard({
                 eventName={name}
                 eventUrl={shareUrl}
                 tooltip={t.share ?? 'Share'}
-                className="size-9"
+                className="size-8 [&_svg]:size-4"
               />
               <EventSaveButton
                 eventId={id}
                 variant="icon"
-                className="size-9"
+                className="size-8"
                 onToggled={onSaveToggled}
               />
             </div>
