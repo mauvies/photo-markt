@@ -144,7 +144,7 @@ export function GuestCartContent() {
   return (
     <div className="relative">
       {/* Sign-in nudge */}
-      <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border bg-primary/5 px-4 py-3 text-sm">
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border bg-primary/5 px-4 py-4 text-sm">
         <div className="flex items-start gap-2">
           <UserPlus className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
           <div>
