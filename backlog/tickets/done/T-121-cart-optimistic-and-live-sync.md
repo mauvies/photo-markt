@@ -1,11 +1,11 @@
 # T-121 · Carrito: updates optimistas (add/remove) + fix "la página del carrito no refleja ítems nuevos hasta refrescar"
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/cart-optimistic-and-live-sync`
 - **OpenSpec change:** —  (estado de cliente + reuso del hook optimista existente; UI/bug con requerimiento claro)
-- **PR:** —
+- **PR:** #181
 - **Cluster:** Carrito/previews & integridad — coordinar con T-115/T-116/T-117 (mismo código de carrito; merge previo)
 
 ## Requerimiento
