@@ -11,7 +11,9 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 54 | P1 | T-130 | [Carrito/Bug] Las previews del carrito no se ven para usuarios autenticados (sí para invitados) — signed URL user-scoped vs thumbnail/admin | — | todo |
+| 54 | P1 | T-130 | [Carrito/Bug] Las previews del carrito no se ven para usuarios autenticados (sí para invitados) — signed URL user-scoped vs thumbnail/admin | — | doing |
+| 54b | P1 | T-131 | [Seguridad/Pagos] Fallback de preview del carrito sirve el original SIN watermark antes del bake del thumbnail (eventos de pago watermarked) — hallazgo del `/code-review` de T-130 | T-130 | todo |
+| 54c | P2 | T-132 | [Seguridad] Add-to-cart acepta fotos de eventos privados sin chequear visibilidad/share code — hallazgo del `/code-review` de T-130 | T-130 | todo |
 | 55 | P2 | T-125 | [Perf] Peso de imágenes de la galería: backfill thumbnails legacy + variante small + cap de tiles eager (F2 de T-123) | — | todo |
 | 56 | P2 | T-127 | [EventCard] Reservar dos líneas para el título → altura de card consistente (info de abajo alineada entre cards) | — | todo |
 | 57 | P2 | T-128 | [Skeletons] Sincronizar los loading skeletons (home, listado, detalle) con el layout/márgenes post-rediseño → menos layout shift | T-127 | todo |

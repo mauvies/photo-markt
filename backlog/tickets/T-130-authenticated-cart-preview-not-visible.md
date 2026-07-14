@@ -1,7 +1,7 @@
 # T-130 · Bug: las previews del carrito no se ven para usuarios autenticados (sí para invitados)
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno (coordinar merge con T-121 / cluster Carrito — mismos archivos)
 - **Rama:** `fix/authenticated-cart-preview`  (tipo = fix)
 - **OpenSpec change:** —  (bug de fuente de URL de preview; requerimiento claro)
