@@ -215,7 +215,7 @@ function PhotographerRow({
   // never nest an anchor inside another anchor.
   if (username) {
     return (
-      <div className="mt-2 border-t pt-2">
+      <div className="mt-2 flex items-center border-t pt-2">
         <Link
           href={`/${locale}/photographer/${username}`}
           className="inline-flex max-w-full transition-opacity hover:opacity-80"
