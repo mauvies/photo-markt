@@ -1,11 +1,11 @@
 # T-122 · Fix: el contador de fotos de la toolbar no refleja los resultados de una búsqueda por dorsal
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/bib-search-photo-count`
 - **OpenSpec change:** —  (fix acotado en dos viewers)
-- **PR:** —
+- **PR:** #182
 
 ## Requerimiento
 Al hacer una **búsqueda por dorsal** que matchea, p. ej., 3 fotos, la galería muestra esas 3 — pero el
