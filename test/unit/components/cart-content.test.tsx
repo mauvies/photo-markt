@@ -48,10 +48,12 @@ vi.mock('@/lib/i18n/translations-provider', () => ({
 // PhotoLightbox pulls a heavy import tree and only renders on interaction.
 vi.mock('@/components/photo-lightbox', () => ({ PhotoLightbox: () => null }));
 
-const { getCurrentCartMock, createCheckoutSessionActionMock } = vi.hoisted(() => ({
-  getCurrentCartMock: vi.fn(),
-  createCheckoutSessionActionMock: vi.fn(),
-}));
+const { getCurrentCartMock, createCheckoutSessionActionMock, removePhotoFromCartActionMock } =
+  vi.hoisted(() => ({
+    getCurrentCartMock: vi.fn(),
+    createCheckoutSessionActionMock: vi.fn(),
+    removePhotoFromCartActionMock: vi.fn(),
+  }));
 
 // `./actions` is a "use server" module — mock it so the client test doesn't pull
 // server-only code. Only the runtime functions matter (types are erased).
@@ -59,7 +61,7 @@ vi.mock('@/app/[lang]/dashboard/talent/cart/actions', () => ({
   getCurrentCart: getCurrentCartMock,
   clearCartAction: vi.fn(),
   createCheckoutSessionAction: createCheckoutSessionActionMock,
-  removePhotoFromCartAction: vi.fn(),
+  removePhotoFromCartAction: removePhotoFromCartActionMock,
 }));
 
 import type { CartData } from '@/app/[lang]/dashboard/talent/cart/actions';
@@ -87,15 +89,14 @@ const initialCartData: CartData = {
   removedCount: 0,
 };
 
-function renderCart(data: CartData = initialCartData) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  return render(
-    <QueryClientProvider client={queryClient}>
+function renderCart(data: CartData = initialCartData, queryClient?: QueryClient) {
+  const client = queryClient ?? new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const result = render(
+    <QueryClientProvider client={client}>
       <CartContent initialCartData={data} />
     </QueryClientProvider>,
   );
+  return { ...result, queryClient: client };
 }
 
 afterEach(() => {
@@ -103,6 +104,7 @@ afterEach(() => {
   toastMock.mockClear();
   getCurrentCartMock.mockReset();
   createCheckoutSessionActionMock.mockReset();
+  removePhotoFromCartActionMock.mockReset();
 });
 
 describe('CartContent — item preview (T-111)', () => {
@@ -166,5 +168,53 @@ describe('CartContent — checkout failure refetches the cart (T-117)', () => {
     // rendering. After the fix, the failure invalidates the query and
     // getCurrentCart is called to refresh it.
     await waitFor(() => expect(getCurrentCartMock).toHaveBeenCalled());
+  });
+});
+
+const EMPTY_CART: CartData = { items: [], subtotalCents: 0, itemCount: 0, removedCount: 0 };
+
+describe('CartContent — live sync with fresh server data (T-121)', () => {
+  it('renders the fresh server snapshot even when a stale (empty) cart-data cache exists', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    // Simulate a prior visit that cached an EMPTY cart (staleTime:Infinity keeps
+    // it around). Before the fix this stale cache shadowed the fresh
+    // `initialCartData` snapshot from the force-dynamic RSC render, so the page
+    // showed the empty state until a manual refresh. After the fix the mount
+    // seeds ['cart-data'] with the fresh snapshot, so the item shows instantly.
+    queryClient.setQueryData<CartData>(['cart-data'], EMPTY_CART);
+
+    renderCart(initialCartData, queryClient);
+
+    expect(screen.getByText('Surf Cup')).toBeTruthy();
+  });
+});
+
+describe('CartContent — optimistic remove (T-121)', () => {
+  it('drops the item and decrements the badge before the server confirms', async () => {
+    // A never-resolving remove so we can observe the pre-confirmation UI.
+    removePhotoFromCartActionMock.mockImplementation(() => new Promise<void>(() => {}));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData<number>(['cart-count'], 1);
+
+    renderCart(initialCartData, queryClient);
+    fireEvent.click(screen.getByText('remove'));
+
+    // Item is gone and the shared badge decremented — without waiting on the server.
+    await waitFor(() => expect(screen.queryByText('Surf Cup')).toBeNull());
+    expect(queryClient.getQueryData<number>(['cart-count'])).toBe(0);
+  });
+
+  it('rolls back the item and badge and toasts on failure', async () => {
+    removePhotoFromCartActionMock.mockRejectedValue(new Error('boom'));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData<number>(['cart-count'], 1);
+
+    renderCart(initialCartData, queryClient);
+    fireEvent.click(screen.getByText('remove'));
+
+    // Exact rollback: the item returns and the badge is restored.
+    await waitFor(() => expect(screen.getByText('Surf Cup')).toBeTruthy());
+    expect(queryClient.getQueryData<number>(['cart-count'])).toBe(1);
+    expect(toastMock.error).toHaveBeenCalled();
   });
 });

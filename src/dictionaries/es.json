@@ -259,7 +259,7 @@
     "viewEvent": "Ver evento",
     "viewPhotographer": "Ver fotógrafo",
     "removedFromCart": "Eliminado del carrito",
-    "failedRemoveItem": "Error al eliminar el artículo",
+    "failedRemoveItem": "No se pudo eliminar el artículo del carrito, inténtalo de nuevo",
     "cartCleared": "Carrito vaciado",
     "failedClearCart": "Error al vaciar el carrito",
     "failedStartCheckout": "Error al iniciar el pago",
@@ -665,8 +665,8 @@
     "cancel": "Cancelar",
     "addedToCart": "Añadida al carrito",
     "removedFromCart": "Eliminada del carrito",
-    "failedAddCart": "Error al añadir la foto al carrito",
-    "failedRemoveCart": "Error al eliminar la foto del carrito"
+    "failedAddCart": "No se pudo añadir la foto al carrito, inténtalo de nuevo",
+    "failedRemoveCart": "No se pudo eliminar la foto del carrito, inténtalo de nuevo"
   },
   "lightboxToolbar": {
     "share": "Compartir",
@@ -1141,8 +1141,8 @@
     "bulkClaimedSkipped": "{n} fotos añadidas a tu perfil, {m} omitidas",
     "failedBulkFavorite": "No se pudieron añadir las fotos a favoritos",
     "failedBulkClaim": "No se pudieron añadir las fotos a tu perfil",
-    "failedAddCart": "No se pudo añadir la foto al carrito",
-    "failedRemoveCart": "No se pudo eliminar la foto del carrito"
+    "failedAddCart": "No se pudo añadir la foto al carrito, inténtalo de nuevo",
+    "failedRemoveCart": "No se pudo eliminar la foto del carrito, inténtalo de nuevo"
   },
   "profilePhotoViewer": {
     "downloadStarted": "Descarga iniciada",

@@ -99,6 +99,20 @@ export function CartContent({ initialCartData }: CartContentProps) {
     staleTime: Number.POSITIVE_INFINITY,
   });
 
+  // T-121: the page is `force-dynamic`, so `initialCartData` is a fresh server
+  // snapshot on every navigation. But ['cart-data'] caches across navigations
+  // with staleTime:Infinity, so a stale (e.g. empty, from a prior visit before
+  // items were added) cache would shadow the fresh snapshot and the cart would
+  // look empty until a manual refresh — even though the header badge, which
+  // reads ['cart-count'], already updated. Seed the query with the fresh
+  // snapshot on mount (before paint) so the page always reflects server truth
+  // and shares one reactive source with the badge. This overwrites any stale
+  // optimistic state on a fresh navigation, which is correct — the server is
+  // authoritative on load.
+  useLayoutEffect(() => {
+    queryClient.setQueryData<CartData>(['cart-data'], initialCartData);
+  }, [initialCartData, queryClient]);
+
   const lp = useLocalizedPath();
   const { t } = useTranslations<{
     empty: string;
@@ -141,16 +155,41 @@ export function CartContent({ initialCartData }: CartContentProps) {
     }
   }, [cartData.removedCount]);
 
+  // T-121: optimistic remove. The item drops from the shared ['cart-data']
+  // source and the badge (['cart-count']) decrements instantly — before the
+  // server confirms — so the page and header never diverge. On failure we roll
+  // back to the exact prior state and surface a toast.
   const handleRemove = (photoId: string) => {
+    const previousData = queryClient.getQueryData<CartData>(['cart-data']) ?? cartData;
+    const previousCount = queryClient.getQueryData<number>(['cart-count']);
+    queryClient.setQueryData<CartData>(['cart-data'], (curr) => {
+      const base = curr ?? previousData;
+      const items = base.items.filter((i) => i.photoId !== photoId);
+      return {
+        ...base,
+        items,
+        itemCount: items.length,
+        subtotalCents: items.reduce((sum, i) => sum + i.unitPriceCents, 0),
+      };
+    });
+    queryClient.setQueryData<number>(['cart-count'], (n = 0) => Math.max(0, n - 1));
     setRemovingId(photoId);
     startTransition(async () => {
       try {
         await removePhotoFromCartAction(photoId);
-        // Await the refetch so the UI updates before the spinner stops.
+        // Reconcile with server truth — covers the T-117 self-heal that may
+        // have removed additional now-unpurchasable rows.
         await queryClient.invalidateQueries({ queryKey: ['cart-data'] });
         queryClient.invalidateQueries({ queryKey: ['cart-count'] });
         toast.success(t('removedFromCart'));
       } catch (error) {
+        // Exact rollback of both the list and the badge.
+        queryClient.setQueryData<CartData>(['cart-data'], previousData);
+        if (previousCount !== undefined) {
+          queryClient.setQueryData<number>(['cart-count'], previousCount);
+        } else {
+          queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+        }
         const message = error instanceof Error ? error.message : t('failedRemoveItem');
         toast.error(message);
       } finally {
@@ -160,13 +199,27 @@ export function CartContent({ initialCartData }: CartContentProps) {
   };
 
   const handleClearCart = () => {
+    const previousData = queryClient.getQueryData<CartData>(['cart-data']) ?? cartData;
+    const previousCount = queryClient.getQueryData<number>(['cart-count']);
+    queryClient.setQueryData<CartData>(['cart-data'], (curr) => ({
+      ...(curr ?? previousData),
+      items: [],
+      itemCount: 0,
+      subtotalCents: 0,
+    }));
+    queryClient.setQueryData<number>(['cart-count'], 0);
     startTransition(async () => {
       try {
         await clearCartAction();
-        await queryClient.invalidateQueries({ queryKey: ['cart-data'] });
         queryClient.invalidateQueries({ queryKey: ['cart-count'] });
         toast.success(t('cartCleared'));
       } catch (error) {
+        queryClient.setQueryData<CartData>(['cart-data'], previousData);
+        if (previousCount !== undefined) {
+          queryClient.setQueryData<number>(['cart-count'], previousCount);
+        } else {
+          queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+        }
         const message = error instanceof Error ? error.message : t('failedClearCart');
         toast.error(message);
       }
