@@ -15,7 +15,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | 54 | P2 | T-124 | [Perf] SSR de los eventos iniciales del grid home/explore (F1 de T-123 — LCP driver #1; decisión "nearby first" embebida) | — | todo |
 | 55 | P2 | T-125 | [Perf] Peso de imágenes de la galería: backfill thumbnails legacy + variante small + cap de tiles eager (F2 de T-123) | — | todo |
 | 56 | P2 | T-127 | [EventCard] Reservar dos líneas para el título → altura de card consistente (info de abajo alineada entre cards) | — | todo |
-| 57 | P3 | T-126 | [Perf] Code-split del stack modal/lightbox de la galería + bundle Sentry (~180 KiB JS sin usar, F3 de T-123) | — | todo |
+| 57 | P2 | T-128 | [Skeletons] Sincronizar los loading skeletons (home, listado, detalle) con el layout/márgenes post-rediseño → menos layout shift | T-127 | todo |
+| 58 | P3 | T-126 | [Perf] Code-split del stack modal/lightbox de la galería + bundle Sentry (~180 KiB JS sin usar, F3 de T-123) | — | todo |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
