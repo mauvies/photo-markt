@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 51 | P2 | T-122 | [Galería] El contador "Fotos (N)" no refleja los resultados de una búsqueda por dorsal (muestra el total del evento) | — | todo |
+| 51 | P2 | T-122 | [Galería] El contador "Fotos (N)" no refleja los resultados de una búsqueda por dorsal (muestra el total del evento) | — | doing |
 | 52 | P2 | T-123 | [Perf] Auditoría Lighthouse/Core Web Vitals del frontend + fixes de alto impacto (fuentes, bundle, LCP/CLS/INP) | — | todo |
 | 53 | P2 | T-120 | [Landing/Fotógrafos] Landing de fotógrafos — **parcialmente cubierto por T-118 (#179)** que ya creó `/photographers`; rescopear a lo que falte (trust signals, FAQ accordion, link header → `/photographers` en vez de login) | — | todo |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |

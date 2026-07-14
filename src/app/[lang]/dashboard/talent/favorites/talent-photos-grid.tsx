@@ -345,7 +345,7 @@ export function TalentPhotosGrid({
         bulkActions={bulkActions}
         labels={selectionLabels}
         selectionResetKey={selectionResetKey}
-        toolbarClassName="sticky top-[var(--header-height)] z-30 -mx-4 px-3 md:mx-0 md:px-0"
+        toolbarClassName="sticky top-[var(--header-height)] z-30"
       />
 
       {hasMore && (
