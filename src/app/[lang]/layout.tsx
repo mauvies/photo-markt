@@ -41,7 +41,7 @@ export default async function LangLayout({
         <ScrollToTop />
         <GuestCartProvider>
           <GuestCartMerge cartRestoredMessage={dict.cart.cartRestored} />
-          <PhotographerBanner label={dict.nav.imPhotographer} />
+          <PhotographerBanner label={dict.nav.becomePhotographer} />
           <ConditionalHeader>
             <TranslationsProvider translations={dict.nav}>
               {/* Nav reads `useSearchParams()` (login-href + language switcher);

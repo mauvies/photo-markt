@@ -70,7 +70,7 @@ export function Nav() {
               href={buildLoginHref()}
               className="hidden text-sm transition-colors hover:text-foreground/70 md:inline-flex"
             >
-              {t('imPhotographer')}
+              {t('becomePhotographer')}
             </Link>
             <Link href={buildLoginHref()}>
               <Button
