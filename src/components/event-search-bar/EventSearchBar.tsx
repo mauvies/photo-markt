@@ -2,7 +2,6 @@
 
 import { format } from 'date-fns';
 import { enUS, es } from 'date-fns/locale';
-import { motion } from 'framer-motion';
 import { Clock, Search, SlidersHorizontal, X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
@@ -302,13 +301,12 @@ export function EventSearchBar({
             className="inset-0 h-dvh max-w-none translate-x-0 translate-y-0 rounded-none border-0 p-0"
           >
             <DialogTitle className="sr-only">Search events</DialogTitle>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="flex h-full flex-col bg-background"
-            >
+            {/* CSS entrance animation (tw-animate-css, same idiom as DialogContent)
+                instead of framer-motion — this was the only motion usage on the
+                home/events/explore routes, and it kept the whole library in their
+                first-load bundle (T-123). The motion exit animation never ran
+                anyway: Radix unmounts the content on close. */}
+            <div className="flex h-full animate-in flex-col bg-background duration-200 ease-out fade-in-0 slide-in-from-bottom-5">
               <div className="flex items-center justify-end px-4 py-6">
                 <DialogClose asChild>
                   <button
@@ -614,7 +612,7 @@ export function EventSearchBar({
                   </Button>
                 </div>
               </div>
-            </motion.div>
+            </div>
           </DialogContent>
         </Dialog>
 

@@ -280,6 +280,9 @@ export function EventCard({
         <div className="relative aspect-[16/11] w-full overflow-hidden bg-muted">
           {coverSrc ? (
             <>
+              {/* Skeleton sits BEHIND the image (earlier in DOM, both absolute)
+                  so a priority cover can paint progressively over it. */}
+              {imageStatus === 'loading' && <Skeleton className="absolute inset-0 rounded-none" />}
               <Image
                 src={coverSrc}
                 alt={`${name} cover`}
@@ -288,13 +291,26 @@ export function EventCard({
                 sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
                 priority={priority}
                 className={cn(
-                  'object-cover transition-[opacity,transform] duration-300',
-                  imageStatus === 'loaded' ? 'opacity-100 group-hover:scale-[1.03]' : 'opacity-0',
+                  'object-cover',
+                  // Above-the-fold (priority) covers are LCP candidates: they
+                  // must paint as soon as bytes arrive, never wait for
+                  // hydration + onLoad + a fade. Below-the-fold covers keep the
+                  // fade-in polish. (T-123)
+                  priority
+                    ? cn(
+                        'transition-transform duration-300 group-hover:scale-[1.03]',
+                        imageStatus === 'error' && 'opacity-0',
+                      )
+                    : cn(
+                        'transition-[opacity,transform] duration-300',
+                        imageStatus === 'loaded'
+                          ? 'opacity-100 group-hover:scale-[1.03]'
+                          : 'opacity-0',
+                      ),
                 )}
                 onLoad={() => setImageStatus('loaded')}
                 onError={() => setImageStatus('error')}
               />
-              {imageStatus === 'loading' && <Skeleton className="absolute inset-0 rounded-none" />}
               {imageStatus === 'error' && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground">
                   <ImageOff className="h-8 w-8 opacity-40" aria-hidden />
