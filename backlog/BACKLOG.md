@@ -11,6 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
+| 54 | P1 | T-130 | [Carrito/Bug] Las previews del carrito no se ven para usuarios autenticados (sí para invitados) — signed URL user-scoped vs thumbnail/admin | — | todo |
 | 55 | P2 | T-125 | [Perf] Peso de imágenes de la galería: backfill thumbnails legacy + variante small + cap de tiles eager (F2 de T-123) | — | todo |
 | 56 | P2 | T-127 | [EventCard] Reservar dos líneas para el título → altura de card consistente (info de abajo alineada entre cards) | — | todo |
 | 57 | P2 | T-128 | [Skeletons] Sincronizar los loading skeletons (home, listado, detalle) con el layout/márgenes post-rediseño → menos layout shift | T-127 | todo |
@@ -18,6 +19,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |
 | — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
+| — | P2 | T-129 | [DISEÑO] "Nearby first": implementar la geolocalización del buscador de eventos o podar el plumbing muerto (hallazgo de T-124) | **blocked:** decisión de producto (implementar vs podar) | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
 ### Clusters (tocan el mismo código — ejecutar contiguos y en orden)
