@@ -70,4 +70,49 @@ describe('PhotoAlbumViewer grid', () => {
     expect(loadings.slice(0, 5).every((l) => l !== 'lazy')).toBe(true);
     expect(loadings[5]).toBe('lazy');
   });
+
+  // Regression (T-123): priority tiles are LCP candidates — their image must be
+  // visible from the first paint (no `opacity-0` gate that waits for hydration
+  // + onLoad), with the loading skeleton rendered BEHIND the image (earlier in
+  // DOM order) so progressive decoding paints over it. Below-the-fold tiles
+  // keep the covering skeleton + fade-in.
+  it('does not gate priority-tile image visibility on onLoad; skeleton sits behind the image', () => {
+    const { container } = render(
+      <PhotoAlbumViewer items={makeBatch(['a', 'b', 'c', 'd', 'e', 'f'])} />,
+    );
+    const tiles = Array.from(container.querySelectorAll('.grid-cols-2 [role="button"]'));
+
+    // happy-dom never fires image load events, so every tile is still in its
+    // "loading" state here — exactly the pre-hydration/pre-load situation.
+    const priorityImg = tiles[0].querySelector('img');
+    expect(priorityImg?.className).not.toContain('opacity-0');
+
+    const prioritySkeleton = tiles[0].querySelector('[data-slot="skeleton"]');
+    expect(prioritySkeleton).not.toBeNull();
+    // Skeleton before the image in DOM order → painted behind it.
+    expect(
+      priorityImg &&
+        prioritySkeleton &&
+        prioritySkeleton.compareDocumentPosition(priorityImg) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('keeps the opacity fade + covering skeleton for below-the-fold tiles', () => {
+    const { container } = render(
+      <PhotoAlbumViewer items={makeBatch(['a', 'b', 'c', 'd', 'e', 'f'])} />,
+    );
+    const tiles = Array.from(container.querySelectorAll('.grid-cols-2 [role="button"]'));
+
+    const lazyImg = tiles[5].querySelector('img');
+    expect(lazyImg?.className).toContain('opacity-0');
+
+    const lazySkeleton = tiles[5].querySelector('[data-slot="skeleton"]');
+    expect(lazySkeleton).not.toBeNull();
+    // Covering skeleton comes after the image in DOM order.
+    expect(
+      lazyImg &&
+        lazySkeleton &&
+        lazyImg.compareDocumentPosition(lazySkeleton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
 });

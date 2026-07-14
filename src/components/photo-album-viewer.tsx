@@ -302,14 +302,16 @@ export default function PhotoAlbumViewer({
   );
 
   const renderExtras = useCallback(
-    (photoId: string) => {
+    (photoId: string, isPriorityTile = false) => {
       const state = loadStates[photoId] ?? 'loading';
 
       // While the image is in flight, cover the tile with a skeleton and
       // hide every action icon / badge so they don't float over an empty
       // placeholder. On error, swap the skeleton for a muted fallback.
+      // Priority (above-the-fold) tiles already render their skeleton behind
+      // the image so it can paint before hydration — don't cover them here.
       if (state === 'loading') {
-        return <Skeleton className="absolute inset-0 rounded-lg" />;
+        return isPriorityTile ? null : <Skeleton className="absolute inset-0 rounded-lg" />;
       }
       if (state === 'error') {
         return (
@@ -452,6 +454,13 @@ export default function PhotoAlbumViewer({
                 }
               }}
             >
+              {/* Priority tiles get their skeleton BEHIND the image (earlier in
+                  DOM) so the LCP image paints progressively over it; the
+                  below-the-fold tiles keep the covering skeleton + fade from
+                  renderExtras. (T-123) */}
+              {index < PRIORITY_TILE_COUNT && state === 'loading' && (
+                <Skeleton className="absolute inset-0 rounded-lg" />
+              )}
               <Image
                 src={photo.src}
                 alt={photo.alt}
@@ -460,8 +469,14 @@ export default function PhotoAlbumViewer({
                 sizes={GRID_SIZES}
                 unoptimized={photo.unoptimized ?? shouldSkipImageOptimization(photo.src)}
                 className={cn(
-                  'object-cover transition-opacity duration-200',
-                  state === 'loaded' ? 'opacity-100' : 'opacity-0',
+                  'object-cover',
+                  // LCP candidates must not wait for hydration + onLoad to paint.
+                  index < PRIORITY_TILE_COUNT
+                    ? state === 'error' && 'opacity-0'
+                    : cn(
+                        'transition-opacity duration-200',
+                        state === 'loaded' ? 'opacity-100' : 'opacity-0',
+                      ),
                   state === 'loaded' && canSelect && isSelected && 'opacity-75',
                 )}
                 onLoad={() =>
@@ -475,7 +490,7 @@ export default function PhotoAlbumViewer({
                   )
                 }
               />
-              {renderExtras(photoId)}
+              {renderExtras(photoId, index < PRIORITY_TILE_COUNT)}
             </div>
           );
         })}

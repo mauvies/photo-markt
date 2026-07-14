@@ -1,28 +1,22 @@
 import type { Metadata, Viewport } from 'next';
-import { Geist_Mono, Inter, Inter_Tight, Syne } from 'next/font/google';
+import { Inter, Inter_Tight } from 'next/font/google';
 import './globals.css';
+import { env } from '@/env.mjs';
 import { getSiteUrl } from '@/lib/get-site-url';
 import { defaultLocale } from '@/lib/i18n/config';
 
+// Only the two families the UI actually renders (T-123): Inter (body) and
+// Inter Tight (headings). Syne was mapped to --font-wordmark but nothing used
+// it; Geist Mono styled three incidental spots now covered by the system mono
+// stack. Each extra family here is a render-critical preload on every page.
 const inter = Inter({
   variable: '--font-inter',
-  subsets: ['latin'],
-});
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
   subsets: ['latin'],
 });
 
 const interTight = Inter_Tight({
   variable: '--font-inter-tight',
   subsets: ['latin'],
-});
-
-const syne = Syne({
-  variable: '--font-syne',
-  subsets: ['latin'],
-  weight: ['700', '800'],
 });
 
 // Explicit viewport. `viewportFit: 'cover'` is the part that matters: without
@@ -80,11 +74,18 @@ export default function RootLayout({
   // would opt every page in the app into dynamic rendering; instead the
   // [lang] layout applies the correct value client-side via <HtmlLangSync>.
   return (
-    <html
-      lang={defaultLocale}
-      className={`${inter.variable} ${geistMono.variable} ${interTight.variable} ${syne.variable}`}
-    >
-      <body className="antialiased">{children}</body>
+    <html lang={defaultLocale} className={`${inter.variable} ${interTight.variable}`}>
+      <body className="antialiased">
+        {/* Event covers and purchased photos load from Supabase Storage signed
+            URLs (a different origin in production). React hoists this <link>
+            into <head> during SSR, so the browser warms DNS+TLS while the HTML
+            still parses — shaving the handshake off the first (often LCP)
+            image. A literal tag, not react-dom preconnect(): from a Server
+            Component the hint only reaches the flight payload (client-side,
+            post-JS — too late). (T-123) */}
+        <link rel="preconnect" href={new URL(env.NEXT_PUBLIC_SUPABASE_URL).origin} />
+        {children}
+      </body>
     </html>
   );
 }
