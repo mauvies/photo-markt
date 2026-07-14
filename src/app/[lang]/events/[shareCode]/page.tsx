@@ -516,7 +516,7 @@ export default async function EventPage({
           retryFailedButton: dict.newEvent.uploadRetryFailedButton,
         }}
       >
-        <div className="mx-auto max-w-[1400px] w-full flex-1 px-34 py-10 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1400px] w-full flex-1 px-3 py-4 sm:py-10 sm:px-6 lg:px-8">
           <div className="mb-6 flex items-start justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold">{event.name}</h1>

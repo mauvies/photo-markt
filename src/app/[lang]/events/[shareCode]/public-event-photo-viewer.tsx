@@ -37,6 +37,7 @@ import { useLoadMorePhotos } from '@/hooks/use-load-more-photos';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
 import { type EventBulkActionKey, eventBulkActionKeys } from '@/lib/event-bulk-actions';
 import { filterEventPhotoPages, filterEventPhotos } from '@/lib/event-photo-filter';
+import { resolveGalleryCounts } from '@/lib/gallery-photo-count';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import { getEventPhotoDownloadUrlAction, loadMoreEventPhotos } from './actions';
 import { buildBuckets, type FaceSearchResultsLabels } from './face-search-shared';
@@ -533,6 +534,20 @@ export function PublicEventPhotoViewer({
     [bibSearch.matchedPhotos, filter, myPhotoIds],
   );
 
+  // The toolbar count reflects what's currently shown: during a bib search
+  // that's the number of matches (per All/My tab), not the event total (T-122).
+  const { all: displayedAllCount, mine: displayedMineCount } = useMemo(
+    () =>
+      resolveGalleryCounts({
+        bibActive,
+        matchedPhotos: bibSearch.matchedPhotos,
+        mineIds: myPhotoIds,
+        eventTotal: totalCount,
+        mineTotal: myPhotoIds.size,
+      }),
+    [bibActive, bibSearch.matchedPhotos, myPhotoIds, totalCount],
+  );
+
   // ── Single-photo download (lightbox) ───────────────────────────────────
   const isPhotoDownloadable = useCallback(
     (photoId: string) => isFreeEvent || isOwner || purchasedPhotoIds.has(photoId),
@@ -745,7 +760,7 @@ export function PublicEventPhotoViewer({
               selectable={canSelect}
               labels={selectionLabels}
               selectionResetKey={selectionResetKey}
-              toolbarClassName="sticky top-[var(--header-height)] -mx-4 px-3 md:mx-0 md:px-0"
+              toolbarClassName="sticky top-[var(--header-height)]"
               gridClassName="-mx-3.5 sm:mx-0"
               toolbarLeading={
                 <Button type="button" variant="outline" size="sm" onClick={faceSearch.clearMatches}>
@@ -765,8 +780,8 @@ export function PublicEventPhotoViewer({
           selectable={canSelect}
           labels={selectionLabels}
           selectionResetKey={selectionResetKey}
-          toolbarClassName=" sticky top-[var(--header-height)] -mx-4 px-3 md:mx-0 md:px-0"
-          gridClassName="-mx-3.5 sm:mx-0"
+          toolbarClassName=" sticky top-[var(--header-height)]"
+          gridClassName=""
           loadMore={
             bibActive
               ? undefined
@@ -779,11 +794,13 @@ export function PublicEventPhotoViewer({
                 onValueChange={setFilter}
                 allLabel={filterLabels.all}
                 mineLabel={filterLabels.mine}
-                allCount={totalCount}
-                mineCount={myPhotoIds.size}
+                allCount={displayedAllCount}
+                mineCount={displayedMineCount}
               />
-            ) : totalCount > 0 ? (
-              <EventPhotoCountLabel label={photosCountLabel.replace('{n}', String(totalCount))} />
+            ) : displayedAllCount > 0 ? (
+              <EventPhotoCountLabel
+                label={photosCountLabel.replace('{n}', String(displayedAllCount))}
+              />
             ) : undefined
           }
           emptyState={

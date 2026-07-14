@@ -62,7 +62,7 @@ export default async function PhotographerLayout({ children }: { children: React
       />
       <SidebarInset>
         <DashboardTopHeader user={sidebarUser} activeRole={activeRole} />
-        <div className="flex flex-1 flex-col gap-6 p-4 pb-20 md:pb-4">{children}</div>
+        <div className="flex flex-1 flex-col gap-6 px-3 py-4 pb-20 md:pb-4">{children}</div>
       </SidebarInset>
       <PhotographerBottomNav
         user={sidebarUser}

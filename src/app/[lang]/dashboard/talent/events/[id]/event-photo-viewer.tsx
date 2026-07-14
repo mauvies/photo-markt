@@ -45,6 +45,7 @@ import {
   filterEventPhotoPages,
   filterEventPhotos,
 } from '@/lib/event-photo-filter';
+import { resolveGalleryCounts } from '@/lib/gallery-photo-count';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
   addPhotosToMyPhotosAction,
@@ -466,6 +467,20 @@ export function EventPhotoViewer({
     bibHasData,
   );
 
+  // The toolbar count reflects what's currently shown: during a bib search
+  // that's the number of matches (per All/My tab), not the event total (T-122).
+  const { all: displayedAllCount, mine: displayedMineCount } = useMemo(
+    () =>
+      resolveGalleryCounts({
+        bibActive,
+        matchedPhotos: bibSearch.matchedPhotos,
+        mineIds: uploadedPhotoIds,
+        eventTotal: totalCount,
+        mineTotal: uploadedPhotoIds.size,
+      }),
+    [bibActive, bibSearch.matchedPhotos, uploadedPhotoIds, totalCount],
+  );
+
   // ── Per-photo download (lightbox) ──────────────────────────────────────
   const isPhotoDownloadable = useCallback(
     (photoId: string) => isFreeEvent || purchasedPhotoIds.has(photoId),
@@ -688,7 +703,7 @@ export function EventPhotoViewer({
   // side (8px total scrollWidth over the viewport, confirmed via DevTools),
   // which mobile browsers rendered as a small, permanent zoom-in on load —
   // real horizontal overflow, not a viewport/scale bug.
-  const toolbarClassName = 'sticky top-[var(--header-height)] -mx-3 px-3 md:mx-0 md:px-0';
+  const toolbarClassName = 'sticky top-[var(--header-height)] -mx-3 px-3';
   // Bleed the grid nearly full-width on mobile, leaving a 2px gap at each edge
   // (-mx-3.5 against the page's px-4); padded again from sm up so the toolbar
   // stays the only inset chrome on phones.
@@ -775,11 +790,13 @@ export function EventPhotoViewer({
               onValueChange={setFilter}
               allLabel={filterLabels.all}
               mineLabel={filterLabels.mine}
-              allCount={totalCount}
-              mineCount={uploadedPhotoIds.size}
+              allCount={displayedAllCount}
+              mineCount={displayedMineCount}
             />
-          ) : totalCount > 0 ? (
-            <EventPhotoCountLabel label={photosCountLabel.replace('{n}', String(totalCount))} />
+          ) : displayedAllCount > 0 ? (
+            <EventPhotoCountLabel
+              label={photosCountLabel.replace('{n}', String(displayedAllCount))}
+            />
           ) : undefined
         }
         emptyState={

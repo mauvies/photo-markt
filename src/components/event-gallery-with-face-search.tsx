@@ -152,7 +152,7 @@ export function EventGalleryWithFaceSearch({
           matchedPhotos: bibMatched?.matchedPhotos ?? [],
         }}
       >
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
           {findPhotos.visible ? (
             <FindMyPhotosBanner
               key="find-my-photos-banner"
