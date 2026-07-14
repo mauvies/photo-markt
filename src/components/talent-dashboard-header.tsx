@@ -1,6 +1,6 @@
 'use client';
 
-import { Package, Search, ShoppingBag, ShoppingCart, User } from 'lucide-react';
+import { Heart, Search, ShoppingBag, ShoppingCart, User } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { BottomNav } from '@/components/bottom-nav';
@@ -56,7 +56,7 @@ export function TalentDashboardHeader({
 
   const talentNavLinks = [
     { href: '/dashboard/talent/events', label: navLabels.explore, icon: Search },
-    { href: '/dashboard/talent/favorites', label: navLabels.myPhotos, icon: Package },
+    { href: '/dashboard/talent/favorites', label: navLabels.myPhotos, icon: Heart },
     { href: '/dashboard/talent/orders', label: navLabels.orders, icon: ShoppingBag },
     { href: '/dashboard/talent/profile', label: navLabels.profile, icon: User },
     // Privacy lives in the avatar dropdown, not the top nav — it's a
