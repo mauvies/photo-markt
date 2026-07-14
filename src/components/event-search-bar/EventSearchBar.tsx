@@ -259,9 +259,9 @@ export function EventSearchBar({
           <button
             type="button"
             onClick={() => setMobileDialogOpen(true)}
-            className="flex h-14 items-center rounded-full border bg-background px-8 gap-3 shadow-lg"
+            className="flex h-12 items-center rounded-full border bg-background px-8 gap-3 shadow-lg sm:h-14"
           >
-            <Search className="h-5 w-5 text-foreground/80" />
+            <Search className="w-4 h-6 md:h-8 md:w-8 text-foreground/80" />
             <span className="font-medium tracking-wider text-foreground/80">{t('mobileText')}</span>
           </button>
           {showMobileFilters && (

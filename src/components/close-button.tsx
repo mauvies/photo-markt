@@ -40,7 +40,7 @@ export function CloseButton({ className = '' }: { className?: string }) {
       type="button"
       aria-label="Close"
       onClick={handleClick}
-      className={`inline-flex h-9 w-9 items-center justify-center text-foreground/70 hover:text-foreground/60 transition-colors ${className}`}
+      className={`inline-flex h-10 w-10 items-center justify-center text-foreground/70 hover:text-foreground/60 hover:bg-accent/80 rounded-full transition-colors ${className}`}
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"

@@ -10,7 +10,7 @@ import { usePathname } from 'next/navigation';
  * cart/checkout — stay footer-free so the footer doesn't compete with the
  * task at hand (industry-standard behavior).
  */
-const STATIC_FOOTER_PATHS = ['/terms', '/privacy-policy', '/about', '/contact'];
+const STATIC_FOOTER_PATHS = ['/terms', '/privacy-policy', '/about', '/contact', '/photographers'];
 
 export function ConditionalFooter({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

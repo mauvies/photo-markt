@@ -1,8 +1,8 @@
-import Image from 'next/image';
 import Link from 'next/link';
 import { FacebookIcon, InstagramIcon, XIcon } from '@/components/brand-icons';
 import { CookiePreferencesButton } from '@/components/cookie-preferences-button';
 import { LanguageSwitcher } from '@/components/language-switcher';
+import { LogoLink } from '@/components/logo-link';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { localizedPath } from '@/lib/i18n/localized-path';
 
@@ -26,15 +26,15 @@ export function Footer({ dict, lang }: { dict: Dictionary; lang: string }) {
     {
       title: t.productTitle,
       links: [
-        { label: t.howItWorks, href: lp('/#how-it-works') },
-        { label: t.pricing, href: lp('/#pricing') },
+        { label: t.howItWorks, href: lp('/photographers#how-it-works') },
+        { label: t.pricing, href: lp('/photographers#pricing') },
       ],
     },
     {
       title: t.photographersTitle,
       links: [
-        { label: t.becomePhotographer, href: lp('/signup') },
-        { label: t.photographerPricing, href: lp('/#pricing') },
+        { label: t.becomePhotographer, href: lp('/photographers') },
+        { label: t.photographerPricing, href: lp('/photographers#pricing') },
       ],
     },
     {
@@ -72,15 +72,11 @@ export function Footer({ dict, lang }: { dict: Dictionary; lang: string }) {
         <div className="grid gap-10 lg:grid-cols-12">
           {/* Brand */}
           <div className="space-y-4 lg:col-span-4">
-            <Link href={lp('/')} className="inline-flex items-center">
-              <Image
-                src="/logo.svg"
-                alt="Photo Markt"
-                className="h-9 w-auto"
-                width={90}
-                height={90}
-              />
-            </Link>
+            <LogoLink
+              href={lp('/')}
+              className="inline-flex items-center"
+              imgClassName="h-9 w-auto"
+            />
             <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">{t.tagline}</p>
             <div className="flex items-center gap-3">
               {socials.map(({ key, label, Icon, href }) =>

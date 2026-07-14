@@ -26,6 +26,7 @@
     "login": "Iniciar sesión",
     "loginShort": "Entrar",
     "getStarted": "Empezar",
+    "becomePhotographer": "Hazte fotógrafo",
     "goToDashboard": "Ir al panel",
     "explore": "Explorar",
     "myPhotos": "Mis fotos",
@@ -60,9 +61,9 @@
     "tooltip": "Compartir"
   },
   "home": {
-    "heroHeadline1": "Tus Mejores Fotos",
-    "heroHeadline2": "Entregadas Al Instante.",
-    "heroSubtitle": "Conectamos fotógrafos con talentos. Encuentra tus fotos en segundos con nuestra búsqueda avanzada.",
+    "heroHeadline1": "Encuentra Tus",
+    "heroHeadline2": "Fotos En Segundos.",
+    "heroSubtitle": "Usa nuestra busqueda inteligente para encontrar las fotos de tus eventos o sesiones favoritas.",
     "heroDisclaimer": "Sin cuenta · Compra en minutos · Descarga instantánea",
     "haveAccessCode": "¿Tienes un código de acceso?",
     "accessPrivateEvent": "Acceder a evento privado",
@@ -81,7 +82,7 @@
     "ctaSubtitle": "Únete a fotógrafos y talentos que usan Photo Markt para que los grandes momentos nunca se pierdan.",
     "ctaCreateAccount": "Crear cuenta gratis",
     "ctaHaveAccount": "Ya tengo una cuenta",
-    "featuredEventsTitle": "Eventos destacados",
+    "featuredEventsTitle": "Últimos eventos",
     "exploreAllEvents": "Ver todos los eventos",
     "noEventsAvailableYet": "No hay eventos disponibles aún.",
     "statusAll": "Todos",
@@ -1503,6 +1504,12 @@
         "bullets": []
       }
     ]
+  },
+  "photographersPage": {
+    "heroHeadline1": "Vende Tus",
+    "heroHeadline2": "Fotos De Eventos.",
+    "heroSubtitle": "Publica tus eventos, deja que el talento se encuentre con IA y cobra por cada foto que vendas.",
+    "heroCta": "Empezar como fotógrafo"
   },
   "aboutPage": {
     "title": "Sobre nosotros",

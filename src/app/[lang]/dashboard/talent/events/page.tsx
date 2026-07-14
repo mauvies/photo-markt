@@ -1,9 +1,7 @@
-import { EventSearchBar } from '@/components/event-search-bar';
+import { EventsExploreView } from '@/components/events-explore-view';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
-import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { getFilterOptionsAction } from './actions';
-import { ExplorePageContent } from './explore-page-content';
 
 export default async function TalentExplorePage({
   params,
@@ -16,52 +14,26 @@ export default async function TalentExplorePage({
     dateFrom?: string;
     dateTo?: string;
     preset?: string;
+    photographer?: string;
   }>;
 }) {
   const { lang } = await params;
-  const { where, activity, dateFrom, dateTo, preset } = await searchParams;
+  const [dict, filterOptions, resolvedSearchParams] = await Promise.all([
+    getDictionary(lang as Locale),
+    getFilterOptionsAction(),
+    searchParams,
+  ]);
 
-  const dict = await getDictionary(lang as Locale);
-  const filterOptions = await getFilterOptionsAction();
-
-  const key = `${where ?? ''}-${activity ?? ''}-${dateFrom ?? ''}-${dateTo ?? ''}`;
-
+  // Identical browse-events view to the public home page — only the header
+  // differs (this page renders inside the talent dashboard chrome). Event
+  // cards and access codes stay inside the dashboard (`/dashboard/talent/events/<code>`).
   return (
-    <div className="space-y-6">
-      <div className="flex justify-center">
-        <TranslationsProvider translations={dict.eventSearchBar}>
-          <EventSearchBar
-            key={key}
-            variant="hero"
-            initialWhere={where ?? ''}
-            initialActivity={activity ?? ''}
-            initialDateFrom={dateFrom ?? ''}
-            initialDateTo={dateTo ?? ''}
-            initialPreset={preset}
-            searchHref="/dashboard/talent/events"
-          />
-        </TranslationsProvider>
-      </div>
-
-      <TranslationsProvider
-        translations={{ ...dict.eventFilterBar, ...dict.eventCard, activities: dict.activities }}
-      >
-        <ExplorePageContent
-          key={key}
-          initialFilterOptions={filterOptions}
-          loadOnMount={true}
-          initialWhere={where}
-          initialActivity={activity}
-          initialDateFrom={dateFrom}
-          initialDateTo={dateTo}
-          hideTopFilters={true}
-          showFindMe={false}
-          // Forwarded into the inner EventSearchBar so access codes typed
-          // here land on the talent-dashboard event detail route (which
-          // now resolves share codes — see `events/[id]/page.tsx`).
-          eventLinkPrefix="/dashboard/talent/events"
-        />
-      </TranslationsProvider>
-    </div>
+    <EventsExploreView
+      dict={dict}
+      filterOptions={filterOptions}
+      searchParams={resolvedSearchParams}
+      basePath="/dashboard/talent/events"
+      eventLinkPrefix="/dashboard/talent/events"
+    />
   );
 }

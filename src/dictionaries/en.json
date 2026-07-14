@@ -26,6 +26,7 @@
     "login": "Log in",
     "loginShort": "Log in",
     "getStarted": "Get started",
+    "becomePhotographer": "Become a photographer",
     "goToDashboard": "Go to dashboard",
     "explore": "Explore",
     "myPhotos": "My photos",
@@ -60,9 +61,9 @@
     "tooltip": "Share"
   },
   "home": {
-    "heroHeadline1": "Your Best Shots",
-    "heroHeadline2": "Delivered Fast.",
-    "heroSubtitle": "Bridging the gap between photographers and athletes. Discover your photos in seconds through our advanced gallery search.",
+    "heroHeadline1": "Find Your",
+    "heroHeadline2": "Photos In Seconds.",
+    "heroSubtitle": "Use our smart search to find photos from your favorite events or sessions.",
     "heroDisclaimer": "No account needed · Buy in minutes · Instant downloads",
     "haveAccessCode": "Have an access code?",
     "accessPrivateEvent": "Access private event",
@@ -81,7 +82,7 @@
     "ctaSubtitle": "Join photographers and talents who use Photo Markt to make sure great moments never get lost in someone's camera roll.",
     "ctaCreateAccount": "Create your free account",
     "ctaHaveAccount": "I already have an account",
-    "featuredEventsTitle": "Featured Events",
+    "featuredEventsTitle": "Latest events",
     "exploreAllEvents": "Explore all events",
     "noEventsAvailableYet": "No events available yet.",
     "statusAll": "All",
@@ -1503,6 +1504,12 @@
         "bullets": []
       }
     ]
+  },
+  "photographersPage": {
+    "heroHeadline1": "Sell Your",
+    "heroHeadline2": "Event Photos.",
+    "heroSubtitle": "Publish your events, let talent find themselves with AI, and get paid for every photo you sell.",
+    "heroCta": "Start as a photographer"
   },
   "aboutPage": {
     "title": "About us",
