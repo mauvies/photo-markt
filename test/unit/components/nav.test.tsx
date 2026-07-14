@@ -41,6 +41,16 @@ afterEach(() => {
 // non-cart surface (/) added/removed the button's DOM footprint entirely,
 // shifting the language switcher next to it. The slot must stay reserved
 // on both kinds of route.
+// T-120: the signed-out "become a photographer" link must point to the
+// /photographers landing (it temporarily pointed to login after T-118).
+describe('Nav become-photographer link (T-120)', () => {
+  it('links to the localized /photographers landing for signed-out visitors', () => {
+    const { getByText } = render(<Nav />);
+    const link = getByText('becomePhotographer').closest('a');
+    expect(link?.getAttribute('href')).toBe('/es/photographers');
+  });
+});
+
 describe('Nav cart slot (T-114 layout-shift regression)', () => {
   it('reserves the same-size cart slot on a non-cart route as on a cart route', () => {
     mockPathname = '/es';

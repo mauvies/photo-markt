@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 53 | P2 | T-120 | [Landing/Fotógrafos] Landing de fotógrafos — **parcialmente cubierto por T-118 (#179)** que ya creó `/photographers`; rescopear a lo que falte (trust signals, FAQ accordion, link header → `/photographers` en vez de login) | — | todo |
+| 53 | P2 | T-120 | [Landing/Fotógrafos] Landing de fotógrafos — **parcialmente cubierto por T-118 (#179)** que ya creó `/photographers`; rescopear a lo que falte (trust signals, FAQ accordion, link header → `/photographers` en vez de login) | — | doing |
 | 54 | P2 | T-124 | [Perf] SSR de los eventos iniciales del grid home/explore (F1 de T-123 — LCP driver #1; decisión "nearby first" embebida) | — | todo |
 | 55 | P2 | T-125 | [Perf] Peso de imágenes de la galería: backfill thumbnails legacy + variante small + cap de tiles eager (F2 de T-123) | — | todo |
 | 56 | P2 | T-127 | [EventCard] Reservar dos líneas para el título → altura de card consistente (info de abajo alineada entre cards) | — | todo |

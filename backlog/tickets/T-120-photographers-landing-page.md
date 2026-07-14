@@ -1,7 +1,7 @@
 # T-120 · Landing dedicada para fotógrafos (sell-side, optimizada a conversión)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `feat/photographers-landing`
 - **OpenSpec change:** —  (página nueva + link de header/footer; UI con requerimiento claro, implementar directo)

@@ -1510,7 +1510,40 @@
     "heroHeadline1": "Vende Tus",
     "heroHeadline2": "Fotos De Eventos.",
     "heroSubtitle": "Publica tus eventos, deja que el talento se encuentre con IA y cobra por cada foto que vendas.",
-    "heroCta": "Empezar como fotógrafo"
+    "heroCta": "Empezar como fotógrafo",
+    "trustLabel": "Por qué Photo Markt",
+    "trustHeadline": "Condiciones honestas, sin sorpresas.",
+    "trustStripeTitle": "Pagos seguros con Stripe",
+    "trustStripeBody": "El checkout y los cobros funcionan sobre Stripe. Conectas tu propia cuenta y cada venta se transfiere directamente a ti.",
+    "trustFreeTitle": "Empieza gratis",
+    "trustFreeBody": "Sin costo inicial ni cuota mensual en el plan Free — solo pagas una comisión cuando de verdad vendes.",
+    "trustEconomicsTitle": "Te quedas con la gran mayoría",
+    "trustEconomicsBody": "Te quedas con el 88–95% de cada venta según tu plan, y Photo Markt absorbe la tarifa de transferencia de Stripe.",
+    "trustPrivacyTitle": "Privacidad primero",
+    "trustPrivacyBody": "Las selfies se usan solo para encontrar coincidencias y nunca se almacenan, y los eventos con menores tienen protección extra.",
+    "faqTitle": "Preguntas frecuentes",
+    "faqItems": [
+      {
+        "question": "¿Cuánto me quedo por cada venta?",
+        "answer": "Entre el 88% y el 95%, según tu plan: la comisión es 12% en Free, 8% en Starter y 5% en Pro. Photo Markt absorbe la tarifa de transferencia de Stripe, así que siempre recibes tu monto neto completo."
+      },
+      {
+        "question": "¿Cómo y cuándo cobro?",
+        "answer": "A través de Stripe Connect. Vinculas tu cuenta de Stripe desde el dashboard y tu parte de cada pedido completado se transfiere directamente a ella — sin monto mínimo ni esperas mensuales."
+      },
+      {
+        "question": "¿Qué cuesta empezar?",
+        "answer": "Nada. El plan Free no tiene cuota mensual — solo pagas comisión cuando se vende una foto. Los planes de pago son opcionales y simplemente reducen esa comisión."
+      },
+      {
+        "question": "¿Cómo se protegen mis fotos del robo?",
+        "answer": "Los compradores solo ven previsualizaciones con marca de agua y calidad reducida. Los originales en alta resolución se entregan solo tras la compra, mediante enlaces de descarga de corta duración."
+      },
+      {
+        "question": "¿Tengo que etiquetar mis fotos a mano?",
+        "answer": "No. El reconocimiento facial por IA indexa tus fotos automáticamente al subirlas, para que los compradores se encuentren con una selfie o un dorsal."
+      }
+    ]
   },
   "aboutPage": {
     "title": "Sobre nosotros",

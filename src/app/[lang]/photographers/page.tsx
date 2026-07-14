@@ -1,5 +1,15 @@
-import { ArrowRight, Camera, Download, Sparkles } from 'lucide-react';
+import {
+  ArrowRight,
+  Camera,
+  Download,
+  Lock,
+  Rocket,
+  ShieldCheck,
+  Sparkles,
+  Wallet,
+} from 'lucide-react';
 import Link from 'next/link';
+import { PhotographersFaq } from '@/components/photographers-faq';
 import { PricingSection } from '@/components/pricing-section';
 import { Button } from '@/components/ui/button';
 import { getUser } from '@/database/server';
@@ -13,6 +23,15 @@ export default async function PhotographersPage({ params }: { params: Promise<{ 
   const p = dict.photographersPage;
   const signupHref = localizedPath(lang, '/signup');
   const loginHref = localizedPath(lang, '/login');
+
+  // Genuine trust signals only (T-120) — no fabricated social proof or
+  // invented traction numbers. Claims match CLAUDE.md §Payments.
+  const trustSignals = [
+    { Icon: ShieldCheck, title: p.trustStripeTitle, body: p.trustStripeBody },
+    { Icon: Rocket, title: p.trustFreeTitle, body: p.trustFreeBody },
+    { Icon: Wallet, title: p.trustEconomicsTitle, body: p.trustEconomicsBody },
+    { Icon: Lock, title: p.trustPrivacyTitle, body: p.trustPrivacyBody },
+  ];
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -104,10 +123,36 @@ export default async function PhotographersPage({ params }: { params: Promise<{ 
         </div>
       </section>
 
+      {/* Trust signals */}
+      <section className="border-y bg-muted/30 py-20 sm:py-24">
+        <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              {p.trustLabel}
+            </p>
+            <h2 className="mt-4 text-3xl font-semibold sm:text-4xl">{p.trustHeadline}</h2>
+          </div>
+          <div className="mx-auto mt-14 grid max-w-5xl gap-10 sm:grid-cols-2 lg:grid-cols-4">
+            {trustSignals.map(({ Icon, title, body }) => (
+              <div key={title} className="flex flex-col items-center gap-3 text-center">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl border bg-background">
+                  <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
+                </div>
+                <h3 className="text-base font-semibold tracking-tight">{title}</h3>
+                <p className="text-sm leading-relaxed text-muted-foreground">{body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Pricing */}
       <div id="pricing" className="scroll-mt-20">
         <PricingSection isAuthenticated={!!user} t={dict.pricingSection} />
       </div>
+
+      {/* FAQ */}
+      <PhotographersFaq title={p.faqTitle} items={p.faqItems} />
 
       {/* Final CTA */}
       <section className="bg-linear-to-br from-primary/10 via-primary/5 to-background py-20 sm:py-24">

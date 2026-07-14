@@ -30,8 +30,8 @@ describe('PhotographerBanner', () => {
     mockUser = null;
     const { getByText, container } = render(<PhotographerBanner label="Soy fotógrafo" />);
     expect(getByText('Soy fotógrafo')).toBeTruthy();
-    // Temporarily links to login (locale-prefixed) while the landing is improved.
-    expect(container.querySelector('a')?.getAttribute('href')).toBe('/es/login');
+    // T-120: points to the photographers landing (locale-prefixed), not login.
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('/es/photographers');
   });
 
   it('renders nothing for an authenticated user', () => {

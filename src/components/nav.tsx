@@ -63,12 +63,10 @@ export function Nav() {
         ) : (
           <>
             {/* Desktop only — the mobile equivalent is the full-width
-                  "I'm a photographer" banner above the header (home only).
-                  Temporarily points to login while the /photographers landing
-                  is being improved. */}
+                  "I'm a photographer" banner above the header (home only). */}
             <Link
-              href={buildLoginHref()}
-              className="hidden text-sm transition-colors hover:text-foreground/70 md:inline-flex"
+              href={lp('/photographers')}
+              className="hidden items-center gap-1.5 text-sm transition-colors hover:text-foreground/70 md:inline-flex"
             >
               {t('becomePhotographer')}
             </Link>
