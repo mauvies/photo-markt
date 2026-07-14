@@ -161,6 +161,7 @@ export async function PhotographerPublicProfile({
                   photos: dict.eventCard.photos,
                   noPhotosYet: dict.eventCard.noPhotosYet,
                   imageUnavailable: dict.eventCard.imageUnavailable,
+                  share: dict.eventCard.share,
                 }}
               />
             ))}

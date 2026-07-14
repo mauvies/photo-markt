@@ -2,7 +2,6 @@
 
 import { Filter, Loader2, Search } from 'lucide-react';
 import { EventCard } from '@/components/event-card';
-import { EventSaveButton } from '@/components/event-save-button';
 import { Button } from '@/components/ui/button';
 import type { EventWithStats } from '@/hooks/use-event-search';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
@@ -14,7 +13,7 @@ type EventGridT = Pick<
 > &
   Pick<
     Dictionary['eventCard'],
-    'photo' | 'photos' | 'noPhotosYet' | 'comingSoon' | 'imageUnavailable'
+    'photo' | 'photos' | 'noPhotosYet' | 'comingSoon' | 'imageUnavailable' | 'share'
   > & {
     activities: Dictionary['activities'];
   };
@@ -105,6 +104,7 @@ export function EventGrid({
             hrefParam={event.slug ?? event.id}
             name={event.name}
             date={event.date}
+            sessionTime={event.session_time}
             city={event.city}
             country={event.country}
             activity={event.activity}
@@ -115,17 +115,18 @@ export function EventGrid({
             photographer={{
               username: event.photographerUsername,
               displayName: event.photographerDisplayName,
+              avatarUrl: event.photographerAvatarUrl,
             }}
             status={event.status}
             linkPrefix={eventLinkPrefix}
             priority={index < 4}
-            saveSlot={<EventSaveButton eventId={event.id} />}
             t={{
               photo: t('photo'),
               photos: t('photos'),
               noPhotosYet: t('noPhotosYet'),
               comingSoon: t('comingSoon'),
               imageUnavailable: t('imageUnavailable'),
+              share: t('share'),
             }}
           />
         ))}

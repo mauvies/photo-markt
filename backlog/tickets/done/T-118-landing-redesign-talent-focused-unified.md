@@ -1,11 +1,11 @@
 # T-118 · Rediseño del landing: enfocado en talento, home público/autenticado unificado, header simplificado
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
-- **Rama:** `feat/landing-redesign-talent-focused`
-- **OpenSpec change:** **probable sí** — feature grande y algo ambigua (unifica landing + Explore, reestructura header/nav de talento en varias superficies); crear el change al ejecutar (`/opsx:propose` → `/opsx:apply`) para capturar el diseño del header unificado antes de codear.
-- **PR:** —
+- **Rama:** `feat/landing-explore-and-photographer-entry`
+- **OpenSpec change:** — (se implementó directo; la unificación resultó un requerimiento claro apoyado en el patrón paginado ya existente)
+- **PR:** #179
 
 ## Requerimiento
 El landing actual mezcla dos audiencias (talentos que buscan fotos + fotógrafos, vía la sección de

@@ -25,6 +25,10 @@ export type EventWithStats = {
   pricePerPhoto: number | null;
   photographerUsername: string | null;
   photographerDisplayName: string | null;
+  /** Photographer avatar (T-119) — null when the profile has none. */
+  photographerAvatarUrl?: string | null;
+  /** Manual session time (T-106/T-119) — null when unset. */
+  session_time?: string | null;
   status: EventStatus;
 };
 
