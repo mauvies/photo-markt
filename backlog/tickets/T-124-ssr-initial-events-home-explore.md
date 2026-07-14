@@ -1,7 +1,7 @@
 # T-124 · [Perf] Server-renderizar los eventos iniciales del grid de home/explore (LCP driver #1 de T-123)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno (pero lleva una decisión de producto embebida: qué orden mostrar sin geolocalización — ver Notas)
 - **Rama:** `perf/ssr-initial-events-grid`
 - **OpenSpec change:** —  (se crea al ejecutar si el diseño lo amerita)
