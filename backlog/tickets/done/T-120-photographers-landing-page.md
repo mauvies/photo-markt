@@ -1,11 +1,11 @@
 # T-120 · Landing dedicada para fotógrafos (sell-side, optimizada a conversión)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/photographers-landing`
 - **OpenSpec change:** —  (página nueva + link de header/footer; UI con requerimiento claro, implementar directo)
-- **PR:** —
+- **PR:** #184
 - **Dep:** T-118 (el rediseño del landing saca el pricing/contenido de fotógrafo del landing principal y deja el `PricingSection` "reservado para esta página", y reestructura el header donde este ticket añade el link centrado — **ejecutar después de T-118 con merge previo**)
 
 ## Requerimiento
