@@ -1,11 +1,11 @@
 # T-127 · EventCard: reservar dos líneas para el título (altura de card consistente)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/event-card-title-two-line-height`  (tipo = fix)
 - **OpenSpec change:** —  (UI de un solo componente, requerimiento claro)
-- **PR:** —
+- **PR:** #192
 
 ## Requerimiento
 En el `EventCard` rediseñado (T-119, PR #180), el área del título **crece con el largo del título**:
