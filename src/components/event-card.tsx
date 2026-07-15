@@ -363,7 +363,10 @@ export function EventCard({
         {/* Title + (explore) share/save icons */}
         <div className="flex items-start justify-between gap-1">
           <Link href={eventHref} className="block min-w-0 flex-1">
-            <h3 className="line-clamp-2 text-lg font-semibold leading-snug text-foreground">
+            {/* min-h reserves two lines of text-lg/leading-snug (2 * 1.125rem * 1.375)
+                so a one-line title doesn't collapse the block and misalign the info
+                below it across cards in the same grid row (T-127). */}
+            <h3 className="line-clamp-2 min-h-[3.1rem] text-lg font-semibold leading-snug text-foreground">
               {name}
             </h3>
           </Link>

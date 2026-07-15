@@ -122,4 +122,23 @@ describe('EventCard (T-119 redesign)', () => {
     expect(queryByTestId('share-btn')).toBeNull();
     expect(container.querySelector('a[href^="/es/photographer/"]')).toBeNull();
   });
+
+  it('reserves two-line height for the title regardless of title length (T-127)', () => {
+    const { container: shortContainer } = render(<EventCard {...baseProps} name="5K Run" />);
+    const shortTitle = shortContainer.querySelector('h3');
+    const { container: longContainer } = render(
+      <EventCard
+        {...baseProps}
+        name="A very long marathon event title that would normally wrap onto two lines"
+      />,
+    );
+    const longTitle = longContainer.querySelector('h3');
+
+    // Same min-height class on both, so a one-line title reserves the same
+    // space as a two-line one — the info below never shifts between cards.
+    expect(shortTitle?.className).toContain('min-h-[3.1rem]');
+    expect(longTitle?.className).toContain('min-h-[3.1rem]');
+    // Still capped/truncated at two lines for very long titles.
+    expect(longTitle?.className).toContain('line-clamp-2');
+  });
 });
