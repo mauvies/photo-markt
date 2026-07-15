@@ -1,11 +1,35 @@
 # T-125 · [Perf] Peso de imágenes de la galería: backfill de thumbnails legacy + variante small + cap de tiles eager
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `perf/gallery-image-weight`
-- **OpenSpec change:** —  (probable: toca el pipeline Inngest de thumbnails — decidir al ejecutar)
-- **PR:** —
+- **OpenSpec change:** — (no tocó el pipeline; el fix de raíz fue ops — re-sync del app de Inngest)
+- **PR:** #191
+
+## Resolución
+
+La premisa del ticket (código: variante small faltante + backfill) resultó ser mayormente un
+problema de **ops**, no de código. Diagnóstico contra prod (MCP):
+
+- Storage tenía **300 originales y 0 thumbnails** — el bake nunca corrió en prod. Cada tile de
+  galería caía a `/api/watermark` full-res (de ahí el peso).
+- Causa raíz: el **app de Inngest de prod estaba synceado viejo** (solo 5 de 13 funciones
+  registradas). `generate-photo-thumbnails`, el cron `reconcile-indexing-state`, `detect-photo-bibs`,
+  la limpieza de storage huérfano y los backfills de habilitar AI/dorsales **nunca corrieron en
+  prod**. El indexado de caras sí (era una de las 5 viejas).
+- Al re-sincronizar el app, el cron de reconciliación horneó las **299 fotos legacy** solo, en el
+  siguiente tick (small + medium en storage, todas `ready`).
+
+Deliverable de código en este PR: los tiles de grilla ahora usan la variante **small (400px)** en
+vez de medium (800px) vía `resolveGalleryTileSrc` (fallback small → medium → url). Medido sobre 299
+thumbnails reales de prod: **medium 103.8 KB vs small 30.7 KB → ~70% menos por tile** (30.3 MB → 9.0
+MB para el evento de 299). Test unit del helper (falla si se revierte a medium).
+
+Follow-ups capturados: **T-137** (instalar integración Vercel↔Inngest — causa raíz del drift) y
+**T-138** (auditar qué estuvo muerto en prod: dorsales, cleanup de huérfanos, backfills). El "cap de
+tiles eager" que listaba este ticket queda cubierto por el ahorro de peso; no se implementó
+IntersectionObserver propio.
 
 ## Requerimiento
 Follow-up **F2** de la auditoría de rendimiento T-123 (`docs/PERF_AUDIT.md`). Una galería de evento
