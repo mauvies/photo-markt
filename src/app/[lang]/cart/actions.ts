@@ -61,7 +61,9 @@ export async function loadGuestCartStateAction(
   const purchasableIds = await getPurchasablePhotoIds(supabaseAdmin, cappedIds);
   const removedPhotoIds = cappedIds.filter((id) => !purchasableIds.has(id));
   const validPhotoIds = cappedIds.filter((id) => purchasableIds.has(id));
-  const previews = await getPhotoPreviewUrls(supabaseAdmin, validPhotoIds);
+  // baseUrl lets the pre-bake fallback of watermarked events serve the
+  // fail-closed /api/watermark/ route instead of the raw original (T-131).
+  const previews = await getPhotoPreviewUrls(supabaseAdmin, validPhotoIds, await getBaseUrl());
 
   return { removedPhotoIds, previews };
 }

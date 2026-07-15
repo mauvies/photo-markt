@@ -119,7 +119,7 @@ describe('T-130 — authenticated cart preview resolution', () => {
     createSessionMock.mockClear();
   });
 
-  it("lists the item and returns a usable previewUrl for a purchasable photo the talent doesn't own (thumbnail not baked)", async () => {
+  it("lists the item and returns a watermarked previewUrl for a purchasable photo the talent doesn't own (thumbnail not baked)", async () => {
     const { photo } = await seedCartWithForeignPhoto();
 
     const cartData = await getCurrentCart();
@@ -128,10 +128,12 @@ describe('T-130 — authenticated cart preview resolution', () => {
     // RLS-filtered because the buyer doesn't own the photo row.
     expect(cartData.items).toHaveLength(1);
     expect(cartData.items[0].photoId).toBe(photo.id);
-    // Before T-130 this was null: the user-scoped client was denied signing
-    // the photographer's storage path. Admin signing must produce a URL.
+    // The seeded event is watermark_enabled (DB default), so the pre-bake
+    // fallback must go through the fail-closed /api/watermark/ route (T-131) —
+    // NEVER a direct signed URL of the payment-gated original.
     expect(cartData.items[0].previewUrl).toBeTruthy();
-    expect(cartData.items[0].previewUrl).toContain('/storage/v1/object/sign/');
+    expect(cartData.items[0].previewUrl).toContain('/api/watermark/');
+    expect(cartData.items[0].previewUrl).not.toContain('/storage/v1/object/sign/');
   });
 
   it('serves the baked immutable thumbnail when thumbnail_status is ready', async () => {

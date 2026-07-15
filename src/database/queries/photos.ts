@@ -6,7 +6,7 @@
 // loads sharp at module scope: this query file is client-reachable via
 // plan-limits.ts → the event wizard, and sharp breaks the browser build.
 import { resolvePhotoPreviewUrl } from '@/lib/thumbnail-urls';
-import { createPhotoUrls } from './storage';
+import { createPhotoUrlMap } from './storage';
 import type { SupabaseServerClient } from './types';
 import { getErrorMessage } from './types';
 
@@ -1087,8 +1087,18 @@ export async function getPurchasablePhotoIds(
  * Resolve display preview URLs for a set of photos, keyed by photo id — the
  * single source both cart surfaces share (T-130, extracted from T-115's
  * guest-cart resolution). Serves the baked immutable thumbnail (`/api/thumb`)
- * when `thumbnail_status='ready'`, falling back to a fresh non-watermarked
- * signed URL of the original while the thumbnail hasn't baked.
+ * when `thumbnail_status='ready'`, falling back to the original while the
+ * thumbnail hasn't baked yet.
+ *
+ * The pre-bake fallback honors each event's watermark setting (T-131):
+ *  - `watermark_enabled` events → the fail-closed `/api/watermark/` route, so
+ *    the payment-gated original is NEVER served un-watermarked (the invariant
+ *    "full resolution only after purchase"). This matches the baked
+ *    thumbnail's own watermark contract, so the fallback is no weaker than the
+ *    steady state. Needs `baseUrl` to build absolute watermark URLs — a
+ *    missing/blank one fails closed to `null` (icon fallback), never the raw
+ *    original.
+ *  - free / no-watermark events → a direct signed original (nothing to hide).
  *
  * Pass `supabaseAdmin`: the viewer is a buyer, not the photo's owner, so a
  * user-scoped client can be denied by storage RLS when signing someone
@@ -1100,12 +1110,13 @@ export async function getPurchasablePhotoIds(
 export async function getPhotoPreviewUrls(
   supabase: SupabaseServerClient,
   photoIds: string[],
+  baseUrl: string,
 ): Promise<Record<string, string | null>> {
   if (photoIds.length === 0) return {};
 
   const { data: photos, error } = await supabase
     .from('photos')
-    .select('id, original_url, thumbnail_status, thumb_version')
+    .select('id, original_url, thumbnail_status, thumb_version, events(watermark_enabled)')
     .in('id', photoIds);
 
   if (error || !photos) {
@@ -1115,22 +1126,29 @@ export async function getPhotoPreviewUrls(
     return {};
   }
 
-  // Only sign originals that will actually be served — a `ready` thumbnail
-  // wins in resolvePhotoPreviewUrl, so signing its original would be a wasted
-  // storage round trip on every cart load in the steady state.
-  const paths = photos
-    .filter((photo) => photo.thumbnail_status !== 'ready')
-    .map((photo) => photo.original_url)
-    .filter((url): url is string => url !== null);
-
-  const signedUrls =
-    paths.length > 0
-      ? await createPhotoUrls(supabase, 'photos', paths, { expiresIn: 3600, useWatermark: false })
-      : [];
-  const signedMap: Record<string, string> = {};
-  for (const item of signedUrls) {
-    if (item.signedUrl) signedMap[item.path] = item.signedUrl;
+  // Only build a fallback for originals that will actually be served — a
+  // `ready` thumbnail wins in resolvePhotoPreviewUrl, so touching its original
+  // would be a wasted round trip on every cart load in the steady state.
+  // Partition the pre-bake window by watermark policy: watermarked events go
+  // through the fail-closed `/api/watermark/` route (T-131); only an event
+  // KNOWN to be un-watermarked keeps the direct signed original. Anything we
+  // can't positively confirm as free (a null/RLS-hidden event embed, an
+  // event_id NULL orphan) falls closed to the watermark route — never expose
+  // the raw original on an unknown gating state.
+  const watermarkPaths: string[] = [];
+  const directPaths: string[] = [];
+  for (const photo of photos) {
+    if (photo.thumbnail_status === 'ready' || photo.original_url === null) continue;
+    const event = Array.isArray(photo.events) ? photo.events[0] : photo.events;
+    if (event?.watermark_enabled === false) directPaths.push(photo.original_url);
+    else watermarkPaths.push(photo.original_url);
   }
+
+  const [watermarkMap, directMap] = await Promise.all([
+    createPhotoUrlMap(supabase, 'photos', watermarkPaths, { useWatermark: true, baseUrl }),
+    createPhotoUrlMap(supabase, 'photos', directPaths, { expiresIn: 3600, useWatermark: false }),
+  ]);
+  const signedMap: Record<string, string> = { ...watermarkMap, ...directMap };
 
   const result: Record<string, string | null> = {};
   for (const photo of photos) {

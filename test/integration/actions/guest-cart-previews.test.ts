@@ -75,8 +75,9 @@ describe('loadGuestCartStateAction — preview resolution', () => {
     expect(previews[photo.id]).not.toBe(originalUrl);
   });
 
-  it('falls back to a freshly-signed original when the thumbnail has not baked yet', async () => {
+  it('falls back to the watermarked preview route when a watermarked event has not baked yet', async () => {
     const photographer = await createTestUser('PHOTOGRAPHER');
+    // Events are watermark_enabled by default (DB default true).
     const event = await createTestEvent(photographer.id, { price_per_photo: 10 });
     const originalUrl = `${photographer.id}/${event.id}/${crypto.randomUUID()}.jpg`;
     await uploadStubBytes(originalUrl);
@@ -90,6 +91,10 @@ describe('loadGuestCartStateAction — preview resolution', () => {
 
     expect(previews[photo.id]).toBeTruthy();
     expect(previews[photo.id]).not.toContain('/api/thumb/');
+    // T-131: the pre-bake fallback must NOT leak the raw original — it goes
+    // through the fail-closed /api/watermark/ route for watermarked events.
+    expect(previews[photo.id]).toContain('/api/watermark/');
+    expect(previews[photo.id]).not.toContain('/storage/v1/object/sign/');
   });
 
   it('resolves multiple photos independently by current thumbnail state', async () => {
