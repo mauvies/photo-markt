@@ -1,11 +1,39 @@
 # T-138 · [Ops/Auditoría] Auditar qué funciones Inngest estuvieron muertas en prod y reconciliar datos/storage
 
 - **Prioridad:** P1
-- **Estado:** todo
-- **Blockers:** ninguno (independiente de T-137; conviene después de que el sync esté estable)
-- **Rama:** `ops/audit-dead-inngest-prod`
-- **OpenSpec change:** — (auditoría + posibles jobs one-off de reconciliación)
+- **Estado:** done
+- **Blockers:** ninguno
+- **Rama:** — (ops, sin cambios de código)
+- **OpenSpec change:** —
 - **PR:** —
+
+## Auditoría (2026-07-15, contra prod vía MCP)
+
+5 eventos en prod (3 borrados sin fotos, 2 vivos con 300 fotos).
+
+| Superficie | Estado | Acción |
+|---|---|---|
+| Thumbnails | ✅ 300/300 `ready` | Ninguna — reconciliado por T-125 |
+| Indexado de caras | ✅ 300/300 terminal | Ninguna — `index-photo-faces` era de las 5 vivas |
+| **Detección de dorsales** | ❌ 2 eventos opt-in, 0 filas `photo_bib_numbers` | Backfill solo del Marathon (ver abajo) |
+| Cleanup de eventos borrados | ✅ Limpio | Ninguna — los 3 borrados tenían 0 fotos y sin colección |
+| Storage huérfano | ✅ 1 original suelto (300 rows / 301 objetos) | Ninguna — el cron de cleanup (ya vivo) lo barre |
+| Colecciones AWS huérfanas | ⚠️ No verificable vía DB | Chequeo manual en consola Rekognition (`eu-west-1`) |
+
+**Decisión de reconciliación (confirmada con el usuario):** backfillear dorsales **solo** en
+"Marathon Madrid 2026" (`b5b4a5ee`, 265 fotos) — ahí los dorsales tienen sentido. Se **salta**
+"Surf Session Los Caracas" (`cfa8d0ee`, 35 fotos): surfistas no llevan dorsal, correr `DetectText`
+ahí es coste AWS tirado. Disparo: el usuario deshabilitó→rehabilitó la detección de dorsales del
+evento Marathon (disparó `backfillEventBibDetection` por el camino real, ya synceado).
+
+## Resultado (verificado 2026-07-15)
+Backfill del Marathon **completo**: evento `bib_detection_status='ready'`, 265/265 fotos procesadas
+(0 pending), **238 fotos con dorsales, 1293 números** en `photo_bib_numbers`. La búsqueda por dorsal
+en ese evento ahora devuelve resultados. Surf saltado a propósito. Storage huérfano (1 original
+suelto) queda para el cron de cleanup ya vivo. Colecciones AWS: el DB no muestra huérfanas; chequeo
+de la consola Rekognition queda como verificación manual opcional del usuario. Sin cambios de código
+— fue ops puro. Follow-up de UX capturado: **T-139** (mostrar el progreso de dorsales al fotógrafo,
+que hoy corre a ciegas — se notó justo en esta reconciliación).
 
 ## Requerimiento
 T-125 destapó que el app de Inngest de prod estuvo synceado viejo (5/13 funciones) durante un

@@ -11,9 +11,9 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 54 | P1 | T-138 | [Ops/Auditoría] Auditar qué funciones Inngest estuvieron muertas en prod (dorsales, cleanup de huérfanos, backfills AI/dorsales) y reconciliar datos/storage (hallazgo de T-125) | — | todo |
 | 56 | P2 | T-127 | [EventCard] Reservar dos líneas para el título → altura de card consistente (info de abajo alineada entre cards) | — | todo |
 | 57 | P2 | T-128 | [Skeletons] Sincronizar los loading skeletons (home, listado, detalle) con el layout/márgenes post-rediseño → menos layout shift | T-127 | todo |
+| 57.5 | P2 | T-139 | [Dashboard] Mostrar estado/progreso de detección de dorsales en el evento del fotógrafo (paridad con la tarjeta de AI matching, hallazgo de T-138) | — | todo |
 | 58 | P3 | T-136 | [Seguridad/Pagos] Galerías (pública, talent, favoritos) firman el original full-res pre-bake en eventos vendibles sin watermark + índice `photos.original_url` — hallazgo del `/code-review` de T-133 | T-133 | todo |
 | 59 | P3 | T-126 | [Perf] Code-split del stack modal/lightbox de la galería + bundle Sentry (~180 KiB JS sin usar, F3 de T-123) | — | todo |
 | 60 | P3 | T-135 | [Chore/Bundle] Quitar `framer-motion` (solo lo usa `feedback-view`) reimplementando su animación en CSS | — | todo |
@@ -42,6 +42,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-138** · Ops/Auditoría (P1): auditoría del período de drift de Inngest (hallazgo de T-125). Contra prod (MCP): 5 eventos (3 borrados sin fotos, 2 vivos con 300 fotos). **Muerto y ya reconciliado por T-125:** thumbnails (300/300 `ready`) e indexado de caras (300/300, `index-photo-faces` era de las 5 vivas). **Muerto con impacto real: detección de dorsales** — 2 eventos opt-in con 0 filas `photo_bib_numbers`. Reconciliación (confirmada con el usuario): backfill **solo** del "Marathon Madrid 2026" (265 fotos, dorsales tienen sentido); se saltó "Surf Session Los Caracas" (surfistas no llevan dorsal → `DetectText` sería coste AWS tirado). Disparo vía toggle off→on del usuario (camino real, ya synceado). **Verificado:** evento `ready`, 265/265 procesadas, 238 fotos con dorsales, **1293 números** detectados → la búsqueda por dorsal ya funciona. **Limpio:** eventos borrados sin colección/fotos huérfanas; storage con 1 original suelto (el cron de cleanup ya vivo lo barre). Colecciones AWS: DB sin huérfanas, consola Rekognition queda como check manual opcional. Sin código (ops puro). Follow-up de UX: T-139 (progreso de dorsales visible al fotógrafo)
 
 - **T-137** · Infra/Inngest (P1): causa raíz del drift descubierto en T-125 — el app de Inngest de prod no se re-sincronizaba en cada deploy, así que quedó con 5/13 funciones registradas (thumbnails, crons, dorsales, cleanup y backfills muertos en prod). El usuario configuró la integración Vercel↔Inngest: generó la key de **Protection Bypass for Automation** en Vercel y la cargó en Inngest (deja pasar los requests a `/api/inngest` pese a la Deployment Protection). **Verificado:** el merge del PR #191 disparó un deploy y el app se re-sincronizó **solo**. Sin PR (config de dashboard). Sigue T-138 (reconciliar el período de drift)
 
