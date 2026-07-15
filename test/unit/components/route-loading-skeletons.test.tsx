@@ -1,0 +1,56 @@
+/** @vitest-environment happy-dom */
+import { cleanup, render } from '@testing-library/react';
+import { afterEach, describe, expect, it } from 'vitest';
+import TalentEventDetailLoading from '@/app/[lang]/dashboard/talent/events/[id]/loading';
+import TalentEventsLoading from '@/app/[lang]/dashboard/talent/events/loading';
+import EventDetailLoading from '@/app/[lang]/events/[shareCode]/loading';
+import EventsListingLoading from '@/app/[lang]/events/loading';
+
+afterEach(cleanup);
+
+// Regression (T-128): these loading states used to be a bare <Spinner /> (or,
+// for the event-detail grid, a stale 3-breakpoint/gap-4 grid) that didn't
+// match the real page's footprint — causing a visible layout shift once the
+// real content mounted.
+
+describe('/events loading.tsx', () => {
+  it('matches the page shell margins and renders the real card grid, not a bare spinner', () => {
+    const { container } = render(<EventsListingLoading />);
+    expect(container.innerHTML).toContain('mx-auto max-w-[1400px] w-full flex-1 px-4 pt-6 pb-10');
+    expect(container.innerHTML).toContain('aspect-[4/3]');
+    // The old loading.tsx rendered nothing but a bare <Spinner /> (an
+    // <output> element) — a page-shaped skeleton replaces it entirely.
+    expect(container.querySelector('output')).toBeNull();
+  });
+});
+
+describe('/dashboard/talent/events loading.tsx', () => {
+  it('renders the real card grid without re-wrapping the layout margins', () => {
+    const { container } = render(<TalentEventsLoading />);
+    expect(container.innerHTML).toContain('aspect-[4/3]');
+    // The dashboard layout already supplies mx-auto/max-w/px — this file
+    // must not duplicate it.
+    expect(container.innerHTML).not.toContain('max-w-[1400px]');
+  });
+});
+
+describe('/events/[shareCode] loading.tsx', () => {
+  it('matches the real photo grid columns/gap/aspect-ratio (PhotoAlbumViewer)', () => {
+    const { container } = render(<EventDetailLoading />);
+    expect(container.innerHTML).toContain('mx-auto max-w-[1400px] w-full flex-1 px-3 py-4');
+    expect(container.innerHTML).toContain(
+      'grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5',
+    );
+    expect(container.innerHTML).toContain('aspect-square');
+  });
+});
+
+describe('/dashboard/talent/events/[id] loading.tsx (T-128: previously missing)', () => {
+  it('matches the real photo grid columns/gap/aspect-ratio', () => {
+    const { container } = render(<TalentEventDetailLoading />);
+    expect(container.innerHTML).toContain(
+      'grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5',
+    );
+    expect(container.innerHTML).toContain('aspect-square');
+  });
+});

@@ -602,8 +602,12 @@ export default async function EventPage({
                 <Suspense
                   key="event-gallery"
                   fallback={
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                      {Array.from({ length: 12 }).map((_, i) => (
+                    // Matches PhotoAlbumViewer's real grid (grid-cols-2 gap-2
+                    // sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5, aspect-square
+                    // tiles) — the previous 3-breakpoint/gap-4 version undercounted
+                    // columns at lg and used the wrong gap (T-128).
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                      {Array.from({ length: 15 }).map((_, i) => (
                         // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton items
                         <div key={i} className="aspect-square animate-pulse rounded-lg bg-muted" />
                       ))}
