@@ -45,14 +45,24 @@ export function GuestCartContent() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const photoIds = useMemo(() => items.map((item) => item.photoId), [items]);
+  // Per-item share codes prove access to private events (T-132) — a guest item
+  // stashed its event's code at add time. Deduped + sorted so the query key is
+  // stable regardless of item order.
+  const shareCodes = useMemo(
+    () =>
+      Array.from(
+        new Set(items.map((item) => item.eventShareCode).filter((c): c is string => Boolean(c))),
+      ).sort(),
+    [items],
+  );
   // Live preview lookup (T-115) + purchasability validation (T-117) in one
   // round trip — never render the `previewUrl` snapshot stashed in
   // localStorage at add-to-cart time (a signed original that expires after
   // ~1h), and never keep an entry whose photo is no longer purchasable
   // (deleted, event soft-deleted, or no longer approved).
   const { data: guestCartState } = useQuery({
-    queryKey: ['guest-cart-state', photoIds],
-    queryFn: () => loadGuestCartStateAction(photoIds),
+    queryKey: ['guest-cart-state', photoIds, shareCodes],
+    queryFn: () => loadGuestCartStateAction(photoIds, shareCodes),
     enabled: photoIds.length > 0,
   });
   const livePreviews = guestCartState?.previews;

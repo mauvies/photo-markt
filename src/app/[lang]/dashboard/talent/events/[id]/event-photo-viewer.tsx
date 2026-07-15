@@ -217,7 +217,9 @@ export function EventPhotoViewer({
   // Optimistic cart state — the hook handles instant icon flip + badge sync.
   const { photosInCart, addToCart, removeFromCart } = useOptimisticPhotosInCart({
     initialPhotosInCart,
-    addServerAction: addPhotoToCartAction,
+    // Pass the event's share code so a private event's photo is addable to the
+    // authenticated cart (T-132) — a public event ignores it.
+    addServerAction: (photoId) => addPhotoToCartAction(photoId, shareCode ?? undefined),
     removeServerAction: removePhotoFromCartAction,
     toastLabels: { failedAdd: t('failedAddCart'), failedRemove: t('failedRemoveCart') },
   });

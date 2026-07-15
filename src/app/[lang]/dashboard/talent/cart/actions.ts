@@ -14,7 +14,9 @@ import {
   getPhotographerConnectStatuses,
   getPhotoPreviewUrls,
   getPurchasablePhotoIds,
+  isEventAccessible,
   isPhotoInCart,
+  isPhotoTaggedForTalent,
 } from '@/database/queries';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
@@ -120,9 +122,18 @@ export async function getCurrentCart(): Promise<CartData> {
 }
 
 /**
- * Add a photo to the current user's cart
+ * Add a photo to the current user's cart.
+ *
+ * Access proof for private events (T-132) is one of two things: the caller
+ * presents the event's own `shareCode` (the bearer token that let them reach
+ * `/events/[shareCode]`), OR the authenticated user already has the photo
+ * tagged in their library — a persisted relationship the server can verify
+ * without the client ever echoing back a bearer token (this is the favorites
+ * path). Public events need neither. Without this gate an authenticated user
+ * who merely learned a private photo's UUID could add it and buy it, bypassing
+ * the share-link wall entirely.
  */
-export async function addPhotoToCartAction(photoId: string): Promise<void> {
+export async function addPhotoToCartAction(photoId: string, shareCode?: string): Promise<void> {
   const supabase = await createClient();
 
   const {
@@ -159,12 +170,25 @@ export async function addPhotoToCartAction(photoId: string): Promise<void> {
   // photo from an event that no longer exists can't be added (T-040).
   const { data: event, error: eventError } = await supabaseAdmin
     .from('events')
-    .select('id, price_per_photo')
+    .select('id, price_per_photo, is_public, share_code')
     .eq('id', photo.event_id)
     .is('deleted_at', null)
     .single();
 
   if (eventError || !event) {
+    throw new Error('Event not found.');
+  }
+
+  // Private-event access gate (T-132): a non-public event's photo is addable
+  // only with the matching share code OR when the user already has it tagged
+  // (favorites — a saved photo they demonstrably had access to). The tag check
+  // is a fallback, evaluated only when the code doesn't already grant access.
+  // Reported as "not found" so a UUID-only probe can't distinguish "wrong id"
+  // from "no access".
+  const accessible =
+    isEventAccessible(event, shareCode ? [shareCode] : []) ||
+    (await isPhotoTaggedForTalent(supabaseAdmin, photoId, user.id));
+  if (!accessible) {
     throw new Error('Event not found.');
   }
 
@@ -402,6 +426,16 @@ export async function mergeGuestCartAction(items: GuestCartItem[]): Promise<numb
   const cart = await getOrCreateCart(supabase, user.id);
   let merged = 0;
 
+  // Union of every code the guest cart carries (T-132) — the same set the guest
+  // preview and guest checkout use. A code still only unlocks its OWN event, but
+  // pooling them keeps merge consistent with those paths: an item whose event
+  // another item already proved (same private event, code stashed on a sibling
+  // item) isn't silently dropped on login just because its own snapshot lacked
+  // the code.
+  const shareCodes = items
+    .map((i) => i.eventShareCode)
+    .filter((code): code is string => Boolean(code));
+
   for (const item of items) {
     try {
       // Re-validate photo exists and get current price from DB
@@ -415,13 +449,18 @@ export async function mergeGuestCartAction(items: GuestCartItem[]): Promise<numb
 
       const { data: event } = await supabaseAdmin
         .from('events')
-        .select('id, price_per_photo')
+        .select('id, price_per_photo, is_public, share_code')
         .eq('id', photo.event_id)
         .is('deleted_at', null)
         .maybeSingle();
 
       // Skip photos whose event was soft-deleted — never merge them in (T-040).
       if (!event) continue;
+
+      // Private-event access gate (T-132): merge is the bridge into the authed
+      // cart (which authed checkout trusts), so a private item with no matching
+      // code in the cart must never cross it.
+      if (!isEventAccessible(event, shareCodes)) continue;
 
       const unitPriceCents = event.price_per_photo ? Math.round(event.price_per_photo * 100) : 0;
 

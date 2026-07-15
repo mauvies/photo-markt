@@ -190,7 +190,9 @@ export function PublicEventPhotoViewer({
     removeFromCart: removeAuthCart,
   } = useOptimisticPhotosInCart({
     initialPhotosInCart: authInitialSet,
-    addServerAction: addPhotoToCartAction,
+    // Pass the event's share code so a private event's photo is addable to the
+    // authenticated cart (T-132) — a public event ignores it.
+    addServerAction: (photoId) => addPhotoToCartAction(photoId, shareCode ?? undefined),
     removeServerAction: removePhotoFromCartAction,
     toastLabels: {
       failedAdd: cartToastLabels.failedAdd,
