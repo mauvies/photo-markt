@@ -1,7 +1,11 @@
 'use server';
 
 import { headers } from 'next/headers';
-import { getPhotoPreviewUrls, getPurchasablePhotoIds } from '@/database/queries/photos';
+import {
+  getAccessiblePhotoIds,
+  getPhotoPreviewUrls,
+  getPurchasablePhotoIds,
+} from '@/database/queries/photos';
 import { getPhotographerConnectStatuses } from '@/database/queries/profiles';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { getBaseUrl } from '@/lib/get-base-url';
@@ -40,6 +44,7 @@ const GUEST_CART_MAX_IDS = 100;
  */
 export async function loadGuestCartStateAction(
   photoIds: string[],
+  shareCodes: string[] = [],
 ): Promise<{ removedPhotoIds: string[]; previews: Record<string, string | null> }> {
   if (photoIds.length === 0) return { removedPhotoIds: [], previews: {} };
 
@@ -58,9 +63,17 @@ export async function loadGuestCartStateAction(
   }
 
   const cappedIds = photoIds.slice(0, GUEST_CART_MAX_IDS);
-  const purchasableIds = await getPurchasablePhotoIds(supabaseAdmin, cappedIds);
-  const removedPhotoIds = cappedIds.filter((id) => !purchasableIds.has(id));
-  const validPhotoIds = cappedIds.filter((id) => purchasableIds.has(id));
+  // A guest item survives only if it's both purchasable (T-117: approved, event
+  // alive) AND accessible (T-132: event public, or the caller presents the
+  // event's share code — the guest cart stashes it per item). A private-event
+  // photo with no matching code is dropped like any other unavailable item.
+  const [purchasableIds, accessibleIds] = await Promise.all([
+    getPurchasablePhotoIds(supabaseAdmin, cappedIds),
+    getAccessiblePhotoIds(supabaseAdmin, cappedIds, shareCodes),
+  ]);
+  const isValid = (id: string) => purchasableIds.has(id) && accessibleIds.has(id);
+  const removedPhotoIds = cappedIds.filter((id) => !isValid(id));
+  const validPhotoIds = cappedIds.filter(isValid);
   // baseUrl lets the pre-bake fallback of watermarked events serve the
   // fail-closed /api/watermark/ route instead of the raw original (T-131).
   const previews = await getPhotoPreviewUrls(supabaseAdmin, validPhotoIds, await getBaseUrl());
@@ -110,8 +123,17 @@ export async function createGuestCheckoutSessionAction(
   // (row exists, approved, event not soft-deleted) — never charge otherwise.
   // The prior select alone isn't enough: it doesn't filter `events.deleted_at`,
   // so a photo whose event was soft-deleted would otherwise sail through.
-  const purchasableIds = await getPurchasablePhotoIds(supabaseAdmin, photoIds);
-  if (photoIds.some((id) => !purchasableIds.has(id))) {
+  // Access gate (T-132): a private-event item is only chargeable when the item
+  // carries the event's share code — the same proof the guest presented to
+  // reach the gallery. Keyed per item so a code never unlocks another event.
+  const shareCodes = items
+    .map((i) => i.eventShareCode)
+    .filter((code): code is string => Boolean(code));
+  const [purchasableIds, accessibleIds] = await Promise.all([
+    getPurchasablePhotoIds(supabaseAdmin, photoIds),
+    getAccessiblePhotoIds(supabaseAdmin, photoIds, shareCodes),
+  ]);
+  if (photoIds.some((id) => !purchasableIds.has(id) || !accessibleIds.has(id))) {
     const dict = await getDictionary(lang);
     throw new Error(dict.cart.itemsUnavailableRemoved);
   }

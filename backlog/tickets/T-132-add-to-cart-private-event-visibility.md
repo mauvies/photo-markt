@@ -1,7 +1,7 @@
 # T-132 · Seguridad: add-to-cart acepta fotos de eventos privados sin chequear visibilidad (share code)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `fix/add-to-cart-event-visibility`
 - **OpenSpec change:** —  (superficie auth/seguridad → `/code-review` antes de commitear)

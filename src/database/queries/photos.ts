@@ -1084,6 +1084,64 @@ export async function getPurchasablePhotoIds(
 }
 
 /**
+ * The single access rule for "may a caller BUY this event's photos" (T-132).
+ * Purchasability (approved + event alive) is not the same as access: a private
+ * event (`is_public = false`) is reachable only through its `share_code` — the
+ * bearer token the photographer shares. So a photo is buyable iff its event is
+ * public, OR the caller presents a share code matching the event's own
+ * `share_code`. Keeping this a pure function means the add-to-cart gate, the
+ * batch predicate below, and both checkout paths all decide access identically
+ * — never re-derive `is_public || code` inline.
+ *
+ * `shareCodes` is the union of codes the caller has demonstrably seen (the URL
+ * of a `/events/[shareCode]` page, or the per-item code the guest cart stashed
+ * at add time). The match is still per-event: a code only unlocks the event it
+ * belongs to, so presenting event A's code never grants access to event B.
+ */
+export function isEventAccessible(
+  event: { is_public: boolean | null; share_code: string | null },
+  shareCodes: string[],
+): boolean {
+  if (event.is_public === true) return true;
+  return event.share_code !== null && shareCodes.includes(event.share_code);
+}
+
+/**
+ * Of `photoIds`, the subset whose event is ACCESSIBLE to a caller presenting
+ * `shareCodes` (T-132) — the batch companion to {@link isEventAccessible},
+ * applied at the guest-cart boundaries (load, merge, checkout) where a request
+ * carries several photos across possibly-different events. Pair it with
+ * {@link getPurchasablePhotoIds} (state) — a photo must be BOTH accessible and
+ * purchasable to be bought. Pass `supabaseAdmin`: the buyer isn't the photo's
+ * owner, so a user-scoped read is RLS-filtered.
+ */
+export async function getAccessiblePhotoIds(
+  supabase: SupabaseServerClient,
+  photoIds: string[],
+  shareCodes: string[],
+): Promise<Set<string>> {
+  if (photoIds.length === 0) return new Set();
+
+  const { data, error } = await supabase
+    .from('photos')
+    .select('id, events!inner(is_public, share_code)')
+    .in('id', photoIds);
+
+  if (error) {
+    throw new Error(`Failed to get accessible photo ids: ${getErrorMessage(error)}`);
+  }
+
+  const accessible = new Set<string>();
+  for (const row of data ?? []) {
+    const event = Array.isArray(row.events) ? row.events[0] : row.events;
+    if (event && isEventAccessible(event, shareCodes)) {
+      accessible.add(row.id as string);
+    }
+  }
+  return accessible;
+}
+
+/**
  * Resolve display preview URLs for a set of photos, keyed by photo id — the
  * single source both cart surfaces share (T-130, extracted from T-115's
  * guest-cart resolution). Serves the baked immutable thumbnail (`/api/thumb`)

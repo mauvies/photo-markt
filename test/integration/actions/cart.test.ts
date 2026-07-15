@@ -201,6 +201,100 @@ describe('cart Server Actions', () => {
         .eq('cart_id', cart.id);
       expect(count).toBe(0);
     });
+
+    // T-132: a private event (is_public = false) is reachable only via its
+    // share code. Adding one of its photos by bare UUID — with no code — must be
+    // rejected, or an authenticated user who merely learned the id could buy a
+    // photo they were never given the share link to.
+    it('rejects a private-event photo added with no share code (T-132)', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id, {
+        price_per_photo: 5,
+        is_public: false,
+        share_code: 'PRIV132',
+      });
+      const photo = await createTestPhoto(event.id);
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+
+      await expect(addPhotoToCartAction(photo.id)).rejects.toThrow(/not found/i);
+
+      const cart = await getOrCreateCart(createServiceClient(), talent.id);
+      const { count } = await createServiceClient()
+        .from('cart_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('cart_id', cart.id);
+      expect(count).toBe(0);
+    });
+
+    it('rejects a private-event photo added with the wrong share code (T-132)', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id, {
+        price_per_photo: 5,
+        is_public: false,
+        share_code: 'PRIV132',
+      });
+      const photo = await createTestPhoto(event.id);
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+
+      await expect(addPhotoToCartAction(photo.id, 'WRONGCODE')).rejects.toThrow(/not found/i);
+    });
+
+    it('adds a private-event photo when the correct share code is presented (T-132)', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id, {
+        price_per_photo: 5,
+        is_public: false,
+        share_code: 'PRIV132',
+      });
+      const photo = await createTestPhoto(event.id);
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+
+      await expect(addPhotoToCartAction(photo.id, 'PRIV132')).resolves.not.toThrow();
+
+      const cart = await getOrCreateCart(createServiceClient(), talent.id);
+      const { count } = await createServiceClient()
+        .from('cart_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('cart_id', cart.id);
+      expect(count).toBe(1);
+    });
+
+    it('adds a public-event photo with no share code (T-132 — public flow unaffected)', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id, { price_per_photo: 5, is_public: true });
+      const photo = await createTestPhoto(event.id);
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+
+      await expect(addPhotoToCartAction(photo.id)).resolves.not.toThrow();
+      expect(await getCartItemCountAction()).toBe(1);
+    });
+
+    // T-132: the favorites path presents no share code — instead the server
+    // proves access from the talent's own tag row (a photo they saved, so they
+    // demonstrably reached the event). No bearer token is echoed through the
+    // client.
+    it('adds a private-event photo the talent has tagged, with no share code (T-132 favorites path)', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id, {
+        price_per_photo: 5,
+        is_public: false,
+        share_code: 'PRIVTAG',
+      });
+      const photo = await createTestPhoto(event.id);
+      const talent = await createTestUser('TALENT');
+      // The talent has this photo in their library (saved from the event).
+      await createServiceClient()
+        .from('talent_photo_tags')
+        .insert({ photo_id: photo.id, talent_user_id: talent.id, tagged_by_user_id: talent.id });
+      mockSession.userId = talent.id;
+
+      await expect(addPhotoToCartAction(photo.id)).resolves.not.toThrow();
+      expect(await getCartItemCountAction()).toBe(1);
+    });
   });
 
   describe('removePhotoFromCartAction', () => {
@@ -327,6 +421,73 @@ describe('cart Server Actions', () => {
       const cart = await getOrCreateCart(sb, talent.id);
       const { data: items } = await sb.from('cart_items').select('photo_id').eq('cart_id', cart.id);
       expect((items ?? []).map((i) => i.photo_id)).toEqual([livePhoto.id]);
+    });
+
+    // T-132: merge is the bridge from the (client-controlled) guest cart into
+    // the authenticated cart, which authed checkout then trusts. A private-event
+    // item only crosses it when the cart carries that event's real share code —
+    // the proof a legit guest stashed at add time. An item from a private event
+    // the cart never proves is dropped. Access is keyed per event: event A's
+    // code never unlocks event B (unlike a purchasability-only filter).
+    it('drops a private-event item the cart never proves, keeps public + proven-private (T-132)', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const publicEvent = await createTestEvent(photographer.id, {
+        price_per_photo: 5,
+        is_public: true,
+      });
+      const privateA = await createTestEvent(photographer.id, {
+        price_per_photo: 5,
+        is_public: false,
+        share_code: 'PRIV_A',
+      });
+      const privateB = await createTestEvent(photographer.id, {
+        price_per_photo: 5,
+        is_public: false,
+        share_code: 'PRIV_B',
+      });
+      const publicPhoto = await createTestPhoto(publicEvent.id);
+      const photoA = await createTestPhoto(privateA.id);
+      const photoB = await createTestPhoto(privateB.id);
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+
+      // The cart proves only PRIV_A (photoA carries it). photoB (a different
+      // private event) has no code anywhere in the cart → dropped.
+      const merged = await mergeGuestCartAction([
+        guestItem(publicPhoto.id),
+        { ...guestItem(photoA.id), eventShareCode: 'PRIV_A' },
+        guestItem(photoB.id),
+      ]);
+      expect(merged).toBe(2);
+
+      const sb = createServiceClient();
+      const cart = await getOrCreateCart(sb, talent.id);
+      const { data: items } = await sb.from('cart_items').select('photo_id').eq('cart_id', cart.id);
+      const photoIds = (items ?? []).map((i) => i.photo_id).sort();
+      expect(photoIds).toEqual([publicPhoto.id, photoA.id].sort());
+    });
+
+    // T-132: a code stashed on one item unlocks only its OWN private event's
+    // items, but it does so for ALL of them — merge pools the cart's codes like
+    // the guest preview/checkout do, so a sibling item from the same private
+    // event isn't dropped just because its own snapshot predates the stored code.
+    it('merges a code-less item when a sibling from the same private event carries the code (T-132)', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const privateEvent = await createTestEvent(photographer.id, {
+        price_per_photo: 5,
+        is_public: false,
+        share_code: 'PRIV_SHARED',
+      });
+      const withCode = await createTestPhoto(privateEvent.id);
+      const codeless = await createTestPhoto(privateEvent.id);
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+
+      const merged = await mergeGuestCartAction([
+        { ...guestItem(withCode.id), eventShareCode: 'PRIV_SHARED' },
+        guestItem(codeless.id), // same event, no own code → still merged via the pooled code
+      ]);
+      expect(merged).toBe(2);
     });
   });
 });

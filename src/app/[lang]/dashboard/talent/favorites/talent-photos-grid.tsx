@@ -70,6 +70,11 @@ export function TalentPhotosGrid({
   const [selectionResetKey, setSelectionResetKey] = useState(0);
   // Seed only once — the hook owns subsequent transitions.
   const seedPhotosInCart = useMemo(() => new Set(initialPhotosInCart), [initialPhotosInCart]);
+  // No share code is threaded through the client here (T-132): a private
+  // event's `share_code` is a whole-gallery bearer token, so echoing it into
+  // favorites props would let one tagged photo unlock the entire event. Instead
+  // `addPhotoToCartAction` proves access server-side from the talent's own tag
+  // row — every photo in this grid is one they saved.
   const { photosInCart, addToCart, removeFromCart } = useOptimisticPhotosInCart({
     initialPhotosInCart: seedPhotosInCart,
     addServerAction: addPhotoToCartAction,

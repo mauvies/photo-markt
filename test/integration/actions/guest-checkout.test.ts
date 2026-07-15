@@ -39,14 +39,16 @@ import {
 } from '../../helpers/supabase-test-client';
 
 /** Seed a photographer with an active Stripe Connect account, one priced event, one photo. */
-async function seedPurchasablePhoto(): Promise<GuestCartItem> {
+async function seedPurchasablePhoto(
+  eventOverrides?: Parameters<typeof createTestEvent>[1],
+): Promise<GuestCartItem> {
   const photographer = await createTestUser('PHOTOGRAPHER');
   const sb = createServiceClient();
   await sb
     .from('profiles')
     .update({ stripe_connect_status: 'active', stripe_connect_account_id: 'acct_test_123' })
     .eq('id', photographer.id);
-  const event = await createTestEvent(photographer.id, { price_per_photo: 10 });
+  const event = await createTestEvent(photographer.id, { price_per_photo: 10, ...eventOverrides });
   const photo = await createTestPhoto(event.id, { user_id: photographer.id });
   return {
     photoId: photo.id,
@@ -81,6 +83,35 @@ describe('createGuestCheckoutSessionAction', () => {
     };
     // Price re-validated server-side from the event's price_per_photo (10.00 → 1000 cents).
     expect(sessionArgs.line_items[0]?.price_data.unit_amount).toBe(1000);
+  });
+
+  // T-132: a private event is reachable only via its share code. A guest
+  // checkout item from a private event must carry the event's real share code
+  // (the proof stashed at add time) — otherwise the session is refused, never
+  // charged, so a crafted cart for a private photo can't buy it.
+  it('refuses to check out a private-event item with no share code (T-132)', async () => {
+    const item = await seedPurchasablePhoto({ is_public: false, share_code: 'PRIVCHK' });
+
+    await expect(createGuestCheckoutSessionAction([item])).rejects.toThrow();
+    expect(createSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses a private-event item with the wrong share code (T-132)', async () => {
+    const item = await seedPurchasablePhoto({ is_public: false, share_code: 'PRIVCHK' });
+
+    await expect(
+      createGuestCheckoutSessionAction([{ ...item, eventShareCode: 'NOPE' }]),
+    ).rejects.toThrow();
+    expect(createSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('checks out a private-event item when it carries the correct share code (T-132)', async () => {
+    const item = await seedPurchasablePhoto({ is_public: false, share_code: 'PRIVCHK' });
+
+    const result = await createGuestCheckoutSessionAction([{ ...item, eventShareCode: 'PRIVCHK' }]);
+
+    expect(result.url).toBe('https://checkout.stripe.test/session/cs_test_123');
+    expect(createSessionMock).toHaveBeenCalledTimes(1);
   });
 
   // ─── Rate limit (T-085) ──────────────────────────────────────────────────
