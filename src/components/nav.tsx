@@ -56,8 +56,20 @@ export function Nav() {
         </div>
         <LanguageSwitcher />
         {user === undefined ? (
-          // Auth not yet resolved — reserve space, no logged-out flash.
-          <Skeleton className="h-10 w-10 rounded-full" />
+          // Auth not yet resolved. The header is `justify-between` (HeaderShell),
+          // so this slot's width directly determines how far left everything to
+          // its left (LanguageSwitcher, cart) sits. The logged-out state below
+          // (link + button) is far wider than a single avatar circle — reserving
+          // only the circle's width here made that whole state resolve into a
+          // sudden rightward-anchored growth, visibly shoving the language
+          // switcher and cart icon left once auth settled. Reserve the wider
+          // logged-out footprint instead so most visitors (logged-out, browsing
+          // publicly) see no shift at all; the logged-in swap to a narrower
+          // avatar is a much smaller, less jarring shrink than that growth was.
+          <div className="flex items-center gap-1.5">
+            <Skeleton className="hidden h-4 w-32 md:block" />
+            <Skeleton className="h-10 w-20 rounded-md" />
+          </div>
         ) : user ? (
           <UserAvatar user={user} />
         ) : (

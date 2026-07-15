@@ -3,6 +3,7 @@ import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 let mockPathname = '/es';
+let mockUser: { id: string } | null | undefined = null;
 
 vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
@@ -11,7 +12,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/hooks/use-auth-user', () => ({
-  useAuthUser: () => ({ user: null }),
+  useAuthUser: () => ({ user: mockUser }),
 }));
 
 vi.mock('@/lib/i18n/translations-provider', () => ({
@@ -33,6 +34,7 @@ import { Nav } from '@/components/nav';
 afterEach(() => {
   cleanup();
   mockPathname = '/es';
+  mockUser = null;
 });
 
 // T-114: `showCart` gates whether <CartLinkButton> mounts at all, and Nav
@@ -72,5 +74,24 @@ describe('Nav cart slot (T-114 layout-shift regression)', () => {
     // Same wrapper footprint on both routes — only its contents differ.
     expect(eventsSlot?.className).toBe(homeSlot?.className);
     expect(eventsContainer.querySelector('[data-testid="cart-link-button"]')).toBeTruthy();
+  });
+});
+
+// Regression: while auth is unresolved (`user === undefined`), the header
+// (HeaderShell, `justify-between`) anchors this slot to the right edge, so
+// its width dictates how far left the LanguageSwitcher/cart sit. A bare
+// avatar-circle skeleton was far narrower than the logged-out state (a link
+// + button) it might resolve into, so resolving to logged-out grew the slot
+// and visibly shoved everything to its left. The loading skeleton must
+// reserve a footprint close to the wider (logged-out) state instead.
+describe('Nav auth-slot layout-shift regression', () => {
+  it('reserves a wide (logged-out-shaped) skeleton while auth is unresolved, not a bare circle', () => {
+    mockUser = undefined;
+    const { container } = render(<Nav />);
+    const skeletons = container.querySelectorAll('[data-slot="skeleton"]');
+    // Two placeholder bars: the desktop-only "become a photographer" link and
+    // the login button — not a single small circular avatar placeholder.
+    expect(skeletons.length).toBe(2);
+    expect(container.querySelector('.rounded-full')).toBeNull();
   });
 });
