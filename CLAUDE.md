@@ -258,9 +258,10 @@ OR profiles.display_name ILIKE '%query%'
 ## Image Handling
 
 - Original photos: Supabase Storage (private)
-- Previews: watermarked + degraded quality via `/src/app/api/watermark/`
+- Previews: protected via `/src/app/api/watermark/` — the route picks the treatment server-side from the photo's event (never from the caller, and only from a photos row whose `event_id` matches the path's event segment): tiled watermark + degraded quality for `watermark_enabled` events, the clean baked-medium-thumbnail treatment for events selling without a visible mark (T-133). Unknown policy fails closed to the watermark treatment
 - Purchased photos: short-lived signed URLs — never expose original storage path publicly
 - Watermark: tiled repeating pattern, server-side via Sharp
+- Sellable photos (watermarked or not) should never resolve to a direct signed full-res original pre-purchase. Enforced today in the **cart** pre-bake fallback (`getPhotoPreviewUrls` routes anything sellable through `/api/watermark/`; only genuinely free AND un-watermarked events keep the direct signed original). The **gallery** pre-bake paths (public event page, talent dashboard, favorites) still direct-sign originals for sellable no-watermark events — closing them is T-136
 - **Uploads:** all paths (photographer + guest collaborative) validate via `src/lib/photo-upload.ts` before writing to storage. Magic-byte check via Sharp, 50 MB per-file cap, content-type and extension are derived from the detected format — `file.type` and `file.name` are never trusted
 
 ## Security Utilities

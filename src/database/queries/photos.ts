@@ -1141,6 +1141,81 @@ export async function getAccessiblePhotoIds(
   return accessible;
 }
 
+export interface PreviewPolicy {
+  /**
+   * The event's watermark policy: `true`/`false` when positively known,
+   * `null` when it isn't — callers must fail closed on `null`.
+   */
+  watermarkEnabled: boolean | null;
+  /** Indexed face boxes for the photo (service-role-written, trustworthy). */
+  faceBoxes: Array<{ boundingBox: Record<string, number>; confidence: number }>;
+}
+
+/**
+ * The watermark policy + indexed face boxes for the photo stored at
+ * `storagePath`, looked up server-side by the `/api/watermark/` route to pick
+ * its treatment (T-133) — never trusted from anything the caller sends, since
+ * the route is unauthenticated and path-addressable. One query replaces the
+ * previous separate policy + face-box lookups (both filtered the same
+ * unindexed `original_url`).
+ *
+ * A photo row only counts if it is BOUND to the path it claims: storage paths
+ * are `${storageOwnerId}/${eventId}/${uuid}.${ext}` (enforced at upload), so
+ * the row's `event_id` must equal the path's event segment. Photos RLS
+ * (`own_photos_mutate`) only checks `user_id = auth.uid()`, so any
+ * authenticated user can insert a row with an ARBITRARY `original_url`
+ * pointing at someone else's object and attach it to their own no-watermark
+ * event — without the binding check, such a planted row could trick the route
+ * into serving a clean (un-watermarked) copy of a victim's payment-gated
+ * photo whenever the victim's own row is absent (orphan-cleanup window). A
+ * BOUND row can only tell the truth: its event embed IS the path's event.
+ * Unbound rows are ignored; no bound row → `null` (fail closed to the
+ * watermark treatment). No `.maybeSingle()`: `original_url` has no unique
+ * constraint, and a legitimate duplicate must degrade to fail-closed, not
+ * error the whole lookup.
+ *
+ * Pass a service-role client: the requester is an anonymous viewer.
+ */
+export async function getPreviewPolicyByStoragePath(
+  supabase: SupabaseServerClient,
+  storagePath: string,
+): Promise<PreviewPolicy> {
+  const pathEventId = storagePath.split('/')[1] ?? '';
+
+  const { data, error } = await supabase
+    .from('photos')
+    .select('event_id, events(watermark_enabled), photo_faces(bounding_box, confidence)')
+    .eq('original_url', storagePath);
+
+  if (error) {
+    throw new Error(`Failed to look up preview policy: ${getErrorMessage(error)}`);
+  }
+
+  const boundRows = (data ?? []).filter((row) => row.event_id === pathEventId);
+  if (boundRows.length === 0) return { watermarkEnabled: null, faceBoxes: [] };
+
+  // All bound rows reference the same event (same event_id), so their policy
+  // can only disagree via a missing embed — treat that as unknown.
+  let watermarkEnabled: boolean | null = null;
+  const policies = boundRows.map((row) => {
+    const event = Array.isArray(row.events) ? row.events[0] : row.events;
+    return typeof event?.watermark_enabled === 'boolean' ? event.watermark_enabled : null;
+  });
+  if (policies.every((p) => p === false)) watermarkEnabled = false;
+  else if (policies.every((p) => p === true)) watermarkEnabled = true;
+
+  const faceBoxes = boundRows.flatMap((row) =>
+    (row.photo_faces ?? [])
+      .filter((face) => face.bounding_box !== null)
+      .map((face) => ({
+        boundingBox: face.bounding_box as Record<string, number>,
+        confidence: Number(face.confidence ?? 0),
+      })),
+  );
+
+  return { watermarkEnabled, faceBoxes };
+}
+
 /**
  * Resolve display preview URLs for a set of photos, keyed by photo id — the
  * single source both cart surfaces share (T-130, extracted from T-115's
@@ -1148,15 +1223,22 @@ export async function getAccessiblePhotoIds(
  * when `thumbnail_status='ready'`, falling back to the original while the
  * thumbnail hasn't baked yet.
  *
- * The pre-bake fallback honors each event's watermark setting (T-131):
- *  - `watermark_enabled` events → the fail-closed `/api/watermark/` route, so
- *    the payment-gated original is NEVER served un-watermarked (the invariant
- *    "full resolution only after purchase"). This matches the baked
- *    thumbnail's own watermark contract, so the fallback is no weaker than the
- *    steady state. Needs `baseUrl` to build absolute watermark URLs — a
- *    missing/blank one fails closed to `null` (icon fallback), never the raw
- *    original.
- *  - free / no-watermark events → a direct signed original (nothing to hide).
+ * The pre-bake fallback must never expose more than the steady state (the
+ * public `medium` thumb) does, so it partitions by what there is to protect
+ * (T-131 watermark, T-133 resolution):
+ *  - anything SELLABLE (`price_per_photo` > 0) or watermarked → the
+ *    fail-closed `/api/watermark/` route, which picks the treatment
+ *    server-side from the event's own policy: tiled watermark for
+ *    `watermark_enabled` events, clean medium-budget downscale for events
+ *    that sell without a visible mark. Either way the payment-gated
+ *    full-resolution original is NEVER served (the invariant "full resolution
+ *    only after purchase"). Needs `baseUrl` to build absolute watermark URLs
+ *    — a missing/blank one fails closed to `null` (icon fallback), never the
+ *    raw original.
+ *  - only an event positively known to be BOTH free (`price_per_photo`
+ *    null/0) AND un-watermarked keeps the direct signed original: with no
+ *    payment gate there is nothing a "purchase" would grant beyond what the
+ *    photographer already gives away, so there is nothing to protect.
  *
  * Pass `supabaseAdmin`: the viewer is a buyer, not the photo's owner, so a
  * user-scoped client can be denied by storage RLS when signing someone
@@ -1174,7 +1256,9 @@ export async function getPhotoPreviewUrls(
 
   const { data: photos, error } = await supabase
     .from('photos')
-    .select('id, original_url, thumbnail_status, thumb_version, events(watermark_enabled)')
+    .select(
+      'id, original_url, thumbnail_status, thumb_version, events(watermark_enabled, price_per_photo)',
+    )
     .in('id', photoIds);
 
   if (error || !photos) {
@@ -1187,18 +1271,20 @@ export async function getPhotoPreviewUrls(
   // Only build a fallback for originals that will actually be served — a
   // `ready` thumbnail wins in resolvePhotoPreviewUrl, so touching its original
   // would be a wasted round trip on every cart load in the steady state.
-  // Partition the pre-bake window by watermark policy: watermarked events go
-  // through the fail-closed `/api/watermark/` route (T-131); only an event
-  // KNOWN to be un-watermarked keeps the direct signed original. Anything we
-  // can't positively confirm as free (a null/RLS-hidden event embed, an
-  // event_id NULL orphan) falls closed to the watermark route — never expose
-  // the raw original on an unknown gating state.
+  // Partition the pre-bake window by what there is to protect: watermarked
+  // (T-131) and SELLABLE (T-133) events go through the fail-closed
+  // `/api/watermark/` route; only an event positively known to be free AND
+  // un-watermarked keeps the direct signed original. Anything we can't
+  // positively confirm (a null/RLS-hidden event embed, an event_id NULL
+  // orphan) falls closed to the watermark route — never expose the raw
+  // original on an unknown gating state.
   const watermarkPaths: string[] = [];
   const directPaths: string[] = [];
   for (const photo of photos) {
     if (photo.thumbnail_status === 'ready' || photo.original_url === null) continue;
     const event = Array.isArray(photo.events) ? photo.events[0] : photo.events;
-    if (event?.watermark_enabled === false) directPaths.push(photo.original_url);
+    const sellable = (event?.price_per_photo ?? 0) > 0;
+    if (event?.watermark_enabled === false && !sellable) directPaths.push(photo.original_url);
     else watermarkPaths.push(photo.original_url);
   }
 

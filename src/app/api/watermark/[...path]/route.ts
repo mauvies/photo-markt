@@ -1,9 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { type NextRequest, NextResponse } from 'next/server';
-import { getPhotoFaceBoxesByStoragePath } from '@/database/queries/rekognition';
+import { getPreviewPolicyByStoragePath, type PreviewPolicy } from '@/database/queries/photos';
 import { env } from '@/env.mjs';
 import { getClientIp, rateLimit, retryAfterSeconds } from '@/lib/rate-limit';
-import { addWatermarkToImage, buildWatermarkErrorPlaceholder, type FaceBox } from '@/lib/watermark';
+import { generateThumbnail } from '@/lib/thumbnails';
+import { addWatermarkToImage, buildWatermarkErrorPlaceholder } from '@/lib/watermark';
 
 // Bound the request so a hung Sharp encode (or a slow Supabase download) can't
 // bill open-ended serverless time. A single watermark is normally sub-second;
@@ -21,14 +22,20 @@ export const maxDuration = 15;
 const WATERMARK_RATE_LIMIT = { limit: 600, windowSec: 3600 } as const;
 
 /**
- * API route to serve watermarked images — accessible without authentication.
- * Path format: /api/watermark/photos/userId/eventId/filename
+ * API route to serve protected photo previews — accessible without
+ * authentication. Path format: /api/watermark/photos/userId/eventId/filename
+ *
+ * The treatment is decided server-side from the photo's event (T-133):
+ * watermarked events get the tiled watermark pipeline; events that sell
+ * without a visible mark get a clean medium-budget downscale (matching their
+ * baked public thumbnail). Either way the full-resolution original never
+ * leaves this route.
  *
  * Security posture: this endpoint is fail-CLOSED. If anything goes wrong
- * (storage download fails, watermarking throws, config missing) we serve a
- * generic placeholder image — never the original. The original photo is
- * payment-gated; falling back to the un-watermarked source on error would
- * silently bypass that gate.
+ * (storage download fails, policy lookup fails, watermarking throws, config
+ * missing) we serve the watermark pipeline or a generic placeholder image —
+ * never the original. The original photo is payment-gated; falling back to
+ * the un-watermarked source on error would silently bypass that gate.
  */
 async function serveErrorPlaceholder(
   status: number,
@@ -131,10 +138,30 @@ export async function GET(
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { data: imageData, error: downloadError } = await supabase.storage
-      .from('photos')
-      .download(fullPath);
+    // T-133: pick the treatment from the event's OWN watermark policy + fetch
+    // the indexed face boxes, looked up server-side by storage path — never
+    // from anything the caller sends (this route is unauthenticated and
+    // path-addressable, so a caller-chosen treatment would let anyone strip
+    // the mark off a watermarked photo). The lookup is independent of the
+    // download, so both run in parallel — no extra round trip of latency on
+    // an already CDN-missed request. A lookup failure degrades to the
+    // watermark treatment (fail closed) but is served `no-store`: a transient
+    // DB hiccup must not pin the possibly-wrong treatment in the CDN for 24h.
+    let policyLookupFailed = false;
+    const [downloadResult, policy] = await Promise.all([
+      supabase.storage.from('photos').download(fullPath),
+      getPreviewPolicyByStoragePath(supabase, fullPath).catch((policyErr): PreviewPolicy => {
+        policyLookupFailed = true;
+        logWatermarkError('preview policy lookup failed (failing closed to watermark)', {
+          path: fullPath,
+          error: policyErr,
+          status: 200,
+        });
+        return { watermarkEnabled: null, faceBoxes: [] };
+      }),
+    ]);
 
+    const { data: imageData, error: downloadError } = downloadResult;
     if (downloadError || !imageData) {
       logWatermarkError('storage download failed', {
         path: fullPath,
@@ -149,22 +176,42 @@ export async function GET(
     const arrayBuffer = await imageData.arrayBuffer();
     const imageBuffer = Buffer.from(arrayBuffer);
 
-    // Best-effort: anchor a watermark over a face if this photo has indexed
-    // faces. Any failure here must NOT break the preview — degrade to tile-only.
-    let faceBoxes: FaceBox[] = [];
-    try {
-      faceBoxes = await getPhotoFaceBoxesByStoragePath(supabase, fullPath);
-    } catch (faceErr) {
-      logWatermarkError('face box lookup failed (degrading to tile-only)', {
-        path: fullPath,
-        error: faceErr,
-        status: 200,
-      });
+    // An event positively known to sell WITHOUT a visible mark gets the exact
+    // same treatment its baked public thumbnail serves in the steady state —
+    // literally the same `generateThumbnail('medium')` the bake job runs, so
+    // the pre-bake fallback can never expose more resolution than the public
+    // /api/thumb URL. Watermarked or UNKNOWN policy (no bound photo row for
+    // the path, lookup error) keeps the full watermark pipeline below — fail
+    // closed. Cached shorter than the watermark branch (1h vs 24h): this is
+    // the only body this route emits with no mark, so a later
+    // watermark_enabled flip must stop serving clean copies quickly — the
+    // URL is unversioned, there is no way to bust it.
+    if (policy.watermarkEnabled === false) {
+      try {
+        const downscaledBuffer = await generateThumbnail(imageBuffer, 'medium');
+        return new NextResponse(new Uint8Array(downscaledBuffer), {
+          headers: {
+            'Content-Type': 'image/webp',
+            'Cache-Control': 'public, max-age=3600, s-maxage=3600',
+          },
+        });
+      } catch (downscaleErr) {
+        // Same invariant as the watermark branch: never fall back to
+        // `imageBuffer` — the full-res original is payment-gated.
+        logWatermarkError('clean downscale threw', {
+          path: fullPath,
+          error: downscaleErr,
+          status: 502,
+        });
+        return serveErrorPlaceholder(502);
+      }
     }
 
     let watermarkedBuffer: Buffer;
     try {
-      watermarkedBuffer = await addWatermarkToImage(imageBuffer, faceBoxes);
+      // Blur every indexed face under the tile — face boxes came back with
+      // the policy lookup (empty on lookup failure → tile-only, best-effort).
+      watermarkedBuffer = await addWatermarkToImage(imageBuffer, policy.faceBoxes);
     } catch (watermarkErr) {
       // CRITICAL: never fall back to `imageBuffer` here — that would expose
       // the original, payment-gated photo to anyone who can hit the URL.
@@ -179,7 +226,13 @@ export async function GET(
     return new NextResponse(new Uint8Array(watermarkedBuffer), {
       headers: {
         'Content-Type': 'image/jpeg',
-        'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+        // A treatment picked on a FAILED policy lookup may be wrong (a
+        // no-watermark event transiently rendered with tiles) — keep it out
+        // of the CDN so the next request retries, mirroring the placeholder's
+        // no-store rationale.
+        'Cache-Control': policyLookupFailed
+          ? 'no-store, must-revalidate'
+          : 'public, max-age=86400, s-maxage=86400',
       },
     });
   } catch (error) {
