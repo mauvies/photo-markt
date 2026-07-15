@@ -324,4 +324,255 @@ describe('T-117 — cart inventory integrity', () => {
       expect(createSessionMock).toHaveBeenCalledTimes(1);
     });
   });
+
+  // ─── (e) T-134: authenticated checkout re-validates ACCESSIBILITY ─────────
+  //
+  // T-132 gated the guest checkout on private-event access, but authed checkout
+  // only re-validated purchasability. `cart_items` now persists the presented
+  // share code (access_share_code) so authed checkout can re-validate at parity
+  // with the guest path — closing the public→private-flip charge without
+  // breaking legitimate private (share-code) or favorites (tag) purchases.
+
+  /** Read the persisted access proof of a talent's only cart item. */
+  async function readAccessShareCode(talentId: string): Promise<string | null> {
+    const sb = createServiceClient();
+    const cart = await getOrCreateCart(sb, talentId);
+    const { data } = await sb
+      .from('cart_items')
+      .select('access_share_code')
+      .eq('cart_id', cart.id)
+      .single();
+    return (data?.access_share_code as string | null) ?? null;
+  }
+
+  describe('persisted access proof (access_share_code)', () => {
+    it('stores the presented code for a private-event add', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id, {
+        price_per_photo: 5,
+        is_public: false,
+        share_code: 'PRIV134',
+      });
+      const photo = await createTestPhoto(event.id, { user_id: photographer.id });
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+
+      await addPhotoToCartAction(photo.id, 'PRIV134');
+
+      expect(await readAccessShareCode(talent.id)).toBe('PRIV134');
+    });
+
+    it('stores null for a public-event add (no proof needed)', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id, { price_per_photo: 5, is_public: true });
+      const photo = await createTestPhoto(event.id, { user_id: photographer.id });
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+
+      await addPhotoToCartAction(photo.id);
+
+      expect(await readAccessShareCode(talent.id)).toBeNull();
+    });
+
+    it('stores null for the favorites/tag path (the live tag is the proof, not a code)', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id, {
+        price_per_photo: 5,
+        is_public: false,
+        share_code: 'PRIVTAG134',
+      });
+      const photo = await createTestPhoto(event.id, { user_id: photographer.id });
+      const talent = await createTestUser('TALENT');
+      await createServiceClient()
+        .from('talent_photo_tags')
+        .insert({ photo_id: photo.id, talent_user_id: talent.id, tagged_by_user_id: talent.id });
+      mockSession.userId = talent.id;
+
+      // No code presented — access granted by the tag.
+      await addPhotoToCartAction(photo.id);
+
+      expect(await readAccessShareCode(talent.id)).toBeNull();
+    });
+  });
+
+  describe('authed checkout accessibility re-validation', () => {
+    it('rejects a photo added while public then flipped private, with no code and no tag', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      await markConnected(photographer.id);
+      const event = await createTestEvent(photographer.id, { price_per_photo: 5, is_public: true });
+      const photo = await createTestPhoto(event.id, { user_id: photographer.id });
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+      await addPhotoToCartAction(photo.id); // added while public → no stored code
+
+      // Photographer flips the event private after it's in the cart.
+      await createServiceClient().from('events').update({ is_public: false }).eq('id', event.id);
+
+      await expect(createCheckoutSessionAction()).rejects.toThrow(/no longer available/i);
+      expect(createSessionMock).not.toHaveBeenCalled();
+    });
+
+    it('still checks out a legitimate private purchase (correct code persisted)', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      await markConnected(photographer.id);
+      const event = await createTestEvent(photographer.id, {
+        price_per_photo: 5,
+        is_public: false,
+        share_code: 'PRIVOK134',
+      });
+      const photo = await createTestPhoto(event.id, { user_id: photographer.id });
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+      await addPhotoToCartAction(photo.id, 'PRIVOK134');
+
+      const result = await createCheckoutSessionAction();
+
+      expect(result.url).toBe('https://checkout.stripe.test/session/cs_test_123');
+      expect(createSessionMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('still checks out a favorites purchase (tagged, no code) via the live tag check', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      await markConnected(photographer.id);
+      const event = await createTestEvent(photographer.id, {
+        price_per_photo: 5,
+        is_public: false,
+        share_code: 'PRIVFAV134',
+      });
+      const photo = await createTestPhoto(event.id, { user_id: photographer.id });
+      const talent = await createTestUser('TALENT');
+      await createServiceClient()
+        .from('talent_photo_tags')
+        .insert({ photo_id: photo.id, talent_user_id: talent.id, tagged_by_user_id: talent.id });
+      mockSession.userId = talent.id;
+      await addPhotoToCartAction(photo.id); // favorites path, no code
+
+      const result = await createCheckoutSessionAction();
+
+      expect(result.url).toBe('https://checkout.stripe.test/session/cs_test_123');
+      expect(createSessionMock).toHaveBeenCalledTimes(1);
+    });
+
+    // Share-code rotation: the stored code is re-validated against the event's
+    // CURRENT share_code every time, and a re-add through the new share link
+    // refreshes the persisted proof (never stranded on the old code).
+    it('re-proves access after a share-code rotation when the current code is re-presented', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      await markConnected(photographer.id);
+      const event = await createTestEvent(photographer.id, {
+        price_per_photo: 5,
+        is_public: false,
+        share_code: 'ROT_A',
+      });
+      const photo = await createTestPhoto(event.id, { user_id: photographer.id });
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+      await addPhotoToCartAction(photo.id, 'ROT_A'); // stores ROT_A
+
+      // Photographer rotates the share code; buyer re-adds via the new link.
+      await createServiceClient().from('events').update({ share_code: 'ROT_B' }).eq('id', event.id);
+      await addPhotoToCartAction(photo.id, 'ROT_B'); // idempotent re-add refreshes the proof
+
+      expect(await readAccessShareCode(talent.id)).toBe('ROT_B');
+      const result = await createCheckoutSessionAction();
+      expect(result.url).toBe('https://checkout.stripe.test/session/cs_test_123');
+      expect(createSessionMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses after a share-code rotation when the stale code is never re-presented (no tag)', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      await markConnected(photographer.id);
+      const event = await createTestEvent(photographer.id, {
+        price_per_photo: 5,
+        is_public: false,
+        share_code: 'ROT_A',
+      });
+      const photo = await createTestPhoto(event.id, { user_id: photographer.id });
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+      await addPhotoToCartAction(photo.id, 'ROT_A'); // stores ROT_A
+
+      // Rotation revokes the old link; buyer never re-presents the new code.
+      await createServiceClient().from('events').update({ share_code: 'ROT_C' }).eq('id', event.id);
+
+      await expect(createCheckoutSessionAction()).rejects.toThrow(/no longer available/i);
+      expect(createSessionMock).not.toHaveBeenCalled();
+    });
+
+    // Accepted fail-closed behavior (T-134 review): a favorites-added item's
+    // proof IS the live tag. Un-saving the photo removes that proof, so the
+    // item can no longer be checked out — parity with the guest path, which
+    // never trusts a stale grant. Documented, intended, self-heals like T-117.
+    it('refuses a favorites-added item after the buyer un-tags the photo', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      await markConnected(photographer.id);
+      const event = await createTestEvent(photographer.id, {
+        price_per_photo: 5,
+        is_public: false,
+        share_code: 'PRIVUNTAG134',
+      });
+      const photo = await createTestPhoto(event.id, { user_id: photographer.id });
+      const talent = await createTestUser('TALENT');
+      const sb = createServiceClient();
+      await sb
+        .from('talent_photo_tags')
+        .insert({ photo_id: photo.id, talent_user_id: talent.id, tagged_by_user_id: talent.id });
+      mockSession.userId = talent.id;
+      await addPhotoToCartAction(photo.id); // favorites path, no stored code
+
+      // Buyer removes the photo from their library — the only proof it had.
+      await sb
+        .from('talent_photo_tags')
+        .delete()
+        .eq('photo_id', photo.id)
+        .eq('talent_user_id', talent.id);
+
+      await expect(createCheckoutSessionAction()).rejects.toThrow(/no longer available/i);
+      expect(createSessionMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getCurrentCart self-heal drops inaccessible items (T-134)', () => {
+    it('removes a public-then-private-flipped item with no valid proof and reports removedCount', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id, { price_per_photo: 5, is_public: true });
+      const photo = await createTestPhoto(event.id, { user_id: photographer.id });
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+      await addPhotoToCartAction(photo.id);
+
+      await createServiceClient().from('events').update({ is_public: false }).eq('id', event.id);
+
+      const cartData = await getCurrentCart();
+
+      expect(cartData.removedCount).toBe(1);
+      expect(cartData.items).toHaveLength(0);
+
+      const sb = createServiceClient();
+      const cart = await getOrCreateCart(sb, talent.id);
+      const { count } = await sb
+        .from('cart_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('cart_id', cart.id);
+      expect(count).toBe(0);
+    });
+
+    it('keeps a private item whose persisted code still matches', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id, {
+        price_per_photo: 5,
+        is_public: false,
+        share_code: 'PRIVKEEP134',
+      });
+      const photo = await createTestPhoto(event.id, { user_id: photographer.id });
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+      await addPhotoToCartAction(photo.id, 'PRIVKEEP134');
+
+      const cartData = await getCurrentCart();
+
+      expect(cartData.removedCount).toBe(0);
+      expect(cartData.items).toHaveLength(1);
+    });
+  });
 });

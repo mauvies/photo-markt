@@ -1106,6 +1106,38 @@ export function isEventAccessible(
   return event.share_code !== null && shareCodes.includes(event.share_code);
 }
 
+/** The access-relevant event fields for one photo (T-132/T-134). */
+type PhotoEventAccess = { is_public: boolean | null; share_code: string | null };
+
+/**
+ * Load the access-relevant event fields (`is_public`, `share_code`) for a set
+ * of photos, keyed by photo id — the shared fetch both accessibility helpers
+ * below build on, so the PostgREST `events!inner` embed shape is normalized in
+ * exactly one place. Pass `supabaseAdmin`: the buyer isn't the photo's owner.
+ */
+async function getEventAccessByPhotoIds(
+  supabase: SupabaseServerClient,
+  photoIds: string[],
+): Promise<Map<string, PhotoEventAccess>> {
+  const map = new Map<string, PhotoEventAccess>();
+  if (photoIds.length === 0) return map;
+
+  const { data, error } = await supabase
+    .from('photos')
+    .select('id, events!inner(is_public, share_code)')
+    .in('id', photoIds);
+
+  if (error) {
+    throw new Error(`Failed to load event access by photo ids: ${getErrorMessage(error)}`);
+  }
+
+  for (const row of data ?? []) {
+    const event = Array.isArray(row.events) ? row.events[0] : row.events;
+    if (event) map.set(row.id as string, event);
+  }
+  return map;
+}
+
 /**
  * Of `photoIds`, the subset whose event is ACCESSIBLE to a caller presenting
  * `shareCodes` (T-132) — the batch companion to {@link isEventAccessible},
@@ -1120,24 +1152,70 @@ export async function getAccessiblePhotoIds(
   photoIds: string[],
   shareCodes: string[],
 ): Promise<Set<string>> {
-  if (photoIds.length === 0) return new Set();
-
-  const { data, error } = await supabase
-    .from('photos')
-    .select('id, events!inner(is_public, share_code)')
-    .in('id', photoIds);
-
-  if (error) {
-    throw new Error(`Failed to get accessible photo ids: ${getErrorMessage(error)}`);
-  }
+  const eventByPhotoId = await getEventAccessByPhotoIds(supabase, photoIds);
 
   const accessible = new Set<string>();
-  for (const row of data ?? []) {
-    const event = Array.isArray(row.events) ? row.events[0] : row.events;
-    if (event && isEventAccessible(event, shareCodes)) {
-      accessible.add(row.id as string);
+  for (const [photoId, event] of eventByPhotoId) {
+    if (isEventAccessible(event, shareCodes)) accessible.add(photoId);
+  }
+  return accessible;
+}
+
+/**
+ * Of the authenticated cart `items`, the subset of photo ids the buyer may
+ * still purchase from an ACCESS standpoint (T-134) — the authed-checkout
+ * companion to {@link getAccessiblePhotoIds}, which keys off a request-scoped
+ * code set. Here each item carries its OWN persisted proof (`accessShareCode`,
+ * captured at add time), because the authed cart spans events added at
+ * different times with different codes.
+ *
+ * A photo is accessible iff its event is public now, OR the item's persisted
+ * code matches that event's current `share_code` (via the shared
+ * {@link isEventAccessible}), OR the buyer still has the photo tagged in their
+ * library — the favorites path presents no code, and a live tag is also a
+ * legitimate escape hatch when the photographer rotated the code after the
+ * buyer saved the photo. Pair with {@link getPurchasablePhotoIds} (state): a
+ * photo must be BOTH accessible and purchasable to be bought. Pass
+ * `supabaseAdmin`: the buyer isn't the photo's owner.
+ */
+export async function getAccessibleAuthedCartPhotoIds(
+  supabase: SupabaseServerClient,
+  items: Array<{ photoId: string; accessShareCode: string | null }>,
+  userId: string,
+): Promise<Set<string>> {
+  if (items.length === 0) return new Set();
+
+  const eventByPhotoId = await getEventAccessByPhotoIds(
+    supabase,
+    items.map((i) => i.photoId),
+  );
+
+  const accessible = new Set<string>();
+  const needsTagCheck: string[] = [];
+  for (const item of items) {
+    const event = eventByPhotoId.get(item.photoId);
+    if (!event) continue; // no event row → not accessible (and not purchasable)
+    if (isEventAccessible(event, item.accessShareCode ? [item.accessShareCode] : [])) {
+      accessible.add(item.photoId);
+    } else {
+      needsTagCheck.push(item.photoId);
     }
   }
+
+  // Only the items no code cleared fall back to the live tag check — one
+  // batched lookup against the buyer's own library, never per-item.
+  if (needsTagCheck.length > 0) {
+    const { data: tags, error: tagError } = await supabase
+      .from('talent_photo_tags')
+      .select('photo_id')
+      .eq('talent_user_id', userId)
+      .in('photo_id', needsTagCheck);
+    if (tagError) {
+      throw new Error(`Failed to check cart tag ownership: ${getErrorMessage(tagError)}`);
+    }
+    for (const tag of tags ?? []) accessible.add(tag.photo_id as string);
+  }
+
   return accessible;
 }
 

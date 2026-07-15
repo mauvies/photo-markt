@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 55 | P2 | T-134 | [Seguridad/Pagos] Checkout autenticado no re-valida accesibilidad (flip público→privado); falta prueba de acceso persistida — hallazgo del `/code-review` de T-132 | T-132 | todo |
+| 55 | P2 | T-134 | [Seguridad/Pagos] Checkout autenticado no re-valida accesibilidad (flip público→privado); falta prueba de acceso persistida — hallazgo del `/code-review` de T-132 | T-132 | doing |
 | 55 | P2 | T-136 | [Seguridad/Pagos] Galerías (pública, talent, favoritos) firman el original full-res pre-bake en eventos vendibles sin watermark + índice `photos.original_url` — hallazgo del `/code-review` de T-133 | T-133 | todo |
 | 56 | P2 | T-125 | [Perf] Peso de imágenes de la galería: backfill thumbnails legacy + variante small + cap de tiles eager (F2 de T-123) | — | todo |
 | 57 | P2 | T-127 | [EventCard] Reservar dos líneas para el título → altura de card consistente (info de abajo alineada entre cards) | — | todo |
