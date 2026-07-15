@@ -1,7 +1,7 @@
 # T-131 · Seguridad/Pagos: el fallback de preview del carrito sirve el original SIN watermark antes de que hornee el thumbnail
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `fix/cart-preview-watermark-fallback`
 - **OpenSpec change:** —  (tocará el criterio de watermark — evaluar al ejecutar; es superficie de pagos/seguridad → `/code-review` antes de commitear)

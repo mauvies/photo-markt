@@ -18,6 +18,7 @@ import {
 } from '@/database/queries';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { getBaseUrl } from '@/lib/get-base-url';
 import { getSiteUrl } from '@/lib/get-site-url';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import type { Locale } from '@/lib/i18n/config';
@@ -90,9 +91,12 @@ export async function getCurrentCart(): Promise<CartData> {
   // photographer's storage path with the user-scoped client can be denied by
   // RLS, which left authenticated cart previews broken while the guest cart
   // (already admin-signed) worked.
+  // baseUrl lets the pre-bake fallback of watermarked events serve the
+  // fail-closed /api/watermark/ route instead of the raw original (T-131).
   const previewUrlsById = await getPhotoPreviewUrls(
     supabaseAdmin,
     items.map((item) => item.photo_id),
+    await getBaseUrl(),
   );
 
   const subtotalCents = items.reduce((sum, item) => sum + item.unit_price_cents, 0);
