@@ -1,12 +1,14 @@
 /**
  * Integration tests for `getPhotoPreviewUrls` (`src/database/queries/photos.ts`).
  *
- * T-131: the shared cart preview resolver. When a photo's thumbnail hasn't
- * baked yet, the pre-bake fallback must honor the event's watermark policy —
- * watermarked (payment-gated) events go through the fail-closed /api/watermark/
- * route, NEVER a direct signed URL of the raw original ("full resolution only
- * after purchase"). Free / no-watermark events keep the direct signed original
- * (nothing to protect). A `ready` thumbnail always wins via /api/thumb/.
+ * T-131/T-133: the shared cart preview resolver. When a photo's thumbnail
+ * hasn't baked yet, the pre-bake fallback must never serve a direct signed URL
+ * of the raw original for anything payment-gated ("full resolution only after
+ * purchase"): watermarked events (T-131) AND sellable no-watermark events
+ * (T-133) both go through the fail-closed /api/watermark/ route, which picks
+ * the treatment server-side. Only an event positively known to be free AND
+ * un-watermarked keeps the direct signed original (nothing to protect). A
+ * `ready` thumbnail always wins via /api/thumb/.
  *
  * This is the single point both cart surfaces (guest + authenticated) share,
  * so the invariant is asserted once here.
@@ -64,8 +66,11 @@ describe('getPhotoPreviewUrls', () => {
     expect(result[photo.id]).not.toContain('/storage/v1/object/sign/');
   });
 
-  it('serves a direct signed original for a free (no-watermark) event with a pending thumbnail', async () => {
+  it('serves the fail-closed watermark route (not the raw original) for a SELLABLE no-watermark event with a pending thumbnail (T-133)', async () => {
     const photographer = await createTestUser('PHOTOGRAPHER');
+    // Sellable but the photographer disabled the visible mark: the full-res
+    // original is still payment-gated (steady state serves the downscaled
+    // medium thumb), so the pre-bake fallback must not expose it either.
     const event = await createTestEvent(photographer.id, { price_per_photo: 10 });
     const originalUrl = `${photographer.id}/${event.id}/${crypto.randomUUID()}.jpg`;
     await uploadStubBytes(originalUrl);
@@ -73,7 +78,6 @@ describe('getPhotoPreviewUrls', () => {
       user_id: photographer.id,
       original_url: originalUrl,
     });
-    // Free event: nothing to protect, keep the current direct-sign behavior.
     await createServiceClient()
       .from('events')
       .update({ watermark_enabled: false })
@@ -81,8 +85,43 @@ describe('getPhotoPreviewUrls', () => {
 
     const result = await getPhotoPreviewUrls(createServiceClient(), [photo.id], BASE_URL);
 
-    expect(result[photo.id]).toContain('/storage/v1/object/sign/');
-    expect(result[photo.id]).not.toContain('/api/watermark/');
+    // The regression: before T-133 this resolved to a direct signed URL of the
+    // full-resolution original — anyone could save the sellable photo without
+    // paying, just because the event had no visible watermark.
+    expect(result[photo.id]).toBe(`${BASE_URL}/api/watermark/${originalUrl}`);
+    expect(result[photo.id]).not.toContain('/storage/v1/object/sign/');
+  });
+
+  it('serves a direct signed original for a genuinely FREE no-watermark event with a pending thumbnail', async () => {
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    // No price and no watermark: a "purchase" would grant nothing beyond what
+    // the photographer already gives away — nothing to protect (decided in
+    // T-133). Both null and 0 prices count as free.
+    const nullPriceEvent = await createTestEvent(photographer.id, { price_per_photo: null });
+    const zeroPriceEvent = await createTestEvent(photographer.id, { price_per_photo: 0 });
+    const photos = [];
+    for (const event of [nullPriceEvent, zeroPriceEvent]) {
+      const originalUrl = `${photographer.id}/${event.id}/${crypto.randomUUID()}.jpg`;
+      await uploadStubBytes(originalUrl);
+      photos.push(
+        await createTestPhoto(event.id, { user_id: photographer.id, original_url: originalUrl }),
+      );
+      await createServiceClient()
+        .from('events')
+        .update({ watermark_enabled: false })
+        .eq('id', event.id);
+    }
+
+    const result = await getPhotoPreviewUrls(
+      createServiceClient(),
+      photos.map((p) => p.id),
+      BASE_URL,
+    );
+
+    for (const photo of photos) {
+      expect(result[photo.id]).toContain('/storage/v1/object/sign/');
+      expect(result[photo.id]).not.toContain('/api/watermark/');
+    }
   });
 
   it('serves the baked immutable thumbnail when ready, regardless of watermark policy', async () => {

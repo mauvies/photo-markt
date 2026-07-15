@@ -7,6 +7,9 @@
  *   - Missing object → 404 placeholder (fail-closed), never cached
  *   - Path traversal → 400
  *   - T-094: over the per-IP hourly cap → 429 with Retry-After, never cached
+ *   - T-133: treatment picked server-side from the event's watermark policy —
+ *     no-watermark events get a clean medium-budget (800px) downscale, while
+ *     watermarked or UNKNOWN-policy paths keep the tiled pipeline (1024px)
  */
 
 import { NextRequest } from 'next/server';
@@ -16,6 +19,9 @@ import { GET } from '@/app/api/watermark/[...path]/route';
 import { computeWindow } from '@/lib/rate-limit';
 import {
   createServiceClient,
+  createTestEvent,
+  createTestPhoto,
+  createTestUser,
   LOCAL_SERVICE_ROLE_KEY,
   LOCAL_SUPABASE_URL,
 } from '../../helpers/supabase-test-client';
@@ -83,6 +89,135 @@ describe('/api/watermark route', () => {
   it('returns 400 for a path traversal attempt (..)', async () => {
     const res = await makeRequest(['test-user', '..', 'photo.jpg']);
     expect(res.status).toBe(400);
+  });
+
+  // T-133: the treatment is decided server-side from the photo's event. A
+  // 1600×1200 source makes the branch observable in the output size — the
+  // watermark pipeline resizes to 1024 longest-side, the clean no-watermark
+  // downscale to the public medium-thumb budget (800). Neither ever returns
+  // the 1600px original.
+  describe('server-side treatment by event watermark policy (T-133)', () => {
+    let largeJpeg: Buffer;
+    const uploadedPaths: string[] = [];
+
+    beforeAll(async () => {
+      largeJpeg = await sharp({
+        create: { width: 1600, height: 1200, channels: 3, background: { r: 40, g: 90, b: 60 } },
+      })
+        .jpeg({ quality: 80 })
+        .toBuffer();
+    });
+
+    afterAll(async () => {
+      // resetDatabase truncates tables, not storage — clean our objects so
+      // the local bucket doesn't accumulate 1600×1200 blobs across runs.
+      if (uploadedPaths.length > 0) {
+        await createServiceClient().storage.from(BUCKET).remove(uploadedPaths);
+      }
+    });
+
+    async function uploadLargeJpeg(storagePath: string) {
+      await createServiceClient()
+        .storage.from(BUCKET)
+        .upload(storagePath, largeJpeg, { contentType: 'image/jpeg', upsert: true });
+      uploadedPaths.push(storagePath);
+    }
+
+    /** Seed an event + photo row + stored object; returns the storage path. */
+    async function seedEventPhoto(opts: { watermarkEnabled: boolean }): Promise<string> {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id, { price_per_photo: 10 });
+      await createServiceClient()
+        .from('events')
+        .update({ watermark_enabled: opts.watermarkEnabled })
+        .eq('id', event.id);
+      const storagePath = `${photographer.id}/${event.id}/${crypto.randomUUID()}.jpg`;
+      await uploadLargeJpeg(storagePath);
+      await createTestPhoto(event.id, { user_id: photographer.id, original_url: storagePath });
+      return storagePath;
+    }
+
+    it('serves the clean baked-thumbnail treatment for a sellable NO-watermark event — never the full-res original', async () => {
+      const storagePath = await seedEventPhoto({ watermarkEnabled: false });
+
+      const res = await makeRequest(storagePath.split('/'));
+
+      expect(res.status).toBe(200);
+      // Literally the bake job's generateThumbnail('medium') output: webp,
+      // medium budget (800) — NOT the watermark pipeline's 1024, and NEVER
+      // the 1600 source.
+      expect(res.headers.get('content-type')).toBe('image/webp');
+      const meta = await sharp(Buffer.from(await res.arrayBuffer())).metadata();
+      expect(meta.format).toBe('webp');
+      expect(meta.width).toBe(800);
+      expect(meta.height).toBe(600);
+      // Shorter TTL than the watermark branch: a watermark_enabled flip must
+      // stop serving clean cached copies within the hour.
+      expect(res.headers.get('cache-control') ?? '').toContain('max-age=3600');
+    });
+
+    it('keeps the tiled watermark pipeline (cached 24h) for a watermarked event', async () => {
+      const storagePath = await seedEventPhoto({ watermarkEnabled: true });
+
+      const res = await makeRequest(storagePath.split('/'));
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('image/jpeg');
+      expect(res.headers.get('cache-control') ?? '').toContain('max-age=86400');
+      const meta = await sharp(Buffer.from(await res.arrayBuffer())).metadata();
+      // The watermark pipeline's 1024 longest-side — proves the clean branch
+      // did NOT run for a watermarked event.
+      expect(meta.width).toBe(1024);
+      expect(meta.height).toBe(768);
+    });
+
+    it('fails closed to the watermark pipeline when the policy is unknown (no photo row for the path)', async () => {
+      const orphanPath = `orphan-user/orphan-event/${crypto.randomUUID()}.jpg`;
+      await uploadLargeJpeg(orphanPath);
+
+      const res = await makeRequest(orphanPath.split('/'));
+
+      expect(res.status).toBe(200);
+      const meta = await sharp(Buffer.from(await res.arrayBuffer())).metadata();
+      // Unknown policy must NOT get the clean treatment — an attacker must
+      // never obtain a cleaner copy by pointing the route at a path the DB
+      // can't vouch for.
+      expect(meta.width).toBe(1024);
+    });
+
+    it('ignores a planted photos row not bound to the path event — a crafted row cannot unlock the clean treatment', async () => {
+      // Photos RLS only checks user_id on insert, so any authenticated user
+      // can plant a row whose original_url points at someone else's storage
+      // object while event_id points at their OWN no-watermark event. During
+      // the victim's orphan-cleanup window (photo row gone, object still in
+      // storage) that planted row would be the only original_url match — an
+      // unbound-row lookup would read the attacker's watermark_enabled=false
+      // and serve a clean copy of the victim's payment-gated photo.
+      const victim = await createTestUser('PHOTOGRAPHER');
+      const victimEvent = await createTestEvent(victim.id, { price_per_photo: 10 });
+      // watermark_enabled stays at the DB default (true) — a watermarked event.
+      const victimPath = `${victim.id}/${victimEvent.id}/${crypto.randomUUID()}.jpg`;
+      await uploadLargeJpeg(victimPath);
+      // No photo row for victimPath — simulates the orphan-cleanup window.
+
+      const attacker = await createTestUser('PHOTOGRAPHER');
+      const attackerEvent = await createTestEvent(attacker.id, { price_per_photo: 10 });
+      await createServiceClient()
+        .from('events')
+        .update({ watermark_enabled: false })
+        .eq('id', attackerEvent.id);
+      // The planted row: attacker's no-watermark event claiming the victim's path.
+      await createTestPhoto(attackerEvent.id, { user_id: attacker.id, original_url: victimPath });
+
+      const res = await makeRequest(victimPath.split('/'));
+
+      expect(res.status).toBe(200);
+      const meta = await sharp(Buffer.from(await res.arrayBuffer())).metadata();
+      // The planted row's event_id doesn't match the path's event segment →
+      // ignored → policy unknown → tiled watermark (1024), never the clean 800.
+      expect(meta.width).toBe(1024);
+      expect(meta.format).not.toBe('webp');
+    });
   });
 
   // T-094 regression: pre-seed the caller's bucket to the limit so the next

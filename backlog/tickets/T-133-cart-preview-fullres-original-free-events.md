@@ -1,11 +1,11 @@
 # T-133 · Seguridad: el fallback de preview del carrito sirve el ORIGINAL a resolución completa en eventos sin watermark (pre-bake)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/cart-preview-fullres-free-events`
 - **OpenSpec change:** —  (superficie de pagos/seguridad → `/code-review` antes de commitear)
-- **PR:** —
+- **PR:** #189
 
 ## Requerimiento
 Hallazgo CONFIRMED del `/code-review high` de T-131 (pre-existente; T-131 lo dejó fuera de alcance a
