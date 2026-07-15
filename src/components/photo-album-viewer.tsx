@@ -19,6 +19,7 @@ import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCoarsePointer } from '@/hooks/use-coarse-pointer';
 import { usePhotoLightboxUrl } from '@/hooks/use-photo-lightbox-url';
+import { resolveGalleryTileSrc } from '@/lib/gallery-tile-src';
 import { shouldSkipImageOptimization } from '@/lib/image-source';
 import { cn } from '@/lib/utils';
 
@@ -246,14 +247,20 @@ export default function PhotoAlbumViewer({
 
   // Uniform tile source: fixed-size crops (aspect-square, object-cover) don't
   // need natural width/height, so this — unlike the old justified-rows layout
-  // — never varies tile count per row by aspect ratio. `next/image` resizes
-  // the medium thumbnail (or the full url as fallback) down to the rendered
-  // tile size per `GRID_SIZES`, so no manual srcSet is needed.
+  // — never varies tile count per row by aspect ratio.
+  //
+  // Prefer the 400px `small` thumbnail for the grid tile (T-125): tiles render
+  // at ~180–280px, so the 800px `medium` (~104 KB avg) ships ~3.4× the bytes a
+  // tile needs — the 400px `small` (~31 KB avg) covers every breakpoint incl.
+  // mobile retina. `resolveGalleryTileSrc` falls back to `medium`, then the full
+  // `url`, so a photo whose thumbnails haven't baked (or a surface that doesn't
+  // thread `thumbSmall`) keeps its current source with no regression. The
+  // lightbox / detail modal still open `medium`/full for the zoomed view.
   const photos = useMemo(
     () =>
       items.map((p) => ({
         id: p.id,
-        src: p.thumbMedium ?? p.url,
+        src: resolveGalleryTileSrc(p),
         alt: p.alt ?? 'photo',
         unoptimized: p.unoptimized,
       })),
