@@ -2,7 +2,10 @@
  * Photo-related database queries
  */
 
-import { resolvePhotoPreviewUrl } from '@/lib/thumbnails';
+// Import the sharp-free URL helper module — NOT '@/lib/thumbnails', which
+// loads sharp at module scope: this query file is client-reachable via
+// plan-limits.ts → the event wizard, and sharp breaks the browser build.
+import { resolvePhotoPreviewUrl } from '@/lib/thumbnail-urls';
 import { createPhotoUrls } from './storage';
 import type { SupabaseServerClient } from './types';
 import { getErrorMessage } from './types';
