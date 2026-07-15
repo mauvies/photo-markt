@@ -277,7 +277,7 @@ export function EventCard({
     <div className="group relative overflow-hidden rounded-2xl border bg-card">
       {/* Cover */}
       <Link href={eventHref} className="block">
-        <div className="relative aspect-[16/11] w-full overflow-hidden bg-muted">
+        <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
           {coverSrc ? (
             <>
               {/* Skeleton sits BEHIND the image (earlier in DOM, both absolute)
