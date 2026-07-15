@@ -1,11 +1,11 @@
 # T-128 · Sincronizar los loading skeletons con el layout/márgenes actuales
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno (Dep **T-127** — soft: el skeleton de la card debe reservar el mismo espacio de título de dos líneas)
 - **Rama:** `fix/sync-loading-skeletons`  (tipo = fix)
 - **OpenSpec change:** —  (solo loading states; requerimiento claro, sin schema/lógica)
-- **PR:** —
+- **PR:** #193
 
 ## Requerimiento
 Los loading skeletons (estados/páginas de carga) se **desincronizaron** de los componentes reales que
