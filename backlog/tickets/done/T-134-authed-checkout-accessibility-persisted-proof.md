@@ -1,11 +1,11 @@
 # T-134 · Seguridad/Pagos: el checkout autenticado no re-valida accesibilidad (evento privado tras flip público→privado) — falta prueba de acceso persistida
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/authed-checkout-accessibility`
 - **OpenSpec change:** sí — toca pagos/seguridad y probablemente migración (columna de prueba de acceso o tabla de grants); `/opsx:propose` + `/code-review ultra`.
-- **PR:** —
+- **PR:** #190
 
 ## Requerimiento
 Hallazgo CONFIRMED del `/code-review high` de T-132. T-132 cerró el add-to-cart, el merge y el checkout

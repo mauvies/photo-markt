@@ -7,8 +7,9 @@ import {
   clearCart as dbClearCart,
   removePhotoFromCart as dbRemovePhotoFromCart,
   deleteCartItemsByPhotoIds,
+  getAccessibleAuthedCartPhotoIds,
+  getCartItemAccessInfo,
   getCartItemCount,
-  getCartItemPhotoIds,
   getCartItemsWithDetails,
   getOrCreateCart,
   getPhotographerConnectStatuses,
@@ -68,15 +69,22 @@ export async function getCurrentCart(): Promise<CartData> {
 
   const cart = await getOrCreateCart(supabase, user.id);
 
-  // Self-heal (T-117): a hard-deleted photo is already gone from cart_items
-  // via the `on delete cascade` FK, but a soft-deleted event or an
-  // upload_status regression (approved -> rejected) is not — diff the raw,
-  // unfiltered id list against the purchasable set and delete what's gone bad.
-  const rawPhotoIds = await getCartItemPhotoIds(supabase, cart.id);
-  const purchasableIds = await getPurchasablePhotoIds(supabaseAdmin, rawPhotoIds);
-  const unpurchasableIds = rawPhotoIds.filter((id) => !purchasableIds.has(id));
-  if (unpurchasableIds.length > 0) {
-    await deleteCartItemsByPhotoIds(supabaseAdmin, cart.id, unpurchasableIds);
+  // Self-heal: a hard-deleted photo is already gone from cart_items via the
+  // `on delete cascade` FK, but two conditions are not — drop both so the
+  // rendered cart and the checkout agree on what's buyable:
+  //  - (T-117) a soft-deleted event or an upload_status regression
+  //    (approved -> rejected) makes a photo unpurchasable; and
+  //  - (T-134) an event flipped public -> private after the item was added,
+  //    with no persisted matching code and no live tag, makes it inaccessible.
+  const accessInfo = await getCartItemAccessInfo(supabase, cart.id);
+  const rawPhotoIds = accessInfo.map((i) => i.photoId);
+  const [purchasableIds, accessibleIds] = await Promise.all([
+    getPurchasablePhotoIds(supabaseAdmin, rawPhotoIds),
+    getAccessibleAuthedCartPhotoIds(supabaseAdmin, accessInfo, user.id),
+  ]);
+  const badIds = rawPhotoIds.filter((id) => !purchasableIds.has(id) || !accessibleIds.has(id));
+  if (badIds.length > 0) {
+    await deleteCartItemsByPhotoIds(supabaseAdmin, cart.id, badIds);
   }
 
   // Read details with the admin client (T-130): the joined photo/event rows
@@ -117,7 +125,7 @@ export async function getCurrentCart(): Promise<CartData> {
     })),
     subtotalCents,
     itemCount: items.length,
-    removedCount: unpurchasableIds.length,
+    removedCount: badIds.length,
   };
 }
 
@@ -185,12 +193,20 @@ export async function addPhotoToCartAction(photoId: string, shareCode?: string):
   // is a fallback, evaluated only when the code doesn't already grant access.
   // Reported as "not found" so a UUID-only probe can't distinguish "wrong id"
   // from "no access".
+  const grantedByCode = isEventAccessible(event, shareCode ? [shareCode] : []);
   const accessible =
-    isEventAccessible(event, shareCode ? [shareCode] : []) ||
-    (await isPhotoTaggedForTalent(supabaseAdmin, photoId, user.id));
+    grantedByCode || (await isPhotoTaggedForTalent(supabaseAdmin, photoId, user.id));
   if (!accessible) {
     throw new Error('Event not found.');
   }
+
+  // Persist the access proof (T-134) so authed checkout can re-validate against
+  // it later. Store the code ONLY when it's the private-event proof that
+  // granted access — never for a public event (no proof needed) or the tag
+  // path (the live tag is the proof). This is what lets checkout refuse a
+  // photo added while public and only later flipped private.
+  const accessShareCode =
+    event.is_public !== true && shareCode && shareCode === event.share_code ? shareCode : null;
 
   // Allow free photos (price_per_photo can be null or 0)
   // Convert price to cents (avoid floating point issues)
@@ -201,7 +217,14 @@ export async function addPhotoToCartAction(photoId: string, shareCode?: string):
   const cart = await getOrCreateCart(supabase, user.id);
 
   // Add photo to cart
-  await dbAddPhotoToCart(supabase, cart.id, photoId, photographerId, unitPriceCents);
+  await dbAddPhotoToCart(
+    supabase,
+    cart.id,
+    photoId,
+    photographerId,
+    unitPriceCents,
+    accessShareCode,
+  );
 }
 
 /**
@@ -322,22 +345,29 @@ export async function createCheckoutSessionAction(): Promise<{ url: string }> {
   // Get user's cart
   const cart = await getOrCreateCart(supabase, user.id);
 
-  // Defense in depth (T-117): re-validate purchasability immediately before
-  // charging, against the RAW cart_items list — never charge for a photo
-  // that's since become unpurchasable. `getCartItemsWithDetails` below
-  // already silently excludes soft-deleted-event items, so checking against
-  // its (pre-filtered) output would miss exactly that case in a mixed cart
-  // and silently charge for a smaller cart than the user saw. Self-heal by
+  // Defense in depth: re-validate BOTH purchasability (T-117) and accessibility
+  // (T-134) immediately before charging, against the RAW cart_items list —
+  // never charge for a photo that's since become unpurchasable (event
+  // soft-deleted / upload_status regressed) OR inaccessible (event flipped
+  // public -> private and the buyer holds no valid persisted code and no live
+  // tag). This reaches parity with the guest checkout. `getCartItemsWithDetails`
+  // below already silently excludes soft-deleted-event items, so checking
+  // against its (pre-filtered) output would miss exactly that case in a mixed
+  // cart and silently charge for a smaller cart than the user saw. Self-heal by
   // deleting the bad rows so the next cart load is already clean.
-  const rawPhotoIds = await getCartItemPhotoIds(supabase, cart.id);
+  const accessInfo = await getCartItemAccessInfo(supabase, cart.id);
+  const rawPhotoIds = accessInfo.map((i) => i.photoId);
   if (rawPhotoIds.length === 0) {
     throw new Error('Cart is empty');
   }
 
-  const purchasableIds = await getPurchasablePhotoIds(supabaseAdmin, rawPhotoIds);
-  const unpurchasablePhotoIds = rawPhotoIds.filter((id) => !purchasableIds.has(id));
-  if (unpurchasablePhotoIds.length > 0) {
-    await deleteCartItemsByPhotoIds(supabaseAdmin, cart.id, unpurchasablePhotoIds);
+  const [purchasableIds, accessibleIds] = await Promise.all([
+    getPurchasablePhotoIds(supabaseAdmin, rawPhotoIds),
+    getAccessibleAuthedCartPhotoIds(supabaseAdmin, accessInfo, user.id),
+  ]);
+  const badPhotoIds = rawPhotoIds.filter((id) => !purchasableIds.has(id) || !accessibleIds.has(id));
+  if (badPhotoIds.length > 0) {
+    await deleteCartItemsByPhotoIds(supabaseAdmin, cart.id, badPhotoIds);
     const h = await headers();
     const referer = h.get('referer') ?? '';
     const lang = (referer.match(/\/(es|en)\//)?.[1] ?? 'en') as Locale;
@@ -350,11 +380,13 @@ export async function createCheckoutSessionAction(): Promise<{ url: string }> {
   // user-scoped read would see an empty cart and wrongly reject checkout.
   const allCartItems = await getCartItemsWithDetails(supabaseAdmin, cart.id, user.id);
 
-  // Charge ONLY rows that passed the purchasability check above. The admin
-  // read re-queries cart_items, so a row inserted concurrently between the
-  // raw-id snapshot and this read has never been validated — filtering by the
-  // validated set closes that window instead of trusting the fresh list.
-  const cartItems = allCartItems.filter((item) => purchasableIds.has(item.photo_id));
+  // Charge ONLY rows that passed both checks above. The admin read re-queries
+  // cart_items, so a row inserted concurrently between the raw-id snapshot and
+  // this read has never been validated — filtering by the validated sets closes
+  // that window instead of trusting the fresh list.
+  const cartItems = allCartItems.filter(
+    (item) => purchasableIds.has(item.photo_id) && accessibleIds.has(item.photo_id),
+  );
 
   if (cartItems.length === 0) {
     throw new Error('Cart is empty');
@@ -462,9 +494,25 @@ export async function mergeGuestCartAction(items: GuestCartItem[]): Promise<numb
       // code in the cart must never cross it.
       if (!isEventAccessible(event, shareCodes)) continue;
 
+      // Persist the access proof (T-134): for a private event the cart proved,
+      // store its own share code (a code only unlocks its own event, so a
+      // pooled match means this event's code IS present). Public events store
+      // null. This is what authed checkout re-validates against.
+      const accessShareCode =
+        event.is_public !== true && event.share_code && shareCodes.includes(event.share_code)
+          ? event.share_code
+          : null;
+
       const unitPriceCents = event.price_per_photo ? Math.round(event.price_per_photo * 100) : 0;
 
-      await dbAddPhotoToCart(supabase, cart.id, item.photoId, photo.user_id, unitPriceCents);
+      await dbAddPhotoToCart(
+        supabase,
+        cart.id,
+        item.photoId,
+        photo.user_id,
+        unitPriceCents,
+        accessShareCode,
+      );
       merged++;
     } catch {
       // skip individual failures — best-effort merge

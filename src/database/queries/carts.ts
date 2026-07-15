@@ -102,17 +102,37 @@ export async function addPhotoToCart(
   photoId: string,
   photographerId: string,
   unitPriceCents: number,
+  // T-134: the share code the caller presented for this photo's (private)
+  // event, persisted as the access proof authed checkout re-validates against.
+  // Null for public events and the favorites/tag path (no code was presented).
+  accessShareCode?: string | null,
 ): Promise<void> {
   // Check if item already exists (idempotent)
   const { data: existing } = await supabase
     .from('cart_items')
-    .select('id')
+    .select('id, access_share_code')
     .eq('cart_id', cartId)
     .eq('photo_id', photoId)
     .maybeSingle();
 
   if (existing) {
-    // Already in cart, do nothing (idempotent)
+    // Already in cart (idempotent). Refresh the persisted proof whenever the
+    // caller now presents a DIFFERENT non-null code: the callers only ever pass
+    // a code they've already validated against the event's CURRENT share_code,
+    // so a newly-presented code is always the freshest valid proof — this is
+    // what lets a re-add through a rotated share link (old stored code no longer
+    // matches) re-prove access instead of being stranded. Never clear an
+    // existing code on a code-less re-add (that must not downgrade a proven
+    // item).
+    if (accessShareCode && accessShareCode !== existing.access_share_code) {
+      const { error: updateError } = await supabase
+        .from('cart_items')
+        .update({ access_share_code: accessShareCode })
+        .eq('id', existing.id);
+      if (updateError) {
+        throw new Error(`Failed to update cart item access proof: ${getErrorMessage(updateError)}`);
+      }
+    }
     return;
   }
 
@@ -121,6 +141,7 @@ export async function addPhotoToCart(
     photo_id: photoId,
     photographer_id: photographerId,
     unit_price_cents: unitPriceCents,
+    access_share_code: accessShareCode ?? null,
   });
 
   if (error) {
@@ -179,6 +200,31 @@ export async function getCartItemPhotoIds(
   }
 
   return (data ?? []).map((row) => row.photo_id as string);
+}
+
+/**
+ * Raw `photo_id` + persisted `access_share_code` per cart item (T-134) — the
+ * access-proof view the accessibility re-validation needs, distinct from the
+ * display-only `event_share_code` join in {@link getCartItemsWithDetails}
+ * (which is the event's CURRENT code, not the code the buyer presented).
+ */
+export async function getCartItemAccessInfo(
+  supabase: SupabaseServerClient,
+  cartId: string,
+): Promise<Array<{ photoId: string; accessShareCode: string | null }>> {
+  const { data, error } = await supabase
+    .from('cart_items')
+    .select('photo_id, access_share_code')
+    .eq('cart_id', cartId);
+
+  if (error) {
+    throw new Error(`Failed to get cart item access info: ${getErrorMessage(error)}`);
+  }
+
+  return (data ?? []).map((row) => ({
+    photoId: row.photo_id as string,
+    accessShareCode: (row.access_share_code as string | null) ?? null,
+  }));
 }
 
 /**

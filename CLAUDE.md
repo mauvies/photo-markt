@@ -168,9 +168,12 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
 - Face embeddings themselves live inside the AWS collection — the DB only stores the returned `aws_face_id`. Talent selfie search maps AWS face IDs back to photo IDs here
 
 **carts / cart_items**
-`carts: id, user_id` — `cart_items: id, cart_id, photo_id, photographer_id, unit_price_cents`
+`carts: id, user_id` — `cart_items: id, cart_id, photo_id, photographer_id, unit_price_cents, access_share_code`
 - Guest cart stored in `localStorage` under `photo-markt_guest_cart`
 - Guest cart merged into authenticated cart on login via `src/components/guest-cart-merge.tsx`
+- `access_share_code` (nullable, T-134) persists the private-event share code the buyer presented at add/merge time — the access proof authenticated checkout re-validates against. Both `createCheckoutSessionAction` and the `getCurrentCart` self-heal drop/refuse an item unless its event is public now, its stored `access_share_code` still matches the event's `share_code`, or the buyer still has the photo tagged (live check) — parity with the guest checkout, closing the public→private-flip charge. Stored null for public events and the favorites/tag path; legacy rows (null) fail closed for private events
+
+**Access proof is per-item and validated live.** Never treat the display-only `event_share_code` (the event's *current* code, joined for the `/events/[shareCode]` link) as the access proof — the proof is the persisted `cart_items.access_share_code`. The shared accessibility rule is `isEventAccessible` / `getAccessibleAuthedCartPhotoIds` (reuse, don't re-derive)
 
 **orders / order_items**
 `orders: id, user_id, cart_id, stripe_payment_intent_id, stripe_checkout_session_id, status, total_amount_cents`
