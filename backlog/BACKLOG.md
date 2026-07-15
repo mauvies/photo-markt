@@ -11,10 +11,10 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 55 | P2 | T-136 | [Seguridad/Pagos] Galerías (pública, talent, favoritos) firman el original full-res pre-bake en eventos vendibles sin watermark + índice `photos.original_url` — hallazgo del `/code-review` de T-133 | T-133 | todo |
-| 56 | P2 | T-125 | [Perf] Peso de imágenes de la galería: backfill thumbnails legacy + variante small + cap de tiles eager (F2 de T-123) | — | todo |
-| 57 | P2 | T-127 | [EventCard] Reservar dos líneas para el título → altura de card consistente (info de abajo alineada entre cards) | — | todo |
-| 58 | P2 | T-128 | [Skeletons] Sincronizar los loading skeletons (home, listado, detalle) con el layout/márgenes post-rediseño → menos layout shift | T-127 | todo |
+| 55 | P2 | T-125 | [Perf] Peso de imágenes de la galería: backfill thumbnails legacy + variante small + cap de tiles eager (F2 de T-123) | — | todo |
+| 56 | P2 | T-127 | [EventCard] Reservar dos líneas para el título → altura de card consistente (info de abajo alineada entre cards) | — | todo |
+| 57 | P2 | T-128 | [Skeletons] Sincronizar los loading skeletons (home, listado, detalle) con el layout/márgenes post-rediseño → menos layout shift | T-127 | todo |
+| 58 | P3 | T-136 | [Seguridad/Pagos] Galerías (pública, talent, favoritos) firman el original full-res pre-bake en eventos vendibles sin watermark + índice `photos.original_url` — hallazgo del `/code-review` de T-133 | T-133 | todo |
 | 59 | P3 | T-126 | [Perf] Code-split del stack modal/lightbox de la galería + bundle Sentry (~180 KiB JS sin usar, F3 de T-123) | — | todo |
 | 60 | P3 | T-135 | [Chore/Bundle] Quitar `framer-motion` (solo lo usa `feedback-view`) reimplementando su animación en CSS | — | todo |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
