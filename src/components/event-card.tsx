@@ -156,7 +156,7 @@ function ActivityBadge({
   return (
     <OverlayIconBadge
       label={label}
-      className={`absolute ${position} flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white/90 backdrop-blur-sm`}
+      className={`absolute ${position} flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-black/70 backdrop-blur-sm`}
     >
       <Icon className="h-4 w-4" aria-hidden />
     </OverlayIconBadge>
@@ -277,7 +277,7 @@ export function EventCard({
     <div className="group relative overflow-hidden rounded-2xl border bg-card">
       {/* Cover */}
       <Link href={eventHref} className="block">
-        <div className="relative aspect-[16/11] w-full overflow-hidden bg-muted">
+        <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
           {coverSrc ? (
             <>
               {/* Skeleton sits BEHIND the image (earlier in DOM, both absolute)
@@ -363,7 +363,10 @@ export function EventCard({
         {/* Title + (explore) share/save icons */}
         <div className="flex items-start justify-between gap-1">
           <Link href={eventHref} className="block min-w-0 flex-1">
-            <h3 className="line-clamp-2 text-lg font-semibold leading-snug text-foreground">
+            {/* min-h reserves two lines of text-lg/leading-snug (2 * 1.125rem * 1.375)
+                so a one-line title doesn't collapse the block and misalign the info
+                below it across cards in the same grid row (T-127). */}
+            <h3 className="line-clamp-2 min-h-[3.1rem] text-lg font-semibold leading-snug text-foreground">
               {name}
             </h3>
           </Link>
