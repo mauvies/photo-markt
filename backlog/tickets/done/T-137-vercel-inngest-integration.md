@@ -1,11 +1,19 @@
 # T-137 · [Infra/Inngest] Instalar la integración Vercel↔Inngest para auto-sync en cada deploy
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
-- **Rama:** `infra/vercel-inngest-integration`
-- **OpenSpec change:** — (config de infra, no toca el repo)
-- **PR:** — (probablemente sin cambios de código; es config en Vercel/Inngest)
+- **Rama:** — (config de infra en Vercel/Inngest, sin cambios de código)
+- **OpenSpec change:** —
+- **PR:** — (sin PR; config de dashboard)
+
+## Resolución (2026-07-15)
+Integración Vercel↔Inngest configurada por el usuario: generada la key de **Protection Bypass for
+Automation** en Vercel y cargada en Inngest (deja pasar los requests de Inngest a `/api/inngest`
+pese a la Deployment Protection de prod). **Verificado empíricamente:** el merge del PR #191
+disparó un deploy y el app de Inngest **se re-sincronizó solo** (apareció el sync automático sin
+disparo manual). El drift 5/13 no vuelve a pasar. Queda pendiente T-138 (reconciliar lo que estuvo
+muerto durante el período de drift).
 
 ## Requerimiento
 Causa raíz descubierta en T-125: el app de Inngest de **producción quedó synceado viejo** —
