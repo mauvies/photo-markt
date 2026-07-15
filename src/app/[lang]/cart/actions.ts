@@ -1,9 +1,8 @@
 'use server';
 
 import { headers } from 'next/headers';
-import { getPurchasablePhotoIds } from '@/database/queries/photos';
+import { getPhotoPreviewUrls, getPurchasablePhotoIds } from '@/database/queries/photos';
 import { getPhotographerConnectStatuses } from '@/database/queries/profiles';
-import { createPhotoUrls } from '@/database/queries/storage';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { getBaseUrl } from '@/lib/get-base-url';
 import type { GuestCartItem } from '@/lib/guest-cart';
@@ -11,54 +10,14 @@ import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { getClientIp, rateLimit } from '@/lib/rate-limit';
 import { stripe } from '@/lib/stripe/config';
-import { resolvePhotoPreviewUrl } from '@/lib/thumbnails';
 
 /**
- * Resolve the current, live preview URL for each guest cart photo — never the
- * snapshot `previewUrl` stashed in localStorage at add-to-cart time, which is
- * a signed original that expires after ~1h (T-115). Mirrors the authenticated
- * cart's resolution (`getCurrentCart`): thumbnail-first when baked (immutable,
- * never expires), falling back to a freshly-signed original — unwatermarked,
- * matching the existing "no watermark for cart previews" convention — for
- * photos whose thumbnail hasn't baked yet.
+ * Ceiling on ids per guest-cart state request. A real guest cart holds a
+ * handful of photos; anything past the cap is quietly left unresolved (icon
+ * fallback) rather than fanned out into an unbounded service-role query +
+ * bulk storage signing for an attacker-supplied list.
  */
-export async function resolveGuestCartPreviewsAction(
-  photoIds: string[],
-): Promise<Record<string, string | null>> {
-  if (photoIds.length === 0) return {};
-
-  const { data: photos, error } = await supabaseAdmin
-    .from('photos')
-    .select('id, original_url, thumbnail_status, thumb_version')
-    .in('id', photoIds);
-
-  if (error || !photos) return {};
-
-  const paths = photos
-    .map((photo) => photo.original_url)
-    .filter((url): url is string => url !== null);
-
-  const signedUrls = await createPhotoUrls(supabaseAdmin, 'photos', paths, {
-    expiresIn: 3600,
-    useWatermark: false,
-  });
-  const signedMap: Record<string, string> = {};
-  for (const item of signedUrls) {
-    if (item.signedUrl) signedMap[item.path] = item.signedUrl;
-  }
-
-  const result: Record<string, string | null> = {};
-  for (const photo of photos) {
-    result[photo.id] = resolvePhotoPreviewUrl({
-      originalUrl: photo.original_url,
-      thumbnailStatus: photo.thumbnail_status,
-      thumbVersion: photo.thumb_version,
-      fallbackSignedUrl: photo.original_url ? (signedMap[photo.original_url] ?? null) : null,
-    });
-  }
-
-  return result;
-}
+const GUEST_CART_MAX_IDS = 100;
 
 /**
  * Validate a guest (localStorage) cart's photo ids against the shared
@@ -66,18 +25,43 @@ export async function resolveGuestCartPreviewsAction(
  * still valid — one round trip from the client. Ids that are no longer
  * purchasable (photo hard-deleted, event soft-deleted, or `upload_status` no
  * longer approved) come back in `removedPhotoIds` so the caller can drop them
- * and show a notice; `previews` only covers the surviving ids, reusing
- * `resolveGuestCartPreviewsAction` (T-115) rather than re-deriving it.
+ * and show a notice; `previews` only covers the surviving ids (never the
+ * snapshot `previewUrl` stashed in localStorage at add-to-cart time, which is
+ * a signed original that expires after ~1h — T-115). Resolution itself is the
+ * shared `getPhotoPreviewUrls` (T-130): baked thumbnail first, freshly-signed
+ * original as fallback.
+ *
+ * This is the ONLY exported entry point for guest preview resolution
+ * (T-130 hardening): the previous `resolveGuestCartPreviewsAction` was a
+ * separately POSTable server action that resolved arbitrary caller-supplied
+ * ids with NO purchasability filter — an unauthenticated signed-URL minting
+ * surface. Folded in here so every anonymous caller passes the purchasability
+ * gate, the id cap, and the IP rate limit below.
  */
 export async function loadGuestCartStateAction(
   photoIds: string[],
 ): Promise<{ removedPhotoIds: string[]; previews: Record<string, string | null> }> {
   if (photoIds.length === 0) return { removedPhotoIds: [], previews: {} };
 
-  const purchasableIds = await getPurchasablePhotoIds(supabaseAdmin, photoIds);
-  const removedPhotoIds = photoIds.filter((id) => !purchasableIds.has(id));
-  const validPhotoIds = photoIds.filter((id) => purchasableIds.has(id));
-  const previews = await resolveGuestCartPreviewsAction(validPhotoIds);
+  // Unauthenticated endpoint doing service-role reads + bulk storage signing
+  // — same abuse class as the guest checkout above, so same IP keying. More
+  // generous than checkout (a legit guest reloads the cart page freely), and
+  // on limit we degrade to "no previews resolved" WITHOUT reporting removals:
+  // a rate-limited response must never make the client drop valid items.
+  const rl = await rateLimit({
+    key: `guest-cart-previews:${getClientIp(await headers())}`,
+    limit: 60,
+    windowSec: 3600,
+  });
+  if (!rl.ok) {
+    return { removedPhotoIds: [], previews: {} };
+  }
+
+  const cappedIds = photoIds.slice(0, GUEST_CART_MAX_IDS);
+  const purchasableIds = await getPurchasablePhotoIds(supabaseAdmin, cappedIds);
+  const removedPhotoIds = cappedIds.filter((id) => !purchasableIds.has(id));
+  const validPhotoIds = cappedIds.filter((id) => purchasableIds.has(id));
+  const previews = await getPhotoPreviewUrls(supabaseAdmin, validPhotoIds);
 
   return { removedPhotoIds, previews };
 }

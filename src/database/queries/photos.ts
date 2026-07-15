@@ -2,6 +2,11 @@
  * Photo-related database queries
  */
 
+// Import the sharp-free URL helper module — NOT '@/lib/thumbnails', which
+// loads sharp at module scope: this query file is client-reachable via
+// plan-limits.ts → the event wizard, and sharp breaks the browser build.
+import { resolvePhotoPreviewUrl } from '@/lib/thumbnail-urls';
+import { createPhotoUrls } from './storage';
 import type { SupabaseServerClient } from './types';
 import { getErrorMessage } from './types';
 
@@ -1076,4 +1081,66 @@ export async function getPurchasablePhotoIds(
   }
 
   return new Set((data ?? []).map((row) => row.id as string));
+}
+
+/**
+ * Resolve display preview URLs for a set of photos, keyed by photo id — the
+ * single source both cart surfaces share (T-130, extracted from T-115's
+ * guest-cart resolution). Serves the baked immutable thumbnail (`/api/thumb`)
+ * when `thumbnail_status='ready'`, falling back to a fresh non-watermarked
+ * signed URL of the original while the thumbnail hasn't baked.
+ *
+ * Pass `supabaseAdmin`: the viewer is a buyer, not the photo's owner, so a
+ * user-scoped client can be denied by storage RLS when signing someone
+ * else's path — exactly the T-130 bug this replaces.
+ *
+ * Best-effort by design: a failed lookup returns `{}` (missing ids degrade to
+ * the caller's icon fallback) rather than breaking the whole cart load.
+ */
+export async function getPhotoPreviewUrls(
+  supabase: SupabaseServerClient,
+  photoIds: string[],
+): Promise<Record<string, string | null>> {
+  if (photoIds.length === 0) return {};
+
+  const { data: photos, error } = await supabase
+    .from('photos')
+    .select('id, original_url, thumbnail_status, thumb_version')
+    .in('id', photoIds);
+
+  if (error || !photos) {
+    // Still best-effort (previews degrade to the icon fallback), but never
+    // silently: an outage here blanks every cart preview at once.
+    console.error(`getPhotoPreviewUrls: photos lookup failed: ${error?.message ?? 'no rows'}`);
+    return {};
+  }
+
+  // Only sign originals that will actually be served — a `ready` thumbnail
+  // wins in resolvePhotoPreviewUrl, so signing its original would be a wasted
+  // storage round trip on every cart load in the steady state.
+  const paths = photos
+    .filter((photo) => photo.thumbnail_status !== 'ready')
+    .map((photo) => photo.original_url)
+    .filter((url): url is string => url !== null);
+
+  const signedUrls =
+    paths.length > 0
+      ? await createPhotoUrls(supabase, 'photos', paths, { expiresIn: 3600, useWatermark: false })
+      : [];
+  const signedMap: Record<string, string> = {};
+  for (const item of signedUrls) {
+    if (item.signedUrl) signedMap[item.path] = item.signedUrl;
+  }
+
+  const result: Record<string, string | null> = {};
+  for (const photo of photos) {
+    result[photo.id] = resolvePhotoPreviewUrl({
+      originalUrl: photo.original_url,
+      thumbnailStatus: photo.thumbnail_status,
+      thumbVersion: photo.thumb_version,
+      fallbackSignedUrl: photo.original_url ? (signedMap[photo.original_url] ?? null) : null,
+    });
+  }
+
+  return result;
 }

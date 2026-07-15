@@ -3,7 +3,6 @@
 import { headers } from 'next/headers';
 import { userHasRole } from '@/app/[lang]/actions/roles';
 import {
-  createPhotoUrls,
   addPhotoToCart as dbAddPhotoToCart,
   clearCart as dbClearCart,
   removePhotoFromCart as dbRemovePhotoFromCart,
@@ -13,12 +12,12 @@ import {
   getCartItemsWithDetails,
   getOrCreateCart,
   getPhotographerConnectStatuses,
+  getPhotoPreviewUrls,
   getPurchasablePhotoIds,
   isPhotoInCart,
 } from '@/database/queries';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
-import { getBaseUrl } from '@/lib/get-base-url';
 import { getSiteUrl } from '@/lib/get-site-url';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import type { Locale } from '@/lib/i18n/config';
@@ -77,34 +76,31 @@ export async function getCurrentCart(): Promise<CartData> {
     await deleteCartItemsByPhotoIds(supabaseAdmin, cart.id, unpurchasableIds);
   }
 
-  const items = await getCartItemsWithDetails(supabase, cart.id, user.id);
+  // Read details with the admin client (T-130): the joined photo/event rows
+  // belong to the PHOTOGRAPHER, and `photos` RLS only exposes own rows
+  // (`own_photos_select`) — with the user-scoped client the `photos!inner`
+  // join silently dropped every foreign item from the buyer's cart. Ownership
+  // is still enforced: `cart.id` comes from the session user's own cart and
+  // `getCartItemsWithDetails` re-checks `user_id` explicitly via `getCart`.
+  const items = await getCartItemsWithDetails(supabaseAdmin, cart.id, user.id);
 
-  // Generate signed URLs for preview images
-  const photoPaths = items
-    .map((item) => item.photo_url)
-    .filter((url): url is string => url !== null);
-
-  const previewUrlsMap: Record<string, string | null> = {};
-
-  if (photoPaths.length > 0) {
-    const baseUrl = await getBaseUrl();
-    const photoUrls = await createPhotoUrls(supabase, 'photos', photoPaths, {
-      expiresIn: 3600,
-      useWatermark: false, // No watermark for cart previews
-      baseUrl,
-    });
-
-    for (const item of photoUrls) {
-      previewUrlsMap[item.path] = item.signedUrl;
-    }
-  }
+  // Resolve previews with the shared cart resolution (T-130): baked thumbnail
+  // when ready, admin-signed original as fallback. Signing MUST use
+  // `supabaseAdmin` — the talent doesn't own the photo, so signing the
+  // photographer's storage path with the user-scoped client can be denied by
+  // RLS, which left authenticated cart previews broken while the guest cart
+  // (already admin-signed) worked.
+  const previewUrlsById = await getPhotoPreviewUrls(
+    supabaseAdmin,
+    items.map((item) => item.photo_id),
+  );
 
   const subtotalCents = items.reduce((sum, item) => sum + item.unit_price_cents, 0);
 
   return {
     items: items.map((item) => ({
       photoId: item.photo_id,
-      previewUrl: item.photo_url ? (previewUrlsMap[item.photo_url] ?? null) : null,
+      previewUrl: previewUrlsById[item.photo_id] ?? null,
       photographerId: item.photographer_id,
       photographerName: item.photographer_name,
       photographerSlug: item.photographer_slug,
@@ -321,8 +317,16 @@ export async function createCheckoutSessionAction(): Promise<{ url: string }> {
     throw new Error(dict.cart.itemsUnavailableRemoved);
   }
 
-  // Get cart items
-  const cartItems = await getCartItemsWithDetails(supabase, cart.id, user.id);
+  // Get cart items — admin client for the same reason as `getCurrentCart`
+  // (T-130): `photos` RLS hides the photographer's rows from the buyer, so a
+  // user-scoped read would see an empty cart and wrongly reject checkout.
+  const allCartItems = await getCartItemsWithDetails(supabaseAdmin, cart.id, user.id);
+
+  // Charge ONLY rows that passed the purchasability check above. The admin
+  // read re-queries cart_items, so a row inserted concurrently between the
+  // raw-id snapshot and this read has never been validated — filtering by the
+  // validated set closes that window instead of trusting the fresh list.
+  const cartItems = allCartItems.filter((item) => purchasableIds.has(item.photo_id));
 
   if (cartItems.length === 0) {
     throw new Error('Cart is empty');
