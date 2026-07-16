@@ -37,8 +37,10 @@ import {
 } from '@/hooks/use-bulk-contributor-delete';
 import { useBulkPhotoDownload } from '@/hooks/use-bulk-photo-download';
 import { useLoadMorePhotos } from '@/hooks/use-load-more-photos';
+import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
 import { filterNewIds } from '@/lib/bulk-select';
+import { showAddedToCartToast } from '@/lib/cart-toast';
 import { shouldShowBulkDownload } from '@/lib/event-bulk-actions';
 import {
   bibSearchEmptyKind,
@@ -180,6 +182,7 @@ export function EventPhotoViewer({
     failedBulkClaim: string;
   }>();
   const router = useRouter();
+  const lp = useLocalizedPath();
 
   // Bulk-delete dialog state. `deletedIds` filters the server-provided list so
   // deleted tiles drop instantly; router.refresh() then reconciles.
@@ -227,9 +230,13 @@ export function EventPhotoViewer({
   const handleAddToCart = useCallback(
     (photoId: string) => {
       addToCart(photoId);
-      toast.success(t('addedToCart'));
+      showAddedToCartToast({
+        message: t('addedToCart'),
+        viewCartLabel: bulkDownload.viewCart,
+        onViewCart: () => router.push(lp('/dashboard/talent/cart')),
+      });
     },
-    [addToCart, t],
+    [addToCart, t, bulkDownload, router, lp],
   );
 
   const handleRemoveFromCart = useCallback(
@@ -381,13 +388,16 @@ export function EventPhotoViewer({
         return;
       }
       for (const id of toAdd) addToCart(id);
-      toast.success(
-        toAdd.length === 1
-          ? bulkDownload.addedToCartOne
-          : bulkDownload.addedToCartMany.replace('{n}', String(toAdd.length)),
-      );
+      showAddedToCartToast({
+        message:
+          toAdd.length === 1
+            ? bulkDownload.addedToCartOne
+            : bulkDownload.addedToCartMany.replace('{n}', String(toAdd.length)),
+        viewCartLabel: bulkDownload.viewCart,
+        onViewCart: () => router.push(lp('/dashboard/talent/cart')),
+      });
     },
-    [photosInCart, purchasedPhotoIds, addToCart, bulkDownload],
+    [photosInCart, purchasedPhotoIds, addToCart, bulkDownload, router, lp],
   );
 
   // ── Bulk delete — talents may only delete their own uploads ─────────────

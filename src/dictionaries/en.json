@@ -664,7 +664,9 @@
     "loading": "Loading...",
     "cancel": "Cancel",
     "addedToCart": "Added to cart",
+    "addedToCartMany": "{n} photos added to cart",
     "removedFromCart": "Removed from cart",
+    "viewCart": "View cart",
     "failedAddCart": "Couldn't add the photo to your cart, please try again",
     "failedRemoveCart": "Couldn't remove the photo from your cart, please try again"
   },
@@ -1113,7 +1115,7 @@
     "jobTitle": "Event Photographer",
     "noEventsBody": "This photographer hasn't published any events yet.",
     "editProfile": "Edit profile",
-    "copyProfileLink": "Copy profile link",
+    "copyProfileLink": "Copy link",
     "copied": "Copied",
     "editProfileTitle": "Edit profile",
     "editProfileSubtitle": "Update your public profile info — name, username and short bio.",

@@ -95,7 +95,6 @@ export async function PhotographerPublicProfile({
           createdAt={profile.created_at}
           eventCount={profile.eventCount}
           photoCount={profile.photoCount}
-          photosSoldCount={profile.photosSoldCount}
           labels={{
             locationFormat: p.locationFormat,
             photographerSince: p.photographerSince,
@@ -103,15 +102,12 @@ export async function PhotographerPublicProfile({
             eventsCountOne: p.eventsCountOne,
             photosCount: p.photosCount,
             photosCountOne: p.photosCountOne,
-            photosSold: p.photosSold,
-            photosSoldOne: p.photosSoldOne,
           }}
         />
 
         {isOwner && (
-          // Owner-only action row — lets the photographer edit their info
-          // or grab their shareable URL (always the public path) without
-          // leaving the page.
+          // Owner-only action row — edit info or copy the shareable URL. Sits
+          // below the identity block (after the location/member-since meta).
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <Link
               href={`/${lang}/dashboard/photographer/profile/edit`}
@@ -129,7 +125,7 @@ export async function PhotographerPublicProfile({
         )}
       </div>
 
-      <section className="mt-4">
+      <section>
         <h2 className="mb-4 text-xl font-semibold tracking-tight sm:text-2xl">{p.events}</h2>
         {photographerEvents.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed py-20 text-center sm:py-24">

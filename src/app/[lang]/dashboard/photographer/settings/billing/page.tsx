@@ -65,68 +65,73 @@ export default async function PhotographerSettingsBillingPage({
           <CardDescription>{dict.photographerDashboard.billingPlanDesc}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 p-4 pt-0 sm:p-6 sm:pt-0">
-          <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-medium">{dict.photographerDashboard.currentPlan}</p>
-              <p className="text-sm text-muted-foreground">
-                {currentPlan.name} Plan
-                {currentPlan.pricing !== null && ` • ${formatPlanPrice(currentPlan)}`}
-              </p>
-            </div>
-            {nextPlanId && (
-              <UpgradePlanButton
-                planId={nextPlanId}
-                checkoutErrorLabel={dict.photographerDashboard.checkoutError}
-                yearlyUnavailableLabel={dict.photographerDashboard.checkoutYearlyUnavailable}
-                className="w-full bg-gradient-starter border-0 text-white hover:opacity-90 sm:w-auto"
-              />
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-sm font-medium">{dict.photographerDashboard.planFeatures}</p>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              {planFeatures[currentPlanId].map((feature) => (
-                <li key={feature.text} className="flex items-start gap-2">
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                  <span>
-                    {feature.text}
-                    {feature.badge && (
-                      <Badge variant="secondary" className="ml-1.5 py-0 text-[10px]">
-                        {feature.badge}
-                      </Badge>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {currentPlan.storageGB !== null && (
-            <div className="space-y-2 rounded-lg border p-4">
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-2">
-                  <Database className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-sm font-medium">{dict.photographerDashboard.storageUsage}</p>
-                </div>
+          {/* Single "Plan actual" card — the current-plan heading + upgrade CTA on
+              top, then the plan's feature list, then storage usage (no inner
+              border) so it all reads as one consolidated card. */}
+          <div className="space-y-4 rounded-lg border p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium">{dict.photographerDashboard.currentPlan}</p>
                 <p className="text-sm text-muted-foreground">
-                  {formatStorage(storage.usedGB)} / {formatStorage(currentPlan.storageGB)}
+                  {currentPlan.name} Plan
+                  {currentPlan.pricing !== null && ` • ${formatPlanPrice(currentPlan)}`}
                 </p>
               </div>
-              <Progress
-                value={Math.min((storage.usedGB / currentPlan.storageGB) * 100, 100)}
-                className="h-2"
-              />
-              <p className="text-xs text-muted-foreground">
-                {totals.totalPhotos} {dict.photographerDashboard.photosUploaded}
-              </p>
-              {storage.usedGB >= currentPlan.storageGB && (
-                <p className="mt-2 text-xs font-medium text-destructive">
-                  {dict.photographerDashboard.storageLimitReached}
-                </p>
+              {nextPlanId && (
+                <UpgradePlanButton
+                  planId={nextPlanId}
+                  checkoutErrorLabel={dict.photographerDashboard.checkoutError}
+                  yearlyUnavailableLabel={dict.photographerDashboard.checkoutYearlyUnavailable}
+                  className="w-full bg-gradient-starter border-0 text-white hover:opacity-90 sm:w-auto"
+                />
               )}
             </div>
-          )}
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">{dict.photographerDashboard.planFeatures}</p>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                {planFeatures[currentPlanId].map((feature) => (
+                  <li key={feature.text} className="flex items-start gap-2">
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                    <span>
+                      {feature.text}
+                      {feature.badge && (
+                        <Badge variant="secondary" className="ml-1.5 py-0 text-[10px]">
+                          {feature.badge}
+                        </Badge>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {currentPlan.storageGB !== null && (
+              <div className="space-y-2">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2">
+                    <Database className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-sm font-medium">{dict.photographerDashboard.storageUsage}</p>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {formatStorage(storage.usedGB)} / {formatStorage(currentPlan.storageGB)}
+                  </p>
+                </div>
+                <Progress
+                  value={Math.min((storage.usedGB / currentPlan.storageGB) * 100, 100)}
+                  className="h-2"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {totals.totalPhotos} {dict.photographerDashboard.photosUploaded}
+                </p>
+                {storage.usedGB >= currentPlan.storageGB && (
+                  <p className="mt-2 text-xs font-medium text-destructive">
+                    {dict.photographerDashboard.storageLimitReached}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
 
           <AvailablePlansSection
             plans={PLANS.filter((plan) => plan.id !== currentPlanId && plan.id !== 'free')}

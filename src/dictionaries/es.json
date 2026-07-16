@@ -664,7 +664,9 @@
     "loading": "Cargando...",
     "cancel": "Cancelar",
     "addedToCart": "Añadida al carrito",
+    "addedToCartMany": "{n} fotos añadidas al carrito",
     "removedFromCart": "Eliminada del carrito",
+    "viewCart": "Ver carrito",
     "failedAddCart": "No se pudo añadir la foto al carrito, inténtalo de nuevo",
     "failedRemoveCart": "No se pudo eliminar la foto del carrito, inténtalo de nuevo"
   },
@@ -1113,7 +1115,7 @@
     "jobTitle": "Fotógrafo de eventos",
     "noEventsBody": "Este fotógrafo aún no ha publicado ningún evento.",
     "editProfile": "Editar perfil",
-    "copyProfileLink": "Copiar enlace del perfil",
+    "copyProfileLink": "Copiar enlace",
     "copied": "Copiado",
     "editProfileTitle": "Editar perfil",
     "editProfileSubtitle": "Actualiza la información pública de tu perfil: nombre, usuario y biografía.",
