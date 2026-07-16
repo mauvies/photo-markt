@@ -2,10 +2,24 @@
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+// Mutable URL state so a test can simulate a photo being open (`?photo=…`)
+// without re-mocking. Defaults to closed (empty) for every existing test.
+const { mockNav } = vi.hoisted(() => ({ mockNav: { params: new URLSearchParams() } }));
 vi.mock('next/navigation', () => ({
   usePathname: () => '/es/events/some-event',
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => mockNav.params,
 }));
+
+// The detail modal / lightbox are code-split via next/dynamic (T-126). Stub the
+// dynamic wrapper with a synchronous marker so a test can assert whether the
+// overlay is mounted (the deferred-load gate) without resolving the real
+// server-coupled module or waiting on the async import.
+vi.mock('next/dynamic', async () => {
+  const React = await vi.importActual<typeof import('react')>('react');
+  return {
+    default: () => () => React.createElement('div', { 'data-testid': 'lazy-overlay' }),
+  };
+});
 
 // PhotoIconButtons and PhotoLightbox transitively import this Server Action
 // module (for the untag flow); it pulls in `supabaseAdmin`, which throws
@@ -17,7 +31,11 @@ vi.mock('@/app/[lang]/dashboard/photographer/events/[id]/actions', () => ({
 
 import PhotoAlbumViewer, { type PhotoAlbumItem } from '@/components/photo-album-viewer';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  // Reset to the default (closed) URL so tests don't leak the open state.
+  mockNav.params = new URLSearchParams();
+});
 
 function makeBatch(ids: string[]): PhotoAlbumItem[] {
   return ids.map((id) => ({ id, url: `/${id}.jpg` }));
@@ -114,5 +132,24 @@ describe('PhotoAlbumViewer grid', () => {
         lazySkeleton &&
         lazyImg.compareDocumentPosition(lazySkeleton) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+});
+
+// T-126: the detail modal / lightbox are lazy-loaded (next/dynamic) and gated on
+// first open, so their chunk stays out of the gallery's first load. These lock
+// in the gate — the overlay must NOT mount while the gallery is closed, and MUST
+// mount when a photo is open (incl. a deep-linked `?photo=`), so opening keeps
+// working after the split.
+describe('PhotoAlbumViewer deferred overlay (T-126)', () => {
+  it('does not mount the detail/lightbox overlay while no photo is open', () => {
+    mockNav.params = new URLSearchParams();
+    const { queryByTestId } = render(<PhotoAlbumViewer items={makeBatch(['a', 'b'])} />);
+    expect(queryByTestId('lazy-overlay')).toBeNull();
+  });
+
+  it('mounts the overlay when a photo is open (deep-linked ?photo=)', () => {
+    mockNav.params = new URLSearchParams('photo=a');
+    const { queryByTestId } = render(<PhotoAlbumViewer items={makeBatch(['a', 'b'])} />);
+    expect(queryByTestId('lazy-overlay')).not.toBeNull();
   });
 });

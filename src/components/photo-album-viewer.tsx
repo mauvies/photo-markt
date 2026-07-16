@@ -1,20 +1,17 @@
 'use client';
 
 import { ImageOff } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import type { LightboxActionLabels } from '@/components/lightbox-action-bar';
-import {
-  PhotoDetailModal,
-  type PhotoDetailModalItem,
-  type PhotoDetailModalLabels,
-} from '@/components/photo-detail-modal';
+import type { PhotoDetailModalItem, PhotoDetailModalLabels } from '@/components/photo-detail-modal';
 import {
   PhotoIconButtons,
   type PhotoIconTooltips,
   type PhotoMoreMenuConfig,
 } from '@/components/photo-icon-buttons';
-import { PhotoLightbox, type PhotoLightboxItem } from '@/components/photo-lightbox';
+import type { PhotoLightboxItem } from '@/components/photo-lightbox';
 import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCoarsePointer } from '@/hooks/use-coarse-pointer';
@@ -22,6 +19,20 @@ import { usePhotoLightboxUrl } from '@/hooks/use-photo-lightbox-url';
 import { resolveGalleryTileSrc } from '@/lib/gallery-tile-src';
 import { shouldSkipImageOptimization } from '@/lib/image-source';
 import { cn } from '@/lib/utils';
+
+// T-126: the detail modal + lightbox are only shown after a tile tap, so their
+// code is loaded on demand (next/dynamic) rather than in every gallery route's
+// first load (~F3 of the T-123 perf audit). `ssr: false` — both are pure client
+// interaction surfaces with nothing to server-render; the mount gate below
+// keeps the chunk from being fetched until the first open.
+const PhotoDetailModal = dynamic(
+  () => import('@/components/photo-detail-modal').then((m) => m.PhotoDetailModal),
+  { ssr: false },
+);
+const PhotoLightbox = dynamic(
+  () => import('@/components/photo-lightbox').then((m) => m.PhotoLightbox),
+  { ssr: false },
+);
 
 /** Matches the `sm`/`md`/`lg` breakpoints in `grid-cols-*` below so `next/image`
  * requests a close-fitting resize instead of always the largest variant. */
@@ -194,6 +205,15 @@ export default function PhotoAlbumViewer({
   // rendered segments are slices of it, so they can't drift out of sync.
   const items = useMemo(() => itemBatches?.flat() ?? itemsProp ?? [], [itemBatches, itemsProp]);
   const { index, openAt, switchTo, close } = usePhotoLightboxUrl(items);
+  // Latch the on-demand overlay chunk (T-126): don't mount — nor fetch — the
+  // detail modal / lightbox until a photo is first opened, then keep it mounted
+  // so the Radix dialog's close animation still plays through the open→closed
+  // transition. Seeded from `index` so a deep-linked `?photo=` open renders
+  // without waiting for an interaction.
+  const [overlayMounted, setOverlayMounted] = useState(index >= 0);
+  useEffect(() => {
+    if (index >= 0 && !overlayMounted) setOverlayMounted(true);
+  }, [index, overlayMounted]);
   const [dimensions, setDimensions] = useState<Record<string, { width: number; height: number }>>(
     {},
   );
@@ -502,61 +522,62 @@ export default function PhotoAlbumViewer({
           );
         })}
       </div>
-      {detailVariant === 'purchase' && purchaseLabels && locale ? (
-        <PhotoDetailModal
-          items={detailItems}
-          open={index >= 0}
-          initialIndex={index >= 0 ? index : 0}
-          onClose={close}
-          onIndexChange={switchTo}
-          labels={purchaseLabels}
-          locale={locale}
-          photographerName={photographerName}
-          pricePerPhoto={pricePerPhoto}
-          showAddToCart={showAddToCart}
-          showDownload={showDownload}
-          canDownloadPhoto={isPhotoDownloadable}
-          photosInCart={photosInCart}
-          onAddToCart={onAddToCart}
-          onRemoveFromCart={onRemoveFromCart}
-          onDownload={onDownload}
-          onShare={onShare}
-          showAddToFavorites={showAddToPhotos}
-          photosInMyPhotos={photosInMyPhotos}
-          onAddToPhotos={onAddToPhotos}
-          onRemoveFromPhotos={onRemoveFromPhotos}
-        />
-      ) : (
-        <PhotoLightbox
-          items={lightboxItems}
-          open={index >= 0}
-          initialIndex={index >= 0 ? index : 0}
-          onClose={close}
-          onIndexChange={switchTo}
-          showDownload={showDownload}
-          canDownloadPhoto={isPhotoDownloadable}
-          showAddToPhotos={showAddToPhotos}
-          showAddToCart={showAddToCart}
-          showRemove={showRemove}
-          showTagTalent={showTagTalent}
-          onDownload={onDownload}
-          onAddToPhotos={onAddToPhotos}
-          onRemoveFromPhotos={onRemoveFromPhotos}
-          onAddToCart={onAddToCart}
-          onRemoveFromCart={onRemoveFromCart}
-          onRemove={onRemove}
-          onTagTalent={onTagTalent}
-          onUntag={onUntag}
-          onShare={onShare}
-          photosInMyPhotos={photosInMyPhotos}
-          photosInCart={photosInCart}
-          actionBar={lightboxActionBar}
-          onClaimToProfile={onClaimToProfile}
-          claimedIds={claimedIds}
-          canClaimToProfile={canClaimToProfile}
-          actionBarLabels={actionBarLabels}
-        />
-      )}
+      {overlayMounted &&
+        (detailVariant === 'purchase' && purchaseLabels && locale ? (
+          <PhotoDetailModal
+            items={detailItems}
+            open={index >= 0}
+            initialIndex={index >= 0 ? index : 0}
+            onClose={close}
+            onIndexChange={switchTo}
+            labels={purchaseLabels}
+            locale={locale}
+            photographerName={photographerName}
+            pricePerPhoto={pricePerPhoto}
+            showAddToCart={showAddToCart}
+            showDownload={showDownload}
+            canDownloadPhoto={isPhotoDownloadable}
+            photosInCart={photosInCart}
+            onAddToCart={onAddToCart}
+            onRemoveFromCart={onRemoveFromCart}
+            onDownload={onDownload}
+            onShare={onShare}
+            showAddToFavorites={showAddToPhotos}
+            photosInMyPhotos={photosInMyPhotos}
+            onAddToPhotos={onAddToPhotos}
+            onRemoveFromPhotos={onRemoveFromPhotos}
+          />
+        ) : (
+          <PhotoLightbox
+            items={lightboxItems}
+            open={index >= 0}
+            initialIndex={index >= 0 ? index : 0}
+            onClose={close}
+            onIndexChange={switchTo}
+            showDownload={showDownload}
+            canDownloadPhoto={isPhotoDownloadable}
+            showAddToPhotos={showAddToPhotos}
+            showAddToCart={showAddToCart}
+            showRemove={showRemove}
+            showTagTalent={showTagTalent}
+            onDownload={onDownload}
+            onAddToPhotos={onAddToPhotos}
+            onRemoveFromPhotos={onRemoveFromPhotos}
+            onAddToCart={onAddToCart}
+            onRemoveFromCart={onRemoveFromCart}
+            onRemove={onRemove}
+            onTagTalent={onTagTalent}
+            onUntag={onUntag}
+            onShare={onShare}
+            photosInMyPhotos={photosInMyPhotos}
+            photosInCart={photosInCart}
+            actionBar={lightboxActionBar}
+            onClaimToProfile={onClaimToProfile}
+            claimedIds={claimedIds}
+            canClaimToProfile={canClaimToProfile}
+            actionBarLabels={actionBarLabels}
+          />
+        ))}
     </>
   );
 }

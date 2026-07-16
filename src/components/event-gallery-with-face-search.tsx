@@ -1,14 +1,33 @@
 'use client';
 
-import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import type {
   ClientSearchMatch,
   SearchFacesInEventResult,
 } from '@/app/[lang]/events/[shareCode]/face-search-shared';
 import type { PublicPhotoAlbumItem } from '@/app/[lang]/events/[shareCode]/photo-album-item';
-import { FaceSearchModal, type FaceSearchModalLabels } from '@/components/face-search-modal';
+import type { FaceSearchModalLabels } from '@/components/face-search-modal';
 import { FindMyPhotosBanner, type FindMyPhotosLabels } from '@/components/find-my-photos-banner';
 import { resolveFindMyPhotos } from '@/lib/find-my-photos';
+
+// T-126: the face-search modal (camera/upload UI + selfie flow) is only shown
+// once the visitor opens "find my photos", so its chunk loads on demand rather
+// than in the public event page's first load. `ssr: false` — it's a pure
+// client interaction surface; the mount gate below defers the fetch to the
+// first open.
+const FaceSearchModal = dynamic(
+  () => import('@/components/face-search-modal').then((m) => m.FaceSearchModal),
+  { ssr: false },
+);
 
 interface FaceSearchContextValue {
   /** null = no search performed; [] = searched, no matches; [...] = matches. */
@@ -107,6 +126,13 @@ export function EventGalleryWithFaceSearch({
   fullGallery,
 }: EventGalleryWithFaceSearchProps) {
   const [modalOpen, setModalOpen] = useState(false);
+  // Latch the on-demand face-search chunk (T-126): mount — and fetch — it only
+  // after the first open, then keep it mounted so its dialog close animation
+  // still plays.
+  const [modalMounted, setModalMounted] = useState(false);
+  useEffect(() => {
+    if (modalOpen) setModalMounted(true);
+  }, [modalOpen]);
   const [matches, setMatches] = useState<ClientSearchMatch[] | null>(null);
   const [matchedPhotos, setMatchedPhotos] = useState<PublicPhotoAlbumItem[]>([]);
   const [eventIndexingComplete, setEventIndexingComplete] = useState(true);
@@ -174,14 +200,16 @@ export function EventGalleryWithFaceSearch({
             />
           ) : null}
           {fullGallery}
-          <FaceSearchModal
-            key="face-search-modal"
-            open={modalOpen}
-            onOpenChange={setModalOpen}
-            shareCode={shareCode}
-            labels={modalLabels}
-            onResult={onSearchResult}
-          />
+          {modalMounted && (
+            <FaceSearchModal
+              key="face-search-modal"
+              open={modalOpen}
+              onOpenChange={setModalOpen}
+              shareCode={shareCode}
+              labels={modalLabels}
+              onResult={onSearchResult}
+            />
+          )}
         </div>
       </BibSearchContext.Provider>
     </FaceSearchContext.Provider>
