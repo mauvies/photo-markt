@@ -129,17 +129,20 @@ describe('GuestCartContent — live preview resolution (T-115)', () => {
     expect(img.getAttribute('src')).not.toBe(STALE_SNAPSHOT_URL);
   });
 
-  it('resolves preview URLs by the current photo ids + share codes, not from the cached item', () => {
+  it('resolves preview URLs by the current photo ids + share codes + photographer ids, not from the cached item', () => {
     loadGuestCartStateAction.mockResolvedValue({
       removedPhotoIds: [],
       previews: { 'photo-1': LIVE_PREVIEW_URL },
+      photographers: {},
     });
 
     renderCart();
 
     // The item's event share code is passed as access proof (T-132) so a
-    // private-event preview resolves only when the guest actually holds the code.
-    expect(loadGuestCartStateAction).toHaveBeenCalledWith(['photo-1'], ['ABC123']);
+    // private-event preview resolves only when the guest actually holds the
+    // code; the photographer ids resolve the photographer name/slug shown per
+    // item (parity with the authenticated cart).
+    expect(loadGuestCartStateAction).toHaveBeenCalledWith(['photo-1'], ['ABC123'], ['pg-1']);
   });
 });
 

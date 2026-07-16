@@ -48,7 +48,7 @@ describe('loadGuestCartStateAction — preview resolution', () => {
 
   it('returns an empty state for an empty photo id list', async () => {
     const result = await loadGuestCartStateAction([]);
-    expect(result).toEqual({ removedPhotoIds: [], previews: {} });
+    expect(result).toEqual({ removedPhotoIds: [], previews: {}, photographers: {} });
   });
 
   it('resolves the baked thumbnail URL when the thumbnail is ready — never a stale signed URL', async () => {

@@ -1298,6 +1298,19 @@
     "failedPhotosWarning": "{count} foto(s) no se pudieron indexar.",
     "failedPhotosRetry": "Reintentar"
   },
+  "bibStatus": {
+    "cardTitle": "Detección de dorsal",
+    "statusIdle": "Inactivo",
+    "statusDetecting": "Detectando…",
+    "statusReady": "Listo",
+    "statusFailed": "Falló",
+    "processedCount": "{count} de {total} fotos procesadas",
+    "withBibs": "{count} foto(s) con dorsales",
+    "pollUpdating": "Actualizando…",
+    "pollError": "No se pudo actualizar el progreso. Reintentando…",
+    "detectionComplete": "Todas las fotos procesadas",
+    "failedPhotosWarning": "{count} foto(s) no se pudieron procesar."
+  },
   "eventDetails": {
     "title": "Detalles del evento",
     "eventType": "Tipo de evento",
