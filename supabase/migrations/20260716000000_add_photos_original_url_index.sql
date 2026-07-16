@@ -1,0 +1,12 @@
+-- T-136: index photos.original_url.
+--
+-- The unauthenticated /api/watermark/ route filters photos by original_url on
+-- every CDN miss (getPreviewPolicyByStoragePath — the combined policy + face
+-- boxes lookup), and the thumbnail jobs resolve rows the same way. Without an
+-- index each miss is a sequential scan that grows with the table.
+--
+-- Deliberately NOT `concurrently`: the migration runner wraps statements in a
+-- transaction (CONCURRENTLY can't run inside one), and at current scale
+-- (photos is a few hundred rows) the SHARE lock lasts milliseconds. Revisit
+-- if the table grows to the point where a blocking build matters.
+create index if not exists photos_original_url_idx on photos (original_url);

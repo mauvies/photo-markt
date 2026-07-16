@@ -38,6 +38,7 @@ import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { stringifyJsonLd } from '@/lib/json-ld';
+import { needsProtectedPreview } from '@/lib/preview-protection';
 import { ContributeDialog } from './contribute-dialog';
 import { buildPublicPhotoAlbumItem, type UploaderProfileMap } from './photo-album-item';
 import { PublicEventPhotoViewer } from './public-event-photo-viewer';
@@ -172,7 +173,10 @@ async function getCachedEventData(
     eventStatusInside !== 'upcoming'
       ? createPhotoUrlMap(adminForPhotos, 'photos', paths, {
           expiresIn: 60 * 60,
-          useWatermark: event.watermark_enabled === true,
+          // Watermarked OR sellable events route through the fail-closed
+          // /api/watermark/ route — never a direct signed full-res original
+          // pre-purchase (T-136; shared predicate with the cart resolver).
+          useWatermark: needsProtectedPreview(event),
           baseUrl,
         })
       : Promise.resolve<Record<string, string>>({}),
