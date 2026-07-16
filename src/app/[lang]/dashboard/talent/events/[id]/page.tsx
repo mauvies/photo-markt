@@ -40,6 +40,7 @@ import { getSiteUrl } from '@/lib/get-site-url';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
+import { needsProtectedPreview } from '@/lib/preview-protection';
 import { EventPhotoViewer } from './event-photo-viewer';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -49,12 +50,13 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 // AFTER this returns, so no per-user data crosses the cache boundary.
 //
 // `viewerIsTalent` participates in the cache key — two cache entries per
-// event (watermarked vs not). The actual watermark decision is the
-// intersection of `event.watermark_enabled` (photographer's setting) AND
-// `viewerIsTalent` (only talents see the preview-grade image; photographers
-// see the original even on this route). Free collaborative events with
-// `watermark_enabled=false` always serve clean photos regardless of viewer
-// role — that was the bug the user reported on event `2YNNZY6F`.
+// event (protected vs not). The actual protection decision is the
+// intersection of `needsProtectedPreview(event)` (watermarked OR for-sale,
+// T-136) AND `viewerIsTalent` (only talents see the preview-grade image;
+// photographers see the original even on this route). Genuinely free
+// (null-price) events with `watermark_enabled=false` always serve clean
+// photos regardless of viewer role — that was the bug the user reported on
+// event `2YNNZY6F`.
 //
 // Cache invalidated by photographer photo mutations via revalidateTag('event-<id>').
 async function getCachedTalentEventData(param: string, baseUrl: string, viewerIsTalent: boolean) {
@@ -107,11 +109,12 @@ async function getCachedTalentEventData(param: string, baseUrl: string, viewerIs
     countEventPhotosByStatus(supabaseAdmin, event.id, ['approved']),
   ]);
 
-  // Watermark only when BOTH the photographer opted in (`watermark_enabled`)
-  // AND the viewer is a talent. Photographers viewing their own events
-  // here get clean URLs; events with the watermark setting disabled never
-  // watermark even for talents (e.g. free collaborative events).
-  const useWatermark = viewerIsTalent && event.watermark_enabled === true;
+  // Protect only when BOTH the event has something to protect — watermarked
+  // OR sellable (`needsProtectedPreview`, T-136; shared with the cart
+  // resolver) — AND the viewer is a talent. Photographers viewing their own
+  // events here get clean URLs; genuinely free un-watermarked events (e.g.
+  // free collaborative events) keep the direct sign even for talents.
+  const useWatermark = viewerIsTalent && needsProtectedPreview(event);
 
   const eventStatusInside = getEventStatus(event.date);
   const paths = photos.map((p) => p.original_url).filter((url): url is string => url !== null);
@@ -149,7 +152,12 @@ export default async function ExploreEventDetailPage({
     try {
       viewerIsTalent = await userHasRole('talent');
     } catch {
-      viewerIsTalent = false;
+      // Fail CLOSED: `viewerIsTalent` gates preview protection below, and the
+      // 'use cache' entry is keyed on it — a transient role-lookup error must
+      // not compute (and cache for 55 min) the unprotected variant with
+      // direct signed originals. Worst case a photographer briefly sees the
+      // talent (preview-grade) view.
+      viewerIsTalent = true;
     }
   }
 

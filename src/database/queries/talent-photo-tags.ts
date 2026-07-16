@@ -2,6 +2,8 @@
  * Talent photo tag-related database queries
  */
 
+import { needsProtectedPreview } from '@/lib/preview-protection';
+import { createPhotoUrls } from './storage';
 import type { SupabaseServerClient } from './types';
 import { getErrorMessage } from './types';
 
@@ -23,6 +25,7 @@ export interface TaggedPhotoWithEvent {
   event_city: string | null;
   event_country: string | null;
   event_watermark_enabled: boolean | null;
+  event_price_per_photo: number | null;
   tagged_at: string;
 }
 
@@ -187,6 +190,7 @@ export async function getTaggedPhotosForTalent(
           city,
           country,
           watermark_enabled,
+          price_per_photo,
           deleted_at
         )
       )
@@ -221,9 +225,54 @@ export async function getTaggedPhotosForTalent(
       event_city: event?.city ?? null,
       event_country: event?.country ?? null,
       event_watermark_enabled: event?.watermark_enabled ?? null,
+      event_price_per_photo: event?.price_per_photo ?? null,
       tagged_at: item.created_at,
     };
   }) as TaggedPhotoWithEvent[];
+}
+
+/**
+ * Sign display URLs for a set of tagged-photo rows, keyed by storage path —
+ * the single signing helper both tagged-photo surfaces (talent dashboard
+ * overview + favorites) share, so the protection policy can't drift between
+ * them (T-136). Partitions by the shared `needsProtectedPreview` predicate:
+ * watermarked OR for-sale events route through the fail-closed
+ * `/api/watermark/` route; only a positively-known free (null price) AND
+ * un-watermarked event keeps the direct signed original.
+ */
+export async function buildTaggedPhotoSignedUrlMap(
+  supabase: SupabaseServerClient,
+  photos: Pick<
+    TaggedPhotoWithEvent,
+    'photo_url' | 'event_watermark_enabled' | 'event_price_per_photo'
+  >[],
+  baseUrl: string,
+): Promise<Record<string, string | null>> {
+  const byProtection = new Map<boolean, string[]>();
+  for (const photo of photos) {
+    if (!photo.photo_url) continue;
+    const needsWatermark = needsProtectedPreview({
+      watermark_enabled: photo.event_watermark_enabled,
+      price_per_photo: photo.event_price_per_photo,
+    });
+    const existing = byProtection.get(needsWatermark) ?? [];
+    existing.push(photo.photo_url);
+    byProtection.set(needsWatermark, existing);
+  }
+
+  const signedUrlsMap: Record<string, string | null> = {};
+  for (const [needsWatermark, paths] of byProtection.entries()) {
+    const photoUrls = await createPhotoUrls(supabase, 'photos', paths, {
+      expiresIn: 3600,
+      useWatermark: needsWatermark,
+      baseUrl,
+    });
+    for (const item of photoUrls) {
+      signedUrlsMap[item.path] = item.signedUrl;
+    }
+  }
+
+  return signedUrlsMap;
 }
 
 /**

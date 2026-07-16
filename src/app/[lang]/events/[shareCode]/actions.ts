@@ -35,6 +35,7 @@ import { getEventStatus } from '@/lib/event-status';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { getBaseUrl } from '@/lib/get-base-url';
 import { validatePhotoUpload } from '@/lib/photo-upload';
+import { needsProtectedPreview } from '@/lib/preview-protection';
 import { getClientIp, rateLimit } from '@/lib/rate-limit';
 import { safeCall } from '@/lib/safe-call';
 import { BIB_SEARCH_RATE_LIMIT_PREFIX, type SearchPhotosByBibResult } from './bib-search-shared';
@@ -126,8 +127,9 @@ export async function deleteContributorPhotoAction(input: {
 /**
  * Sign a set of event photo rows and map them to gallery items — the shared
  * signing + attribution path for both the load-more grid and the enriched
- * search results. Watermarks exactly when the event's `watermark_enabled` is
- * on (identical to the cached first batch, so appended tiles never leak an
+ * search results. Routes through /api/watermark/ exactly when the event has
+ * something to protect — watermarked OR sellable (`needsProtectedPreview`,
+ * identical to the cached first batch, so appended tiles never leak an
  * original the initial page hid). Uploader names come from `getProfilesByIds`
  * over the `uploaded_by` set plus the event owner.
  */
@@ -153,7 +155,7 @@ async function buildSignedEventAlbumItems(
   const [signed, uploaderProfiles] = await Promise.all([
     createPhotoUrlMap(adminClient, 'photos', paths, {
       expiresIn: 60 * 60,
-      useWatermark: event.watermark_enabled === true,
+      useWatermark: needsProtectedPreview(event),
       baseUrl,
     }),
     getProfilesByIds(adminClient, uploaderUserIds),
@@ -170,8 +172,8 @@ async function buildSignedEventAlbumItems(
  * friendly (mirrors the other public event actions): resolves the event by
  * UUID / slug / share code, short-circuits for upcoming events, and rate-limits
  * by `(eventParam, IP)`. Used by the public and talent viewers' "Load more"
- * button — watermark follows `event.watermark_enabled` so it matches the cached
- * first batch.
+ * button — protection follows `needsProtectedPreview` (watermarked OR sellable)
+ * so it matches the cached first batch.
  */
 export async function loadMoreEventPhotos(
   eventParam: string,

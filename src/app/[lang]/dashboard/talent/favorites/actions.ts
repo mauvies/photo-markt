@@ -1,7 +1,7 @@
 'use server';
 
 import {
-  createPhotoUrls,
+  buildTaggedPhotoSignedUrlMap,
   getTaggedPhotosCountForTalent,
   getTaggedPhotosForTalent,
   isPhotoInCart,
@@ -42,39 +42,6 @@ type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 type TaggedPhoto = Awaited<ReturnType<typeof getTaggedPhotosForTalent>>[number];
 
 // --- Helpers ---
-
-async function buildSignedUrlsMap(
-  supabase: SupabaseClient,
-  photos: TaggedPhoto[],
-): Promise<Record<string, string | null>> {
-  const photoPaths = photos.map((p) => p.photo_url).filter((url): url is string => url !== null);
-  if (photoPaths.length === 0) return {};
-
-  const byWatermark = new Map<boolean, string[]>();
-  for (const photo of photos) {
-    if (!photo.photo_url) continue;
-    const needsWatermark = photo.event_watermark_enabled === true;
-    const existing = byWatermark.get(needsWatermark) ?? [];
-    existing.push(photo.photo_url);
-    byWatermark.set(needsWatermark, existing);
-  }
-
-  const baseUrl = await getBaseUrl();
-  const signedUrlsMap: Record<string, string | null> = {};
-
-  for (const [needsWatermark, paths] of byWatermark.entries()) {
-    const photoUrls = await createPhotoUrls(supabase, 'photos', paths, {
-      expiresIn: 3600,
-      useWatermark: needsWatermark,
-      baseUrl,
-    });
-    for (const item of photoUrls) {
-      signedUrlsMap[item.path] = item.signedUrl;
-    }
-  }
-
-  return signedUrlsMap;
-}
 
 function groupPhotosByEvent(
   photos: TaggedPhoto[],
@@ -175,7 +142,7 @@ export async function listMyTaggedPhotos(options?: {
   ]);
 
   const [signedUrlsMap, photosInCart] = await Promise.all([
-    buildSignedUrlsMap(supabase, taggedPhotos),
+    getBaseUrl().then((baseUrl) => buildTaggedPhotoSignedUrlMap(supabase, taggedPhotos, baseUrl)),
     getPhotosInCart(
       supabase,
       user.id,

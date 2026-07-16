@@ -2,8 +2,8 @@
 
 import { getCartItemCount } from '@/database/queries/carts';
 import { getUserOrders } from '@/database/queries/orders';
-import { createPhotoUrls } from '@/database/queries/storage';
 import {
+  buildTaggedPhotoSignedUrlMap,
   getTaggedPhotosCountForTalent,
   getTaggedPhotosForTalent,
 } from '@/database/queries/talent-photo-tags';
@@ -13,7 +13,6 @@ import { getBaseUrl } from '@/lib/get-base-url';
 // --- Types ---
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
-type TaggedPhoto = Awaited<ReturnType<typeof getTaggedPhotosForTalent>>[number];
 
 type OrderItemWithPhoto = {
   id: string;
@@ -33,39 +32,6 @@ type OrderItemWithPhoto = {
 };
 
 // --- Helpers ---
-
-async function buildSignedUrlsForTaggedPhotos(
-  supabase: SupabaseClient,
-  photos: TaggedPhoto[],
-): Promise<Record<string, string | null>> {
-  const photoPaths = photos.map((p) => p.photo_url).filter((url): url is string => url !== null);
-  if (photoPaths.length === 0) return {};
-
-  const byWatermark = new Map<boolean, string[]>();
-  for (const photo of photos) {
-    if (!photo.photo_url) continue;
-    const needsWatermark = photo.event_watermark_enabled === true;
-    const existing = byWatermark.get(needsWatermark) ?? [];
-    existing.push(photo.photo_url);
-    byWatermark.set(needsWatermark, existing);
-  }
-
-  const baseUrl = await getBaseUrl();
-  const signedUrlsMap: Record<string, string | null> = {};
-
-  for (const [needsWatermark, paths] of byWatermark.entries()) {
-    const photoUrls = await createPhotoUrls(supabase, 'photos', paths, {
-      expiresIn: 3600,
-      useWatermark: needsWatermark,
-      baseUrl,
-    });
-    for (const item of photoUrls) {
-      signedUrlsMap[item.path] = item.signedUrl;
-    }
-  }
-
-  return signedUrlsMap;
-}
 
 async function getPurchasedPhotosCount(supabase: SupabaseClient, userId: string): Promise<number> {
   const { data: completedOrders } = await supabase
@@ -154,7 +120,9 @@ export async function getTalentDashboardData() {
   ]);
 
   const [signedUrlsMap, totalPurchasedPhotos, ordersWithItems] = await Promise.all([
-    buildSignedUrlsForTaggedPhotos(supabase, recentTaggedPhotos),
+    getBaseUrl().then((baseUrl) =>
+      buildTaggedPhotoSignedUrlMap(supabase, recentTaggedPhotos, baseUrl),
+    ),
     getPurchasedPhotosCount(supabase, user.id),
     enrichOrdersWithItems(supabase, recentOrders),
   ]);

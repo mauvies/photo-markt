@@ -5,6 +5,7 @@
 // Import the sharp-free URL helper module — NOT '@/lib/thumbnails', which
 // loads sharp at module scope: this query file is client-reachable via
 // plan-limits.ts → the event wizard, and sharp breaks the browser build.
+import { needsProtectedPreview } from '@/lib/preview-protection';
 import { resolvePhotoPreviewUrl } from '@/lib/thumbnail-urls';
 import { createPhotoUrlMap } from './storage';
 import type { SupabaseServerClient } from './types';
@@ -1304,17 +1305,17 @@ export async function getPreviewPolicyByStoragePath(
  * The pre-bake fallback must never expose more than the steady state (the
  * public `medium` thumb) does, so it partitions by what there is to protect
  * (T-131 watermark, T-133 resolution):
- *  - anything SELLABLE (`price_per_photo` > 0) or watermarked → the
- *    fail-closed `/api/watermark/` route, which picks the treatment
- *    server-side from the event's own policy: tiled watermark for
- *    `watermark_enabled` events, clean medium-budget downscale for events
- *    that sell without a visible mark. Either way the payment-gated
- *    full-resolution original is NEVER served (the invariant "full resolution
- *    only after purchase"). Needs `baseUrl` to build absolute watermark URLs
- *    — a missing/blank one fails closed to `null` (icon fallback), never the
- *    raw original.
+ *  - anything FOR-SALE (`price_per_photo` non-null, including 0 — matching
+ *    `isForSale` and the download gates) or watermarked → the fail-closed
+ *    `/api/watermark/` route, which picks the treatment server-side from the
+ *    event's own policy: tiled watermark for `watermark_enabled` events,
+ *    clean medium-budget downscale for events that sell without a visible
+ *    mark. Either way the payment-gated full-resolution original is NEVER
+ *    served (the invariant "full resolution only after purchase"). Needs
+ *    `baseUrl` to build absolute watermark URLs — a missing/blank one fails
+ *    closed to `null` (icon fallback), never the raw original.
  *  - only an event positively known to be BOTH free (`price_per_photo`
- *    null/0) AND un-watermarked keeps the direct signed original: with no
+ *    null) AND un-watermarked keeps the direct signed original: with no
  *    payment gate there is nothing a "purchase" would grant beyond what the
  *    photographer already gives away, so there is nothing to protect.
  *
@@ -1349,21 +1350,17 @@ export async function getPhotoPreviewUrls(
   // Only build a fallback for originals that will actually be served — a
   // `ready` thumbnail wins in resolvePhotoPreviewUrl, so touching its original
   // would be a wasted round trip on every cart load in the steady state.
-  // Partition the pre-bake window by what there is to protect: watermarked
-  // (T-131) and SELLABLE (T-133) events go through the fail-closed
-  // `/api/watermark/` route; only an event positively known to be free AND
-  // un-watermarked keeps the direct signed original. Anything we can't
-  // positively confirm (a null/RLS-hidden event embed, an event_id NULL
-  // orphan) falls closed to the watermark route — never expose the raw
-  // original on an unknown gating state.
+  // Partition the pre-bake window with the shared `needsProtectedPreview`
+  // predicate (T-131/T-133/T-136): anything with something to protect goes
+  // through the fail-closed `/api/watermark/` route; only an event positively
+  // known to be free AND un-watermarked keeps the direct signed original.
   const watermarkPaths: string[] = [];
   const directPaths: string[] = [];
   for (const photo of photos) {
     if (photo.thumbnail_status === 'ready' || photo.original_url === null) continue;
     const event = Array.isArray(photo.events) ? photo.events[0] : photo.events;
-    const sellable = (event?.price_per_photo ?? 0) > 0;
-    if (event?.watermark_enabled === false && !sellable) directPaths.push(photo.original_url);
-    else watermarkPaths.push(photo.original_url);
+    if (needsProtectedPreview(event)) watermarkPaths.push(photo.original_url);
+    else directPaths.push(photo.original_url);
   }
 
   const [watermarkMap, directMap] = await Promise.all([

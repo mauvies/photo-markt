@@ -94,34 +94,49 @@ describe('getPhotoPreviewUrls', () => {
 
   it('serves a direct signed original for a genuinely FREE no-watermark event with a pending thumbnail', async () => {
     const photographer = await createTestUser('PHOTOGRAPHER');
-    // No price and no watermark: a "purchase" would grant nothing beyond what
-    // the photographer already gives away — nothing to protect (decided in
-    // T-133). Both null and 0 prices count as free.
-    const nullPriceEvent = await createTestEvent(photographer.id, { price_per_photo: null });
-    const zeroPriceEvent = await createTestEvent(photographer.id, { price_per_photo: 0 });
-    const photos = [];
-    for (const event of [nullPriceEvent, zeroPriceEvent]) {
-      const originalUrl = `${photographer.id}/${event.id}/${crypto.randomUUID()}.jpg`;
-      await uploadStubBytes(originalUrl);
-      photos.push(
-        await createTestPhoto(event.id, { user_id: photographer.id, original_url: originalUrl }),
-      );
-      await createServiceClient()
-        .from('events')
-        .update({ watermark_enabled: false })
-        .eq('id', event.id);
-    }
+    // No price (null) and no watermark: a "purchase" would grant nothing
+    // beyond what the photographer already gives away — nothing to protect
+    // (decided in T-133).
+    const event = await createTestEvent(photographer.id, { price_per_photo: null });
+    const originalUrl = `${photographer.id}/${event.id}/${crypto.randomUUID()}.jpg`;
+    await uploadStubBytes(originalUrl);
+    const photo = await createTestPhoto(event.id, {
+      user_id: photographer.id,
+      original_url: originalUrl,
+    });
+    await createServiceClient()
+      .from('events')
+      .update({ watermark_enabled: false })
+      .eq('id', event.id);
 
-    const result = await getPhotoPreviewUrls(
-      createServiceClient(),
-      photos.map((p) => p.id),
-      BASE_URL,
-    );
+    const result = await getPhotoPreviewUrls(createServiceClient(), [photo.id], BASE_URL);
 
-    for (const photo of photos) {
-      expect(result[photo.id]).toContain('/storage/v1/object/sign/');
-      expect(result[photo.id]).not.toContain('/api/watermark/');
-    }
+    expect(result[photo.id]).toContain('/storage/v1/object/sign/');
+    expect(result[photo.id]).not.toContain('/api/watermark/');
+  });
+
+  it('protects a ZERO-priced no-watermark event — 0 counts as for-sale, matching isForSale and the download gates (T-136)', async () => {
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    // price_per_photo = 0 is a valid persisted price: the event page shows the
+    // buy UI (`isForSale = price_per_photo !== null`) and both download gates
+    // deny non-purchasers, so the pre-bake fallback must stay payment-gated
+    // too. Only a NULL price is positively free.
+    const event = await createTestEvent(photographer.id, { price_per_photo: 0 });
+    const originalUrl = `${photographer.id}/${event.id}/${crypto.randomUUID()}.jpg`;
+    await uploadStubBytes(originalUrl);
+    const photo = await createTestPhoto(event.id, {
+      user_id: photographer.id,
+      original_url: originalUrl,
+    });
+    await createServiceClient()
+      .from('events')
+      .update({ watermark_enabled: false })
+      .eq('id', event.id);
+
+    const result = await getPhotoPreviewUrls(createServiceClient(), [photo.id], BASE_URL);
+
+    expect(result[photo.id]).toBe(`${BASE_URL}/api/watermark/${originalUrl}`);
+    expect(result[photo.id]).not.toContain('/storage/v1/object/sign/');
   });
 
   it('serves the baked immutable thumbnail when ready, regardless of watermark policy', async () => {

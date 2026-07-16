@@ -21,18 +21,27 @@ import {
   resetDatabase,
 } from '../../helpers/supabase-test-client';
 
+/** Upload a stub byte at `path` so `createSignedUrl` has a real object to sign. */
+async function uploadStubBytes(sb: SupabaseClient, path: string) {
+  const { error } = await sb.storage
+    .from('photos')
+    .upload(path, new Uint8Array([0xff]), { contentType: 'image/jpeg', upsert: true });
+  if (error) throw new Error(`uploadStubBytes: ${error.message}`);
+}
+
 async function insertApprovedPhoto(
   sb: SupabaseClient,
   eventId: string,
   ownerId: string,
   takenAt: string,
+  originalUrl?: string,
 ): Promise<string> {
   const { data, error } = await sb
     .from('photos')
     .insert({
       user_id: ownerId,
       event_id: eventId,
-      original_url: `${ownerId}/${eventId}/${crypto.randomUUID()}.jpg`,
+      original_url: originalUrl ?? `${ownerId}/${eventId}/${crypto.randomUUID()}.jpg`,
       taken_at: takenAt,
       city: 'Barcelona',
       country: 'ES',
@@ -78,6 +87,51 @@ describe('loadMoreEventPhotos (T-060)', () => {
     for (const item of res.items) {
       expect(item.url).toContain('/api/watermark/');
     }
+  });
+
+  it('routes a SELLABLE no-watermark event with a pending thumbnail through /api/watermark/ — never a direct signed original (T-136)', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id, {
+      share_code: 'LMORE4',
+      date: '2026-01-01',
+      price_per_photo: 10,
+    });
+    const sb = createServiceClient();
+    // Sellable but no visible mark: the full-res original is still
+    // payment-gated ("full resolution only after purchase").
+    await sb.from('events').update({ watermark_enabled: false }).eq('id', event.id);
+    const path = `${owner.id}/${event.id}/${crypto.randomUUID()}.jpg`;
+    // Real object in storage so a direct sign WOULD succeed — before T-136 the
+    // gallery signed exactly this original and anyone could save it from
+    // devtools without paying.
+    await uploadStubBytes(sb, path);
+    await insertApprovedPhoto(sb, event.id, owner.id, '2026-01-01T10:00:00.000Z', path);
+
+    const res = await loadMoreEventPhotos('LMORE4', 0);
+
+    expect(res.items).toHaveLength(1);
+    expect(res.items[0].url).toContain('/api/watermark/');
+    expect(res.items[0].url).not.toContain('/storage/v1/object/sign/');
+  });
+
+  it('keeps the direct signed original for a genuinely FREE no-watermark event (nothing to protect)', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id, {
+      share_code: 'LMORE5',
+      date: '2026-01-01',
+      price_per_photo: null,
+    });
+    const sb = createServiceClient();
+    await sb.from('events').update({ watermark_enabled: false }).eq('id', event.id);
+    const path = `${owner.id}/${event.id}/${crypto.randomUUID()}.jpg`;
+    await uploadStubBytes(sb, path);
+    await insertApprovedPhoto(sb, event.id, owner.id, '2026-01-01T10:00:00.000Z', path);
+
+    const res = await loadMoreEventPhotos('LMORE5', 0);
+
+    expect(res.items).toHaveLength(1);
+    expect(res.items[0].url).toContain('/storage/v1/object/sign/');
+    expect(res.items[0].url).not.toContain('/api/watermark/');
   });
 
   it('short-circuits to an empty result for an upcoming event', async () => {
