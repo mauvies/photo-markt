@@ -2,11 +2,12 @@
 
 import { cacheLife, cacheTag } from 'next/cache';
 import {
-  createSignedUrl,
+  buildEventCoverInputs,
   getEventsCoverPaths,
   getPhotographerBySlug,
   getPhotosForEvents,
   getTopPhotographers,
+  signEventCoverUrls,
 } from '@/database/queries';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import type { EventWithStats } from '@/hooks/use-event-search';
@@ -96,13 +97,14 @@ export async function getPhotographerEventsAction(
     stats.set(id, current);
   }
 
-  const coverUrls = new Map<string, string>();
-  await Promise.all(
-    Array.from(stats.entries()).map(async ([eventId, info]) => {
-      if (!info.coverPath) return;
-      const signed = await createSignedUrl(supabaseAdmin, 'photos', info.coverPath, 3600);
-      if (signed) coverUrls.set(eventId, signed);
-    }),
+  // A first-photo fallback cover for a watermarked/for-sale event routes through
+  // the fail-closed /api/watermark/ route — never a direct signed full-res
+  // original in the card payload (T-140, shared predicate with the cart/gallery
+  // surfaces). Dedicated covers (those in coverOverride) are promotional images
+  // → always direct-signed.
+  const coverUrls = await signEventCoverUrls(
+    supabaseAdmin,
+    buildEventCoverInputs(stats, coverOverride, new Map(events.map((e) => [e.id, e]))),
   );
 
   return {

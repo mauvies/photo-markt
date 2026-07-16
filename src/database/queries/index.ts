@@ -13,6 +13,8 @@ export * from './carts';
 export * from './download-tokens';
 // Re-export earnings queries
 export * from './earnings';
+// Re-export event cover / OG image URL resolution (T-140)
+export * from './event-covers';
 // Re-export event-photographers (organizer event memberships) queries
 export * from './event-photographers';
 // Re-export event queries

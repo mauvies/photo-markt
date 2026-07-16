@@ -1,11 +1,11 @@
 # T-140 · Seguridad/Pagos: el fallback de portada de las event cards y el `og:image` del evento público firman el ORIGINAL full-res de la primera foto en eventos con fotos en venta
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/cover-og-image-prebake-fullres-leak`
 - **OpenSpec change:** — (superficie de pagos/seguridad → `/code-review` antes de commitear)
-- **PR:** —
+- **PR:** #199
 
 ## Requerimiento
 Hallazgos CONFIRMED del `/code-review high` de T-136 — la misma clase de leak que

@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { userHasRole } from '@/app/[lang]/actions/roles';
 import {
-  createSignedUrl,
+  buildEventCoverInputs,
   getEventsCoverPaths,
   getPhotosForEvents,
   getSavedEventIdsForTalent,
@@ -11,6 +11,7 @@ import {
   getSavedEventsForTalent,
   type SavedEventRow,
   saveEventForTalent,
+  signEventCoverUrls,
   unsaveEventForTalent,
   updateLastSeenAt,
 } from '@/database/queries';
@@ -138,13 +139,15 @@ async function enrichSavedEvents(rows: SavedEventRow[]): Promise<SavedEventCard[
     stats.set(id, current);
   }
 
-  const coverUrls = new Map<string, string>();
-  await Promise.all(
-    Array.from(stats.entries()).map(async ([eventId, info]) => {
-      if (!info.coverPath) return;
-      const signedUrl = await createSignedUrl(supabaseAdmin, 'photos', info.coverPath, 60 * 60);
-      if (signedUrl) coverUrls.set(eventId, signedUrl);
-    }),
+  // A first-photo fallback cover for a watermarked/for-sale event routes through
+  // the fail-closed /api/watermark/ route — never a direct signed full-res
+  // original in the card payload (T-140). Saved-event cards carry no baked
+  // `coverThumbUrl`, so `coverUrl` IS what renders; protecting it matters most
+  // here. Dedicated covers (those in coverOverride) are promotional images →
+  // always direct-signed.
+  const coverUrls = await signEventCoverUrls(
+    supabaseAdmin,
+    buildEventCoverInputs(stats, coverOverride, new Map(rows.map((r) => [r.event_id, r]))),
   );
 
   const userIds = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
