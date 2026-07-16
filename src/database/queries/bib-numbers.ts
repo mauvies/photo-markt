@@ -13,6 +13,10 @@
  * is gated by `photo_bib_numbers`' RLS read policy.
  */
 
+import {
+  type BibDetectionProgress,
+  summarizeBibDetectionProgress,
+} from '@/lib/bib-detection-status';
 import type { SupabaseServerClient } from './types';
 import { getErrorMessage } from './types';
 
@@ -166,6 +170,29 @@ export async function bulkSetPhotoBibDetectionStatus(
   if (error) {
     throw new Error(`Failed to bulk-set bib_detection_status: ${getErrorMessage(error)}`);
   }
+}
+
+/**
+ * Aggregate bib-detection progress for an event's photos — processed vs total,
+ * in-flight, failed, and how many carry bib numbers. Mirrors
+ * `getEventAiIndexingProgress`; the counting itself is the pure
+ * `summarizeBibDetectionProgress` so it stays unit-testable (T-139). Backs the
+ * owner's status card + its polling action.
+ */
+export async function getEventBibDetectionProgress(
+  supabase: SupabaseServerClient,
+  eventId: string,
+): Promise<BibDetectionProgress> {
+  const { data, error } = await supabase
+    .from('photos')
+    .select('bib_detection_status')
+    .eq('event_id', eventId);
+  if (error) {
+    throw new Error(`Failed to load event bib-detection progress: ${getErrorMessage(error)}`);
+  }
+  return summarizeBibDetectionProgress(
+    (data ?? []).map((row) => (row.bib_detection_status as BibDetectionStatus | null) ?? null),
+  );
 }
 
 /**

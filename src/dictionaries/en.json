@@ -1298,6 +1298,19 @@
     "failedPhotosWarning": "{count} photo(s) failed to index.",
     "failedPhotosRetry": "Retry"
   },
+  "bibStatus": {
+    "cardTitle": "Bib number detection",
+    "statusIdle": "Idle",
+    "statusDetecting": "Detecting…",
+    "statusReady": "Ready",
+    "statusFailed": "Failed",
+    "processedCount": "{count} of {total} photos processed",
+    "withBibs": "{count} photo(s) with bib numbers",
+    "pollUpdating": "Updating…",
+    "pollError": "Couldn't refresh progress. Retrying…",
+    "detectionComplete": "All photos processed",
+    "failedPhotosWarning": "{count} photo(s) failed to process."
+  },
   "eventDetails": {
     "title": "Event details",
     "eventType": "Event type",

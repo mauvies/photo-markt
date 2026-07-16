@@ -11,6 +11,10 @@ import {
   isApprovedEventPhotographer,
   type SupabaseServerClient,
 } from '@/database/queries';
+import {
+  type BibDetectionEventStatus,
+  getEventBibDetectionProgress,
+} from '@/database/queries/bib-numbers';
 import { type AiMatchingStatus, getEventAiIndexingProgress } from '@/database/queries/rekognition';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
@@ -26,6 +30,7 @@ import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
 import { getPhotoTags } from './actions';
 import { AiStatusCard } from './ai-status-card';
+import { BibStatusCard } from './bib-status-card';
 import { EventActionsMenu } from './event-actions-menu';
 import { EventDetailsCard } from './event-details-card';
 import { EventModerationTabs } from './event-moderation-tabs';
@@ -185,10 +190,16 @@ export default async function EventDetailPage({
   const containsMinors = Boolean(eventRecord.contains_minors);
   const aiMatchingStatus =
     (eventRecord.ai_matching_status as AiMatchingStatus | undefined) ?? 'idle';
-  const aiProgress =
+  const bibDetectionStatus =
+    (eventRecord.bib_detection_status as BibDetectionEventStatus | undefined) ?? 'idle';
+  const [aiProgress, bibProgress] = await Promise.all([
     role === 'owner' && aiMatchingEnabled
-      ? await getEventAiIndexingProgress(adminClient, id)
-      : null;
+      ? getEventAiIndexingProgress(adminClient, id)
+      : Promise.resolve(null),
+    role === 'owner' && bibDetectionEnabled
+      ? getEventBibDetectionProgress(adminClient, id)
+      : Promise.resolve(null),
+  ]);
 
   // Pull the upload-rejected toast copy from the existing newEvent
   // dictionary — shared with the wizard's "Upload rejected" messaging.
@@ -259,6 +270,32 @@ export default async function EventDetailPage({
       />
     ) : null;
 
+  const bibStatusCard =
+    bibDetectionEnabled && bibProgress ? (
+      <BibStatusCard
+        eventId={id}
+        status={bibDetectionStatus}
+        totalApplicable={bibProgress.totalApplicable}
+        processed={bibProgress.processed}
+        pending={bibProgress.pending}
+        failed={bibProgress.failed}
+        withBibs={bibProgress.withBibs}
+        labels={{
+          cardTitle: dict.bibStatus.cardTitle,
+          statusIdle: dict.bibStatus.statusIdle,
+          statusDetecting: dict.bibStatus.statusDetecting,
+          statusReady: dict.bibStatus.statusReady,
+          statusFailed: dict.bibStatus.statusFailed,
+          processedCount: dict.bibStatus.processedCount,
+          withBibs: dict.bibStatus.withBibs,
+          pollUpdating: dict.bibStatus.pollUpdating,
+          pollError: dict.bibStatus.pollError,
+          detectionComplete: dict.bibStatus.detectionComplete,
+          failedPhotosWarning: dict.bibStatus.failedPhotosWarning,
+        }}
+      />
+    ) : null;
+
   const shareCard = event.share_code ? (
     <EventShareCode
       shareCode={event.share_code}
@@ -268,11 +305,18 @@ export default async function EventDetailPage({
     />
   ) : null;
 
-  // 1, 2 or 3 cards depending on which sections apply — the grid column count
-  // matches so the present cards share one equal-height row on desktop.
-  const sectionCount = 1 + (aiStatusCard ? 1 : 0) + (shareCard ? 1 : 0);
+  // 1–4 cards depending on which sections apply — the grid column count matches
+  // so the present cards share one equal-height row on desktop. With all four
+  // present, wrap to a 2×2 on md and a single row only from lg up.
+  const sectionCount = 1 + (aiStatusCard ? 1 : 0) + (bibStatusCard ? 1 : 0) + (shareCard ? 1 : 0);
   const sectionsGridClass =
-    sectionCount === 3 ? 'md:grid-cols-3' : sectionCount === 2 ? 'md:grid-cols-2' : '';
+    sectionCount >= 4
+      ? 'md:grid-cols-2 lg:grid-cols-4'
+      : sectionCount === 3
+        ? 'md:grid-cols-3'
+        : sectionCount === 2
+          ? 'md:grid-cols-2'
+          : '';
 
   return (
     <div>
@@ -285,12 +329,14 @@ export default async function EventDetailPage({
           <EventActionsMenu eventId={id} t={dict.events} />
         </div>
       </div>
-      {/* Event details, live AI indexing status and "Share event" — one
-          equal-height row on desktop (the grid stretches the cards to match),
-          stacked full-width on mobile. AI and Share are conditional. */}
+      {/* Event details, live AI indexing status, bib-detection status and
+          "Share event" — one equal-height row on desktop (the grid stretches
+          the cards to match), stacked full-width on mobile. AI, bib and Share
+          are conditional. */}
       <div className={cn('mt-4 grid gap-4', sectionsGridClass)}>
         {detailsCard}
         {aiStatusCard}
+        {bibStatusCard}
         {shareCard}
       </div>
       {event.type === 'organizer' && (

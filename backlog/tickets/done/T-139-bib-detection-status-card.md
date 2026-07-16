@@ -1,11 +1,11 @@
 # T-139 · [Dashboard] Mostrar estado/progreso de detección de dorsales (paridad con la tarjeta de AI matching)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/bib-detection-status-card`
-- **OpenSpec change:** — (UI que lee estado existente; se decide al ejecutar)
-- **PR:** —
+- **OpenSpec change:** — (UI que lee estado existente; implementado directo, sin OpenSpec)
+- **PR:** #195
 
 ## Requerimiento
 En la página de detalle del evento del fotógrafo (`/dashboard/photographer/events/[id]`) hoy se

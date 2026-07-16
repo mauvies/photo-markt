@@ -22,7 +22,11 @@ import {
   tagPhotosForTalent,
   untagPhotoForTalent,
 } from '@/database/queries';
-import { getEventBibDetectionState } from '@/database/queries/bib-numbers';
+import {
+  type BibDetectionEventStatus,
+  getEventBibDetectionProgress,
+  getEventBibDetectionState,
+} from '@/database/queries/bib-numbers';
 import {
   type AiMatchingStatus,
   getEventAiIndexingProgress,
@@ -790,4 +794,39 @@ export async function reindexEvent(eventId: string): Promise<{ success: true }> 
   revalidatePath(`/es/dashboard/photographer/events/${eventId}`);
   revalidatePath(`/en/dashboard/photographer/events/${eventId}`);
   return { success: true };
+}
+
+/**
+ * Lightweight progress poll for the owner's bib-detection status card — the
+ * bib-number counterpart of `getEventIndexingProgress`. Returns a compact
+ * payload so the card can refresh "X of Y processed" without a page reload.
+ * Owner-only. Read-only: it just surfaces the state the `detectPhotoBibs`
+ * worker already persists (no new AWS cost). (T-139)
+ */
+export interface EventBibProgress {
+  status: BibDetectionEventStatus;
+  processedCount: number;
+  totalCount: number;
+  failedCount: number;
+  pendingCount: number;
+  withBibsCount: number;
+}
+
+export async function getEventBibDetectionProgressAction(
+  eventId: string,
+): Promise<EventBibProgress> {
+  const supabase = await createClient();
+  await requireEventOwner(supabase, eventId);
+
+  const state = await getEventBibDetectionState(supabase, eventId);
+  const progress = await getEventBibDetectionProgress(supabase, eventId);
+
+  return {
+    status: state?.status ?? 'idle',
+    processedCount: progress.processed,
+    totalCount: progress.totalApplicable,
+    failedCount: progress.failed,
+    pendingCount: progress.pending,
+    withBibsCount: progress.withBibs,
+  };
 }
