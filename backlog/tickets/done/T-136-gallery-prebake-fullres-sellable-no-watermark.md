@@ -1,11 +1,11 @@
 # T-136 · Seguridad/Pagos: las galerías (no el carrito) siguen firmando el ORIGINAL full-res pre-bake en eventos vendibles sin watermark + índice para `photos.original_url`
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/gallery-prebake-fullres-free-events`
 - **OpenSpec change:** — (superficie de pagos/seguridad → `/code-review` antes de commitear; el índice es una migración additive trivial)
-- **PR:** —
+- **PR:** #196
 
 ## Requerimiento
 Hallazgo CONFIRMED del `/code-review high` de T-133. T-133 cerró la ventana pre-bake para el **carrito**
