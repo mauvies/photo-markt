@@ -39,15 +39,30 @@ export interface SearchFacesInEventResult {
 }
 
 /**
- * Parseable message prefix on the rate-limit error. Mirrors the
+ * Parseable message prefix on the rate-limit / degradation errors. Mirrors the
  * `PLAN_LIMIT:` pattern from `lib/plan-limits.ts` so the client can detect
  * the type from the message string alone (React strips custom Error
  * subclasses in production).
+ *
+ * Two distinct outcomes share the prefix:
+ *   - `:exhausted`   — the per-(event, IP) hourly throttle (tier 1). Retryable
+ *                      soon; the modal shows "too many searches, try later".
+ *   - `:unavailable` — a cost breaker tripped (per-event or global daily cap,
+ *                      T-034). The modal shows a dignified "temporarily
+ *                      unavailable" — the user needn't know which breaker.
  */
 export const FACE_SEARCH_RATE_LIMIT_PREFIX = 'RATE_LIMIT:face-search';
+export const FACE_SEARCH_EXHAUSTED_MESSAGE = `${FACE_SEARCH_RATE_LIMIT_PREFIX}:exhausted`;
+export const FACE_SEARCH_UNAVAILABLE_MESSAGE = `${FACE_SEARCH_RATE_LIMIT_PREFIX}:unavailable`;
 
+/** Tier-1 per-IP throttle ("too many searches"). Excludes the breaker outcome. */
 export function isFaceSearchRateLimitError(err: unknown): boolean {
-  return err instanceof Error && err.message.startsWith(FACE_SEARCH_RATE_LIMIT_PREFIX);
+  return err instanceof Error && err.message.startsWith(FACE_SEARCH_EXHAUSTED_MESSAGE);
+}
+
+/** A cost breaker tripped — face search is temporarily unavailable (T-034). */
+export function isFaceSearchUnavailableError(err: unknown): boolean {
+  return err instanceof Error && err.message.startsWith(FACE_SEARCH_UNAVAILABLE_MESSAGE);
 }
 
 // ─── Client-side results state (shared by the provider, viewers, results UI) ──

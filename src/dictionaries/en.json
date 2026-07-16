@@ -1403,6 +1403,7 @@
       "submitButton": "Accept",
       "searching": "Searching…",
       "errorRateLimit": "Too many searches. Try again later.",
+      "errorUnavailable": "Face search is temporarily unavailable. Please try again later.",
       "errorInvalidSelfie": "Please use a photo with a single, clear face.",
       "errorCollectionMissing": "This event no longer supports face search.",
       "errorGeneric": "Search failed. Please try again.",

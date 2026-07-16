@@ -52,7 +52,9 @@ describe('rateLimit fail-open Sentry alerting', () => {
     const [err, context] = captureException.mock.calls[0];
     expect(err).toBeInstanceOf(Error);
     expect(context.level).toBe('warning');
-    expect(context.fingerprint).toEqual(['rate-limit-fail-open']);
+    expect(context.fingerprint).toEqual(['rate-limit-backend-error']);
+    // The throttle (rateLimit) still serves the request → outcome fail-open.
+    expect(context.tags.outcome).toBe('fail-open');
   });
 
   it('sends only the limiter action prefix — never the IP / user-id in the key', async () => {
