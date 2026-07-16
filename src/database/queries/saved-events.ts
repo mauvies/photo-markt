@@ -25,6 +25,9 @@ export interface SavedEventRow {
   activity: string;
   slug: string | null;
   price_per_photo: number | null;
+  /** Cover-protection policy (T-140): the enrich layer needs it to decide
+   *  whether a first-photo cover fallback must route through /api/watermark/. */
+  watermark_enabled: boolean | null;
   saved_at: string;
 }
 
@@ -148,6 +151,7 @@ export async function getSavedEventsForTalent(
         activity,
         slug,
         price_per_photo,
+        watermark_enabled,
         deleted_at
       )
     `,
@@ -174,6 +178,7 @@ export async function getSavedEventsForTalent(
       activity: event?.activity,
       slug: event?.slug ?? null,
       price_per_photo: event?.price_per_photo ?? null,
+      watermark_enabled: event?.watermark_enabled ?? null,
       saved_at: item.saved_at,
     };
   }) as SavedEventRow[];

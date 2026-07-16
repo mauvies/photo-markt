@@ -16,6 +16,7 @@ import {
   getEventPhotosPublicPage,
   getProfilesByIds,
   type PhotoDetail,
+  resolveEventOgImageUrl,
   type SupabaseServerClient,
 } from '@/database/queries';
 import { getPurchasedPhotoIdsForEvent } from '@/database/queries/orders';
@@ -233,28 +234,21 @@ export async function generateMetadata({
   const description = `Browse ${activityLabel} photos from ${event.name} in ${location} on ${formattedDate}. Find yourself in professional high-resolution event photos and download your best shots.`;
 
   const ogImages: { url: string; width: number; height: number; alt: string }[] = [];
-  // Prefer the dedicated cover image (T-055) — this is the presentation image
-  // the photographer chose, and social/SEO previews are exactly where it
-  // matters most. Fall back to the first photo when no cover is set.
-  let ogImagePath = (event as { cover_path?: string | null }).cover_path ?? null;
-  if (!ogImagePath) {
-    const { data: firstPhotoRow } = await supabaseAdmin
-      .from('photos')
-      .select('original_url')
-      .eq('event_id', event.id)
-      .is('deleted_at', null)
-      .limit(1)
-      .maybeSingle();
-    ogImagePath = firstPhotoRow?.original_url ?? null;
-  }
-
-  if (ogImagePath) {
-    const { data: signedData } = await supabaseAdmin.storage
-      .from('photos')
-      .createSignedUrl(ogImagePath, 60 * 60 * 24);
-    if (signedData?.signedUrl) {
-      ogImages.push({ url: signedData.signedUrl, width: 1200, height: 630, alt: title });
-    }
+  // Prefer the dedicated cover image (T-055) — the presentation image the
+  // photographer chose, and social/SEO previews are exactly where it matters
+  // most. A first-photo fallback for a watermarked/for-sale event is served
+  // through the fail-closed /api/watermark/ derivative, never a direct signed
+  // full-res original in <meta og:image> (T-140, shared predicate with the
+  // in-page gallery signing above).
+  const ogImageUrl = await resolveEventOgImageUrl(supabaseAdmin, {
+    eventId: event.id,
+    coverPath: (event as { cover_path?: string | null }).cover_path ?? null,
+    watermarkEnabled: event.watermark_enabled,
+    pricePerPhoto: event.price_per_photo,
+    baseUrl,
+  });
+  if (ogImageUrl) {
+    ogImages.push({ url: ogImageUrl, width: 1200, height: 630, alt: title });
   }
 
   return {
