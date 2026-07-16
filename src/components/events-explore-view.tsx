@@ -69,7 +69,7 @@ export async function EventsExploreView({
         <section className="relative flex flex-col items-center justify-center overflow-hidden pb-2">
           <div className="relative z-10 mx-auto max-w-5xl text-center">
             <h1 className="text-balance text-4xl font-bold sm:text-5xl">
-              <span className="block bg-linear-to-r from-primary via-primary/80 to-primary/60 bg-clip-text pb-2 text-transparent">
+              <span className="block bg-linear-to-r from-primary via-primary/80 to-primary/60 bg-clip-text pt-4 sm:pt-0 pb-2 text-transparent">
                 {dict.home.heroHeadline1} {dict.home.heroHeadline2}
               </span>
             </h1>

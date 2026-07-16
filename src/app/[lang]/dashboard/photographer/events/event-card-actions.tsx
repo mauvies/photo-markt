@@ -51,7 +51,7 @@ export function EventCardActions({ editHref, onDelete, labels }: EventCardAction
   // Matches the activity/visibility overlay badges on the cover so all three
   // icons read as a consistent action-icon row.
   const triggerClass =
-    'flex h-8 w-8 items-center justify-center rounded-full bg-gray-900/60 text-white backdrop-blur-sm shadow-sm transition-colors hover:bg-gray-900/80 focus-visible:outline-none disabled:opacity-50 sm:h-7 sm:w-7';
+    'flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-black/70 backdrop-blur-sm shadow-sm transition-colors hover:bg-white/60 focus-visible:outline-none disabled:opacity-50 sm:h-7 sm:w-7';
 
   const trigger = (
     <button
