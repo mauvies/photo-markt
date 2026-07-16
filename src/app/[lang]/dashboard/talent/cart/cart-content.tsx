@@ -360,8 +360,11 @@ export function CartContent({ initialCartData }: CartContentProps) {
           </div>
         </div>
 
-        {/* Right side - Summary (desktop only) */}
-        <div className="hidden md:block flex-1 min-w-0">
+        {/* Right side - Summary (desktop only). `md:mt-10` drops the summary by
+            the height of the left column's "N items / Clear cart" header row
+            (h-8 button + mb-2 = 40px) so its top lines up with the first cart
+            item instead of the header row. */}
+        <div className="hidden min-w-0 flex-1 md:mt-10 md:block">
           <div className="sticky top-4 self-start rounded-lg border border-border bg-card p-6 shadow-lg">
             <div className="space-y-4">
               <div className="space-y-3">

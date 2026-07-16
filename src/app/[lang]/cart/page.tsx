@@ -21,7 +21,7 @@ export default async function GuestCartPage({ params }: { params: Promise<{ lang
   const dict = await getDictionary(lang as Locale);
 
   return (
-    <div className="mx-auto max-w-[1400px] px-3 py-4 sm:py-10 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[1300px] px-3 py-4 sm:py-10 sm:px-6 lg:px-8">
       <div className="mb-4">
         <h1 className="text-3xl font-bold">{dict.cart.shoppingCart}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{dict.cart.reviewPhotos}</p>

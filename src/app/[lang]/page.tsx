@@ -37,7 +37,7 @@ export default async function Home({
   // TalentDashboardHeader). Event cards and access codes resolve to the public
   // viewer here (`/events/<code>`).
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-4 py-10 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-[1300px] px-4 py-10 sm:px-6 lg:px-8">
       <EventsExploreView
         dict={dict}
         filterOptions={filterOptions}

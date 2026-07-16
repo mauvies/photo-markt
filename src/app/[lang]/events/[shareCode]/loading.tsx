@@ -1,6 +1,6 @@
 import { Skeleton } from '@/components/ui/skeleton';
 
-// Mirrors `page.tsx`'s shell (`mx-auto max-w-[1400px] w-full flex-1 px-3
+// Mirrors `page.tsx`'s shell (`mx-auto max-w-[1300px] w-full flex-1 px-3
 // py-4 sm:py-10 sm:px-6 lg:px-8`), header row (title + meta line + share
 // button), and the real photo grid (`grid-cols-2 gap-2 sm:grid-cols-3
 // md:grid-cols-4 lg:grid-cols-5`, `aspect-square` tiles — matching
@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 // shift (T-128).
 export default function Loading() {
   return (
-    <div className="mx-auto max-w-[1400px] w-full flex-1 px-3 py-4 sm:py-10 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[1300px] w-full flex-1 px-3 py-4 sm:py-10 sm:px-6 lg:px-8">
       <div className="mb-6 flex items-start justify-between gap-4">
         <div className="space-y-2">
           <Skeleton className="h-8 w-64" />

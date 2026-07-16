@@ -22,7 +22,7 @@ export function HeaderShell({
         className,
       )}
     >
-      <div className="mx-auto flex h-(--header-height) max-w-[1400px] items-center justify-between px-3">
+      <div className="mx-auto flex h-(--header-height) max-w-[1300px] items-center justify-between px-3">
         {children}
       </div>
     </header>

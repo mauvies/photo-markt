@@ -105,7 +105,7 @@ export default async function DownloadPage({
   );
 
   return (
-    <div className="mx-auto max-w-[1400px] px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-[1300px] px-4 py-8 sm:px-6">
       {/* Account creation nudge */}
       {!downloadToken.claimed_by_user_id && (
         <div className="mb-6 flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
