@@ -1,13 +1,11 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
-import { Calendar, Image as ImageIcon, Loader2, ShoppingCart, Trash2, User, X } from 'lucide-react';
-import Image from 'next/image';
-import Link from 'next/link';
+import { Loader2, ShoppingCart, Trash2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useLayoutEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
+import { CartItemRow } from '@/components/cart/cart-item-row';
 import { CART_MERGE_STATE_KEY } from '@/components/guest-cart-merge';
 import { PhotoLightbox } from '@/components/photo-lightbox';
 import {
@@ -118,7 +116,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
     empty: string;
     emptyCartAuthDesc: string;
     browseEvents: string;
-    viewMyPhotos: string;
+    viewFavorites: string;
     item: string;
     items: string;
     clearCart: string;
@@ -296,7 +294,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
             {t('browseEvents')}
           </Button>
           <Button onClick={() => router.push(lp('/dashboard/talent/favorites'))} variant="outline">
-            {t('viewMyPhotos')}
+            {t('viewFavorites')}
           </Button>
         </div>
       </div>
@@ -337,115 +335,36 @@ export function CartContent({ initialCartData }: CartContentProps) {
           </div>
           <div className="space-y-3">
             {cartData.items.map((item) => (
-              <div
+              <CartItemRow
                 key={item.photoId}
-                className="group flex gap-4 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/50 hover:shadow-md"
-              >
-                {item.previewUrl ? (
-                  <button
-                    type="button"
-                    onClick={() => setLightboxItem(item)}
-                    aria-label={t('viewPhoto')}
-                    className="relative h-24 w-24 shrink-0 cursor-zoom-in overflow-hidden rounded-lg bg-muted"
-                  >
-                    <Image
-                      src={item.previewUrl}
-                      alt={item.eventTitle || t('photoAlt')}
-                      fill
-                      className="object-cover transition-transform group-hover:scale-105"
-                      sizes="80px"
-                      // previewUrl is a signed original (createPhotoUrls,
-                      // useWatermark:false). Routing a multi-MB original through
-                      // the Vercel optimizer times it out → broken image (T-111,
-                      // same failure as T-110). Serve it directly, like the guest
-                      // cart already does.
-                      unoptimized
-                    />
-                  </button>
-                ) : (
-                  <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground">
-                    <ImageIcon className="h-8 w-8" />
-                  </div>
-                )}
-
-                <div className="flex flex-1 flex-col gap-2 min-w-0">
-                  <div>
-                    {item.eventTitle &&
-                      (item.eventShareCode ? (
-                        <Link
-                          href={lp(`/events/${item.eventShareCode}`)}
-                          title={t('viewEvent')}
-                          className="font-semibold text-base text-foreground line-clamp-1 hover:underline"
-                        >
-                          {item.eventTitle}
-                        </Link>
-                      ) : (
-                        <h4 className="font-semibold text-base text-foreground line-clamp-1">
-                          {item.eventTitle}
-                        </h4>
-                      ))}
-                    <div className="flex flex-col items-start gap-1 text-sm text-muted-foreground">
-                      {item.photographerName &&
-                        (item.photographerSlug ? (
-                          <Link
-                            href={lp(`/photographer/${item.photographerSlug}`)}
-                            title={t('viewPhotographer')}
-                            className="flex items-center gap-1.5 hover:underline"
-                          >
-                            <User className="h-3.5 w-3.5" />
-                            <span className="line-clamp-1">{item.photographerName}</span>
-                          </Link>
-                        ) : (
-                          <div className="flex items-center gap-1.5">
-                            <User className="h-3.5 w-3.5" />
-                            <span className="line-clamp-1">{item.photographerName}</span>
-                          </div>
-                        ))}
-                      {item.eventDate && (
-                        <div className="flex items-center gap-1.5">
-                          <Calendar className="h-3.5 w-3.5" />
-                          <span>{format(new Date(item.eventDate), 'MMM d, yyyy')}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-auto flex items-center justify-between gap-4">
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-xl font-bold text-foreground">
-                        {formatPrice(item.unitPriceCents)}
-                      </span>
-                      {item.unitPriceCents === 0 && (
-                        <span className="text-xs font-medium text-green-600 dark:text-green-400">
-                          {t('free')}
-                        </span>
-                      )}
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRemove(item.photoId)}
-                      disabled={isPending && removingId === item.photoId}
-                      className="text-foreground/90 hover:text-foreground hover:bg-muted shrink-0"
-                    >
-                      {isPending && removingId === item.photoId ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <>
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          <span className="hidden sm:inline">{t('remove')}</span>
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </div>
+                previewUrl={item.previewUrl}
+                eventName={item.eventTitle}
+                eventShareCode={item.eventShareCode}
+                eventDate={item.eventDate}
+                photographerName={item.photographerName}
+                photographerSlug={item.photographerSlug}
+                unitPriceCents={item.unitPriceCents}
+                removing={isPending && removingId === item.photoId}
+                onViewPhoto={() => setLightboxItem(item)}
+                onRemove={() => handleRemove(item.photoId)}
+                labels={{
+                  photoAlt: t('photoAlt'),
+                  viewPhoto: t('viewPhoto'),
+                  viewEvent: t('viewEvent'),
+                  viewPhotographer: t('viewPhotographer'),
+                  remove: t('remove'),
+                  free: t('free'),
+                }}
+              />
             ))}
           </div>
         </div>
 
-        {/* Right side - Summary (desktop only) */}
-        <div className="hidden md:block flex-1 min-w-0">
+        {/* Right side - Summary (desktop only). `md:mt-10` drops the summary by
+            the height of the left column's "N items / Clear cart" header row
+            (h-8 button + mb-2 = 40px) so its top lines up with the first cart
+            item instead of the header row. */}
+        <div className="hidden min-w-0 flex-1 md:mt-10 md:block">
           <div className="sticky top-4 self-start rounded-lg border border-border bg-card p-6 shadow-lg">
             <div className="space-y-4">
               <div className="space-y-3">

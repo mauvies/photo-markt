@@ -20,7 +20,6 @@ export interface PublicPhotographerProfile {
 export interface PhotographerWithStats extends PublicPhotographerProfile {
   eventCount: number;
   photoCount: number;
-  photosSoldCount: number;
 }
 
 export interface PhotographerSearchResult {
@@ -56,7 +55,7 @@ export async function getPhotographerBySlug(
   //   what's actually visible on the public profile, not total uploads).
   // - photosSoldCount: line items from completed orders attributed to this
   //   photographer (one count per photo sold, including repeat sales).
-  const [eventsRes, photosRes, salesRes] = await Promise.all([
+  const [eventsRes, photosRes] = await Promise.all([
     supabase
       .from('events')
       .select('*', { count: 'exact', head: true })
@@ -69,11 +68,6 @@ export async function getPhotographerBySlug(
       .eq('events.user_id', data.id)
       .eq('events.is_public', true)
       .is('events.deleted_at', null),
-    supabase
-      .from('order_items')
-      .select('id, orders!inner(status)', { count: 'exact', head: true })
-      .eq('photographer_id', data.id)
-      .eq('orders.status', 'completed'),
   ]);
 
   return {
@@ -81,7 +75,6 @@ export async function getPhotographerBySlug(
     slug: data.slug ?? data.username,
     eventCount: eventsRes.count ?? 0,
     photoCount: photosRes.count ?? 0,
-    photosSoldCount: salesRes.count ?? 0,
   };
 }
 

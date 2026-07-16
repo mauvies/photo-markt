@@ -41,7 +41,7 @@ export function AvailablePlansSection({
   featuresByPlan,
   labels,
 }: AvailablePlansSectionProps) {
-  const [billing, setBilling] = useState<BillingPeriod>('monthly');
+  const [billing, setBilling] = useState<BillingPeriod>('yearly');
   const isYearly = billing === 'yearly';
 
   return (

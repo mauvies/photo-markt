@@ -1,6 +1,6 @@
 'use client';
 
-import Image from 'next/image';
+import { Camera } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo } from 'react';
@@ -27,14 +27,14 @@ export function ProfileContent({
 
   useEffect(() => {
     if (!showSuccessMessage) return;
-    toast.success('Purchase successful! Your photos are now available.', { duration: 5000 });
+    toast.success(translations.purchaseSuccess, { duration: 5000 });
     // Re-fetch server data after a delay to allow the Stripe webhook to process, then clean URL
     const timer = setTimeout(() => {
       router.refresh();
       router.replace('/dashboard/talent/profile', { scroll: false });
     }, 3000);
     return () => clearTimeout(timer);
-  }, [showSuccessMessage, router]);
+  }, [showSuccessMessage, router, translations.purchaseSuccess]);
 
   const displayName = profile?.display_name || profile?.username || 'User';
 
@@ -103,11 +103,11 @@ export function ProfileContent({
             <div className="flex gap-8 mb-4">
               <div>
                 <span className="block text-xl font-semibold">{stats.purchasedPhotosCount}</span>
-                <span className="text-sm text-muted-foreground">photos</span>
+                <span className="text-sm text-muted-foreground">{translations.statsPhotos}</span>
               </div>
               <div>
                 <span className="block text-xl font-semibold">{stats.eventsCount}</span>
-                <span className="text-sm text-muted-foreground">events</span>
+                <span className="text-sm text-muted-foreground">{translations.statsEvents}</span>
               </div>
             </div>
           </div>
@@ -115,26 +115,29 @@ export function ProfileContent({
         {profile?.bio && <p className="text-base mt-4">{profile.bio}</p>}
       </div>
 
-      {/* Photo Grid */}
-      {photos.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <div className="rounded-full bg-muted p-6 mb-4">
-            <Image
-              src="/favicon/favicon_simple_dark.png"
-              alt="Photo Markt"
-              width={48}
-              height={48}
-              className="opacity-50"
-            />
+      {/* Photo Grid. Gated on `photoItems` (the renderable set) rather than raw
+          `photos`, so owned rows without a usable preview URL still fall through
+          to the empty state instead of painting a blank grid. */}
+      {photoItems.length === 0 ? (
+        // Empty state — mirrors the cart's empty state (icon + title +
+        // description + actions) so a talent with no purchases isn't met with a
+        // near-blank page.
+        <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
+          <div className="mb-6 rounded-full bg-muted p-6">
+            <Camera className="h-10 w-10 text-muted-foreground/60" />
           </div>
-          <h3 className="text-lg font-semibold mb-2">No photos yet</h3>
-          <p className="text-sm text-muted-foreground mb-4 max-w-md">
-            You haven&apos;t purchased any photos yet. Explore events to find yourself and purchase
-            your favorite shots.
+          <h3 className="mb-2 text-2xl font-semibold">{translations.emptyTitle}</h3>
+          <p className="mb-6 max-w-md text-sm text-muted-foreground">
+            {translations.emptyDescription}
           </p>
-          <Link href="/dashboard/talent/events">
-            <Button>Explore Events</Button>
-          </Link>
+          <div className="flex flex-wrap justify-center gap-3">
+            <Link href="/dashboard/talent/events">
+              <Button>{translations.exploreEvents}</Button>
+            </Link>
+            <Link href="/dashboard/talent/favorites">
+              <Button variant="outline">{translations.viewFavorites}</Button>
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="w-full pt-2 sm:pt-4">

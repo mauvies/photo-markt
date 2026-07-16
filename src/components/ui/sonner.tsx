@@ -1,11 +1,17 @@
 'use client';
 
 import { Toaster as SonnerToaster, type ToasterProps } from 'sonner';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export function Toaster(props: ToasterProps) {
+  // On mobile, show toasts at the top: a bottom toast covers the fixed bottom
+  // nav (and the "Ver carrito" action inside it), whereas a top toast blocks
+  // nothing. Desktop keeps the bottom-right placement.
+  const isMobile = useIsMobile();
+
   return (
     <SonnerToaster
-      position="bottom-right"
+      position={isMobile ? 'top-center' : 'bottom-right'}
       closeButton
       duration={4000}
       gap={10}

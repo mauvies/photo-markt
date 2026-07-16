@@ -166,6 +166,13 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* Reserve the scrollbar gutter permanently so Radix scroll-lock
+     (react-remove-scroll, used by every dropdown/dialog) can't change the page
+     width when it opens — that width change reads as a "zoom"/reflow of the
+     background content when opening the avatar dropdown on mobile. */
+  html {
+    scrollbar-gutter: stable;
+  }
   body {
     @apply bg-background text-foreground;
   }

@@ -16,7 +16,7 @@ afterEach(cleanup);
 describe('/events loading.tsx', () => {
   it('matches the page shell margins and renders the real card grid, not a bare spinner', () => {
     const { container } = render(<EventsListingLoading />);
-    expect(container.innerHTML).toContain('mx-auto max-w-[1400px] w-full flex-1 px-4 pt-6 pb-10');
+    expect(container.innerHTML).toContain('mx-auto max-w-[1300px] w-full flex-1 px-4 pt-6 pb-10');
     expect(container.innerHTML).toContain('aspect-[4/3]');
     // The old loading.tsx rendered nothing but a bare <Spinner /> (an
     // <output> element) — a page-shaped skeleton replaces it entirely.
@@ -30,14 +30,14 @@ describe('/dashboard/talent/events loading.tsx', () => {
     expect(container.innerHTML).toContain('aspect-[4/3]');
     // The dashboard layout already supplies mx-auto/max-w/px — this file
     // must not duplicate it.
-    expect(container.innerHTML).not.toContain('max-w-[1400px]');
+    expect(container.innerHTML).not.toContain('max-w-[1300px]');
   });
 });
 
 describe('/events/[shareCode] loading.tsx', () => {
   it('matches the real photo grid columns/gap/aspect-ratio (PhotoAlbumViewer)', () => {
     const { container } = render(<EventDetailLoading />);
-    expect(container.innerHTML).toContain('mx-auto max-w-[1400px] w-full flex-1 px-3 py-4');
+    expect(container.innerHTML).toContain('mx-auto max-w-[1300px] w-full flex-1 px-3 py-4');
     expect(container.innerHTML).toContain(
       'grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5',
     );

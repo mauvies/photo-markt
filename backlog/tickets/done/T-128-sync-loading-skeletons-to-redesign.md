@@ -27,7 +27,7 @@ equivalente del dashboard de talento.
 - **Listado de eventos** (`events/loading.tsx`) → solo `<Spinner />`, **sin** grid skeleton de cards.
 - **Explore de talento** (`dashboard/talent/events/loading.tsx`) → solo `<Spinner />`.
 - **Detalle de evento público** (`events/[shareCode]/loading.tsx`) → tiene grid `aspect-square` pero con
-  `max-w-[1400px]`/`container py-3` que hay que **verificar contra los márgenes actuales** de la página, y
+  `max-w-[1300px]`/`container py-3` que hay que **verificar contra los márgenes actuales** de la página, y
   le faltan los elementos que rodean al grid (barra de búsqueda/dorsal, iconos de acción, área de título).
 - **Detalle de evento talento** (`dashboard/talent/events/[id]/`) → revisar si tiene loading equivalente y
   alinearlo igual.

@@ -68,7 +68,7 @@ export function Footer({ dict, lang }: { dict: Dictionary; lang: string }) {
 
   return (
     <footer className="border-t bg-background">
-      <div className="mx-auto max-w-[1400px] px-4 py-12 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1300px] px-4 py-12 sm:px-6 lg:px-8">
         <div className="grid gap-10 lg:grid-cols-12">
           {/* Brand */}
           <div className="space-y-4 lg:col-span-4">

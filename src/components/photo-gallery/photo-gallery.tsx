@@ -141,7 +141,13 @@ export function PhotoGallery({
         variant="outline"
         size="sm"
         disabled={selection.selectedIds.length === 0 || action.isPending}
-        onClick={() => action.onRun(selection.selectedIds)}
+        onClick={() => {
+          // Snapshot the ids (passed by value), then exit selection mode
+          // immediately — every bulk action auto-closes selection, so hosts no
+          // longer need to bump `selectionResetKey` themselves.
+          action.onRun(selection.selectedIds);
+          selection.clear();
+        }}
       >
         <action.icon className="mr-2 h-4 w-4" />
         {action.label}
@@ -231,12 +237,20 @@ export function PhotoGallery({
       ) : null}
 
       {selection.isSelecting && bulkButtons.length > 0 ? (
-        // Mobile only: the bulk actions live in a fixed bar over the bottom nav
-        // (same height), horizontally scrollable, staying visible until
-        // selection exits. Desktop shows the same actions inline in the toolbar
-        // above instead (so they render in both places, CSS hides one).
-        <div className="fixed inset-x-0 bottom-0 z-[60] flex min-h-16 items-center gap-2 overflow-x-auto border-t border-border bg-background/95 px-3 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {bulkButtons}
+        // Mobile only: the bulk actions live in a fixed bar over the bottom nav,
+        // staying visible until selection exits. Desktop shows the same actions
+        // inline in the toolbar above (both render; CSS hides one).
+        //
+        // Height matches the bottom nav exactly so it fully covers it: a locked
+        // `h-16` content row (never shrinks/shifts when Android Chrome toggles
+        // its browser chrome) plus `pb-[env(safe-area-inset-bottom)]` on the
+        // outer element — the same recipe as `bottom-nav.tsx` (min-h-16 item +
+        // safe-area pad). Fully-opaque `bg-background` at `z-[60]` hides the
+        // `z-50` nav underneath while selecting.
+        <div className="fixed inset-x-0 bottom-0 z-[60] border-t border-border bg-background pb-[env(safe-area-inset-bottom)] md:hidden">
+          <div className="flex h-16 items-center gap-2 overflow-x-auto px-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {bulkButtons}
+          </div>
         </div>
       ) : null}
     </div>

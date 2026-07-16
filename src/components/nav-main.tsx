@@ -15,6 +15,7 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from '@/components/ui/sidebar';
+import { NAV_ACTIVE_PILL_DATA_ACTIVE } from '@/lib/utils';
 
 export function NavMains({
   items,
@@ -76,7 +77,12 @@ export function NavMains({
           return (
             <Collapsible key={item.title} asChild defaultOpen={isActive}>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip={item.title} isActive={isActive}>
+                <SidebarMenuButton
+                  asChild
+                  tooltip={item.title}
+                  isActive={isActive}
+                  className={NAV_ACTIVE_PILL_DATA_ACTIVE}
+                >
                   <Link href={item.url} onClick={handleLinkClick}>
                     <item.icon />
                     <span>{item.title}</span>
@@ -97,7 +103,11 @@ export function NavMains({
                           const isSubItemActive = isItemActive(subItem.url, allSubUrls);
                           return (
                             <SidebarMenuSubItem key={subItem.title}>
-                              <SidebarMenuSubButton asChild isActive={isSubItemActive}>
+                              <SidebarMenuSubButton
+                                asChild
+                                isActive={isSubItemActive}
+                                className={NAV_ACTIVE_PILL_DATA_ACTIVE}
+                              >
                                 <Link href={subItem.url} onClick={handleLinkClick}>
                                   <span>{subItem.title}</span>
                                 </Link>

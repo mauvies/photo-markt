@@ -65,7 +65,7 @@ export default async function PhotographersPage({ params }: { params: Promise<{ 
 
       {/* How It Works */}
       <section id="how-it-works" className="scroll-mt-20 bg-background py-24">
-        <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1300px] px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               {dict.home.howItWorksLabel}
@@ -125,7 +125,7 @@ export default async function PhotographersPage({ params }: { params: Promise<{ 
 
       {/* Trust signals */}
       <section className="border-y bg-muted/30 py-20 sm:py-24">
-        <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1300px] px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               {p.trustLabel}
@@ -156,7 +156,7 @@ export default async function PhotographersPage({ params }: { params: Promise<{ 
 
       {/* Final CTA */}
       <section className="bg-linear-to-br from-primary/10 via-primary/5 to-background py-20 sm:py-24">
-        <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1300px] px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-3xl text-center">
             <h2 className="text-3xl font-semibold sm:text-4xl">{dict.home.ctaHeadline}</h2>
             <p className="mt-4 text-base text-muted-foreground sm:text-lg">

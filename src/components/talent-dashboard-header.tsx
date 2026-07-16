@@ -13,7 +13,7 @@ import { useCartItemCount } from '@/hooks/use-cart-item-count';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { dashboardHomeForRole } from '@/lib/auth/dashboard-home';
 import type { RoleSlug } from '@/lib/roles';
-import { cn } from '@/lib/utils';
+import { cn, NAV_ACTIVE_PILL } from '@/lib/utils';
 
 export function TalentDashboardHeader({
   user,
@@ -88,7 +88,7 @@ export function TalentDashboardHeader({
               className={cn(
                 'flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium transition-colors',
                 isActive(link.href)
-                  ? 'bg-accent/95 text-foreground hover:bg-accent/90'
+                  ? NAV_ACTIVE_PILL
                   : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
               )}
             >
@@ -132,9 +132,12 @@ export function TalentDashboardHeader({
           badge, since the header is hidden on mobile. */}
       <BottomNav
         items={[
-          ...talentNavLinks
-            .filter((item) => item.href !== '/dashboard/talent/profile')
-            .map((item) => ({ ...item, href: lp(item.href) })),
+          // Explicit order: Explore → Favorites → Cart → Orders. The cart sits
+          // in the middle slot (most-used action) with Orders immediately to
+          // its right, so the array is assembled by hand rather than
+          // spread-then-append.
+          { href: lp('/dashboard/talent/events'), label: navLabels.explore, icon: Search },
+          { href: lp('/dashboard/talent/favorites'), label: navLabels.myPhotos, icon: Heart },
           {
             href: lp('/dashboard/talent/cart'),
             label: navLabels.cart,
@@ -146,6 +149,7 @@ export function TalentDashboardHeader({
                 </span>
               ) : undefined,
           },
+          { href: lp('/dashboard/talent/orders'), label: navLabels.orders, icon: ShoppingBag },
         ]}
         account={
           <BottomNavAccount

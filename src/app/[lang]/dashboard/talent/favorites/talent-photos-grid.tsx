@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { enUS, es } from 'date-fns/locale';
 import { Loader2, ShoppingCart, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import {
@@ -29,7 +29,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
+import { showAddedToCartToast } from '@/lib/cart-toast';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
@@ -57,6 +59,8 @@ export function TalentPhotosGrid({
 }: TalentPhotosGridProps) {
   const { t } = useTranslations<TalentPhotosT>();
   const params = useParams<{ lang: string }>();
+  const router = useRouter();
+  const lp = useLocalizedPath();
   const dateLocale = params?.lang === 'es' ? es : enUS;
   const [groups, setGroups] = useState(initialGroups);
   const [offset, setOffset] = useState(
@@ -90,10 +94,17 @@ export function TalentPhotosGrid({
       for (const photoId of ids) {
         addToCart(photoId);
       }
-      toast.success(`Added ${ids.length} photo${ids.length === 1 ? '' : 's'} to cart`);
+      showAddedToCartToast({
+        message:
+          ids.length === 1
+            ? t('addedToCart')
+            : t('addedToCartMany').replace('{n}', String(ids.length)),
+        viewCartLabel: t('viewCart'),
+        onViewCart: () => router.push(lp('/dashboard/talent/cart')),
+      });
       setSelectionResetKey((k) => k + 1);
     },
-    [addToCart],
+    [addToCart, t, router, lp],
   );
 
   // Per-photo handlers fire the success toast alongside the optimistic flip
@@ -101,9 +112,13 @@ export function TalentPhotosGrid({
   const handleAddToCart = useCallback(
     (photoId: string) => {
       addToCart(photoId);
-      toast.success(t('addedToCart'));
+      showAddedToCartToast({
+        message: t('addedToCart'),
+        viewCartLabel: t('viewCart'),
+        onViewCart: () => router.push(lp('/dashboard/talent/cart')),
+      });
     },
-    [addToCart, t],
+    [addToCart, t, router, lp],
   );
 
   const handleRemoveFromCart = useCallback(
@@ -201,9 +216,21 @@ export function TalentPhotosGrid({
     });
   }, [groups]);
 
-  // One PhotoGallery section per event; the first event of each date carries
-  // the sticky date header, so a single gallery spans every date/event with
-  // one shared selection set + one toolbar.
+  // The very first date moves into the sticky selection toolbar (on the same
+  // row as the "Select" button) instead of stacking as a second sticky bar, so
+  // on scroll only that one row stays pinned to the top.
+  const firstDateKey = dateGroups[0]?.[0] ?? null;
+  const firstDateLabel = useMemo(() => {
+    if (!firstDateKey) return null;
+    if (firstDateKey === 'unknown') return t('unknownDate');
+    const formatted = format(new Date(firstDateKey), 'EEEE, MMMM d, yyyy', { locale: dateLocale });
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+  }, [firstDateKey, dateLocale, t]);
+
+  // One PhotoGallery section per event; the first event of each date (except the
+  // first date, whose header lives in the toolbar) carries the sticky date
+  // header, so a single gallery spans every date/event with one shared
+  // selection set + one toolbar.
   const sections = useMemo<PhotoGallerySection[]>(() => {
     const result: PhotoGallerySection[] = [];
     for (const [dateKey, events] of dateGroups) {
@@ -231,7 +258,7 @@ export function TalentPhotosGrid({
           key: `${dateKey}:${event.event_id ?? 'no-event'}:${eventIndex}`,
           header: (
             <div className="space-y-2">
-              {eventIndex === 0 ? (
+              {eventIndex === 0 && dateKey !== firstDateKey ? (
                 <div className="sticky top-0 z-10 border-b border-border/50 bg-background/95 py-2 pt-4 backdrop-blur-sm">
                   <h2 className="text-xl font-semibold text-foreground">{formattedDate}</h2>
                 </div>
@@ -265,7 +292,7 @@ export function TalentPhotosGrid({
       });
     }
     return result;
-  }, [dateGroups, dateLocale, t]);
+  }, [dateGroups, dateLocale, t, firstDateKey]);
 
   const galleryProps = useMemo(
     () => ({
@@ -350,6 +377,13 @@ export function TalentPhotosGrid({
         bulkActions={bulkActions}
         labels={selectionLabels}
         selectionResetKey={selectionResetKey}
+        toolbarLeading={
+          firstDateLabel ? (
+            <h2 className="truncate text-lg font-semibold text-foreground sm:text-xl">
+              {firstDateLabel}
+            </h2>
+          ) : undefined
+        }
         toolbarClassName="sticky top-[var(--header-height)] z-30"
       />
 

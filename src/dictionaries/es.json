@@ -264,7 +264,7 @@
     "failedClearCart": "Error al vaciar el carrito",
     "failedStartCheckout": "Error al iniciar el pago",
     "emptyCartAuthDesc": "Comienza a agregar fotos a tu carrito desde los eventos a los que has asistido o descubierto.",
-    "viewMyPhotos": "Ver mis fotos",
+    "viewFavorites": "Ver favoritos",
     "allItemsFree": "Todos los artículos en tu carrito son gratuitos",
     "cartRestored": "Tu carrito ha sido recuperado",
     "itemsUnavailableRemoved": "Uno o más artículos de tu carrito ya no están disponibles y fueron eliminados."
@@ -664,7 +664,9 @@
     "loading": "Cargando...",
     "cancel": "Cancelar",
     "addedToCart": "Añadida al carrito",
+    "addedToCartMany": "{n} fotos añadidas al carrito",
     "removedFromCart": "Eliminada del carrito",
+    "viewCart": "Ver carrito",
     "failedAddCart": "No se pudo añadir la foto al carrito, inténtalo de nuevo",
     "failedRemoveCart": "No se pudo eliminar la foto del carrito, inténtalo de nuevo"
   },
@@ -1113,7 +1115,7 @@
     "jobTitle": "Fotógrafo de eventos",
     "noEventsBody": "Este fotógrafo aún no ha publicado ningún evento.",
     "editProfile": "Editar perfil",
-    "copyProfileLink": "Copiar enlace del perfil",
+    "copyProfileLink": "Copiar enlace",
     "copied": "Copiado",
     "editProfileTitle": "Editar perfil",
     "editProfileSubtitle": "Actualiza la información pública de tu perfil: nombre, usuario y biografía.",
@@ -1159,7 +1161,14 @@
     "downloadTooltip": "Descargar",
     "shareTooltip": "Compartir",
     "deleteTooltip": "Eliminar",
-    "moreOptions": "Más opciones"
+    "moreOptions": "Más opciones",
+    "statsPhotos": "fotos",
+    "statsEvents": "eventos",
+    "purchaseSuccess": "¡Compra exitosa! Tus fotos ya están disponibles.",
+    "emptyTitle": "Aún no tienes fotos",
+    "emptyDescription": "Todavía no has comprado ninguna foto. Explora eventos para encontrarte y comprar tus fotos favoritas.",
+    "exploreEvents": "Explorar eventos",
+    "viewFavorites": "Ver favoritos"
   },
   "pricingSection": {
     "headline": "Precios simples para fotógrafos.",

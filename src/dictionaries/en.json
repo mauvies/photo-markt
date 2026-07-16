@@ -264,7 +264,7 @@
     "failedClearCart": "Failed to clear cart",
     "failedStartCheckout": "Failed to start checkout",
     "emptyCartAuthDesc": "Start adding photos to your cart from events you've attended or discovered.",
-    "viewMyPhotos": "View My Photos",
+    "viewFavorites": "View Favorites",
     "allItemsFree": "All items in your cart are free",
     "cartRestored": "Your cart has been restored",
     "itemsUnavailableRemoved": "One or more items in your cart are no longer available and were removed."
@@ -664,7 +664,9 @@
     "loading": "Loading...",
     "cancel": "Cancel",
     "addedToCart": "Added to cart",
+    "addedToCartMany": "{n} photos added to cart",
     "removedFromCart": "Removed from cart",
+    "viewCart": "View cart",
     "failedAddCart": "Couldn't add the photo to your cart, please try again",
     "failedRemoveCart": "Couldn't remove the photo from your cart, please try again"
   },
@@ -1113,7 +1115,7 @@
     "jobTitle": "Event Photographer",
     "noEventsBody": "This photographer hasn't published any events yet.",
     "editProfile": "Edit profile",
-    "copyProfileLink": "Copy profile link",
+    "copyProfileLink": "Copy link",
     "copied": "Copied",
     "editProfileTitle": "Edit profile",
     "editProfileSubtitle": "Update your public profile info — name, username and short bio.",
@@ -1159,7 +1161,14 @@
     "downloadTooltip": "Download",
     "shareTooltip": "Share",
     "deleteTooltip": "Delete",
-    "moreOptions": "More options"
+    "moreOptions": "More options",
+    "statsPhotos": "photos",
+    "statsEvents": "events",
+    "purchaseSuccess": "Purchase successful! Your photos are now available.",
+    "emptyTitle": "No photos yet",
+    "emptyDescription": "You haven't purchased any photos yet. Explore events to find yourself and buy your favorite shots.",
+    "exploreEvents": "Explore events",
+    "viewFavorites": "View Favorites"
   },
   "pricingSection": {
     "headline": "Simple pricing for photographers.",

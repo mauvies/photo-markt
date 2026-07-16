@@ -225,7 +225,7 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
   });
 
   return (
-    <div className="mx-auto w-full max-w-[1400px]">
+    <div className="mx-auto w-full max-w-[1300px]">
       <form
         className="flex flex-col gap-5 pb-24"
         onSubmit={(event) => {

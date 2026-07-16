@@ -93,21 +93,31 @@ export default async function PhotographerDashboardPage({
             viewEventsLabel={t.viewAllEventsAction}
           /> */}
 
-            <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-              <PerformanceChart
-                initialSeries={data.initialSeries}
-                initialRange={data.initialRange}
-                t={{
-                  title: t.performanceTitle,
-                  subtitle: t.performanceSubtitle,
-                  range7d: t.range7d,
-                  range30d: t.range30d,
-                  range3m: t.range3m,
-                  earningsLabel: t.earningsThisMonth,
-                  emptyTitle: t.chartEmptyTitle,
-                  emptyBody: t.chartEmptyBody,
-                }}
-              />
+            {/* Hide the performance chart entirely when there are no sales — the
+                summary metrics already convey the "no data yet" state, so the
+                chart's empty placeholder would just be a redundant second one.
+                Without the chart, Ventas recientes spans the full width. */}
+            <div
+              className={
+                data.recentSales.length > 0 ? 'grid gap-4 lg:grid-cols-[2fr_1fr]' : 'grid gap-4'
+              }
+            >
+              {data.recentSales.length > 0 && (
+                <PerformanceChart
+                  initialSeries={data.initialSeries}
+                  initialRange={data.initialRange}
+                  t={{
+                    title: t.performanceTitle,
+                    subtitle: t.performanceSubtitle,
+                    range7d: t.range7d,
+                    range30d: t.range30d,
+                    range3m: t.range3m,
+                    earningsLabel: t.earningsThisMonth,
+                    emptyTitle: t.chartEmptyTitle,
+                    emptyBody: t.chartEmptyBody,
+                  }}
+                />
+              )}
               <RecentSalesList
                 sales={data.recentSales}
                 lang={lang}

@@ -35,6 +35,7 @@ import {
 import { useBulkPhotoDownload } from '@/hooks/use-bulk-photo-download';
 import { useLoadMorePhotos } from '@/hooks/use-load-more-photos';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
+import { showAddedToCartToast } from '@/lib/cart-toast';
 import { type EventBulkActionKey, eventBulkActionKeys } from '@/lib/event-bulk-actions';
 import { filterEventPhotoPages, filterEventPhotos } from '@/lib/event-photo-filter';
 import { resolveGalleryCounts } from '@/lib/gallery-photo-count';
@@ -340,16 +341,15 @@ export function PublicEventPhotoViewer({
   const handleAddToCart = useCallback(
     (photoId: string) => {
       if (!addPhotoToCart(photoId)) return;
-      toast.success('Added to cart', {
-        action: {
-          label: 'View cart',
-          onClick: () => {
-            window.location.href = cartHref;
-          },
+      showAddedToCartToast({
+        message: bulkDownload.addedToCartOne,
+        viewCartLabel: bulkDownload.viewCart,
+        onViewCart: () => {
+          window.location.href = cartHref;
         },
       });
     },
-    [addPhotoToCart, cartHref],
+    [addPhotoToCart, cartHref, bulkDownload],
   );
 
   // Bulk "Add to cart" — adds every selected photo that isn't already in the
@@ -366,19 +366,16 @@ export function PublicEventPhotoViewer({
         if (addPhotoToCart(id)) added += 1;
       }
       if (added === 0) return;
-      toast.success(
-        added === 1
-          ? bulkDownload.addedToCartOne
-          : bulkDownload.addedToCartMany.replace('{n}', String(added)),
-        {
-          action: {
-            label: bulkDownload.viewCart,
-            onClick: () => {
-              window.location.href = cartHref;
-            },
-          },
+      showAddedToCartToast({
+        message:
+          added === 1
+            ? bulkDownload.addedToCartOne
+            : bulkDownload.addedToCartMany.replace('{n}', String(added)),
+        viewCartLabel: bulkDownload.viewCart,
+        onViewCart: () => {
+          window.location.href = cartHref;
         },
-      );
+      });
     },
     [photosInCart, purchasedPhotoIds, addPhotoToCart, bulkDownload, cartHref],
   );

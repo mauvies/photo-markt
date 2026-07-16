@@ -150,7 +150,7 @@ export default async function Login({
 
   return (
     <TranslationsProvider translations={dict.auth}>
-      <div className="relative max-w-[1400px] mx-auto flex h-full w-full flex-col items-center justify-center p-6 md:p-8">
+      <div className="relative max-w-[1300px] mx-auto flex h-full w-full flex-col items-center justify-center p-6 md:p-8">
         <CloseButton className="absolute right-4 top-4" />
         <div className="w-full max-w-md">
           <h1 className="text-center text-4xl font-bold">{dict.auth.welcomeBack}</h1>
