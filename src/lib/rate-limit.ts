@@ -28,6 +28,17 @@ export type RateLimitConfig = {
  */
 export type RateLimitBackend = (key: string, windowStart: Date) => Promise<number>;
 
+/**
+ * Cost-aware backend: increments the bucket by `amount` (not a flat 1) and
+ * returns the new count. Used by the face-search cost tiers, which count real
+ * AWS calls per operation. Throw on failure — `rateLimitCost()` fails open.
+ */
+export type RateLimitCostBackend = (
+  key: string,
+  windowStart: Date,
+  amount: number,
+) => Promise<number>;
+
 /** Pure: compute the fixed window aligned to epoch for a given (now, size). */
 export function computeWindow(nowMs: number, windowSec: number): { start: Date; resetAt: Date } {
   const sizeMs = windowSec * 1000;
@@ -66,6 +77,26 @@ export const pgBackend: RateLimitBackend = async (key, windowStart) => {
 };
 
 /**
+ * Postgres-backed atomic increment-by-N. Uses the
+ * `increment_rate_limit_bucket_by` RPC (single-statement upsert with
+ * `RETURNING`) so a concurrent burst can't undercount. Sibling of `pgBackend`
+ * for the cost tiers that must increment by the AWS-call count, not a flat 1.
+ */
+export const pgCostBackend: RateLimitCostBackend = async (key, windowStart, amount) => {
+  const { supabaseAdmin } = await import('@/database/supabase-admin');
+  const { data, error } = await supabaseAdmin.rpc('increment_rate_limit_bucket_by', {
+    p_bucket_key: key,
+    p_window_start: windowStart.toISOString(),
+    p_amount: amount,
+  });
+  if (error) throw error;
+  if (typeof data !== 'number') {
+    throw new Error('increment_rate_limit_bucket_by returned non-number');
+  }
+  return data;
+};
+
+/**
  * Fail-open is invisible by design: a sustained backend outage silently disables
  * every limiter (including face search, which gates AWS spend) with only a
  * `console.error`. Surface it to Sentry so the degradation is observable — but
@@ -74,15 +105,26 @@ export const pgBackend: RateLimitBackend = async (key, windowStart) => {
  * as a single Sentry issue. The throttle is per-process (serverless), which
  * still bounds volume meaningfully during an outage (F-20, caching audit T-083).
  */
-const FAIL_OPEN_ALERT_THROTTLE_MS = 60_000;
-let lastFailOpenAlertMs = 0;
+const FAIL_ALERT_THROTTLE_MS = 60_000;
+let lastFailAlertMs = 0;
 
-async function reportFailOpen(config: RateLimitConfig, err: unknown, nowMs: number): Promise<void> {
+/**
+ * Report a limiter backend error to Sentry (throttled). `failMode` records
+ * whether the caller then served the request (`open`) or refused it (`closed`)
+ * — throttles are fail-open (availability), the cost breaker is fail-closed
+ * (never let a DB hiccup silently disable the AWS-spend ceiling).
+ */
+async function reportBackendError(
+  config: RateLimitConfig,
+  err: unknown,
+  nowMs: number,
+  failMode: 'open' | 'closed',
+): Promise<void> {
   // Always log; the Sentry alert is the throttled, higher-signal channel.
-  console.error('rateLimit backend error; failing open', { key: config.key, err });
+  console.error(`rateLimit backend error; failing ${failMode}`, { key: config.key, err });
 
-  if (nowMs - lastFailOpenAlertMs < FAIL_OPEN_ALERT_THROTTLE_MS) return;
-  lastFailOpenAlertMs = nowMs;
+  if (nowMs - lastFailAlertMs < FAIL_ALERT_THROTTLE_MS) return;
+  lastFailAlertMs = nowMs;
 
   // Lazy import (like pgBackend) so the module stays importable without the
   // Sentry SDK, and no-op when no DSN is configured. Only the limiter's action
@@ -93,13 +135,13 @@ async function reportFailOpen(config: RateLimitConfig, err: unknown, nowMs: numb
     const Sentry = await import('@sentry/nextjs');
     Sentry.captureException(err, {
       level: 'warning',
-      fingerprint: ['rate-limit-fail-open'],
-      tags: { subsystem: 'rate-limit', outcome: 'fail-open', limiter },
+      fingerprint: ['rate-limit-backend-error'],
+      tags: { subsystem: 'rate-limit', outcome: `fail-${failMode}`, limiter },
       extra: { limiter, limit: config.limit },
     });
   } catch (sentryErr) {
     // Observability must never break the request path.
-    console.error('failed to report rateLimit fail-open to Sentry', sentryErr);
+    console.error('failed to report rateLimit backend error to Sentry', sentryErr);
   }
 }
 
@@ -119,8 +161,39 @@ export async function rateLimit(
   try {
     count = await backend(config.key, start);
   } catch (err) {
-    await reportFailOpen(config, err, Date.now());
+    await reportBackendError(config, err, Date.now(), 'open');
     return { ok: true, remaining: config.limit, resetAt };
+  }
+  return evaluate(count, config.limit, resetAt);
+}
+
+/**
+ * Cost-aware variant of `rateLimit`: atomically increments the bucket by
+ * `config.cost` (the number of billable AWS calls the operation performs) and
+ * decides on the returned count. Increment-before-work + single-statement RPC
+ * defeats the concurrent-burst race (N requests can't all sail past a
+ * not-yet-incremented counter).
+ *
+ * Deliberately NOT unified with `rateLimit`: this is a **cost circuit breaker**,
+ * not an availability throttle, so it **fails closed**. A throttle would rather
+ * serve a request than 500 the app when the counter storage hiccups; a spend
+ * breaker must do the opposite — if we can't confirm we're under the AWS-call
+ * ceiling, refuse rather than let a DB error silently uncap the bill (the exact
+ * unbounded-spend hole this ticket closes). Face search degrades to
+ * "temporarily unavailable" during a counter outage; bib search + the rest of
+ * the app are untouched.
+ */
+export async function rateLimitCost(
+  config: RateLimitConfig & { cost: number },
+  backend: RateLimitCostBackend = pgCostBackend,
+): Promise<RateLimitResult> {
+  const { start, resetAt } = computeWindow(Date.now(), config.windowSec);
+  let count: number;
+  try {
+    count = await backend(config.key, start, config.cost);
+  } catch (err) {
+    await reportBackendError(config, err, Date.now(), 'closed');
+    return { ok: false, remaining: 0, resetAt };
   }
   return evaluate(count, config.limit, resetAt);
 }

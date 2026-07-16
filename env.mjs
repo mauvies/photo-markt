@@ -42,6 +42,14 @@ export const env = createEnv({
     // Shared secret guarding GET /api/health/ready (T-044). Optional: when
     // unset the readiness endpoint stays locked (401), so absence is safe.
     HEALTH_CHECK_TOKEN: z.string().optional(),
+    // Face-search abuse/cost caps (T-034). Configurable so we can raise them
+    // the day a real event's athletes start searching, without a code deploy.
+    // Defaults are deliberately low (global ~2000 AWS calls/day ≈ $2/day).
+    FACE_SEARCH_GLOBAL_DAILY_CALLS: z.coerce.number().int().positive().default(2000),
+    FACE_SEARCH_EVENT_DAILY_CALLS: z.coerce.number().int().positive().default(1000),
+    // Recipient of the 50%-of-global-cap alert. Optional: absent ⇒ the alert
+    // is a safe no-op (like SENTRY_DSN / HEALTH_CHECK_TOKEN).
+    FACE_SEARCH_ALERT_EMAIL: z.email().optional(),
   },
   /*
    * Environment variables available on the client (and server).
@@ -90,5 +98,8 @@ export const env = createEnv({
     SENTRY_DSN: process.env.SENTRY_DSN,
     NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
     HEALTH_CHECK_TOKEN: process.env.HEALTH_CHECK_TOKEN,
+    FACE_SEARCH_GLOBAL_DAILY_CALLS: process.env.FACE_SEARCH_GLOBAL_DAILY_CALLS,
+    FACE_SEARCH_EVENT_DAILY_CALLS: process.env.FACE_SEARCH_EVENT_DAILY_CALLS,
+    FACE_SEARCH_ALERT_EMAIL: process.env.FACE_SEARCH_ALERT_EMAIL,
   },
 });

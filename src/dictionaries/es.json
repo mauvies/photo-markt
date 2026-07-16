@@ -1403,6 +1403,7 @@
       "submitButton": "Aceptar",
       "searching": "Buscando…",
       "errorRateLimit": "Demasiadas búsquedas. Inténtalo más tarde.",
+      "errorUnavailable": "La búsqueda facial no está disponible temporalmente. Inténtalo más tarde.",
       "errorInvalidSelfie": "Por favor usa una foto con una sola cara clara.",
       "errorCollectionMissing": "Este evento ya no admite búsqueda facial.",
       "errorGeneric": "La búsqueda falló. Inténtalo de nuevo.",

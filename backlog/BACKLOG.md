@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 57 | P1 | T-034 | [Seguridad/Coste] Control anti-abuso de búsqueda facial anónima: caps escalonados (IP+evento/hora, evento/día, global/día) atómicos + circuit breaker + alerta 50% + degradación elegante | — | todo |
+| 57 | P1 | T-034 | [Seguridad/Coste] Control anti-abuso de búsqueda facial anónima: caps escalonados (IP+evento/hora, evento/día, global/día) atómicos + circuit breaker + alerta 50% + degradación elegante | — | doing |
 | 58 | P3 | T-140 | [Seguridad/Pagos] Fallback de portada de event cards (explore/guardados/perfil fotógrafo) y `og:image` del evento público firman el original full-res de la primera foto en eventos vendibles — hallazgo del `/code-review` de T-136 | T-136 | todo |
 | 59 | P3 | T-126 | [Perf] Code-split del stack modal/lightbox de la galería + bundle Sentry (~180 KiB JS sin usar, F3 de T-123) | — | todo |
 | 60 | P3 | T-135 | [Chore/Bundle] Quitar `framer-motion` (solo lo usa `feedback-view`) reimplementando su animación en CSS | — | todo |

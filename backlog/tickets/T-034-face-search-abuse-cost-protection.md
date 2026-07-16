@@ -1,7 +1,7 @@
 # T-034 · Control anti-abuso/coste para la búsqueda facial anónima (tiered caps + circuit breaker)
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno — la decisión de producto/diseño quedó resuelta por el spec del usuario (2026-07-16): caps escalonados + circuit breaker, sin cuota por plan.
 - **Rama:** `feat/face-search-abuse-model`
 - **OpenSpec change:** **sí** — toca BD (migración de tabla de contadores), seguridad y coste → `/opsx:propose` antes de implementar; `/code-review` antes de commitear (pagos/seguridad/BD).

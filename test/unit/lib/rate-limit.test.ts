@@ -4,7 +4,9 @@ import {
   evaluate,
   getClientIp,
   type RateLimitBackend,
+  type RateLimitCostBackend,
   rateLimit,
+  rateLimitCost,
   retryAfterSeconds,
 } from '@/lib/rate-limit';
 
@@ -94,6 +96,74 @@ describe('rateLimit', () => {
       const r = await rateLimit({ key: 'k', limit: 1, windowSec: 60 }, failing);
       expect(r.ok).toBe(true);
       expect(r.remaining).toBe(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe('rateLimitCost', () => {
+  // Simulates the atomic increment-by-N RPC: one shared counter per (key,
+  // window), bumped by `amount` and returning the post-increment value.
+  function makeCostBackend(): { backend: RateLimitCostBackend; counts: Map<string, number> } {
+    const counts = new Map<string, number>();
+    const backend: RateLimitCostBackend = async (key, windowStart, amount) => {
+      const ck = `${key}|${windowStart.toISOString()}`;
+      const next = (counts.get(ck) ?? 0) + amount;
+      counts.set(ck, next);
+      return next;
+    };
+    return { backend, counts };
+  }
+
+  it('increments by cost, not a flat 1', async () => {
+    const { backend, counts } = makeCostBackend();
+    const cfg = { key: 'face-search-global-day', limit: 10, windowSec: 86_400, cost: 2 };
+    const r1 = await rateLimitCost(cfg, backend);
+    expect(r1.ok).toBe(true);
+    // One call bumped the bucket by the cost (2), not 1.
+    expect([...counts.values()][0]).toBe(2);
+    expect(r1.remaining).toBe(8);
+  });
+
+  it('blocks once the incremented count exceeds the limit', async () => {
+    const { backend } = makeCostBackend();
+    const cfg = { key: 'k', limit: 3, windowSec: 60, cost: 1 };
+    const results = [];
+    for (let i = 0; i < 4; i++) results.push(await rateLimitCost(cfg, backend));
+    expect(results.map((r) => r.ok)).toEqual([true, true, true, false]);
+  });
+
+  it('a cost step that jumps past the limit blocks that request', async () => {
+    const { backend } = makeCostBackend();
+    const cfg = { key: 'k', limit: 5, windowSec: 60, cost: 3 };
+    const r1 = await rateLimitCost(cfg, backend); // count 3 <= 5 → ok
+    const r2 = await rateLimitCost(cfg, backend); // count 6 > 5 → blocked
+    expect([r1.ok, r2.ok]).toEqual([true, false]);
+  });
+
+  it('concurrent burst against an atomic backend does not undercount', async () => {
+    const { backend } = makeCostBackend();
+    const cap = 5;
+    const cfg = { key: 'burst', limit: cap, windowSec: 86_400, cost: 1 };
+    // Fire 20 at once; an atomic increment gives each a distinct monotonic
+    // count, so exactly `cap` observe a count within the limit.
+    const results = await Promise.all(
+      Array.from({ length: 20 }, () => rateLimitCost(cfg, backend)),
+    );
+    expect(results.filter((r) => r.ok)).toHaveLength(cap);
+  });
+
+  it('fails CLOSED when the backend errors (cost breaker must not uncap spend)', async () => {
+    const failing: RateLimitCostBackend = async () => {
+      throw new Error('postgres exploded');
+    };
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const r = await rateLimitCost({ key: 'k', limit: 1, windowSec: 60, cost: 1 }, failing);
+      // Unlike the throttle, a spend breaker refuses when it can't verify the cap.
+      expect(r.ok).toBe(false);
+      expect(r.remaining).toBe(0);
     } finally {
       spy.mockRestore();
     }

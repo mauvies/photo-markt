@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { searchFacesInEvent } from '@/app/[lang]/events/[shareCode]/actions';
 import {
   isFaceSearchRateLimitError,
+  isFaceSearchUnavailableError,
   type SearchFacesInEventResult,
 } from '@/app/[lang]/events/[shareCode]/face-search-shared';
 import { Button } from '@/components/ui/button';
@@ -44,6 +45,8 @@ export interface FaceSearchModalLabels {
   submitButton: string;
   searching: string;
   errorRateLimit: string;
+  /** A cost breaker tripped — face search is temporarily unavailable (T-034). */
+  errorUnavailable: string;
   errorInvalidSelfie: string;
   errorCollectionMissing: string;
   errorGeneric: string;
@@ -330,7 +333,11 @@ export function FaceSearchModal({
       onResult(result);
       onOpenChange(false);
     } catch (err) {
-      if (isFaceSearchRateLimitError(err)) {
+      if (isFaceSearchUnavailableError(err)) {
+        // A cost breaker tripped (per-event or global). Dignified copy — not
+        // an error — per T-034; bib search stays available separately.
+        setError(labels.errorUnavailable);
+      } else if (isFaceSearchRateLimitError(err)) {
         setError(labels.errorRateLimit);
       } else {
         // Generic copy — never echo the SDK error message to the UI; that

@@ -29,18 +29,29 @@ import { supabaseAdmin } from '@/database/supabase-admin';
 import { searchFacesByImage } from '@/lib/aws/face-indexing';
 import { prepareImageForRekognition } from '@/lib/aws/image-prep';
 import { normalizeBibToken } from '@/lib/bib-numbers';
+import { sendFaceSearchAlertEmail } from '@/lib/email/send-face-search-alert';
 import { revalidateEventDetailTags, revalidateEventListingTags } from '@/lib/event-cache-tags';
 import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
 import { getEventStatus } from '@/lib/event-status';
+import {
+  AWS_CALLS_PER_FACE_SEARCH,
+  alertClaimKey,
+  eventDailyKey,
+  FACE_SEARCH_DAILY_WINDOW_SEC,
+  getFaceSearchLimits,
+  globalDailyKey,
+  shouldAlertAtFiftyPercent,
+} from '@/lib/face-search-limits';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { getBaseUrl } from '@/lib/get-base-url';
 import { validatePhotoUpload } from '@/lib/photo-upload';
 import { needsProtectedPreview } from '@/lib/preview-protection';
-import { getClientIp, rateLimit } from '@/lib/rate-limit';
+import { computeWindow, getClientIp, rateLimit, rateLimitCost } from '@/lib/rate-limit';
 import { safeCall } from '@/lib/safe-call';
 import { BIB_SEARCH_RATE_LIMIT_PREFIX, type SearchPhotosByBibResult } from './bib-search-shared';
 import {
-  FACE_SEARCH_RATE_LIMIT_PREFIX,
+  FACE_SEARCH_EXHAUSTED_MESSAGE,
+  FACE_SEARCH_UNAVAILABLE_MESSAGE,
   type SearchFacesInEventResult,
   type SearchMatchBucket,
 } from './face-search-shared';
@@ -279,17 +290,22 @@ export async function searchFacesInEvent(
   }
   const collectionId = state.collectionId;
 
-  // 3. Rate-limit by (shareCode, IP). 10 per hour matches the spec. Throws a
-  //    parseable error so the modal can render the localized copy without
-  //    a structured-error class crossing the SA boundary.
+  // 3. Tier 1 — per-(event, IP) hourly request throttle. 10 per hour matches
+  //    the spec. Keyed on the RESOLVED event id (not the raw param) so a UUID,
+  //    slug, and share code for the same event share one budget. Runs before
+  //    selfie validation so an abusive IP is thrown out cheaply — and, being
+  //    first, an IP-throttled attacker never reaches (and so can't inflate) the
+  //    per-event/global cost counters below. Throws a parseable error so the
+  //    modal can render localized copy without a structured-error class
+  //    crossing the SA boundary.
   const ip = getClientIp(await headers());
   const rl = await rateLimit({
-    key: `face-search:${shareCode}:${ip}`,
+    key: `face-search:${event.id}:${ip}`,
     limit: 10,
     windowSec: 3600,
   });
   if (!rl.ok) {
-    throw new Error(`${FACE_SEARCH_RATE_LIMIT_PREFIX}:exhausted`);
+    throw new Error(FACE_SEARCH_EXHAUSTED_MESSAGE);
   }
 
   // 4. Extract + validate the selfie. validatePhotoUpload runs Sharp's
@@ -326,6 +342,75 @@ export async function searchFacesInEvent(
     // generic message — the modal shows "search failed" and lets the user
     // retry.
     throw new Error('Could not process the selfie. Please try a different photo.');
+  }
+
+  // 5b. Cost tiers (T-034). Only requests that already survived the per-IP
+  //     throttle AND selfie validation reach here, so these counters are a
+  //     faithful proxy for "requests that will actually call AWS" — an
+  //     IP-throttled or garbage-payload attacker can't inflate the global
+  //     circuit breaker (which would deny face search platform-wide for free).
+  //     Increment atomically BEFORE the AWS call and decide on the RETURNED
+  //     count; increment by real AWS calls (AWS_CALLS_PER_FACE_SEARCH), not
+  //     searches. Cheaper/narrower tier first: a per-event trip never touches
+  //     the global counter.
+  const limits = getFaceSearchLimits();
+
+  const eventDayRl = await rateLimitCost({
+    key: eventDailyKey(event.id),
+    limit: limits.eventDailyCalls,
+    windowSec: FACE_SEARCH_DAILY_WINDOW_SEC,
+    cost: AWS_CALLS_PER_FACE_SEARCH,
+  });
+  if (!eventDayRl.ok) {
+    console.warn('face-search per-event daily cap reached', { eventId: event.id });
+    throw new Error(FACE_SEARCH_UNAVAILABLE_MESSAGE);
+  }
+
+  const globalDayRl = await rateLimitCost({
+    key: globalDailyKey(),
+    limit: limits.globalDailyCalls,
+    windowSec: FACE_SEARCH_DAILY_WINDOW_SEC,
+    cost: AWS_CALLS_PER_FACE_SEARCH,
+  });
+  if (!globalDayRl.ok) {
+    console.warn('face-search global daily circuit breaker open');
+    throw new Error(FACE_SEARCH_UNAVAILABLE_MESSAGE);
+  }
+
+  // 5c. Fire the 50%-of-global alert once per day-window. `remaining` is
+  //     `cap - count` while under the cap, so the current usage is exactly
+  //     `cap - remaining`. The atomic claim bucket dedupes across serverless
+  //     instances (only the caller that claims count === 1 emails). Best-effort
+  //     — a Resend failure must never block the search.
+  const globalUsed = limits.globalDailyCalls - globalDayRl.remaining;
+  if (limits.alertEmail && shouldAlertAtFiftyPercent(globalUsed, limits.globalDailyCalls)) {
+    const claimKey = alertClaimKey(globalDayRl.resetAt.toISOString());
+    const claim = await rateLimit({
+      key: claimKey,
+      limit: 1,
+      windowSec: FACE_SEARCH_DAILY_WINDOW_SEC,
+    });
+    if (claim.ok) {
+      try {
+        await sendFaceSearchAlertEmail({
+          to: limits.alertEmail,
+          currentCalls: globalUsed,
+          cap: limits.globalDailyCalls,
+        });
+      } catch (alertErr) {
+        console.error('face-search 50% alert email failed', alertErr);
+        // Release the claim so a later request this window retries the alert —
+        // otherwise a transient Resend error would permanently suppress the
+        // day's early warning (the whole point of the 50% alert).
+        const { start } = computeWindow(Date.now(), FACE_SEARCH_DAILY_WINDOW_SEC);
+        const { error: releaseErr } = await supabaseAdmin
+          .from('rate_limit_buckets')
+          .delete()
+          .eq('bucket_key', claimKey)
+          .eq('window_start', start.toISOString());
+        if (releaseErr) console.error('face-search alert claim release failed', releaseErr);
+      }
+    }
   }
 
   // 6. Call AWS SearchFacesByImage. Handle the two product-relevant AWS
