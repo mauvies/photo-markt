@@ -116,7 +116,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
     empty: string;
     emptyCartAuthDesc: string;
     browseEvents: string;
-    viewMyPhotos: string;
+    viewFavorites: string;
     item: string;
     items: string;
     clearCart: string;
@@ -294,7 +294,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
             {t('browseEvents')}
           </Button>
           <Button onClick={() => router.push(lp('/dashboard/talent/favorites'))} variant="outline">
-            {t('viewMyPhotos')}
+            {t('viewFavorites')}
           </Button>
         </div>
       </div>

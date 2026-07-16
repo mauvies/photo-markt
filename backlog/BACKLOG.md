@@ -11,12 +11,13 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
+| 57 | P1 | T-034 | [Seguridad/Coste] Control anti-abuso de búsqueda facial anónima: caps escalonados (IP+evento/hora, evento/día, global/día) atómicos + circuit breaker + alerta 50% + degradación elegante | — | todo |
 | 58 | P3 | T-140 | [Seguridad/Pagos] Fallback de portada de event cards (explore/guardados/perfil fotógrafo) y `og:image` del evento público firman el original full-res de la primera foto en eventos vendibles — hallazgo del `/code-review` de T-136 | T-136 | todo |
 | 59 | P3 | T-126 | [Perf] Code-split del stack modal/lightbox de la galería + bundle Sentry (~180 KiB JS sin usar, F3 de T-123) | — | todo |
 | 60 | P3 | T-135 | [Chore/Bundle] Quitar `framer-motion` (solo lo usa `feedback-view`) reimplementando su animación en CSS | — | todo |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |
-| — | P2 | T-034 | [DISEÑO] Modelo anti-abuso/coste de búsqueda facial (buscador anónimo vs plan del fotógrafo) | **blocked:** decisión de producto | blocked |
+| — | P2 | T-141 | [TRIPWIRE] CAPTCHA en la búsqueda facial anónima — revisitar SOLO al subir el cap global de T-034 para un evento real | **blocked:** tripwire (Dep T-034) | blocked |
 | — | P2 | T-129 | [DISEÑO] "Nearby first": implementar la geolocalización del buscador de eventos o podar el plumbing muerto (hallazgo de T-124) | **blocked:** decisión de producto (implementar vs podar) | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
