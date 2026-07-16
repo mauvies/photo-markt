@@ -36,14 +36,19 @@ pnpm spell        # Spell check .ts/.tsx files
 
 ## Bash command style
 
-To keep commands auto-approvable and avoid manual permission prompts, follow these rules when running shell commands:
+To keep commands auto-approvable and avoid manual permission prompts:
+
+- Prefer the native tools (Glob, Grep, Read) over shell `find` / `grep` / `cat` for locating files or searching code. They're faster and bypass shell approval checks entirely.
+- This matters especially under `src/app/`, where Next.js dynamic route segments use square brackets (`[lang]`, `[code]`, `[id]`). Bracket characters in a `find` argument are glob characters and trigger mandatory manual approval that cannot be pre-approved.
+
+When a shell command IS needed:
 
 - Prefer simple, atomic commands. Run one operation per command instead of chaining multiple with `&&`.
 - Do NOT use `cd` to change directories before running a command. Compound commands starting with `cd` plus output redirection require mandatory manual approval (path-resolution bypass protection) and cannot be pre-approved.
-- Always use full paths from the repository root instead of `cd`-ing into a subdirectory. For example, use `grep -n "export" src/components/ui/dialog.tsx` rather than `cd src && grep -n "export" components/ui/dialog.tsx`.
-- When inspecting multiple files, run separate individual commands rather than chaining them into one compound command.
-- Avoid unnecessary output redirection (`2>/dev/null`, etc.) and piping inside compound commands when a simpler single command achieves the same result.
-- These conventions keep each command matching the pre-approved allowlist, so tasks run without pausing for approval.
+- Always use full paths from the repository root instead of `cd`-ing into a subdirectory.
+- Run `git` commands from the repository root without `-C /abs/path` — the working directory is already the project root. `git -C ...` variants don't match the pre-approved `git status:*` / `git log:*` patterns and cause avoidable prompts.
+- When inspecting multiple files, run separate individual commands rather than chaining them.
+- Avoid unnecessary output redirection (`2>/dev/null`) and piping when a simpler single command achieves the same result.
 
 ## Project Overview
 

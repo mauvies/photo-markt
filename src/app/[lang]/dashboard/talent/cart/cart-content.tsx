@@ -305,35 +305,36 @@ export function CartContent({ initialCartData }: CartContentProps) {
 
   return (
     <div className="relative">
-      <div className="flex items-center justify-between mb-2 md:mb-0">
-        <p className="text-sm text-muted-foreground mt-1">
-          {cartData.itemCount} {cartData.itemCount === 1 ? t('item') : t('items')}
-        </p>
-        {cartData.items.length > 0 && (
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="sm" className="text-muted-foreground">
-                <Trash2 className="h-4 w-4 mr-2" />
-                {t('clearCart')}
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>{t('clearCartTitle')}</AlertDialogTitle>
-                <AlertDialogDescription>{t('clearCartDesc')}</AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
-                <AlertDialogAction onClick={handleClearCart}>{t('clearCart')}</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        )}
-      </div>
-
       <div className="flex flex-col md:flex-row gap-6 pb-44 md:pb-0">
         {/* Left side - Cart items */}
         <div className="flex-2 min-w-0">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm text-muted-foreground mt-1">
+              {cartData.itemCount} {cartData.itemCount === 1 ? t('item') : t('items')}
+            </p>
+            {cartData.items.length > 0 && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="text-muted-foreground">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    {t('clearCart')}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>{t('clearCartTitle')}</AlertDialogTitle>
+                    <AlertDialogDescription>{t('clearCartDesc')}</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleClearCart}>
+                      {t('clearCart')}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
           <div className="space-y-3">
             {cartData.items.map((item) => (
               <div

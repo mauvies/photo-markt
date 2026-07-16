@@ -8,6 +8,7 @@ import {
   Loader2,
   ShoppingCart,
   Trash2,
+  User,
   UserPlus,
   X,
 } from 'lucide-react';
@@ -45,6 +46,10 @@ export function GuestCartContent() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const photoIds = useMemo(() => items.map((item) => item.photoId), [items]);
+  const photographerIds = useMemo(
+    () => Array.from(new Set(items.map((item) => item.photographerId))).sort(),
+    [items],
+  );
   // Per-item share codes prove access to private events (T-132) — a guest item
   // stashed its event's code at add time. Deduped + sorted so the query key is
   // stable regardless of item order.
@@ -61,8 +66,8 @@ export function GuestCartContent() {
   // ~1h), and never keep an entry whose photo is no longer purchasable
   // (deleted, event soft-deleted, or no longer approved).
   const { data: guestCartState } = useQuery({
-    queryKey: ['guest-cart-state', photoIds, shareCodes],
-    queryFn: () => loadGuestCartStateAction(photoIds, shareCodes),
+    queryKey: ['guest-cart-state', photoIds, shareCodes, photographerIds],
+    queryFn: () => loadGuestCartStateAction(photoIds, shareCodes, photographerIds),
     enabled: photoIds.length > 0,
   });
   const livePreviews = guestCartState?.previews;
@@ -101,6 +106,7 @@ export function GuestCartContent() {
     photoAlt: string;
     viewPhoto: string;
     viewEvent: string;
+    viewPhotographer: string;
     itemsUnavailableRemoved: string;
   }>();
 
@@ -256,12 +262,33 @@ export function GuestCartContent() {
                           {item.eventName}
                         </h4>
                       ))}
-                    {item.eventDate && (
-                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                        <Calendar className="h-3.5 w-3.5" />
-                        <span>{format(new Date(item.eventDate), 'MMM d, yyyy')}</span>
-                      </div>
-                    )}
+                    <div className="flex flex-col items-start gap-1 text-sm text-muted-foreground">
+                      {(() => {
+                        const photographer = guestCartState?.photographers?.[item.photographerId];
+                        if (!photographer?.name) return null;
+                        return photographer.slug ? (
+                          <Link
+                            href={lp(`/photographer/${photographer.slug}`)}
+                            title={t('viewPhotographer')}
+                            className="flex items-center gap-1.5 hover:underline"
+                          >
+                            <User className="h-3.5 w-3.5" />
+                            <span className="line-clamp-1">{photographer.name}</span>
+                          </Link>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <User className="h-3.5 w-3.5" />
+                            <span className="line-clamp-1">{photographer.name}</span>
+                          </div>
+                        );
+                      })()}
+                      {item.eventDate && (
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="h-3.5 w-3.5" />
+                          <span>{format(new Date(item.eventDate), 'MMM d, yyyy')}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="mt-auto flex items-center justify-between gap-4">

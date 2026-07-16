@@ -6,7 +6,7 @@ import {
   getPhotoPreviewUrls,
   getPurchasablePhotoIds,
 } from '@/database/queries/photos';
-import { getPhotographerConnectStatuses } from '@/database/queries/profiles';
+import { getPhotographerConnectStatuses, getProfilesByIds } from '@/database/queries/profiles';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { getBaseUrl } from '@/lib/get-base-url';
 import type { GuestCartItem } from '@/lib/guest-cart';
@@ -45,8 +45,13 @@ const GUEST_CART_MAX_IDS = 100;
 export async function loadGuestCartStateAction(
   photoIds: string[],
   shareCodes: string[] = [],
-): Promise<{ removedPhotoIds: string[]; previews: Record<string, string | null> }> {
-  if (photoIds.length === 0) return { removedPhotoIds: [], previews: {} };
+  photographerIds: string[] = [],
+): Promise<{
+  removedPhotoIds: string[];
+  previews: Record<string, string | null>;
+  photographers: Record<string, { name: string | null; slug: string | null }>;
+}> {
+  if (photoIds.length === 0) return { removedPhotoIds: [], previews: {}, photographers: {} };
 
   // Unauthenticated endpoint doing service-role reads + bulk storage signing
   // — same abuse class as the guest checkout above, so same IP keying. More
@@ -59,7 +64,7 @@ export async function loadGuestCartStateAction(
     windowSec: 3600,
   });
   if (!rl.ok) {
-    return { removedPhotoIds: [], previews: {} };
+    return { removedPhotoIds: [], previews: {}, photographers: {} };
   }
 
   const cappedIds = photoIds.slice(0, GUEST_CART_MAX_IDS);
@@ -67,9 +72,11 @@ export async function loadGuestCartStateAction(
   // alive) AND accessible (T-132: event public, or the caller presents the
   // event's share code — the guest cart stashes it per item). A private-event
   // photo with no matching code is dropped like any other unavailable item.
-  const [purchasableIds, accessibleIds] = await Promise.all([
+  const cappedPhotographerIds = [...new Set(photographerIds)].slice(0, GUEST_CART_MAX_IDS);
+  const [purchasableIds, accessibleIds, photographerProfiles] = await Promise.all([
     getPurchasablePhotoIds(supabaseAdmin, cappedIds),
     getAccessiblePhotoIds(supabaseAdmin, cappedIds, shareCodes),
+    getProfilesByIds(supabaseAdmin, cappedPhotographerIds),
   ]);
   const isValid = (id: string) => purchasableIds.has(id) && accessibleIds.has(id);
   const removedPhotoIds = cappedIds.filter((id) => !isValid(id));
@@ -78,7 +85,14 @@ export async function loadGuestCartStateAction(
   // fail-closed /api/watermark/ route instead of the raw original (T-131).
   const previews = await getPhotoPreviewUrls(supabaseAdmin, validPhotoIds, await getBaseUrl());
 
-  return { removedPhotoIds, previews };
+  const photographers = Object.fromEntries(
+    Object.entries(photographerProfiles).map(([id, profile]) => [
+      id,
+      { name: profile.display_name, slug: profile.username ?? null },
+    ]),
+  );
+
+  return { removedPhotoIds, previews, photographers };
 }
 
 /**

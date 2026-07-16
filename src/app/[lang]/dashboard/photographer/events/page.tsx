@@ -200,7 +200,7 @@ export default async function EventsPage({
           <div className="text-base text-muted-foreground md:text-sm">
             {`${events.length} event${events.length === 1 ? '' : 's'}`}
           </div>
-          <div className="mt-4 grid gap-5 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
+          <div className="mt-4 grid gap-5 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
             {events.map((event, index) => {
               const stat = stats.get(event.id) ?? {
                 count: 0,

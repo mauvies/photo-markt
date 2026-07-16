@@ -156,6 +156,7 @@ export async function PhotographerPublicProfile({
                 coverUrl={event.coverUrl}
                 linkPrefix={`/${lang}/events`}
                 priority={index < 4}
+                hideSaveButton={isOwner}
                 t={{
                   photo: dict.eventCard.photo,
                   photos: dict.eventCard.photos,

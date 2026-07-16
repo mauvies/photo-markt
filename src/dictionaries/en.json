@@ -1314,6 +1314,7 @@
     "private": "Private",
     "watermark": "Watermark",
     "aiMatching": "AI face matching",
+    "bibDetection": "Bib number detection",
     "containsMinors": "Contains minors",
     "uploadApproval": "Upload approval required",
     "guestUpload": "Guest upload allowed",

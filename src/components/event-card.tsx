@@ -77,6 +77,10 @@ type EventCardProps = {
   // Fired after the (explore-mode) save toggle resolves — e.g. the favorites
   // grid drops a card when it's unsaved.
   onSaveToggled?: (saved: boolean) => void;
+  // Hides the save-to-favorites heart even in explore mode — e.g. a
+  // photographer previewing their own public profile shouldn't be able to
+  // favorite their own events.
+  hideSaveButton?: boolean;
   // Set on the first row of an above-the-fold grid so Next preloads the
   // cover and skips lazy-loading.
   priority?: boolean;
@@ -248,6 +252,7 @@ export function EventCard({
   ownerStats,
   actions,
   onSaveToggled,
+  hideSaveButton = false,
   priority = false,
   t = DEFAULT_LABELS,
 }: EventCardProps) {
@@ -378,12 +383,14 @@ export function EventCard({
                 tooltip={t.share ?? 'Share'}
                 className="size-8 [&_svg]:size-4"
               />
-              <EventSaveButton
-                eventId={id}
-                variant="icon"
-                className="size-8"
-                onToggled={onSaveToggled}
-              />
+              {!hideSaveButton && (
+                <EventSaveButton
+                  eventId={id}
+                  variant="icon"
+                  className="size-8"
+                  onToggled={onSaveToggled}
+                />
+              )}
             </div>
           )}
         </div>

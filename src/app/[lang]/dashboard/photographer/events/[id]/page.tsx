@@ -181,6 +181,7 @@ export default async function EventDetailPage({
   // that pre-date the migration; cast through `unknown` so TS doesn't object.
   const eventRecord = event as unknown as Record<string, unknown>;
   const aiMatchingEnabled = Boolean(eventRecord.ai_matching_enabled);
+  const bibDetectionEnabled = Boolean(eventRecord.bib_detection_enabled);
   const containsMinors = Boolean(eventRecord.contains_minors);
   const aiMatchingStatus =
     (eventRecord.ai_matching_status as AiMatchingStatus | undefined) ?? 'idle';
@@ -217,6 +218,7 @@ export default async function EventDetailPage({
       isPublic={event.is_public}
       watermarkEnabled={event.watermark_enabled}
       aiMatchingEnabled={aiMatchingEnabled}
+      bibDetectionEnabled={bibDetectionEnabled}
       containsMinors={containsMinors}
       requireUploadApproval={event.require_upload_approval}
       allowGuestUpload={event.allow_guest_upload}

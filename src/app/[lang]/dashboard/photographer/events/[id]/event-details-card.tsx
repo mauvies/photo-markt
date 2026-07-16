@@ -22,6 +22,7 @@ interface EventDetailsCardProps {
   isPublic: boolean;
   watermarkEnabled: boolean;
   aiMatchingEnabled: boolean;
+  bibDetectionEnabled: boolean;
   containsMinors: boolean;
   requireUploadApproval: boolean;
   allowGuestUpload: boolean;
@@ -49,6 +50,7 @@ export function EventDetailsCard({
   isPublic,
   watermarkEnabled,
   aiMatchingEnabled,
+  bibDetectionEnabled,
   containsMinors,
   requireUploadApproval,
   allowGuestUpload,
@@ -83,6 +85,7 @@ export function EventDetailsCard({
     { label: t.visibility, value: isPublic ? t.public : t.private },
     { label: t.watermark, value: yesNo(watermarkEnabled) },
     { label: t.aiMatching, value: yesNo(aiMatchingEnabled) },
+    { label: t.bibDetection, value: yesNo(bibDetectionEnabled) },
     { label: t.containsMinors, value: yesNo(containsMinors) },
     { label: t.uploadApproval, value: yesNo(requireUploadApproval) },
     ...(isCollaborative ? [{ label: t.guestUpload, value: yesNo(allowGuestUpload) }] : []),

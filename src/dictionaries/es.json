@@ -1301,7 +1301,7 @@
   "eventDetails": {
     "title": "Detalles del evento",
     "eventType": "Tipo de evento",
-    "typeSolo": "Individual",
+    "typeSolo": "Solo",
     "typeCollaborative": "Colaborativo",
     "typeOrganizer": "Organizador",
     "activity": "Actividad",
@@ -1314,6 +1314,7 @@
     "private": "Privado",
     "watermark": "Marca de agua",
     "aiMatching": "Reconocimiento facial IA",
+    "bibDetection": "Detección de dorsal",
     "containsMinors": "Incluye menores",
     "uploadApproval": "Requiere aprobación de subidas",
     "guestUpload": "Permite subidas de invitados",
