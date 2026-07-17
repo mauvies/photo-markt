@@ -11,6 +11,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
+| 1 | P1 | T-144 | Bug: ventas de invitado no aparecen en `/dashboard/photographer/sales` (Ventas lee solo `order_items`; Ganancias-resumen lee `payouts` → refleja la venta) | — | todo |
+| 2 | P3 | T-143 | Añadir "total de compras" (órdenes completadas) a las métricas del perfil de talento | — | todo |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |
 | — | P2 | T-141 | [TRIPWIRE] CAPTCHA en la búsqueda facial anónima — revisitar SOLO al subir el cap global de T-034 para un evento real | **blocked:** tripwire (Dep T-034) | blocked |
