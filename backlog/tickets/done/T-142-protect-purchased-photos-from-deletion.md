@@ -1,11 +1,11 @@
 # T-142 · Proteger fotos compradas ante el borrado del fotógrafo (Option A: soft-delete + retener)
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno  (follow-up de PR #202, pero toca código distinto — no bloquea)
 - **Rama:** `feat/protect-purchased-photos-from-deletion`  (tipo = feat)
-- **OpenSpec change:** sí  (toca migración/BD + un path de borrado adyacente al cobro — capturar diseño antes)
-- **PR:** —
+- **OpenSpec change:** `purchased-photo-retention` (proposal + design + delta spec + tasks)
+- **PR:** #203
 
 ## Requerimiento
 La parte de **protección ante borrado** del ticket CRÍTICO original (Part 3). PR #202 arregló el lado de
