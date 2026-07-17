@@ -1,11 +1,11 @@
 # T-126 · [Perf] Recortar ~180 KiB de JS sin usar en rutas públicas: code-split del stack modal/lightbox de la galería + bundle de Sentry
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `perf/code-split-gallery-modals`
 - **OpenSpec change:** —
-- **PR:** —
+- **PR:** #200
 
 ## Requerimiento
 Follow-up **F3** de la auditoría de rendimiento T-123 (`docs/PERF_AUDIT.md`). Lighthouse estima
