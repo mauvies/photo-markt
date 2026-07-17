@@ -1,11 +1,11 @@
 # T-135 · Quitar la dependencia `framer-motion` (apenas usada)
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `chore/remove-framer-motion`  (tipo = chore)
 - **OpenSpec change:** —  (limpieza de dependencia + reimplementación CSS de un componente)
-- **PR:** —
+- **PR:** #201
 
 ## Requerimiento
 Eliminar el paquete `framer-motion` (`^12.42.2`, `package.json`), que apenas se usa — reimplementando las

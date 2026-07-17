@@ -214,6 +214,118 @@ h6 {
   font-family: var(--font-inter-tight), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
+/*
+  Feedback view entrance animations (T-135) — CSS/Tailwind replacements for the
+  framer-motion entrances that `feedback-view.tsx` used to render (fade/slide-up
+  with staggered delays, the success checkmark "pop", the star-rating label swap,
+  and the confetti burst). Custom keyframes live here because the confetti needs
+  per-particle target transforms via CSS vars, which utility classes can't express.
+  `animation-fill-mode: both` holds the initial (hidden) state during the stagger
+  delay so nothing flashes in before its turn. Delays are set inline per element.
+*/
+@keyframes feedback-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes feedback-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes feedback-pop {
+  0% {
+    transform: scale(0);
+  }
+  70% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes feedback-star-label {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes feedback-confetti {
+  from {
+    transform: translate3d(0, 0, 0) scale(0) rotate(0deg);
+    opacity: 1;
+  }
+  to {
+    transform: translate3d(var(--confetti-x, 0), var(--confetti-y, 0), 0) scale(1)
+      rotate(var(--confetti-rot, 0deg));
+    opacity: 0;
+  }
+}
+
+.feedback-animate-fade-up {
+  animation-name: feedback-fade-up;
+  animation-duration: 0.5s;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: both;
+}
+
+.feedback-animate-fade {
+  animation-name: feedback-fade;
+  animation-duration: 0.5s;
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+}
+
+.feedback-animate-pop {
+  animation-name: feedback-pop;
+  animation-duration: 0.5s;
+  animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation-fill-mode: both;
+}
+
+.feedback-star-label {
+  animation-name: feedback-star-label;
+  animation-duration: 0.2s;
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+}
+
+.feedback-confetti-particle {
+  animation-name: feedback-confetti;
+  animation-duration: 1.8s;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  animation-fill-mode: forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feedback-animate-fade-up,
+  .feedback-animate-fade,
+  .feedback-animate-pop,
+  .feedback-star-label {
+    animation: none;
+  }
+  .feedback-confetti-particle {
+    animation: none;
+    opacity: 0;
+  }
+}
+
 /* Brand gradient utilities — defined outside @layer so they override Tailwind's bg-primary */
 .bg-gradient-starter {
   background: var(--gradient-starter);
