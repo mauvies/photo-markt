@@ -1,11 +1,11 @@
 # T-144 · Bug crítico: las ventas de invitado no aparecen en el dashboard de ventas del fotógrafo
 
 - **Prioridad:** P1
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/sales-dashboard-missing-guest-sales`  (tipo = fix)
-- **OpenSpec change:** —  (bug de reporting en la capa de queries; sin migración salvo que se opte por una vista SQL — decidir al ejecutar)
-- **PR:** —
+- **OpenSpec change:** —  (bug de reporting en la capa de queries; sin migración — se usó `supabaseAdmin` para las tablas de invitado, sin vista SQL)
+- **PR:** #204
 
 ## Requerimiento (en palabras del usuario)
 En **Ventas** del dashboard de fotógrafos (`/dashboard/photographer/sales`) **no aparece ninguna venta**
