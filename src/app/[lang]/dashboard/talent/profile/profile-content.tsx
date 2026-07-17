@@ -109,6 +109,10 @@ export function ProfileContent({
                 <span className="block text-xl font-semibold">{stats.eventsCount}</span>
                 <span className="text-sm text-muted-foreground">{translations.statsEvents}</span>
               </div>
+              <div>
+                <span className="block text-xl font-semibold">{stats.purchasesCount}</span>
+                <span className="text-sm text-muted-foreground">{translations.statsPurchases}</span>
+              </div>
             </div>
           </div>
         </div>

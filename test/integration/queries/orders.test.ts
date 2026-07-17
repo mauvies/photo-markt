@@ -12,6 +12,7 @@ import {
   getOrderByCheckoutSessionId,
   getOrderByPaymentIntentId,
   getPurchasedPhotoIdsForEvent,
+  getTalentCompletedOrderCount,
   getUserOrders,
   updateOrderStatus,
 } from '@/database/queries/orders';
@@ -168,6 +169,31 @@ describe('database/queries/orders', () => {
       }
       const orders = await getUserOrders(sb, t.id, 3);
       expect(orders).toHaveLength(3);
+    });
+  });
+
+  // Backs the talent profile "purchases" stat (T-143) — counts COMPLETED orders
+  // only, and scoped to the requesting user.
+  describe('getTalentCompletedOrderCount', () => {
+    it('counts only the user’s completed orders (ignores pending/failed and other users)', async () => {
+      const talent = await createTestUser('TALENT');
+      const other = await createTestUser('TALENT');
+      const sb = createServiceClient();
+      await createOrder(sb, talent.id, { total_amount_cents: 100, status: 'completed' });
+      await createOrder(sb, talent.id, { total_amount_cents: 200, status: 'completed' });
+      await createOrder(sb, talent.id, { total_amount_cents: 300, status: 'pending' });
+      await createOrder(sb, talent.id, { total_amount_cents: 400, status: 'failed' });
+      // A different user's completed order must not leak into the count.
+      await createOrder(sb, other.id, { total_amount_cents: 500, status: 'completed' });
+
+      expect(await getTalentCompletedOrderCount(sb, talent.id)).toBe(2);
+    });
+
+    it('returns 0 for a user with no completed orders', async () => {
+      const talent = await createTestUser('TALENT');
+      const sb = createServiceClient();
+      await createOrder(sb, talent.id, { total_amount_cents: 100, status: 'pending' });
+      expect(await getTalentCompletedOrderCount(sb, talent.id)).toBe(0);
     });
   });
 
