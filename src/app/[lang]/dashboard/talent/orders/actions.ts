@@ -4,6 +4,7 @@ import { getUserOrders, type OrderStatus } from '@/database/queries/orders';
 import { createPhotoUrls } from '@/database/queries/storage';
 import { getErrorMessage } from '@/database/queries/types';
 import { createClient } from '@/database/server';
+import { supabaseAdmin } from '@/database/supabase-admin';
 import { getBaseUrl } from '@/lib/get-base-url';
 
 /**
@@ -52,7 +53,15 @@ export async function getTalentOrders(): Promise<OrderWithItemCount[]> {
   // Pull item count + a handful of photo paths per order in a single query.
   // We select more rows than we'll show so we can take the first N per order
   // when materializing thumbnails.
-  const { data: itemRows, error } = await supabase
+  //
+  // Read via the admin client (T-130 pattern): the joined `photos` rows belong
+  // to the PHOTOGRAPHER, and `photos` RLS only exposes own rows
+  // (`own_photos_select`) — with the user-scoped client the embed silently
+  // returned a null photo for every purchased item, so all thumbnails fell back
+  // to the "photo no longer available" slot (T-116). Ownership is still
+  // enforced: `orderIds` come from `getUserOrders`, scoped to this user's own
+  // orders.
+  const { data: itemRows, error } = await supabaseAdmin
     .from('order_items')
     .select('order_id, photos(original_url)')
     .in('order_id', orderIds);
@@ -92,16 +101,21 @@ export async function getTalentOrders(): Promise<OrderWithItemCount[]> {
     }
   }
 
+  // Sign with the admin client (T-130 pattern): the buyer doesn't own the
+  // photographer's storage objects, so signing the `photos` bucket path with
+  // the user-scoped client is denied by storage RLS and returns null. The paths
+  // being signed all originate from this user's own orders (above), so
+  // ownership is preserved.
   const baseUrl = await getBaseUrl();
   const [originalSigned, watermarkedSigned] = await Promise.all([
     originalPaths.size > 0
-      ? createPhotoUrls(supabase, 'photos', [...originalPaths], {
+      ? createPhotoUrls(supabaseAdmin, 'photos', [...originalPaths], {
           expiresIn: 3600,
           useWatermark: false,
         })
       : Promise.resolve([]),
     watermarkedPaths.size > 0
-      ? createPhotoUrls(supabase, 'photos', [...watermarkedPaths], {
+      ? createPhotoUrls(supabaseAdmin, 'photos', [...watermarkedPaths], {
           expiresIn: 3600,
           useWatermark: true,
           baseUrl,

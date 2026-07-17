@@ -8,6 +8,7 @@ import {
   getTalentPurchasedEventsCount,
 } from '@/database/queries/talent-library';
 import { createClient } from '@/database/server';
+import { supabaseAdmin } from '@/database/supabase-admin';
 
 export interface ProfileData {
   profile: {
@@ -49,14 +50,26 @@ export async function getProfileData(): Promise<ProfileData> {
   }
 
   // Fetch data in parallel — "owned" photos are purchased ∪ claimed-free.
+  //
+  // The owned-photo queries join `photos!inner` / `events`, whose rows belong to
+  // the PHOTOGRAPHER — `photos` RLS only exposes own rows (`own_photos_select`),
+  // so with the user-scoped client the inner join dropped every purchased/claimed
+  // row and the library rendered empty (T-130 was the same bug in the cart). Read
+  // via the admin client; ownership is enforced inside each query by its
+  // `talentUserId`/`user.id` filter (e.g. `getTalentPurchasedPhotos` scopes to
+  // `orders.user_id = talentUserId`). `getProfile` stays on the user client
+  // (profiles RLS already exposes own row).
   const [profile, purchasedPhotosCount, eventsCount, ownedPhotos] = await Promise.all([
     getProfile(supabase, user.id),
-    getTalentOwnedPhotosCount(supabase, user.id),
-    getTalentPurchasedEventsCount(supabase, user.id),
-    getTalentOwnedPhotos(supabase, user.id, { limit: 500 }),
+    getTalentOwnedPhotosCount(supabaseAdmin, user.id),
+    getTalentPurchasedEventsCount(supabaseAdmin, user.id),
+    getTalentOwnedPhotos(supabaseAdmin, user.id, { limit: 500 }),
   ]);
 
-  // Generate signed URLs for previews (1 hour expiry)
+  // Generate signed URLs for previews (1 hour expiry). Sign with the admin
+  // client — the buyer doesn't own the photographer's storage objects, so the
+  // user-scoped client is denied by storage RLS and returns null. Paths come
+  // only from this user's own owned photos (above).
   const photoPaths = ownedPhotos
     .map((p) => p.original_url)
     .filter((url): url is string => url !== null);
@@ -64,7 +77,7 @@ export async function getProfileData(): Promise<ProfileData> {
   const signedUrlsMap: Record<string, string | null> = {};
   if (photoPaths.length > 0) {
     const signedUrls = await createSignedUrls(
-      supabase,
+      supabaseAdmin,
       'photos',
       photoPaths,
       60 * 60, // 1 hour
@@ -127,8 +140,15 @@ export async function getPhotoDownloadUrl(photoPath: string): Promise<string | n
     throw new Error('User not authenticated');
   }
 
+  // Ownership checks use the admin client: they join `photos!inner`, whose rows
+  // belong to the photographer, so under the user-scoped client the inner join
+  // dropped the row and `allowed` was always false — legitimately purchased/
+  // claimed photos threw "not purchased". The explicit `orders.user_id` /
+  // `talent_user_id` filters (kept below) enforce that a user can only unlock
+  // their OWN photos, so admin doesn't widen access.
+
   // Owned via a completed purchase?
-  const { data: orderItems } = await supabase
+  const { data: orderItems } = await supabaseAdmin
     .from('order_items')
     .select(
       `
@@ -149,9 +169,9 @@ export async function getPhotoDownloadUrl(photoPath: string): Promise<string | n
 
   let allowed = Boolean(orderItems && orderItems.length > 0);
 
-  // Or owned via a profile claim (a free photo). RLS scopes this to the user.
+  // Or owned via a profile claim (a free photo), scoped to this user.
   if (!allowed) {
-    const { data: claimed } = await supabase
+    const { data: claimed } = await supabaseAdmin
       .from('talent_claimed_photos')
       .select('id, photos!inner(original_url)')
       .eq('talent_user_id', user.id)
@@ -164,7 +184,9 @@ export async function getPhotoDownloadUrl(photoPath: string): Promise<string | n
     throw new Error('Photo not found or not purchased');
   }
 
-  // Generate signed URL for download (24 hour expiry for downloads)
-  const results = await createSignedUrls(supabase, 'photos', [photoPath], 24 * 60 * 60);
+  // Generate signed URL for download (24 hour expiry for downloads). Sign with
+  // admin — the buyer doesn't own the storage object; access was just authorized
+  // above.
+  const results = await createSignedUrls(supabaseAdmin, 'photos', [photoPath], 24 * 60 * 60);
   return results[0]?.signedUrl ?? null;
 }
