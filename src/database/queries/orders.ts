@@ -277,6 +277,30 @@ export async function getUserOrders(
 }
 
 /**
+ * Count a buyer's COMPLETED orders — the "total purchases" metric (T-143).
+ * Same semantics as `getTalentOrderStats.completedOrders` (orders with
+ * `status = 'completed'`), but a lightweight `head`/`count` query so the profile
+ * page doesn't re-fetch the whole orders list. Distinct from purchased *photos*
+ * (order_items) and *events*.
+ */
+export async function getTalentCompletedOrderCount(
+  supabase: SupabaseServerClient,
+  userId: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from('orders')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('status', 'completed');
+
+  if (error) {
+    throw new Error(`Failed to count completed orders: ${getErrorMessage(error)}`);
+  }
+
+  return count ?? 0;
+}
+
+/**
  * Get orders for a photographer (sales)
  */
 export async function getPhotographerOrders(

@@ -1,11 +1,11 @@
 # T-143 · Añadir "total de compras" a las métricas del perfil de talento
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/talent-profile-purchases-metric`  (tipo = feat)
 - **OpenSpec change:** —  (1 stat aditivo en UI + reuso de query existente; no toca pagos/BD)
-- **PR:** —
+- **PR:** #205
 
 ## Requerimiento
 En las métricas de `/{lang}/dashboard/talent/profile` (bloque de stats estilo Instagram) hoy se muestran

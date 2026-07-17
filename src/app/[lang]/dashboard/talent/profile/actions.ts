@@ -1,5 +1,6 @@
 'use server';
 
+import { getTalentCompletedOrderCount } from '@/database/queries/orders';
 import { getProfile } from '@/database/queries/profiles';
 import { createSignedUrls } from '@/database/queries/storage';
 import {
@@ -20,6 +21,7 @@ export interface ProfileData {
   stats: {
     purchasedPhotosCount: number;
     eventsCount: number;
+    purchasesCount: number;
   };
   photos: Array<{
     photo_id: string;
@@ -59,12 +61,16 @@ export async function getProfileData(): Promise<ProfileData> {
   // `talentUserId`/`user.id` filter (e.g. `getTalentPurchasedPhotos` scopes to
   // `orders.user_id = talentUserId`). `getProfile` stays on the user client
   // (profiles RLS already exposes own row).
-  const [profile, purchasedPhotosCount, eventsCount, ownedPhotos] = await Promise.all([
-    getProfile(supabase, user.id),
-    getTalentOwnedPhotosCount(supabaseAdmin, user.id),
-    getTalentPurchasedEventsCount(supabaseAdmin, user.id),
-    getTalentOwnedPhotos(supabaseAdmin, user.id, { limit: 500 }),
-  ]);
+  const [profile, purchasedPhotosCount, eventsCount, purchasesCount, ownedPhotos] =
+    await Promise.all([
+      getProfile(supabase, user.id),
+      getTalentOwnedPhotosCount(supabaseAdmin, user.id),
+      getTalentPurchasedEventsCount(supabaseAdmin, user.id),
+      // "Purchases" = completed orders (distinct from purchased photos/events).
+      // The user's own orders — RLS lets the user-scoped client read them.
+      getTalentCompletedOrderCount(supabase, user.id),
+      getTalentOwnedPhotos(supabaseAdmin, user.id, { limit: 500 }),
+    ]);
 
   // Generate signed URLs for previews (1 hour expiry). Sign with the admin
   // client — the buyer doesn't own the photographer's storage objects, so the
@@ -121,6 +127,7 @@ export async function getProfileData(): Promise<ProfileData> {
     stats: {
       purchasedPhotosCount,
       eventsCount,
+      purchasesCount,
     },
     photos: photosWithUrls,
   };
