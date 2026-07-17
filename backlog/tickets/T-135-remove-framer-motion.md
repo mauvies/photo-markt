@@ -1,7 +1,7 @@
 # T-135 · Quitar la dependencia `framer-motion` (apenas usada)
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `chore/remove-framer-motion`  (tipo = chore)
 - **OpenSpec change:** —  (limpieza de dependencia + reimplementación CSS de un componente)

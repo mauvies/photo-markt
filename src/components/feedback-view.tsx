@@ -1,6 +1,5 @@
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertCircle,
   Brain,
@@ -117,20 +116,23 @@ function ConfettiParticles() {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
       {particles.map((p) => (
-        <motion.div
+        <div
           key={p.id}
-          className="absolute left-1/2 top-1/3"
-          style={{
-            width: p.size,
-            height: p.size,
-            backgroundColor: p.color,
-            borderRadius: p.isCircle ? '50%' : '3px',
-            marginLeft: -p.size / 2,
-            marginTop: -p.size / 2,
-          }}
-          initial={{ x: 0, y: 0, opacity: 1, scale: 0, rotate: 0 }}
-          animate={{ x: p.x, y: p.y, opacity: 0, scale: 1, rotate: p.rotation }}
-          transition={{ duration: 1.8, delay: p.delay, ease: [0.2, 0, 0, 1] }}
+          className="feedback-confetti-particle absolute left-1/2 top-1/3"
+          style={
+            {
+              width: p.size,
+              height: p.size,
+              backgroundColor: p.color,
+              borderRadius: p.isCircle ? '50%' : '3px',
+              marginLeft: -p.size / 2,
+              marginTop: -p.size / 2,
+              animationDelay: `${p.delay}s`,
+              '--confetti-x': `${p.x}px`,
+              '--confetti-y': `${p.y}px`,
+              '--confetti-rot': `${p.rotation}deg`,
+            } as React.CSSProperties
+          }
         />
       ))}
     </div>
@@ -140,54 +142,42 @@ function ConfettiParticles() {
 function SuccessState({ onReset }: { onReset: () => void }) {
   const { t } = useTranslations<FeedbackT>();
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="relative flex flex-col items-center justify-center py-24 px-6 text-center overflow-hidden"
-    >
+    <div className="feedback-animate-fade-up relative flex flex-col items-center justify-center py-24 px-6 text-center overflow-hidden">
       <ConfettiParticles />
 
-      <motion.div
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ delay: 0.1, type: 'spring', stiffness: 220, damping: 16 }}
-        className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-100 dark:bg-green-950/40"
+      <div
+        className="feedback-animate-pop mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-100 dark:bg-green-950/40"
+        style={{ animationDelay: '0.1s' }}
       >
         <CheckCircle2 className="h-10 w-10 text-green-600 dark:text-green-400" />
-      </motion.div>
+      </div>
 
-      <motion.h2
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.25 }}
-        className="text-2xl font-semibold mb-3"
+      <h2
+        className="feedback-animate-fade-up text-2xl font-semibold mb-3"
+        style={{ animationDelay: '0.25s' }}
       >
         {t('thankYou')}
-      </motion.h2>
+      </h2>
 
-      <motion.p
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.35 }}
-        className="text-muted-foreground max-w-sm mb-2"
+      <p
+        className="feedback-animate-fade-up text-muted-foreground max-w-sm mb-2"
+        style={{ animationDelay: '0.35s' }}
       >
         {t('successLine1')}
-      </motion.p>
-      <motion.p
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.42 }}
-        className="text-sm text-muted-foreground/70 max-w-xs mb-10"
+      </p>
+      <p
+        className="feedback-animate-fade-up text-sm text-muted-foreground/70 max-w-xs mb-10"
+        style={{ animationDelay: '0.42s' }}
       >
         {t('successLine2')}
-      </motion.p>
+      </p>
 
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.55 }}>
+      <div className="feedback-animate-fade" style={{ animationDelay: '0.55s' }}>
         <Button variant="outline" onClick={onReset}>
           {t('submitAnother')}
         </Button>
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   );
 }
 
@@ -235,19 +225,15 @@ function StarRating({
           </button>
         ))}
       </fieldset>
-      <AnimatePresence mode="wait">
-        {display > 0 && (
-          <motion.span
-            key={display}
-            initial={{ opacity: 0, x: -4 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0 }}
-            className="text-sm text-muted-foreground"
-          >
-            {labels[display - 1]}
-          </motion.span>
-        )}
-      </AnimatePresence>
+      {display > 0 && (
+        // `key={display}` remounts the span on every rating change so the CSS
+        // entrance animation re-fires — a cross-fade in of the new label. The
+        // framer-motion exit (fade out before the swap) is dropped intentionally
+        // (T-135): with a single always-present slot the swap reads as a crossfade.
+        <span key={display} className="feedback-star-label text-sm text-muted-foreground">
+          {labels[display - 1]}
+        </span>
+      )}
     </div>
   );
 }
