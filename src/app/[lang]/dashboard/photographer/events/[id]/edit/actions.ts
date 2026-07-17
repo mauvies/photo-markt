@@ -9,10 +9,14 @@ import {
   eventExists,
   getEvent,
   getPhoto,
+  getSoldPhotoIds,
+  isPhotoSold,
+  softDeletePhotosByIds,
   updateEvent,
 } from '@/database/queries';
 import type { SupabaseServerClient } from '@/database/queries/types';
 import { createClient } from '@/database/server';
+import { supabaseAdmin } from '@/database/supabase-admin';
 import { normalizeSessionTime } from '@/lib/format-date';
 import { inngest } from '@/lib/inngest/client';
 
@@ -138,7 +142,7 @@ export async function updateEventAction(
   eventId: string,
   formData: FormData,
   photoIdsToDelete?: string[],
-): Promise<{ success: true }> {
+): Promise<{ success: true; retainedSoldCount: number }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -268,8 +272,18 @@ export async function updateEventAction(
     }
   }
 
+  let retainedSoldCount = 0;
   if (photoIdsToDelete && photoIdsToDelete.length > 0) {
+    // T-142: batch the sold-check once for the whole removal set (not 2 queries
+    // per photo). Sold photos are retained for their buyers (soft-delete, keep
+    // storage); the rest hard-delete + drop storage as before.
+    const soldIds = await getSoldPhotoIds(supabaseAdmin, photoIdsToDelete);
+    if (soldIds.size > 0) {
+      await softDeletePhotosByIds(supabaseAdmin, [...soldIds]);
+      retainedSoldCount = soldIds.size;
+    }
     for (const photoId of photoIdsToDelete) {
+      if (soldIds.has(photoId)) continue; // retained above
       const photo = await getPhoto(supabase, photoId, eventId, user.id);
       if (photo) {
         await dbDeletePhoto(supabase, photoId, user.id);
@@ -287,13 +301,22 @@ export async function updateEventAction(
   });
   revalidateTag('filter-options', 'max');
 
-  return { success: true };
+  // `retainedSoldCount` > 0 → the form should tell the photographer those sold
+  // photos were kept for their buyers rather than destroyed (T-142).
+  return { success: true, retainedSoldCount };
 }
 
 /**
  * Delete a single photo from an event.
+ *
+ * Returns `{ retained: true }` when the photo had been SOLD and was therefore
+ * soft-deleted (kept for the buyer) instead of destroyed (T-142); `false` when
+ * it was hard-deleted.
  */
-export async function deletePhotoAction(photoId: string, eventId: string): Promise<void> {
+export async function deletePhotoAction(
+  photoId: string,
+  eventId: string,
+): Promise<{ retained: boolean }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -310,10 +333,18 @@ export async function deletePhotoAction(photoId: string, eventId: string): Promi
   const photo = await getPhoto(supabase, photoId, eventId, user.id);
   if (!photo) throw new Error('Photo not found.');
 
-  await dbDeletePhoto(supabase, photoId, user.id);
-
-  if (photo.original_url) {
-    await deleteStorageFiles(supabase, 'photos', [photo.original_url]);
+  // T-142: a sold photo is retained for its buyer (soft-delete, keep the row +
+  // storage) instead of hard-deleting, which would otherwise fail on the
+  // ON DELETE RESTRICT FK. Unsold photos hard-delete + drop storage as before.
+  let retained = false;
+  if (await isPhotoSold(supabaseAdmin, photoId)) {
+    await softDeletePhotosByIds(supabaseAdmin, [photoId]);
+    retained = true;
+  } else {
+    await dbDeletePhoto(supabase, photoId, user.id);
+    if (photo.original_url) {
+      await deleteStorageFiles(supabase, 'photos', [photo.original_url]);
+    }
   }
 
   const event = await getEvent(supabase, eventId, user.id);
@@ -322,4 +353,6 @@ export async function deletePhotoAction(photoId: string, eventId: string): Promi
     slug: event?.slug ?? null,
     share_code: event?.share_code ?? null,
   });
+
+  return { retained };
 }

@@ -4,6 +4,7 @@ import { useForm } from '@tanstack/react-form';
 import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
+import { toast } from 'sonner';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -182,6 +183,13 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
           try {
             const result = await updateEventAction(event.id, formData, photoIdsToDelete);
             if (!result?.success) return;
+
+            // T-142: sold photos can't be destroyed — they're kept for their
+            // buyers and hidden from the gallery. Tell the photographer (the
+            // toast persists across the navigation below via the global Toaster).
+            if (result.retainedSoldCount > 0) {
+              toast.success(t('photosKeptSoldOnEdit'));
+            }
 
             const dashboardPath = lp(`/dashboard/photographer/events/${event.id}`);
             if (newFiles.length === 0) {

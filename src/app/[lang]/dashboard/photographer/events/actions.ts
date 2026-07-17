@@ -9,6 +9,7 @@ import {
   getEventCoverPath,
   getPhotoStoragePaths,
   getSoldPhotoIdsForEvent,
+  softDeletePhotosByIds,
 } from '@/database/queries';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
@@ -56,6 +57,14 @@ export const deleteEventAction = async (eventId: string) => {
 
   // Delete photos from database (excluding purchased ones)
   await deleteEventPhotos(supabase, eventId, user.id, purchasedPhotoIds);
+
+  // T-142: soft-delete the retained sold photos so they carry a uniform
+  // `deleted_at` state (hidden from every gallery/search/cart the same way an
+  // individually-deleted sold photo is), while their row + storage stay for the
+  // buyer. The event itself is soft-deleted below.
+  if (purchasedPhotoIds.length > 0) {
+    await softDeletePhotosByIds(supabaseAdmin, purchasedPhotoIds);
+  }
 
   // Delete files from storage
   const pathsToRemove = coverPath ? [...storagePaths, coverPath] : storagePaths;

@@ -155,7 +155,8 @@ export async function getPhotoFacesByEventId(
   const { data: photoRows, error: photosError } = await supabase
     .from('photos')
     .select('id')
-    .eq('event_id', eventId);
+    .eq('event_id', eventId)
+    .is('deleted_at', null);
   if (photosError) {
     throw new Error(`Failed to list event photos: ${getErrorMessage(photosError)}`);
   }
@@ -314,7 +315,8 @@ export async function getEventAiIndexingProgress(
   const { data: photoRows, error: photosError } = await supabase
     .from('photos')
     .select('id, face_index_status')
-    .eq('event_id', eventId);
+    .eq('event_id', eventId)
+    .is('deleted_at', null);
   if (photosError) {
     throw new Error(`Failed to load event photos: ${getErrorMessage(photosError)}`);
   }

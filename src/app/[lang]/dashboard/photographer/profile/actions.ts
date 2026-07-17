@@ -28,11 +28,12 @@ export async function getProfileData() {
     getSalesSummary(supabase, user.id, startDateStr, endDateStr),
   ]);
 
-  // Count total photos
+  // Count total photos (exclude soft-deleted-after-sale photos — T-142)
   const { count: totalPhotosCount } = await supabase
     .from('photos')
     .select('*', { count: 'exact', head: true })
-    .eq('user_id', user.id);
+    .eq('user_id', user.id)
+    .is('deleted_at', null);
 
   return {
     profile,

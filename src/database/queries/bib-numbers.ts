@@ -186,7 +186,8 @@ export async function getEventBibDetectionProgress(
   const { data, error } = await supabase
     .from('photos')
     .select('bib_detection_status')
-    .eq('event_id', eventId);
+    .eq('event_id', eventId)
+    .is('deleted_at', null);
   if (error) {
     throw new Error(`Failed to load event bib-detection progress: ${getErrorMessage(error)}`);
   }

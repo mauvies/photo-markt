@@ -61,6 +61,11 @@ export const cleanupOrphanedStorageFiles = inngest.createFunction(
       // cover image. Covers have no `photos` row, so without the second check
       // the sweep would delete them (T-055). `deleted_at is null` so a cover
       // left behind by a failed event-delete can still be reclaimed later.
+      //
+      // T-142: the photos lookup deliberately has NO `deleted_at` filter — a
+      // soft-deleted-after-sale photo keeps its `original_url` and its storage
+      // must NEVER be swept (the buyer still downloads it). Do not add
+      // `.is('deleted_at', null)` here; that would delete a paying buyer's bytes.
       const [photoRows, coverRows] = await Promise.all([
         supabaseAdmin.from('photos').select('original_url').in('original_url', paths),
         supabaseAdmin

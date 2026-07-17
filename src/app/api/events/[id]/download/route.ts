@@ -16,8 +16,18 @@ export const maxDuration = 60;
 
 const MAX_PHOTOS = 50;
 
-type PhotoRow = { id: string; original_url: string | null; original_filename: string | null };
-type DownloadablePhoto = { id: string; original_url: string; original_filename: string | null };
+type PhotoRow = {
+  id: string;
+  original_url: string | null;
+  original_filename: string | null;
+  deleted_at: string | null;
+};
+type DownloadablePhoto = {
+  id: string;
+  original_url: string;
+  original_filename: string | null;
+  deleted_at: string | null;
+};
 
 function jsonError(message: string, status: number, headers?: HeadersInit) {
   return NextResponse.json({ error: message }, { status, headers });
@@ -81,17 +91,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   // ── Load the event + the requested photos (service role) ───────────────
+  // Load the event WITHOUT a `deleted_at` gate (T-142): a buyer must keep
+  // ZIP access to their purchased photos even after the photographer
+  // soft-deletes the whole event. Owner/free all-access is gated on the event
+  // still being live below; the buyer path is allowed regardless.
   const { data: event } = await supabaseAdmin
     .from('events')
-    .select('id, user_id, price_per_photo')
+    .select('id, user_id, price_per_photo, deleted_at')
     .eq('id', eventId)
-    .is('deleted_at', null)
     .maybeSingle();
   if (!event) return jsonError('Event not found', 404);
+  const eventDeleted = event.deleted_at != null;
 
   const { data: photoRows, error: photosError } = await supabaseAdmin
     .from('photos')
-    .select('id, original_url, original_filename')
+    .select('id, original_url, original_filename, deleted_at')
     .eq('event_id', eventId)
     .in('id', photoIds);
   if (photosError) {
@@ -99,8 +113,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return jsonError('Could not load the selected photos', 500);
   }
   // Only photos that genuinely belong to this event survive; a client-supplied
-  // id for another event's photo is silently dropped here. (`photos` rows are
-  // hard-deleted — the table has no `deleted_at` column — so nothing to filter.)
+  // id for another event's photo is silently dropped here. No `deleted_at`
+  // filter (T-142): a photo soft-deleted after being sold must remain
+  // downloadable by its buyer — the purchase filter below is the gate.
   const photos: DownloadablePhoto[] = ((photoRows ?? []) as PhotoRow[]).filter(
     (p): p is DownloadablePhoto => typeof p.original_url === 'string' && p.original_url.length > 0,
   );
@@ -109,9 +124,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const isOwner = user != null && user.id === event.user_id;
   const isFree = event.price_per_photo == null;
   let allowed: DownloadablePhoto[];
-  if (isOwner || isFree) {
-    allowed = photos;
+  if (!eventDeleted && (isOwner || isFree)) {
+    // Owner/free all-access only while the event is live — and never a
+    // soft-deleted-after-sale photo (T-142): it's retained only for its buyer,
+    // so switching a paid event to free must not expose it to everyone. Buyers
+    // still get it via the purchased-set branch below.
+    allowed = photos.filter((p) => p.deleted_at == null);
   } else if (user) {
+    // Buyers keep access to their purchased photos even after a whole-event
+    // soft-delete (T-142). The purchased set is the authoritative gate.
     const purchased = await getPurchasedPhotoIdsForEvent(supabaseAdmin, user.id, eventId);
     allowed = photos.filter((p) => purchased.has(p.id));
   } else {

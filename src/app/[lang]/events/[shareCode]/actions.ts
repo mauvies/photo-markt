@@ -13,9 +13,11 @@ import {
   getPhotoForContributorDelete,
   getPhotoForDownload,
   getProfilesByIds,
+  isPhotoSold,
   type PhotoDetail,
   resolveEventByParam,
   type SupabaseServerClient,
+  softDeletePhotosByIds,
 } from '@/database/queries';
 import { getEventBibDetectionState, getPhotoIdsByBibInEvent } from '@/database/queries/bib-numbers';
 import { getPurchasedPhotoIdsForEvent } from '@/database/queries/orders';
@@ -111,15 +113,22 @@ export async function deleteContributorPhotoAction(input: {
     throw new Error('Not authorized to delete this photo.');
   }
 
-  // Delete via admin client. The user_id arg to deletePhoto is just for the
-  // RLS-friendly equality clause; we pass the photo's stored user_id so the
-  // delete matches even though we're using the service role.
-  await deletePhoto(adminClient, photo.id, photo.user_id);
-  if (photo.original_url) {
-    try {
-      await deleteStorageFiles(adminClient, 'photos', [photo.original_url]);
-    } catch (cleanupError) {
-      console.error('Storage cleanup failed for contributor delete', cleanupError);
+  // T-142: a sold photo is retained for its buyer (soft-delete, keep the row +
+  // storage) rather than hard-deleted, which would fail on the ON DELETE
+  // RESTRICT FK and strip the buyer's access. Unsold photos hard-delete + drop
+  // storage as before. Delete via admin client — the user_id arg to deletePhoto
+  // is just for the RLS-friendly equality clause; we pass the photo's stored
+  // user_id so the delete matches even though we're using the service role.
+  if (await isPhotoSold(adminClient, photo.id)) {
+    await softDeletePhotosByIds(adminClient, [photo.id]);
+  } else {
+    await deletePhoto(adminClient, photo.id, photo.user_id);
+    if (photo.original_url) {
+      try {
+        await deleteStorageFiles(adminClient, 'photos', [photo.original_url]);
+      } catch (cleanupError) {
+        console.error('Storage cleanup failed for contributor delete', cleanupError);
+      }
     }
   }
 
@@ -626,9 +635,15 @@ export async function getEventPhotoDownloadUrlAction(
   }
 
   // ── Permission (authoritative) ─────────────────────────────────────────
+  // A soft-deleted-after-sale photo (T-142) is hidden from everyone except its
+  // buyer — the free/owner all-access branch must NOT serve it (otherwise
+  // switching a paid event to free would expose the retained original to any
+  // caller who knows the id). Buyers reach it via the purchased-set path below
+  // (their canonical access is the profile/orders download).
+  const isRetained = photo.deleted_at != null;
   const isOwner = Boolean(user && user.id === photo.event_owner_id);
   const isFree = photo.price_per_photo === null;
-  let allowed = isOwner || isFree;
+  let allowed = !isRetained && (isOwner || isFree);
   if (!allowed && user) {
     const purchased = await getPurchasedPhotoIdsForEvent(adminClient, user.id, eventId);
     allowed = purchased.has(photoId);

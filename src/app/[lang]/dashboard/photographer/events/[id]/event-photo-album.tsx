@@ -178,23 +178,39 @@ export function EventPhotoAlbum({
   const confirmDelete = useCallback(async () => {
     const ids = [...pendingIds];
     if (ids.length === 0) return;
+    let retainedCount = 0;
     try {
-      await Promise.all(ids.map((photoId) => deletePhotoAction(photoId, eventId)));
+      const results = await Promise.all(ids.map((photoId) => deletePhotoAction(photoId, eventId)));
+      retainedCount = results.filter((r) => r.retained).length;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('failedDeletePhotos'));
       throw error; // keep the ConfirmDialog open so the user can retry
     }
     // Optimistic removal — drop the tiles now; router.refresh() reconciles.
+    // Retained (sold) photos are soft-deleted, so the owner gallery now
+    // excludes them too — dropping their tile is correct.
     setDeletedIds((prev) => {
       const next = new Set(prev);
       for (const photoId of ids) next.add(photoId);
       return next;
     });
-    toast.success(
-      t('deletedPhotosToast')
-        .replace('{n}', String(ids.length))
-        .replace('{noun}', ids.length === 1 ? t('photo') : t('photos')),
-    );
+    // T-142: sold photos can't be destroyed — they're kept for their buyer and
+    // hidden from the gallery. Report the deleted and retained counts separately.
+    const removedCount = ids.length - retainedCount;
+    if (removedCount > 0) {
+      toast.success(
+        t('deletedPhotosToast')
+          .replace('{n}', String(removedCount))
+          .replace('{noun}', removedCount === 1 ? t('photo') : t('photos')),
+      );
+    }
+    if (retainedCount > 0) {
+      toast.success(
+        t('photosKeptSoldToast')
+          .replace('{n}', String(retainedCount))
+          .replace('{noun}', retainedCount === 1 ? t('photo') : t('photos')),
+      );
+    }
     setSelectionResetKey((k) => k + 1);
     router.refresh();
   }, [pendingIds, eventId, router, t]);

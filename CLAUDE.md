@@ -166,6 +166,7 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
 - Stored in Supabase Storage bucket: `photos`
 - Watermarked previews served via `/src/app/api/watermark/`
 - Full resolution only accessible via short-lived signed URLs after purchase
+- **Soft-delete on sale (`deleted_at`, T-142):** a photo that has been SOLD (appears in a completed `order_items`/`guest_order_items` — the `getSoldPhotoIds`/`isPhotoSold` predicate) is **never hard-deleted**. Every delete path (`deletePhotoAction`, `updateEventAction`'s inline delete, `deleteContributorPhotoAction`, and `deleteEventAction`) checks the sold-set and, if sold, calls `softDeletePhotosByIds` (stamp `deleted_at`, keep the row **and** the storage object) instead of destroying it, so the buyer keeps permanent access. Unsold photos hard-delete + drop storage as before. The `ON DELETE RESTRICT` FK on `order_items.photo_id`/`guest_order_items.photo_id` stays as a hard fail-safe backstop; `orders`/`order_items` are never touched. **Query invariant:** every photographer/public/gallery/search/cart/cover/quota read filters `deleted_at IS NULL` (a miss resurfaces a deleted photo); buyer-facing reads (`getTalentPurchasedPhotos`, `getPurchasedPhotoIdsForEvent`, `getPhotoForDownload`, orders previews, guest download-token page) and the orphaned-storage-cleanup **in-use** set must **never** add that filter — a stray filter there deletes a paying buyer's bytes. The ZIP download route (`/api/events/[id]/download`) allows a buyer's purchased items even after the whole event is soft-deleted.
 
 **photo_faces** (via `/src/database/queries/rekognition.ts`)
 `photo_id, aws_face_id, aws_collection_id, confidence, bounding_box, indexed_at`
@@ -184,13 +185,13 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
 `orders: id, user_id, cart_id, stripe_payment_intent_id, stripe_checkout_session_id, status, total_amount_cents`
 - Status: `pending`, `completed`, `failed`, `refunded`
 
-**payment_accounts**
+**payment_accounts** (legacy — unused)
 `id, photographer_id, type, account_details, is_default, is_verified`
-- Stores Stripe Connect account info for photographer payouts
+- Vestigial table from an earlier payout design. **Superseded by Stripe Connect**, whose account id + status live on `profiles.stripe_connect_account_id` / `profiles.stripe_connect_status` (migration `20260501000000_add_stripe_connect.sql`). No code under `src/app` or `src/components` references this table — do not build on it
 
 **payouts**
 `id, photographer_id, amount_cents, status, paid_at`
-- Transfers fire **per order**, synchronously in the Stripe webhook on `payment_intent.succeeded` (one per `(order_item, photographer)`); this table is the historical record. There is no payout cron or minimum threshold. A manual admin-approval path also exists via `/api/admin/payouts/[id]`. See `ARCHITECTURE.md` §4.3
+- Transfers fire **per order**, synchronously in the Stripe webhook on `payment_intent.succeeded` (one per `(order_item, photographer)`); this table is the historical record. There is no payout cron or minimum threshold. A manual admin-approval route exists at `/api/admin/payouts/[id]`, but is **currently vestigial** — nothing inserts `pending` payout rows (every payout is written straight to `paid` from the per-order transfer via `createPayoutFromTransfer`), so there is nothing to approve and no admin UI. Operational gaps in the transfer path: sub-50¢ net transfers are skipped with a warning (earnings stranded in the platform account), a non-active photographer's funds are held with only a `console.warn`, and refunds do **not** auto-reverse transfers. See `ARCHITECTURE.md` §4.3
 
 **ai_search_profiles**
 `id, user_id, activity_type, country, region, date_from, date_to`
@@ -220,10 +221,10 @@ One-time Stripe payments. Webhook handler at `/src/app/api/stripe/webhook/route.
 After confirmed payment: order saved, cart cleared, photos available in talent profile and orders.
 
 ### Photographer Payouts (Stripe Connect)
-- Photographers connect Stripe Express accounts in `/dashboard/photographer/profile/payout-profile/`
+- Photographers connect Stripe Express accounts in `/dashboard/photographer/settings/payout-profile/`
 - Photo Markt absorbs the Stripe Connect fee (0.5%) — photographer always receives exactly their promised net amount
 - Transfers fire per order, synchronously in the `payment_intent.succeeded` webhook handler — there is no cron or minimum threshold (see `ARCHITECTURE.md` §4.3)
-- Sales tracked in `/dashboard/photographer/sales/`, earnings in `/dashboard/photographer/ganancias/`
+- Sales and earnings share one tabbed page at `/dashboard/photographer/sales/` (`?tab=earnings` selects earnings); `/ventas`, `/ganancias`, `/earnings` are redirect aliases to it
 
 ## Shared Components
 
@@ -363,7 +364,7 @@ Race **bib-number** detection, **per-event opt-in** (the cost gate, mirroring `a
 - **Opt-in:** `events.bib_detection_enabled` (default false) + `bib_detection_status`. Photographer toggles it on the event detail page (`enable/disableBibDetectionForEvent`, owner-only); enabling fires `event.bib-detection-enabled` → `backfillEventBibDetection`. Disabled for `contains_minors` events (parity with face search). Disabling **keeps** existing bib rows.
 - **Detection (job):** `detectPhotoBibs` (`src/lib/inngest/functions/detect-photo-bibs.ts`) on `photo.uploaded` + `photo.bib-detect`; no-ops (status stays NULL) unless the event opted in. Downloads the image, calls Rekognition `DetectText` (`src/lib/aws/bib-detection.ts`), filters to plausible bibs (`extractBibCandidates` in `src/lib/bib-numbers.ts` — confidence floor + digit-dominant pattern + dedupe + cap), persists to `photo_bib_numbers`. Bytes never cross Inngest step boundaries; AWS/Storage/Sharp wrapped in `safeCall`. Backfill fans out a **bib-specific** `photo.bib-detect` event so it never re-runs the face/thumbnail jobs.
 - **Persistence:** `photo_bib_numbers` (`photo_id`, `bib_text`, `confidence`, `bounding_box`, unique `(photo_id, bib_text)`) — RLS read like `photo_faces`, service-role writes only. Per-photo `photos.bib_detection_status`. Queries in `src/database/queries/bib-numbers.ts`.
-- **Search (talent):** `searchPhotosByBibInEvent(shareCode, bib)` (`events/[shareCode]/actions.ts`) — exact normalized match, rate-limited `(shareCode, IP)` 30/h, returns matching **public** photo ids. Surfaced via `BibSearchBar` on both the public event gallery (`/events/[shareCode]`) and the talent-dashboard event view (`/dashboard/talent/events/[id]`), gated on `bib_detection_enabled`; filters the grid client-side. Enabling/disabling bib detection busts the public/talent event cache tags (`revalidateEventPhotoCacheTags`) so the bar appears/disappears immediately (T-064).
+- **Search (talent):** `searchPhotosByBibInEvent(shareCode, bib)` (`events/[shareCode]/actions.ts`) — exact normalized match, rate-limited `(shareCode, IP)` 30/h, returns matching **public** photo ids. Surfaced via the unified `FindMyPhotosBanner` (`src/components/find-my-photos-banner.tsx` — the face + bib "Find my photos" card; bib input opens in a modal) on both the public event gallery (`/events/[shareCode]`) and the talent-dashboard event view (`/dashboard/talent/events/[id]`), gated on `bib_detection_enabled`; results filter the grid client-side on **both** surfaces (symmetric wiring — the old talent-dashboard grid-filter gap is fixed). Enabling/disabling bib detection busts the public/talent event cache tags (`revalidateEventPhotoCacheTags`) so the bar appears/disappears immediately (T-064).
 - **Privacy:** bib numbers are low-sensitivity race identifiers (not PII); selfies/faces unaffected. `contains_minors` parity keeps minors' photos no more exposed than face search already allows.
 - **Cost:** `DetectText` is billed per image on opted-in events — the per-event opt-in is the only throttle (no per-event cap yet). No new env vars (reuses `AWS_*`/`REKOGNITION_*`).
 

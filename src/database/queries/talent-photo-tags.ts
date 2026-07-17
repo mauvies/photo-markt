@@ -197,8 +197,11 @@ export async function getTaggedPhotosForTalent(
     `,
     )
     .eq('talent_user_id', talentUserId)
-    // Hide tagged photos whose event was soft-deleted (T-040).
+    // Hide tagged photos whose event was soft-deleted (T-040) or whose photo was
+    // soft-deleted after being sold (T-142) — a favorite is a bookmark, not
+    // ownership, so it must disappear like any other public tile.
     .is('photos.events.deleted_at', null)
+    .is('photos.deleted_at', null)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -284,10 +287,15 @@ export async function getTaggedPhotosCountForTalent(
 ): Promise<number> {
   const { count, error } = await supabase
     .from('talent_photo_tags')
-    .select('id, photos!inner(events!inner(deleted_at))', { count: 'exact', head: true })
+    .select('id, photos!inner(deleted_at, events!inner(deleted_at))', {
+      count: 'exact',
+      head: true,
+    })
     .eq('talent_user_id', talentUserId)
-    // Match getTaggedPhotosForTalent: don't count soft-deleted events (T-040).
-    .is('photos.events.deleted_at', null);
+    // Match getTaggedPhotosForTalent: don't count soft-deleted events (T-040) or
+    // soft-deleted-after-sale photos (T-142).
+    .is('photos.events.deleted_at', null)
+    .is('photos.deleted_at', null);
 
   if (error) {
     throw new Error(`Failed to get tagged photos count: ${getErrorMessage(error)}`);

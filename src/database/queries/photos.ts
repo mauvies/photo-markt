@@ -155,6 +155,7 @@ export async function getPhotosUploadedCount(
     .from('photos')
     .select('id, events!inner(deleted_at)', { count: 'exact', head: true })
     .eq('user_id', userId)
+    .is('deleted_at', null)
     .is('events.deleted_at', null);
 
   if (startDate) query = query.gte('created_at', startDate);
@@ -190,6 +191,7 @@ export async function getStorageUsageBytes(
     .from('photos')
     .select('size_bytes, events!inner(deleted_at)')
     .eq('user_id', userId)
+    .is('deleted_at', null)
     .is('events.deleted_at', null);
 
   if (error) {
@@ -219,6 +221,7 @@ export async function countEventPhotos(
     .from('photos')
     .select('id', { count: 'exact', head: true })
     .eq('event_id', eventId)
+    .is('deleted_at', null)
     .neq('upload_status', 'rejected');
 
   if (error) {
@@ -245,6 +248,7 @@ export async function getPhotosForEvents(
     .select('event_id, original_url, taken_at, thumbnail_status, thumb_version')
     .in('event_id', eventIds)
     .eq('upload_status', 'approved')
+    .is('deleted_at', null)
     .order('taken_at', { ascending: true })
     .throwOnError();
 
@@ -281,6 +285,7 @@ export async function getPhotosForEventsIncludingPending(
     .select('event_id, original_url, taken_at, thumbnail_status, thumb_version, upload_status')
     .in('event_id', eventIds)
     .in('upload_status', ['pending', 'approved'])
+    .is('deleted_at', null)
     .order('taken_at', { ascending: true })
     .throwOnError();
 
@@ -315,6 +320,7 @@ export async function getPhotoCountsForEvents(
     .select('event_id')
     .in('event_id', eventIds)
     .in('upload_status', ['pending', 'approved'])
+    .is('deleted_at', null)
     .throwOnError();
 
   if (error) {
@@ -346,7 +352,11 @@ export async function getEventPhotos(
   userId: string,
   options?: GetEventPhotosOptions,
 ): Promise<PhotoDetail[]> {
-  let query = supabase.from('photos').select(EVENT_PHOTO_OWNER_COLUMNS).eq('event_id', eventId);
+  let query = supabase
+    .from('photos')
+    .select(EVENT_PHOTO_OWNER_COLUMNS)
+    .eq('event_id', eventId)
+    .is('deleted_at', null);
 
   if (options?.includePending) {
     // Owner-side widening: show photos still mid-validation in the grid so the
@@ -391,6 +401,7 @@ export async function getEventPhotosPublic(
     .select(EVENT_PHOTO_PUBLIC_COLUMNS)
     .eq('event_id', eventId)
     .eq('upload_status', 'approved')
+    .is('deleted_at', null)
     .order('taken_at', { ascending: true });
 
   if (error) {
@@ -415,7 +426,8 @@ export async function getEventPhotosPublicPage(
     .from('photos')
     .select(EVENT_PHOTO_PUBLIC_COLUMNS)
     .eq('event_id', eventId)
-    .eq('upload_status', 'approved');
+    .eq('upload_status', 'approved')
+    .is('deleted_at', null);
 
   // Inclusive range → fetches limit+1 rows; the extra row proves `hasMore`.
   const { data, error } = await applyEventPhotoOrder(query).range(offset, offset + limit);
@@ -441,7 +453,11 @@ export async function getEventPhotosPage(
   userId: string,
   options: GetEventPhotosOptions & EventPhotoPageOptions,
 ): Promise<{ photos: PhotoDetail[]; hasMore: boolean }> {
-  let query = supabase.from('photos').select(EVENT_PHOTO_OWNER_COLUMNS).eq('event_id', eventId);
+  let query = supabase
+    .from('photos')
+    .select(EVENT_PHOTO_OWNER_COLUMNS)
+    .eq('event_id', eventId)
+    .is('deleted_at', null);
 
   if (options.includePending) {
     query = query.in('upload_status', ['approved', 'pending']);
@@ -484,7 +500,8 @@ export async function countEventPhotosByStatus(
     .from('photos')
     .select('id', { count: 'exact', head: true })
     .eq('event_id', eventId)
-    .in('upload_status', statuses);
+    .in('upload_status', statuses)
+    .is('deleted_at', null);
 
   if (error) {
     throw new Error(`Failed to count event photos by status: ${getErrorMessage(error)}`);
@@ -511,6 +528,7 @@ export async function getUploadedPhotoIdsForUserInEvent(
     .from('photos')
     .select('id')
     .eq('event_id', eventId)
+    .is('deleted_at', null)
     .or(`user_id.eq.${userId},uploaded_by.eq.${userId}`);
 
   if (error) {
@@ -843,11 +861,17 @@ export async function getPhotoForDownload(
   original_filename: string | null;
   event_owner_id: string;
   price_per_photo: number | null;
+  deleted_at: string | null;
 } | null> {
+  // NOTE: no `photos.deleted_at` filter — a soft-deleted-after-sale photo must
+  // still be resolvable so its BUYER can download it (T-142). The photo's
+  // `deleted_at` is RETURNED so the caller can deny the free/owner all-access
+  // branch (which must not serve a retained photo) while still honoring the
+  // buyer's purchased-set path.
   const { data, error } = await supabase
     .from('photos')
     .select(
-      'id, original_url, original_filename, events!inner(user_id, price_per_photo, deleted_at)',
+      'id, original_url, original_filename, deleted_at, events!inner(user_id, price_per_photo, deleted_at)',
     )
     .eq('id', photoId)
     .eq('event_id', eventId)
@@ -874,6 +898,7 @@ export async function getPhotoForDownload(
     original_filename: (data.original_filename as string | null) ?? null,
     event_owner_id: event.user_id,
     price_per_photo: event.price_per_photo ?? null,
+    deleted_at: (data as { deleted_at: string | null }).deleted_at ?? null,
   };
 }
 
@@ -1018,9 +1043,29 @@ export async function getSoldPhotoIdsForEvent(
   const ids = (photos ?? []).map((p) => p.id as string);
   if (ids.length === 0) return [];
 
+  // Delegate to the per-id predicate so "sold" is derived in exactly one place.
+  return [...(await getSoldPhotoIds(supabaseAdmin, ids))];
+}
+
+/**
+ * Given a set of photo ids, return the subset that has been SOLD — i.e. appears
+ * in a completed `order_items` OR `guest_order_items` row (T-142). This is the
+ * per-photo generalization of {@link getSoldPhotoIdsForEvent}; the delete paths
+ * use it to decide soft-delete-and-retain (sold) vs hard-delete (unsold).
+ *
+ * MUST run on the service-role client: the order-items tables are RLS-scoped to
+ * the buyer, so a photographer's user-scoped client cannot see another user's
+ * purchase of their photo.
+ */
+export async function getSoldPhotoIds(
+  supabaseAdmin: SupabaseServerClient,
+  photoIds: string[],
+): Promise<Set<string>> {
+  if (photoIds.length === 0) return new Set();
+
   const [orderItems, guestOrderItems] = await Promise.all([
-    supabaseAdmin.from('order_items').select('photo_id').in('photo_id', ids),
-    supabaseAdmin.from('guest_order_items').select('photo_id').in('photo_id', ids),
+    supabaseAdmin.from('order_items').select('photo_id').in('photo_id', photoIds),
+    supabaseAdmin.from('guest_order_items').select('photo_id').in('photo_id', photoIds),
   ]);
   if (orderItems.error) {
     throw new Error(`Failed to check order items: ${getErrorMessage(orderItems.error)}`);
@@ -1029,10 +1074,45 @@ export async function getSoldPhotoIdsForEvent(
     throw new Error(`Failed to check guest order items: ${getErrorMessage(guestOrderItems.error)}`);
   }
 
-  const purchased = new Set<string>();
-  for (const row of orderItems.data ?? []) purchased.add(row.photo_id as string);
-  for (const row of guestOrderItems.data ?? []) purchased.add(row.photo_id as string);
-  return [...purchased];
+  const sold = new Set<string>();
+  for (const row of orderItems.data ?? []) sold.add(row.photo_id as string);
+  for (const row of guestOrderItems.data ?? []) sold.add(row.photo_id as string);
+  return sold;
+}
+
+/**
+ * Convenience wrapper: has this single photo been sold? See
+ * {@link getSoldPhotoIds}. Must run on the service-role client.
+ */
+export async function isPhotoSold(
+  supabaseAdmin: SupabaseServerClient,
+  photoId: string,
+): Promise<boolean> {
+  const sold = await getSoldPhotoIds(supabaseAdmin, [photoId]);
+  return sold.has(photoId);
+}
+
+/**
+ * Soft-delete photos (T-142): stamp `deleted_at` while keeping the row and its
+ * storage object, so a buyer who purchased the photo keeps permanent access
+ * while it disappears from every photographer/public/gallery/search/cart
+ * surface. Idempotent — re-stamping an already soft-deleted row is harmless.
+ *
+ * Runs on the service-role client: the caller has already authorized the delete,
+ * and this avoids depending on a `photos` UPDATE RLS policy for the owner.
+ */
+export async function softDeletePhotosByIds(
+  supabaseAdmin: SupabaseServerClient,
+  photoIds: string[],
+): Promise<void> {
+  if (photoIds.length === 0) return;
+  const { error } = await supabaseAdmin
+    .from('photos')
+    .update({ deleted_at: new Date().toISOString() })
+    .in('id', photoIds);
+  if (error) {
+    throw new Error(`Failed to soft-delete photos: ${getErrorMessage(error)}`);
+  }
 }
 
 /**
@@ -1075,6 +1155,7 @@ export async function getPurchasablePhotoIds(
     .select('id, events!inner(deleted_at)')
     .in('id', photoIds)
     .eq('upload_status', 'approved')
+    .is('deleted_at', null)
     .is('events.deleted_at', null);
 
   if (error) {

@@ -157,11 +157,14 @@ export async function addPhotoToCartAction(photoId: string, shareCode?: string):
     throw new Error('Only talent users can add items to the cart.');
   }
 
-  // Get photo details using admin client to bypass RLS
+  // Get photo details using admin client to bypass RLS. Reject soft-deleted
+  // photos (T-142): a photo retained only for its buyer after being sold must
+  // not be re-addable to anyone's cart.
   const { data: photo, error: photoError } = await supabaseAdmin
     .from('photos')
     .select('id, user_id, event_id')
     .eq('id', photoId)
+    .is('deleted_at', null)
     .single();
 
   if (photoError || !photo) {
@@ -470,11 +473,13 @@ export async function mergeGuestCartAction(items: GuestCartItem[]): Promise<numb
 
   for (const item of items) {
     try {
-      // Re-validate photo exists and get current price from DB
+      // Re-validate photo exists and get current price from DB. Skip
+      // soft-deleted-after-sale photos (T-142) so a merge can't reintroduce one.
       const { data: photo } = await supabaseAdmin
         .from('photos')
         .select('id, user_id, event_id')
         .eq('id', item.photoId)
+        .is('deleted_at', null)
         .maybeSingle();
 
       if (!photo) continue;
