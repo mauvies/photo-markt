@@ -5,9 +5,9 @@
 
 import { getPhotographerNetCents, getPlatformFeeRate } from '@/lib/plans';
 import { getTotalPaidOut, getTotalPendingPayouts } from './payouts';
+import { getCompletedSaleItems, resolveBuyerEmails } from './sales';
 import { getPhotographerPlanIds } from './subscriptions';
 import type { SupabaseServerClient } from './types';
-import { getErrorMessage } from './types';
 
 /**
  * Calculate platform fee from gross earnings using the photographer's plan rate.
@@ -25,29 +25,16 @@ export function calculateNetEarnings(grossEarningsCents: number, feeRate = 0.1):
 
 /**
  * Get total gross earnings for a photographer from completed orders
+ * (authenticated + guest purchases).
  */
 export async function getTotalGrossEarnings(
   supabase: SupabaseServerClient,
   photographerId: string,
 ): Promise<number> {
-  const { data: orderItems, error: itemsError } = await supabase
-    .from('order_items')
-    .select(
-      `
-      total_price_cents,
-      orders!inner(
-        status
-      )
-    `,
-    )
-    .eq('photographer_id', photographerId)
-    .eq('orders.status', 'completed');
-
-  if (itemsError) {
-    throw new Error(`Failed to get total gross earnings: ${getErrorMessage(itemsError)}`);
-  }
-
-  return (orderItems ?? []).reduce((sum, item) => sum + (item.total_price_cents as number), 0);
+  const items = await getCompletedSaleItems(supabase, photographerId, {
+    includePhotoDetails: false,
+  });
+  return items.reduce((sum, item) => sum + item.totalPriceCents, 0);
 }
 
 /**
@@ -116,156 +103,37 @@ export async function getPhotographerEarnings(
   startDate?: string,
   endDate?: string,
 ): Promise<PhotographerEarning[]> {
-  let query = supabase
-    .from('order_items')
-    .select(
-      `
-      id,
-      order_id,
-      photo_id,
-      total_price_cents,
-      created_at,
-      orders!inner(
-        id,
-        user_id,
-        created_at,
-        status
-      ),
-      photos(
-        event_id,
-        events(
-          name,
-          date
-        )
-      )
-    `,
-    )
-    .eq('photographer_id', photographerId)
-    .eq('orders.status', 'completed')
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  if (startDate) {
-    query = query.gte('created_at', startDate);
-  }
-  if (endDate) {
-    query = query.lte('created_at', endDate);
-  }
-
-  const [{ data, error }, planIds] = await Promise.all([
-    query,
+  // The DB returns the newest `limit` rows across both paths, already sorted.
+  const [items, planIds] = await Promise.all([
+    getCompletedSaleItems(supabase, photographerId, { startDate, endDate, limit }),
     getPhotographerPlanIds(supabase, [photographerId]),
   ]);
 
-  if (error) {
-    throw new Error(`Failed to get photographer earnings: ${getErrorMessage(error)}`);
-  }
+  const planId = planIds.get(photographerId);
+  const feeRate = getPlatformFeeRate(planId);
 
-  const feeRate = getPlatformFeeRate(planIds.get(photographerId));
+  const emailByUserId = await resolveBuyerEmails(supabase, items);
 
-  type OrderItemWithRelations = {
-    id: string;
-    order_id: string;
-    photo_id: string;
-    total_price_cents: number;
-    created_at: string;
-    orders:
-      | {
-          id: string;
-          user_id: string;
-          created_at: string;
-          status: string;
-        }[]
-      | {
-          id: string;
-          user_id: string;
-          created_at: string;
-          status: string;
-        }
-      | null;
-    photos:
-      | {
-          event_id: string | null;
-          events:
-            | {
-                name: string;
-                date: string;
-              }[]
-            | {
-                name: string;
-                date: string;
-              }
-            | null;
-        }[]
-      | {
-          event_id: string | null;
-          events:
-            | {
-                name: string;
-                date: string;
-              }[]
-            | {
-                name: string;
-                date: string;
-              }
-            | null;
-        }
-      | null;
-  };
-
-  // Get unique buyer IDs
-  const buyerIds = [
-    ...new Set(
-      (data ?? [])
-        .map((item: OrderItemWithRelations) => {
-          const order = Array.isArray(item.orders) ? item.orders[0] : item.orders;
-          return order?.user_id;
-        })
-        .filter((id): id is string => typeof id === 'string'),
-    ),
-  ];
-
-  // Fetch user emails using RPC function if available
-  const buyerEmailMap: Record<string, string | null> = {};
-
-  if (buyerIds.length > 0) {
-    try {
-      const { data: userEmails } = await supabase.rpc('get_user_emails_batch', {
-        user_ids: buyerIds,
-      });
-
-      if (userEmails) {
-        for (const user of userEmails) {
-          buyerEmailMap[user.id] = user.email ?? null;
-        }
-      }
-    } catch {
-      // RPC function might not exist or might fail, continue without emails
-    }
-  }
-
-  return (data ?? []).map((item: OrderItemWithRelations) => {
-    const order = Array.isArray(item.orders) ? item.orders[0] : item.orders;
-    const photo = Array.isArray(item.photos) ? item.photos[0] : item.photos;
-    const event = Array.isArray(photo?.events) ? photo.events[0] : photo?.events;
-
-    const grossAmountCents = item.total_price_cents;
+  return items.map((item) => {
+    const grossAmountCents = item.totalPriceCents;
     const platformFeeCents = calculatePlatformFee(grossAmountCents, feeRate);
-    const netAmountCents = getPhotographerNetCents(grossAmountCents, planIds.get(photographerId));
+    const netAmountCents = getPhotographerNetCents(grossAmountCents, planId);
 
     return {
-      id: item.id,
-      order_id: item.order_id,
-      photo_id: item.photo_id,
-      event_id: photo?.event_id ?? null,
-      event_name: event?.name ?? null,
-      event_date: event?.date ?? null,
-      buyer_id: order?.user_id ?? '',
-      buyer_email: buyerEmailMap[order?.user_id ?? ''] ?? null,
+      id: item.itemId,
+      order_id: item.orderId,
+      photo_id: item.photoId,
+      event_id: item.eventId,
+      event_name: item.eventName,
+      event_date: item.eventDate,
+      buyer_id: item.buyerUserId ?? '',
+      buyer_email: item.isGuest
+        ? item.buyerEmail
+        : (emailByUserId.get(item.buyerUserId ?? '') ?? null),
       gross_amount_cents: grossAmountCents,
       platform_fee_cents: platformFeeCents,
       net_amount_cents: netAmountCents,
-      created_at: item.created_at,
+      created_at: item.createdAt,
     };
   });
 }
