@@ -67,6 +67,7 @@ export async function getPhotographerBySlug(
       .select('id, events!inner(user_id, is_public, deleted_at)', { count: 'exact', head: true })
       .eq('events.user_id', data.id)
       .eq('events.is_public', true)
+      .is('deleted_at', null)
       .is('events.deleted_at', null),
   ]);
 

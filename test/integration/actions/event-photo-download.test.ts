@@ -172,6 +172,44 @@ describe('getEventPhotoDownloadUrlAction', () => {
     await expect(getEventPhotoDownloadUrlAction(photo.id, event.id)).rejects.toThrow(/permission/i);
   });
 
+  it('does NOT serve a soft-deleted (sold) photo via the free-event branch (T-142 leak)', async () => {
+    // Paid event → photo sold → soft-deleted → event switched to free. The
+    // free/owner all-access branch must not expose the retained original.
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(photographer.id, { price_per_photo: 5 });
+    const path = `${photographer.id}/${event.id}/retained.jpg`;
+    const photo = await createTestPhoto(event.id, { original_url: path });
+    await uploadPlaceholder(path);
+    const buyer = await createTestUser('TALENT');
+    await seedPurchase(buyer.id, photographer.id, photo.id, 'completed');
+    const sb = createServiceClient();
+    await sb.from('photos').update({ deleted_at: new Date().toISOString() }).eq('id', photo.id);
+    await sb.from('events').update({ price_per_photo: null }).eq('id', event.id);
+
+    // A logged-out guest on the now-free event must be denied the retained photo.
+    mockSession.userId = null;
+    await expect(getEventPhotoDownloadUrlAction(photo.id, event.id)).rejects.toThrow(/permission/i);
+  });
+
+  it('still lets the buyer download their own soft-deleted (sold) photo (T-142)', async () => {
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(photographer.id, { price_per_photo: 5 });
+    const path = `${photographer.id}/${event.id}/retained-buyer.jpg`;
+    const photo = await createTestPhoto(event.id, { original_url: path });
+    await uploadPlaceholder(path);
+    const buyer = await createTestUser('TALENT');
+    await seedPurchase(buyer.id, photographer.id, photo.id, 'completed');
+    await createServiceClient()
+      .from('photos')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', photo.id);
+
+    // The buyer keeps access via the purchased-set branch even after soft-delete.
+    mockSession.userId = buyer.id;
+    const url = await getEventPhotoDownloadUrlAction(photo.id, event.id);
+    expect(url).toMatch(/127\.0\.0\.1:54321/);
+  });
+
   it("rejects when the photo doesn't belong to the given event", async () => {
     const photographer = await createTestUser('PHOTOGRAPHER');
     const eventA = await createTestEvent(photographer.id, { price_per_photo: null });

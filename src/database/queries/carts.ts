@@ -289,8 +289,10 @@ export async function getCartItemsWithDetails(
     )
     .eq('cart_id', cartId)
     // Exclude items whose event was soft-deleted — they should never surface
-    // in the cart even if the row lingers (T-040).
+    // in the cart even if the row lingers (T-040) — or whose photo was
+    // soft-deleted because it had been sold (T-142).
     .is('photos.events.deleted_at', null)
+    .is('photos.deleted_at', null)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -383,9 +385,11 @@ export async function getCartItemCount(
     })
     .in('cart_id', cartIds)
     // Keep the badge consistent with the rendered cart: don't count items whose
-    // event was soft-deleted (T-040) or whose photo is no longer approved
-    // (T-117 — matches getPurchasablePhotoIds, the single source of truth).
+    // event was soft-deleted (T-040), whose photo was soft-deleted after being
+    // sold (T-142), or whose photo is no longer approved (T-117 — matches
+    // getPurchasablePhotoIds, the single source of truth).
     .is('photos.events.deleted_at', null)
+    .is('photos.deleted_at', null)
     .eq('photos.upload_status', 'approved');
 
   if (error) {

@@ -143,20 +143,19 @@ export async function resolveEventOgImageUrl(
     return createSignedUrl(supabase, 'photos', opts.coverPath, OG_SIGN_EXPIRY_SECONDS);
   }
 
-  // `photos` has no soft-delete column (only `events` does) — the original
-  // metadata code filtered `.is('deleted_at', null)` on a non-existent column,
-  // which PostgREST rejected, so this fallback silently returned null and the
-  // first-photo OG image never rendered. Select the event's first APPROVED
-  // photo directly: `upload_status='approved'` mirrors what the public gallery
-  // shows, so a still-`pending` guest upload or a `rejected` photo can never
-  // become the public social preview (event-level deletion is already handled
-  // by the caller — the page only renders `generateMetadata` for an
-  // accessible, non-deleted event).
+  // Select the event's first APPROVED, non-soft-deleted photo:
+  // `upload_status='approved'` mirrors what the public gallery shows, so a
+  // still-`pending` guest upload or a `rejected` photo can never become the
+  // public social preview. `deleted_at is null` (T-142) keeps a soft-deleted-
+  // after-sale photo — retained only for its buyer — from becoming the public
+  // og:image. Event-level deletion is handled by the caller (the page only
+  // renders `generateMetadata` for an accessible, non-deleted event).
   const { data: firstPhotoRow } = await supabase
     .from('photos')
     .select('original_url')
     .eq('event_id', opts.eventId)
     .eq('upload_status', 'approved')
+    .is('deleted_at', null)
     .not('original_url', 'is', null)
     .limit(1)
     .maybeSingle();

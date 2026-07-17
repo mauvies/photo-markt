@@ -198,7 +198,11 @@ async function getCachedDashboardData(userId: string): Promise<DashboardData> {
     getRecentSales(supabaseAdmin, userId, 5),
     getCurrentPlan(supabaseAdmin, userId),
     getStorageUsageBytes(supabaseAdmin, userId),
-    supabaseAdmin.from('photos').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+    supabaseAdmin
+      .from('photos')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .is('deleted_at', null),
   ]);
 
   const storageUsedGB = usedBytes / 1024 ** 3;
