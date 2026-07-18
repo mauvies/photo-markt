@@ -65,9 +65,27 @@ directly, so the fix is a `pnpm.overrides` pin in `package.json`, then `pnpm ins
 | `@sentry/nextjs` | 10.65.0 | 10.66.0 | prod | Minor, same major 10. |
 | `inngest` | 4.12.1 | 4.13.0 | prod | Minor, same major 4. No pending major. Smoke-test the workers after. |
 | `lucide-react` | 1.24.0 | 1.25.0 | prod | Minor (icons). |
-| `@biomejs/biome` | 2.3.8 | 2.5.4 | dev | Minor. May surface **new lint findings** — run `pnpm lint` after; fix or `biome migrate`. |
+| `@biomejs/biome` | 2.3.8 | 2.5.4 | dev | **HELD — moved out of Tier 1** (see §2.1). Not a low-risk drop-in. |
 | `@tailwindcss/postcss` | 4.3.2 | 4.3.3 | dev | Patch. Bump with `tailwindcss`. |
 | `tailwindcss` | 4.3.2 | 4.3.3 | dev | Patch. |
+
+### 2.1 Biome — held out of Tier 1 (discovered during Part 2)
+
+`@biomejs/biome 2.3.8 → 2.5.4` looked like a routine dev-only minor, but applying it is
+**not** low-risk:
+
+- **2.4.x and 2.5.x promote lint rules to errors** — `complexity/useOptionalChain` (×11),
+  `suspicious/noArrayIndexKey` (×4), `a11y/noSvgWithoutTitle` (×3): **15 errors + 11
+  warnings** on the current tree, requiring code changes across several files.
+- **2.5.4 additionally panics internally** (`processing panicked: index out of bounds …
+  index is 446`) on ~15 files — a tool regression that makes lint unreliable. 2.4.16 does
+  not panic but still carries the stricter rules.
+
+That's a lint-cleanup refactor + a tool-stability question, not a version bump. Biome is
+**dev-only (zero runtime impact)**, so nothing is lost by holding it. **Recommendation:
+dedicated follow-up ticket** — bump to a non-panicking version (e.g. latest 2.4.x, verify
+newer 2.5.x fixes the panic), then fix or `biome-ignore` the newly-flagged rules in one
+focused change.
 
 ### Tier 1 — **caution** (pre-1.0 `0.x` minor = potentially breaking; and native libs)
 
@@ -119,4 +137,14 @@ Every applied tier must pass `pnpm build` (production) + `pnpm typecheck` + `pnp
 `pnpm test`, plus a manual smoke test of checkout/payment, Stripe webhook, auth/session,
 the image pipeline (upload → Inngest → thumbnails), and face/bib search.
 
-**⏸ STOP — awaiting decision on which tiers to apply before any install.**
+---
+
+## 4. Outcome (approved 2026-07-18)
+
+- ✅ **Tier 2 (security)** — applied via `pnpm.overrides` (this branch / PR #210).
+  `pnpm audit` → no known vulnerabilities. 690 unit + 575 integration green.
+- ✅ **Tier 1 (patch/minor)** — applied (PR #211), **minus biome** (held, §2.1).
+  690 unit + 575 integration + typecheck + lint + build green.
+- ⏸ **Tier 1-caution** (`sharp`, `@supabase/ssr`, `supabase` CLI) — held for individual review.
+- 📋 **Follow-up tickets filed:** Stripe 20→22 (major, payments), TypeScript 5.9→7 (major),
+  archiver 7→8 (major), and Biome 2.3→2.5 lint-cleanup (§2.1).
