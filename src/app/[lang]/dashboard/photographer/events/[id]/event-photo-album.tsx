@@ -2,7 +2,7 @@
 
 import { Download, Trash2, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { type ReactNode, useCallback, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { EventPhotoCountLabel } from '@/components/event-photo-count-label';
@@ -15,6 +15,14 @@ import { downloadEventPhotosZip } from '@/lib/download-zip';
 import { filterEventPhotoPages } from '@/lib/event-photo-filter';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
+import {
+  applyOptimisticDelete,
+  displayedPhotoCount,
+  initialOptimisticDeleteState,
+  type OptimisticDeleteState,
+  resolveDeleteOutcome,
+  rollbackFailedDeletes,
+} from '@/lib/optimistic-photo-delete';
 import { getPhotoDownloadUrlAction, loadMoreOwnerEventPhotos } from './actions';
 import { deletePhotoAction } from './edit/actions';
 
@@ -46,6 +54,12 @@ type EventPhotoAlbumProps = {
    * set (moderation view: the Approved/Pending tab switcher, T-113) it replaces
    * the standalone photo count — the tab labels already carry the counts. */
   toolbarLeading?: ReactNode;
+  /** Notified with the optimistic photo count whenever it changes (T-146). The
+   * moderation view (`EventModerationTabs`) uses it to keep the Approved tab
+   * label in sync with the grid — its count lives outside this component, so it
+   * can't derive from `deletedIds` directly. Omitted in the tab-less view,
+   * which renders its own count from `displayedCount` below. */
+  onDisplayedCountChange?: (count: number) => void;
   /** Whether more photos exist beyond the first batch (drives "Load more"). */
   initialHasMore?: boolean;
   /** "Load more" button label. */
@@ -63,12 +77,14 @@ export function EventPhotoAlbum({
   imageUnavailableLabel,
   totalCount,
   toolbarLeading,
+  onDisplayedCountChange,
   initialHasMore = false,
   loadMoreLabel,
   loadMoreErrorLabel,
 }: EventPhotoAlbumProps) {
   const router = useRouter();
   const { t } = useTranslations<EventsT>();
+  const [, startTransition] = useTransition();
 
   // Paginated grid — server sends the first batch, "Load more" appends the
   // rest. `deletedIds` drops tiles instantly on delete (optimistic); the hook
@@ -86,7 +102,27 @@ export function EventPhotoAlbum({
     fetchMore: (offset) => loadMoreOwnerEventPhotos(eventId, offset),
     onError: () => toast.error(loadMoreErrorLabel),
   });
-  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+  // Optimistic delete overlays (T-146) — `deletedIds` drops tiles from the grid,
+  // `pendingDeleteCount` decrements the whole-event count. See the helper docs
+  // for why they reconcile on different triggers.
+  const [optimistic, setOptimistic] = useState<OptimisticDeleteState>(initialOptimisticDeleteState);
+  const { deletedIds } = optimistic;
+  // The server reconciles the count on refresh (a lower `totalCount` prop), so
+  // drop the optimistic delta then — otherwise a reconciled delete is
+  // subtracted twice. `deletedIds` deliberately persists (load-more pages
+  // aren't re-seeded by the server).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset only when the server reconciles the total, not on every render
+  useEffect(() => {
+    setOptimistic((state) =>
+      state.pendingDeleteCount === 0 ? state : { ...state, pendingDeleteCount: 0 },
+    );
+  }, [totalCount]);
+  const displayedCount = displayedPhotoCount(totalCount, optimistic.pendingDeleteCount);
+  // Feed the optimistic count up to the moderation tabs (its Approved-tab label
+  // lives outside this component). No-op in the tab-less view.
+  useEffect(() => {
+    onDisplayedCountChange?.(displayedCount);
+  }, [displayedCount, onDisplayedCountChange]);
   // Flat list — backs the local handlers (share/download by id). The grid is
   // driven by `gridBatches` so each load-more page renders as its own segment
   // (no re-flow / scroll-jump on append). No "mine" filter on the owner view.
@@ -175,44 +211,43 @@ export function EventPhotoAlbum({
     [isDownloading, eventId, t],
   );
 
-  const confirmDelete = useCallback(async () => {
+  const confirmDelete = useCallback(() => {
     const ids = [...pendingIds];
     if (ids.length === 0) return;
-    let retainedCount = 0;
-    try {
-      const results = await Promise.all(ids.map((photoId) => deletePhotoAction(photoId, eventId)));
-      retainedCount = results.filter((r) => r.retained).length;
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('failedDeletePhotos'));
-      throw error; // keep the ConfirmDialog open so the user can retry
-    }
-    // Optimistic removal — drop the tiles now; router.refresh() reconciles.
-    // Retained (sold) photos are soft-deleted, so the owner gallery now
-    // excludes them too — dropping their tile is correct.
-    setDeletedIds((prev) => {
-      const next = new Set(prev);
-      for (const photoId of ids) next.add(photoId);
-      return next;
-    });
-    // T-142: sold photos can't be destroyed — they're kept for their buyer and
-    // hidden from the gallery. Report the deleted and retained counts separately.
-    const removedCount = ids.length - retainedCount;
-    if (removedCount > 0) {
-      toast.success(
-        t('deletedPhotosToast')
-          .replace('{n}', String(removedCount))
-          .replace('{noun}', removedCount === 1 ? t('photo') : t('photos')),
-      );
-    }
-    if (retainedCount > 0) {
-      toast.success(
-        t('photosKeptSoldToast')
-          .replace('{n}', String(retainedCount))
-          .replace('{noun}', retainedCount === 1 ? t('photo') : t('photos')),
-      );
-    }
+    // Optimistic removal (T-146) — drop the tiles and decrement the count NOW,
+    // before the server responds; the ConfirmDialog closes immediately. Success
+    // is silent (no toast); the server call reconciles / rolls back below.
+    setOptimistic((state) => applyOptimisticDelete(state, ids));
     setSelectionResetKey((k) => k + 1);
-    router.refresh();
+    startTransition(async () => {
+      const results = await Promise.allSettled(
+        ids.map((photoId) => deletePhotoAction(photoId, eventId)),
+      );
+      const { failedIds, retainedCount } = resolveDeleteOutcome(ids, results);
+      // Roll back ONLY the photos that failed — restore their tile and undo
+      // their share of the count decrement. Successful ones stay removed.
+      if (failedIds.length > 0) {
+        setOptimistic((state) => rollbackFailedDeletes(state, failedIds));
+        toast.error(
+          failedIds.length === 1
+            ? t('deleteFailedToastOne')
+            : t('deleteFailedToastMany').replace('{n}', String(failedIds.length)),
+        );
+        // Nothing succeeded — no reconcile needed; the grid is back to before.
+        if (failedIds.length === ids.length) return;
+      }
+      // T-142: sold photos can't be destroyed — they're soft-deleted and kept
+      // for their buyer. That's a SUCCESS sub-case that still gets a toast
+      // (unlike a plain delete, which is silent). Report only the retained count.
+      if (retainedCount > 0) {
+        toast.success(
+          t('photosKeptSoldToast')
+            .replace('{n}', String(retainedCount))
+            .replace('{noun}', retainedCount === 1 ? t('photo') : t('photos')),
+        );
+      }
+      router.refresh();
+    });
   }, [pendingIds, eventId, router, t]);
 
   // Collaborative events only — the 3-dot menu replaces the standalone
@@ -311,8 +346,8 @@ export function EventPhotoAlbum({
         labels={selectionLabels}
         toolbarLeading={
           toolbarLeading ??
-          (totalCount > 0 ? (
-            <EventPhotoCountLabel label={t('photosCount').replace('{n}', String(totalCount))} />
+          (displayedCount > 0 ? (
+            <EventPhotoCountLabel label={t('photosCount').replace('{n}', String(displayedCount))} />
           ) : undefined)
         }
         toolbarClassName="sticky top-0 -mx-3 px-3"

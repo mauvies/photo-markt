@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-146 | Borrado optimista de fotos en un evento (grid + contador se actualizan al confirmar, rollback + toast en fallo; reusa patrón del carrito) | — | todo |
+| 1 | P2 | T-146 | Borrado optimista de fotos en un evento (grid + contador se actualizan al confirmar, rollback + toast en fallo; reusa patrón del carrito) | — | doing |
 | 2 | P2 | T-147 | Rediseñar el hero de `/photographers` (quitar look de plantilla: blobs + texto gradiente → tratamiento anclado a foto deportiva; Option B por falta de assets) | — | todo |
 | 3 | P2 | T-151 | Auditar y actualizar dependencias por tiers de riesgo (audita y para; Tier 1 patch/minor + Tier 2 seguridad aquí; majors Next/React/Stripe/Supabase/Inngest = tickets separados). Gate de aprobación antes de aplicar | — | todo |
 | 4 | P3 | T-149 | Portada del wizard (paso 3): mover `coverDesc` a un tooltip (icono info junto al título) + cuadro full-height en desktop / compacto en mobile | — | todo |

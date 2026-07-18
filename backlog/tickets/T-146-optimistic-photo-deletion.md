@@ -1,7 +1,7 @@
 # T-146 · Borrado optimista de fotos en un evento (grid + contador)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno (T-142 ya mergeado — PR #203; este ticket se apoya en su `deletePhotoAction`/`{ retained }`)
 - **Rama:** `feat/optimistic-photo-deletion` (tipo = feat)
 - **OpenSpec change:** — (UX cliente puro; no toca pagos/BD/auth ni el server-side del borrado)
