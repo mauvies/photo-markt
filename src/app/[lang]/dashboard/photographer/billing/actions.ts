@@ -1,9 +1,10 @@
 'use server';
 
-import { getSubscription } from '@/database/queries/subscriptions';
+import { getCurrentPlan, getSubscription } from '@/database/queries/subscriptions';
 import { createClient } from '@/database/server';
+import { supabaseAdmin } from '@/database/supabase-admin';
 import { env } from '@/env.mjs';
-import type { BillingPeriod } from '@/lib/plans';
+import type { BillingPeriod, PlanId } from '@/lib/plans';
 import { stripe } from '@/lib/stripe/config';
 
 /**
@@ -76,8 +77,13 @@ export async function createBillingCheckoutAction(
     return { error: 'yearly_unavailable' };
   }
 
-  // Check if we already have a Stripe customer and active subscription
-  const subscription = await getSubscription(supabase, user.id);
+  // Check if we already have a Stripe customer and active subscription.
+  // `subscriptions` is a system-managed table: RLS is enabled with no policies
+  // for the `authenticated` role, so this read (and the insert below) MUST use
+  // the service-role client — the user-scoped client silently reads zero rows
+  // and its insert is denied with 42501. Identity still comes from the
+  // user-scoped `getUser()` above; only the subscription query is elevated.
+  const subscription = await getSubscription(supabaseAdmin, user.id);
 
   let stripeCustomerId = subscription?.stripe_customer_id;
 
@@ -142,7 +148,7 @@ export async function createBillingCheckoutAction(
       // returns `{ error }` instead of throwing, so check it explicitly —
       // otherwise a failed insert would be silently ignored, leaving an
       // orphaned Stripe customer with no local subscription row.
-      const { error: insertError } = await supabase.from('subscriptions').insert({
+      const { error: insertError } = await supabaseAdmin.from('subscriptions').insert({
         user_id: user.id,
         stripe_customer_id: stripeCustomerId,
         plan_id: planId,
@@ -166,8 +172,12 @@ export async function createBillingCheckoutAction(
           quantity: 1,
         },
       ],
-      success_url: `${baseUrl}/dashboard/photographer/settings?status=success`,
-      cancel_url: `${baseUrl}/dashboard/photographer/settings?status=cancelled`,
+      // Success returns to the overview in a "confirming" state — activation is
+      // done exclusively by the Stripe webhook (customer.subscription.*), never
+      // here. Reaching this URL must not grant a plan. Cancel returns to the
+      // billing settings surface where the user can retry, with no partial state.
+      success_url: `${baseUrl}/dashboard/photographer?checkout=success`,
+      cancel_url: `${baseUrl}/dashboard/photographer/settings/billing?status=cancelled`,
       metadata: {
         supabase_user_id: user.id,
         plan_id: planId,
@@ -180,6 +190,32 @@ export async function createBillingCheckoutAction(
     console.error('Error creating checkout session:', error);
     return { error: 'checkout_failed' };
   }
+}
+
+/**
+ * Read the current user's plan for the post-checkout confirming banner. Polled
+ * by the client after returning from Stripe to tolerate the gap between the
+ * `success_url` redirect and the webhook that activates the subscription.
+ *
+ * Purely a read — it never writes or activates anything (activation is the
+ * webhook's job). `active` means a paid plan is in effect; the banner flips to
+ * its success state when this turns true. Reads via the service-role client
+ * because `subscriptions` is system-managed (RLS-blocked for the user-scoped
+ * client).
+ */
+export async function getSubscriptionStatusAction(): Promise<{ planId: PlanId; active: boolean }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    throw new Error('Unauthorized');
+  }
+
+  const plan = await getCurrentPlan(supabaseAdmin, user.id);
+  return { planId: plan.id, active: plan.id !== 'free' };
 }
 
 /**
@@ -198,8 +234,9 @@ export async function cancelSubscriptionAction(): Promise<void> {
     throw new Error('Unauthorized');
   }
 
-  // Get user's subscription
-  const subscription = await getSubscription(supabase, user.id);
+  // Get user's subscription — service-role read (system-managed table, see
+  // createBillingCheckoutAction). The user-scoped client is RLS-blocked here.
+  const subscription = await getSubscription(supabaseAdmin, user.id);
 
   if (!subscription || !subscription.stripe_subscription_id) {
     throw new Error('No active subscription found');

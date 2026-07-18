@@ -50,6 +50,7 @@ vi.mock('@/lib/i18n/get-lang-from-headers', () => ({
 }));
 
 import { completeOnboarding, getActiveRole, getActiveRoleOrNull } from '@/app/[lang]/actions/roles';
+import { localizedRedirect } from '@/lib/i18n/redirect';
 import {
   createServiceClient,
   createTestUser,
@@ -88,6 +89,9 @@ describe('onboarding routing', () => {
     await resetDatabase();
     mockSession.userId = null;
     mockSession.activeRole = 'photographer';
+    // localizedRedirect is a module-level mock; clear call history so the
+    // per-test redirect-target assertions below don't see prior tests' calls.
+    vi.mocked(localizedRedirect).mockClear();
   });
 
   describe('getActiveRoleOrNull', () => {
@@ -143,6 +147,62 @@ describe('onboarding routing', () => {
       const profile = await profileRow(user.id);
       expect(profile?.active_role).toBe('PHOTOGRAPHER');
       expect(profile?.username).toBe('studio_lopez');
+    });
+  });
+
+  describe('completeOnboarding preserves plan intent (T-148)', () => {
+    it('redirects a new photographer with a PAID intent into the resume checkout route', async () => {
+      const user = await createAuthUserWithoutProfile();
+      mockSession.userId = user.id;
+
+      await completeOnboarding('PHOTOGRAPHER', 'paid_pht', { plan: 'starter', period: 'yearly' });
+
+      // The intent resumes into the server-validated checkout route (not the
+      // bare dashboard) carrying the whitelisted plan + period.
+      expect(vi.mocked(localizedRedirect)).toHaveBeenCalledWith(
+        'en',
+        '/dashboard/photographer/billing/resume?plan=starter&period=yearly',
+      );
+    });
+
+    it('sends a new photographer with a FREE intent to the overview (no checkout)', async () => {
+      const user = await createAuthUserWithoutProfile();
+      mockSession.userId = user.id;
+
+      await completeOnboarding('PHOTOGRAPHER', 'free_pht', { plan: 'free', period: 'monthly' });
+
+      expect(vi.mocked(localizedRedirect)).toHaveBeenCalledWith('en', '/dashboard/photographer');
+      // Never routes a Free intent through the checkout resume route.
+      expect(vi.mocked(localizedRedirect)).not.toHaveBeenCalledWith(
+        'en',
+        expect.stringContaining('/billing/resume'),
+      );
+    });
+
+    it('ignores a plan intent when onboarding as TALENT (a plan is photographer-only)', async () => {
+      const user = await createAuthUserWithoutProfile();
+      mockSession.userId = user.id;
+
+      await completeOnboarding('TALENT', 'talent_x', { plan: 'starter', period: 'monthly' });
+
+      expect(vi.mocked(localizedRedirect)).toHaveBeenCalledWith('en', '/dashboard/talent');
+      expect(vi.mocked(localizedRedirect)).not.toHaveBeenCalledWith(
+        'en',
+        expect.stringContaining('/billing/resume'),
+      );
+    });
+
+    it('with no intent, a photographer lands on the plain dashboard', async () => {
+      const user = await createAuthUserWithoutProfile();
+      mockSession.userId = user.id;
+
+      await completeOnboarding('PHOTOGRAPHER', 'plain_pht');
+
+      expect(vi.mocked(localizedRedirect)).toHaveBeenCalledWith('en', '/dashboard/photographer');
+      expect(vi.mocked(localizedRedirect)).not.toHaveBeenCalledWith(
+        'en',
+        expect.stringContaining('/billing/resume'),
+      );
     });
   });
 });

@@ -9,8 +9,8 @@ import { Button } from '@/components/ui/button';
 interface GoogleSignInButtonProps {
   plan?: string;
   /**
-   * Billing period to forward through the OAuth flow → settings's UpgradeHandler.
-   * Only relevant when `plan` is also set (post-signup checkout flow).
+   * Billing period to forward through the OAuth flow → the plan-intent resume
+   * route. Only relevant when `plan` is also set (post-signup checkout flow).
    */
   period?: string;
   next?: string;

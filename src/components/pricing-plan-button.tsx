@@ -35,7 +35,9 @@ export function PricingPlanButton({
 
   if (isFree) {
     return (
-      <Link href="/signup" className={className}>
+      // Carry the Free intent through signup so the flow is symmetric with the
+      // paid CTAs; resolves to the dashboard overview (no subscription row).
+      <Link href="/signup?plan=free" className={className}>
         <Button
           variant="outline"
           size="lg"

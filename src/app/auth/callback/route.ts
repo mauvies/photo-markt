@@ -6,6 +6,7 @@ import { claimDownloadToken, getDownloadTokenByToken } from '@/database/queries/
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { rewritePostLoginNext, safeNext } from '@/lib/auth/safe-next';
+import { parsePlanIntent, planIntentResumePath } from '@/lib/billing/plan-intent';
 import { defaultLocale, type Locale } from '@/lib/i18n/config';
 import { localizedPath } from '@/lib/i18n/localized-path';
 
@@ -70,13 +71,31 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}${localizedPath(lang, '/login?error=auth_failed')}`);
   }
 
-  // If user has a plan parameter, redirect to billing checkout. Forward
-  // `period` too so the post-signup auto-checkout in `UpgradeHandler`
-  // picks the right monthly/yearly Stripe Price.
-  if (plan && (plan === 'starter' || plan === 'pro')) {
-    const periodSuffix = period === 'monthly' || period === 'yearly' ? `&period=${period}` : '';
+  // If the user carried a *paid* plan intent, preserve it through to checkout.
+  // A brand-new user (no role yet) must complete onboarding first, with the
+  // intent carried on the URL; an already-onboarded user resumes immediately.
+  // Both targets are internal, whitelist-validated paths (never a raw string).
+  //
+  // Free intent is deliberately NOT diverted here (mirrors the `!== 'free'`
+  // guard on the login/signup pages): Free needs no checkout, so it falls
+  // through to the normal token-claim / `next` / role routing below — a new
+  // Free user still lands in onboarding, an onboarded one on their own
+  // dashboard, and a pending download token / `next` deep-link is honored.
+  const planIntent = parsePlanIntent(plan, period);
+  if (planIntent && planIntent.plan !== 'free') {
+    const [activeRole, roles] = await Promise.all([
+      getProfileActiveRole(supabase, user.id),
+      getUserRoles(supabase, user.id),
+    ]);
+    const isOnboarded = !!activeRole || roles.length > 0;
+    if (isOnboarded) {
+      return NextResponse.redirect(
+        `${origin}${localizedPath(lang, planIntentResumePath(planIntent))}`,
+      );
+    }
+    const onboardingQuery = `?plan=${planIntent.plan}&period=${planIntent.period}`;
     return NextResponse.redirect(
-      `${origin}${localizedPath(lang, `/dashboard/photographer/settings?upgrade=${plan}${periodSuffix}`)}`,
+      `${origin}${localizedPath(lang, `/onboarding/role${onboardingQuery}`)}`,
     );
   }
 

@@ -2,6 +2,7 @@ import { completeOnboarding, getDashboardPath } from '@/app/[lang]/actions/roles
 import OnboardingRoleForm from '@/components/onboarding-role-form';
 import { createClient } from '@/database/server';
 import { redirectToLogin } from '@/lib/auth/redirect-to-login';
+import { parsePlanIntent } from '@/lib/billing/plan-intent';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { getLangFromHeaders } from '@/lib/i18n/get-lang-from-headers';
@@ -31,10 +32,13 @@ export default async function OnboardingRolePage({
   searchParams,
 }: {
   params: Promise<{ lang: string }>;
-  searchParams: Promise<{ message?: string }>;
+  searchParams: Promise<{ message?: string; plan?: string; period?: string }>;
 }) {
   const { lang } = await params;
-  const { message } = await searchParams;
+  const { message, plan, period } = await searchParams;
+  // A plan chosen before signup rides through onboarding on the URL. Validate
+  // it server-side here; it resumes into checkout after the role is assigned.
+  const planIntent = parsePlanIntent(plan, period);
   const dict = await getDictionary(lang as Locale);
   const supabase = await createClient();
 
@@ -73,7 +77,11 @@ export default async function OnboardingRolePage({
       return localizedRedirect(lang, '/onboarding/role?message=username_invalid');
     }
 
-    const result = await completeOnboarding(roleSlugToEnum(role), username);
+    const result = await completeOnboarding(
+      roleSlugToEnum(role),
+      username,
+      planIntent ?? undefined,
+    );
     // On success `completeOnboarding` redirects (throws NEXT_REDIRECT) and never
     // returns. A returned result is a recoverable failure to surface on the page.
     if (result?.error) {

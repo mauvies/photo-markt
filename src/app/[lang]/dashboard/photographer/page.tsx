@@ -10,14 +10,18 @@ import { PerformanceChart } from './_components/performance-chart';
 import { RecentEventsRow } from './_components/recent-events-row';
 import { RecentSalesList } from './_components/recent-sales-list';
 import { StripeConnectBanner, type StripeConnectStatus } from './_components/stripe-connect-banner';
+import { SubscriptionConfirmingBanner } from './_components/subscription-confirming-banner';
 import { getDashboardData } from './actions';
 
 export default async function PhotographerDashboardPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ lang: string }>;
+  searchParams: Promise<{ checkout?: string }>;
 }) {
   const { lang } = await params;
+  const { checkout } = await searchParams;
   const [supabase, dict] = await Promise.all([createClient(), getDictionary(lang as Locale)]);
   const {
     data: { user },
@@ -53,6 +57,20 @@ export default async function PhotographerDashboardPage({
   return (
     <div className="flex flex-1 flex-col gap-4 sm:gap-6">
       <DashboardHeader title={t.overview} />
+
+      {checkout === 'success' && (
+        <SubscriptionConfirmingBanner
+          t={{
+            confirmingTitle: t.subscriptionConfirmingTitle,
+            confirmingBody: t.subscriptionConfirmingBody,
+            activeTitle: t.subscriptionActiveTitle,
+            activeBody: t.subscriptionActiveBody,
+            slowBody: t.subscriptionConfirmingSlowBody,
+            refresh: t.subscriptionRefresh,
+            dismiss: t.subscriptionDismiss,
+          }}
+        />
+      )}
 
       <StripeConnectBanner
         status={connectStatus}

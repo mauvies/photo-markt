@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createClient } from '@/database/server';
 import { nextQuerySuffix, rewritePostLoginNext, safeNext } from '@/lib/auth/safe-next';
+import { parsePlanIntent, planIntentResumePath } from '@/lib/billing/plan-intent';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { getLangFromHeaders } from '@/lib/i18n/get-lang-from-headers';
@@ -43,14 +44,12 @@ export default async function Login({
     data: { user },
   } = await supabase.auth.getUser();
 
-  // If user is logged in and has a plan parameter, redirect to billing checkout.
-  // Forward `period` so UpgradeHandler picks the right Stripe Price.
-  if (user && params.plan && (params.plan === 'starter' || params.plan === 'pro')) {
-    const periodSuffix = period ? `&period=${period}` : '';
-    return localizedRedirect(
-      lang,
-      `/dashboard/photographer/settings?upgrade=${params.plan}${periodSuffix}`,
-    );
+  // If the user is already logged in and carried a paid-plan intent, resume it
+  // via the server-validated resume route (starts Stripe checkout). Free /
+  // no-plan falls through to the normal dashboard routing below.
+  const loggedInIntent = parsePlanIntent(params.plan, period);
+  if (user && loggedInIntent && loggedInIntent.plan !== 'free') {
+    return localizedRedirect(lang, planIntentResumePath(loggedInIntent));
   }
 
   if (user) {

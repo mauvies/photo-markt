@@ -11,13 +11,14 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { getCurrentPlan } from '@/database/queries';
 import { createClient } from '@/database/server';
+import { supabaseAdmin } from '@/database/supabase-admin';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { getPlanFeatures } from '@/lib/plan-features';
 import { formatPlanPrice, PLANS } from '@/lib/plans';
 import { getDashboardData } from '../../actions';
 import { AvailablePlansSection } from '../available-plans-section';
-import { UpgradeHandler } from '../upgrade-handler';
+import { BillingStatusToast } from '../billing-status-toast';
 import { UpgradePlanButton } from '../upgrade-plan-button';
 
 function formatStorage(gb: number): string {
@@ -42,7 +43,11 @@ export default async function PhotographerSettingsBillingPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const currentPlan = await getCurrentPlan(supabase, user?.id);
+  // `subscriptions` is system-managed (RLS on, no policies), so the plan read
+  // must use the service-role client — the user-scoped client is RLS-blocked
+  // and would silently resolve every photographer to "Free". Identity comes
+  // from the user-scoped `getUser()` above.
+  const currentPlan = await getCurrentPlan(supabaseAdmin, user?.id);
   const currentPlanId = currentPlan.id;
   const nextPlanId: 'starter' | 'pro' | null =
     currentPlanId === 'free' ? 'starter' : currentPlanId === 'starter' ? 'pro' : null;
@@ -52,9 +57,13 @@ export default async function PhotographerSettingsBillingPage({
 
   return (
     <>
-      <UpgradeHandler
-        checkoutErrorMessage={dict.photographerDashboard.checkoutError}
-        yearlyUnavailableMessage={dict.photographerDashboard.checkoutYearlyUnavailable}
+      <BillingStatusToast
+        messages={{
+          cancelled: dict.photographerDashboard.checkoutCancelled,
+          updated: dict.photographerDashboard.subscriptionUpdated,
+          checkout_failed: dict.photographerDashboard.checkoutError,
+          yearly_unavailable: dict.photographerDashboard.checkoutYearlyUnavailable,
+        }}
       />
       <Card>
         <CardHeader className="p-4 sm:p-6">
