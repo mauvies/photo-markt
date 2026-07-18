@@ -1,7 +1,7 @@
 # T-151 · Auditar y actualizar dependencias (por tiers de riesgo)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno (pero lleva **gate de aprobación**: Parte 1 audita y para; Parte 2 no arranca sin decisión del usuario sobre qué tiers aplicar)
 - **Rama:** `chore/dependency-audit-tiered`  (tipo = chore)
 - **OpenSpec change:** —  (no aplica: es mantenimiento de deps, sin cambio de comportamiento)
