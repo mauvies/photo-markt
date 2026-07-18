@@ -11,8 +11,9 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-146 | Borrado optimista de fotos en un evento (grid + contador se actualizan al confirmar, rollback + toast en fallo; reusa patrón del carrito) | — | todo |
-| 2 | P2 | T-147 | Rediseñar el hero de `/photographers` (quitar look de plantilla: blobs + texto gradiente → tratamiento anclado a foto deportiva; Option B por falta de assets) | — | todo |
+| 1 | P1 | T-148 | Arreglar flujo de suscripción a plan para usuarios nuevos/no-auth (preservar plan elegido a través del signup → Free al dashboard / pago a Stripe checkout; retorno post-pago con gap redirect↔webhook; validación server-side, sin open-redirect) | — | todo |
+| 2 | P2 | T-146 | Borrado optimista de fotos en un evento (grid + contador se actualizan al confirmar, rollback + toast en fallo; reusa patrón del carrito) | — | todo |
+| 3 | P2 | T-147 | Rediseñar el hero de `/photographers` (quitar look de plantilla: blobs + texto gradiente → tratamiento anclado a foto deportiva; Option B por falta de assets) | — | todo |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |
 | — | P2 | T-141 | [TRIPWIRE] CAPTCHA en la búsqueda facial anónima — revisitar SOLO al subir el cap global de T-034 para un evento real | **blocked:** tripwire (Dep T-034) | blocked |
