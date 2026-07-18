@@ -219,6 +219,8 @@
     "deletedPhotosToast": "Deleted {n} {noun}",
     "deletedPhotosSkippedToast": "Deleted {n} {noun}, skipped {m} you didn't upload",
     "photosKeptSoldToast": "{n} sold {noun} kept for their buyers and hidden from your gallery",
+    "deleteFailedToastOne": "Couldn't delete the photo, please try again.",
+    "deleteFailedToastMany": "Couldn't delete {n} photos, please try again.",
     "deleteNoneEligible": "You can only delete photos you uploaded",
     "failedDeletePhotos": "Failed to delete photos",
     "failedDeleteEvent": "Failed to delete event",

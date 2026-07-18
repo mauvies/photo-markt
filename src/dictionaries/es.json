@@ -219,6 +219,8 @@
     "deletedPhotosToast": "{n} {noun} eliminadas",
     "deletedPhotosSkippedToast": "{n} {noun} eliminadas, {m} omitidas que no subiste",
     "photosKeptSoldToast": "{n} {noun} vendidas se conservaron para sus compradores y se ocultaron de tu galería",
+    "deleteFailedToastOne": "No se pudo eliminar la foto, inténtalo de nuevo.",
+    "deleteFailedToastMany": "No se pudieron eliminar {n} fotos, inténtalo de nuevo.",
     "deleteNoneEligible": "Solo puedes eliminar fotos que tú subiste",
     "failedDeletePhotos": "Error al eliminar las fotos",
     "failedDeleteEvent": "Error al eliminar el evento",

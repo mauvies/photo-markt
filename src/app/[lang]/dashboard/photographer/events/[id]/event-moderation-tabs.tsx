@@ -1,6 +1,6 @@
 'use client';
 
-import { type ComponentProps, useState } from 'react';
+import { type ComponentProps, useEffect, useState } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EventPhotoAlbum } from './event-photo-album';
 import { PendingPhotosTab } from './pending-photos-tab';
@@ -8,7 +8,10 @@ import { PendingPhotosTab } from './pending-photos-tab';
 type ModerationTab = 'all' | 'pending';
 
 type EventModerationTabsProps = {
-  albumProps: Omit<ComponentProps<typeof EventPhotoAlbum>, 'toolbarLeading'>;
+  albumProps: Omit<
+    ComponentProps<typeof EventPhotoAlbum>,
+    'toolbarLeading' | 'onDisplayedCountChange'
+  >;
   pendingProps: Omit<ComponentProps<typeof PendingPhotosTab>, 'toolbarLeading'>;
   /** Approved-tab label; the approved count is appended, e.g. "All photos (12)". */
   approvedLabel: string;
@@ -35,11 +38,18 @@ export function EventModerationTabs({
   pendingCount,
 }: EventModerationTabsProps) {
   const [tab, setTab] = useState<ModerationTab>('all');
+  // The Approved-tab count must track the grid's optimistic deletes (T-146).
+  // The album owns that state, so it drives this via `onDisplayedCountChange`;
+  // we seed from the server prop and re-sync if it changes (e.g. new upload).
+  const [approvedDisplay, setApprovedDisplay] = useState(approvedCount);
+  useEffect(() => {
+    setApprovedDisplay(approvedCount);
+  }, [approvedCount]);
 
   const switcher = (
     <Tabs value={tab} onValueChange={(value) => setTab(value as ModerationTab)}>
       <TabsList>
-        <TabsTrigger value="all">{`${approvedLabel} (${approvedCount})`}</TabsTrigger>
+        <TabsTrigger value="all">{`${approvedLabel} (${approvedDisplay})`}</TabsTrigger>
         <TabsTrigger value="pending">
           {pendingLabelTemplate.replace('{n}', String(pendingCount))}
         </TabsTrigger>
@@ -48,7 +58,11 @@ export function EventModerationTabs({
   );
 
   return tab === 'all' ? (
-    <EventPhotoAlbum {...albumProps} toolbarLeading={switcher} />
+    <EventPhotoAlbum
+      {...albumProps}
+      toolbarLeading={switcher}
+      onDisplayedCountChange={setApprovedDisplay}
+    />
   ) : (
     <PendingPhotosTab {...pendingProps} toolbarLeading={switcher} />
   );
