@@ -1,7 +1,7 @@
 # T-147 · Rediseñar el hero de la landing de fotógrafos (`/photographers`) — hacerlo distintivo
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno (Option B no depende de assets; ver nota sobre Option A)
 - **Rama:** `feat/redesign-photographers-hero` (tipo = feat)
 - **OpenSpec change:** — (rediseño visual de una sección; no toca pagos/auth/BD/IA)

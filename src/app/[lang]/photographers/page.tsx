@@ -1,4 +1,5 @@
 import {
+  Aperture,
   ArrowRight,
   Camera,
   Download,
@@ -35,30 +36,67 @@ export default async function PhotographersPage({ params }: { params: Promise<{ 
 
   return (
     <div className="flex min-h-svh flex-col">
-      {/* Hero */}
-      <section className="relative flex flex-col items-center justify-center overflow-hidden bg-linear-to-br from-background via-background to-primary/5 py-20 sm:py-28">
-        <div className="absolute inset-0 -z-10">
-          <div className="absolute left-1/4 top-1/4 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
-          <div className="absolute bottom-1/4 right-1/4 h-80 w-80 rounded-full bg-primary/5 blur-3xl" />
+      {/* Hero — "in the frame": one deliberate camera metaphor (a rule-of-thirds
+          composition grid + viewfinder corner brackets around the copy) instead
+          of the default blob + gradient-text template. Compact and bordered so
+          it hands off to the sections below. */}
+      <section className="relative overflow-hidden border-b bg-background py-20 sm:py-28">
+        {/* Rule-of-thirds framing grid — hairlines at the thirds that fall off
+            toward the edges (photographic depth of field), never a hard table. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 -z-10 [mask-image:radial-gradient(ellipse_60%_60%_at_50%_45%,black,transparent)]"
+        >
+          <div className="absolute inset-y-0 left-1/3 w-px bg-foreground/10" />
+          <div className="absolute inset-y-0 left-2/3 w-px bg-foreground/10" />
+          <div className="absolute inset-x-0 top-1/3 h-px bg-foreground/10" />
+          <div className="absolute inset-x-0 top-2/3 h-px bg-foreground/10" />
         </div>
 
-        <div className="relative z-10 max-w-4xl space-y-6 px-4 text-center sm:px-6 lg:px-8">
-          <h1 className="text-balance text-4xl font-bold sm:text-6xl">
-            {p.heroHeadline1}
-            <span className="block bg-linear-to-r from-primary via-primary/80 to-primary/60 bg-clip-text pb-2 text-transparent">
-              {p.heroHeadline2}
-            </span>
-          </h1>
-          <p className="mx-auto max-w-2xl text-lg leading-normal text-muted-foreground sm:text-xl">
-            {p.heroSubtitle}
-          </p>
-          <div className="flex justify-center">
-            <Link href={signupHref}>
-              <Button size="lg" className="group px-8 text-base">
-                {p.heroCta}
-                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-              </Button>
-            </Link>
+        <div className="mx-auto max-w-[1300px] px-4 sm:px-6 lg:px-8">
+          <div className="relative mx-auto max-w-3xl text-center">
+            {/* Viewfinder corner brackets — the signature element. */}
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute -left-2 -top-2 h-6 w-6 border-l-2 border-t-2 border-primary/40 sm:-left-6 sm:-top-6 sm:h-10 sm:w-10"
+            />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute -right-2 -top-2 h-6 w-6 border-r-2 border-t-2 border-primary/40 sm:-right-6 sm:-top-6 sm:h-10 sm:w-10"
+            />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute -bottom-2 -left-2 h-6 w-6 border-b-2 border-l-2 border-primary/40 sm:-bottom-6 sm:-left-6 sm:h-10 sm:w-10"
+            />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute -bottom-2 -right-2 h-6 w-6 border-b-2 border-r-2 border-primary/40 sm:-bottom-6 sm:-right-6 sm:h-10 sm:w-10"
+            />
+
+            <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              <Aperture className="h-4 w-4 text-primary" aria-hidden="true" />
+              {p.heroEyebrow}
+            </p>
+
+            {/* Typography carries the hierarchy: a quiet lead-in over a bold,
+                brand-colored statement — no gradient-clipped text. */}
+            <h1 className="mt-5 text-balance text-4xl font-bold tracking-tight sm:text-6xl">
+              <span className="block font-medium text-muted-foreground">{p.heroHeadline1}</span>
+              <span className="block text-primary">{p.heroHeadline2}</span>
+            </h1>
+
+            <p className="mx-auto mt-5 max-w-2xl text-lg leading-normal text-muted-foreground sm:text-xl">
+              {p.heroSubtitle}
+            </p>
+
+            <div className="mt-8 flex justify-center">
+              <Link href={signupHref}>
+                <Button size="lg" className="group px-8 text-base">
+                  {p.heroCta}
+                  <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </section>
