@@ -70,7 +70,7 @@ export default async function PublicEventsPage({
             initialFilterOptions={filterOptions}
             initialEvents={initialEvents}
             initialTotal={initialTotal}
-            eventLinkPrefix="/events"
+            eventLinkPrefix={`/${lang}/events`}
             loadOnMount={!where && !validStatus}
             initialWhere={where}
             initialActivity={activity}

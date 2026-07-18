@@ -32,8 +32,8 @@ export default async function TalentExplorePage({
       dict={dict}
       filterOptions={filterOptions}
       searchParams={resolvedSearchParams}
-      basePath="/dashboard/talent/events"
-      eventLinkPrefix="/dashboard/talent/events"
+      basePath={`/${lang}/dashboard/talent/events`}
+      eventLinkPrefix={`/${lang}/dashboard/talent/events`}
     />
   );
 }

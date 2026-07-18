@@ -42,8 +42,8 @@ export default async function Home({
         dict={dict}
         filterOptions={filterOptions}
         searchParams={resolvedSearchParams}
-        basePath="/"
-        eventLinkPrefix="/events"
+        basePath={`/${lang}`}
+        eventLinkPrefix={`/${lang}/events`}
       />
     </div>
   );
