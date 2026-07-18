@@ -254,7 +254,7 @@ export function PhotoDetailModal({
           </div>
 
           {/* Info / CTA panel — narrow white column. */}
-          <aside className="flex w-full shrink-0 flex-col bg-white p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] text-neutral-900 md:w-[300px]">
+          <aside className="flex w-full shrink-0 flex-col bg-white px-5 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] text-neutral-900 md:w-[300px]">
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
               {uploaderName ? (
                 <MetaRow icon={<Camera className="h-4 w-4" />}>{uploaderName}</MetaRow>

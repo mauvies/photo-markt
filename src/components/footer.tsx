@@ -60,7 +60,7 @@ export function Footer({ dict, lang }: { dict: Dictionary; lang: string }) {
     },
   ];
 
-  const socials = [
+  const _socials = [
     { key: 'instagram', label: 'Instagram', Icon: InstagramIcon, href: SOCIAL_LINKS.instagram },
     { key: 'twitter', label: 'X (Twitter)', Icon: XIcon, href: SOCIAL_LINKS.twitter },
     { key: 'facebook', label: 'Facebook', Icon: FacebookIcon, href: SOCIAL_LINKS.facebook },
@@ -69,7 +69,7 @@ export function Footer({ dict, lang }: { dict: Dictionary; lang: string }) {
   return (
     <footer className="border-t bg-background">
       <div className="mx-auto max-w-[1300px] px-4 py-12 sm:px-6 lg:px-8">
-        <div className="grid gap-10 lg:grid-cols-12">
+        <div className="grid gap-8 lg:grid-cols-12">
           {/* Brand */}
           <div className="space-y-4 lg:col-span-4">
             <LogoLink
@@ -78,7 +78,7 @@ export function Footer({ dict, lang }: { dict: Dictionary; lang: string }) {
               imgClassName="h-9 w-auto"
             />
             <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">{t.tagline}</p>
-            <div className="flex items-center gap-3">
+            {/* <div className="flex items-center gap-3">
               {socials.map(({ key, label, Icon, href }) =>
                 href ? (
                   <a
@@ -98,7 +98,7 @@ export function Footer({ dict, lang }: { dict: Dictionary; lang: string }) {
                   </span>
                 ),
               )}
-            </div>
+            </div> */}
           </div>
 
           {/* Link groups */}

@@ -93,7 +93,7 @@ export default async function OnboardingRolePage({
   });
 
   return (
-    <div className="mx-auto max-w-3xl py-12">
+    <div className="px-4 py-10 sm:px-6 lg:px-8">
       <div className="text-center mb-6">
         <h1 className="text-3xl font-bold">{dict.onboarding.roleTitle}</h1>
         <p className="mt-2 text-muted-foreground">{dict.onboarding.roleSubtitle}</p>

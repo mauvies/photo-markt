@@ -141,6 +141,7 @@ export default function OnboardingRoleForm({
           type="submit"
           disabled={!selectedRole || !isUsernameValid || availability === 'unavailable'}
           className="px-8"
+          size="lg"
         >
           {dict.continue}
         </Button>

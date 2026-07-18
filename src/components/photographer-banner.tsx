@@ -32,7 +32,7 @@ export function PhotographerBanner({ label }: { label: string }) {
     <div className="md:hidden">
       <Link
         href={lp('/photographers')}
-        className="flex w-full items-center justify-center gap-2 bg-gray-100 py-2.5 text-sm text-gray-600 transition-colors hover:bg-gray-200"
+        className="flex w-full items-center justify-center gap-2 bg-gray-100 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-200"
       >
         <Camera className="h-3.5 w-3.5" aria-hidden="true" />
         <span>{label}</span>
