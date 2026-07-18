@@ -37,14 +37,17 @@ directly, so the fix is a `pnpm.overrides` pin in `package.json`, then `pnpm ins
 "pnpm": {
   "overrides": {
     "postcss@<8.5.10": ">=8.5.10",   // dedupes to the 8.5.19 already in the tree
-    "vite@<8.0.16": ">=8.0.16"        // dev-only (vitest); pin the deny-bypass fix
+    "vite": "8.0.16"                  // dev-only (vitest); pin the deny-bypass fix
   }
 }
 ```
 
 - The `postcss` override just dedupes onto the `8.5.19` already present — very low risk.
-- The `vite` override moves vitest's vite from `8.0.12 → >=8.0.16` (patch range, same major `8`).
-  Requires a green `pnpm test` after — vitest 4.x supports vite 8 patch line.
+- The `vite` override moves vitest's vite from `8.0.12 → 8.0.16` (patch, same major `8`).
+  **Note:** a `>=8.0.16` range override did **not** force pnpm v10.30 to re-resolve the
+  already-locked `8.0.12` (recorded in the lockfile but ignored), so it's pinned to the
+  exact minimal patched version `8.0.16` — which also satisfies vitest 4.1.10's own peer
+  (`vite@>=8.0.16`). Requires a green `pnpm test`; verified 690 unit + 575 integration.
 
 ---
 
