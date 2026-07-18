@@ -43,6 +43,14 @@ function useCurrentLang(): Locale {
   return (params?.lang as Locale) ?? 'es';
 }
 
+// Persists the choice so the middleware honors it on any subsequent
+// unprefixed navigation (a dropped `/[lang]` link, a bookmark, a fresh tab).
+// One year, `path=/` so it's visible to the middleware on every route.
+function persistLocaleCookie(lang: Locale) {
+  // biome-ignore lint/suspicious/noDocumentCookie: single-cookie write, no Cookie Store API fallback needed
+  document.cookie = `preferred-locale=${lang}; path=/; max-age=31536000; SameSite=Lax`;
+}
+
 // Separated so the Suspense boundary is explicit on both server and client,
 // preventing useSearchParams() from causing a useId() counter mismatch.
 function LanguageSwitcherDropdown() {
@@ -71,6 +79,7 @@ function LanguageSwitcherDropdown() {
             <DropdownMenuItem key={lang} asChild>
               <a
                 href={buildHref(lang)}
+                onClick={() => persistLocaleCookie(lang)}
                 aria-current={isActive ? 'true' : undefined}
                 className={cn(
                   'flex items-center gap-2 rounded-lg pr-2',
@@ -106,6 +115,7 @@ function LanguageSwitcherInline() {
           <li key={lang}>
             <a
               href={buildHref(lang)}
+              onClick={() => persistLocaleCookie(lang)}
               aria-current={isActive ? 'true' : undefined}
               className={cn(
                 'flex items-center gap-3 rounded-md border px-3 py-2.5 text-sm transition-colors',

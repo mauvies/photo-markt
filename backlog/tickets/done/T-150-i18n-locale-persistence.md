@@ -1,11 +1,11 @@
 # T-150 · El idioma elegido no persiste al navegar (revierte a español)
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/i18n-locale-persistence`  (tipo = fix)
-- **OpenSpec change:** —  (se crea al ejecutar, si el cambio toca >1 archivo o es ambiguo)
-- **PR:** —
+- **OpenSpec change:** — (no ameritó — bug-fix acotado, sin BD/auth/pagos)
+- **PR:** #207
 
 ## Requerimiento
 Cuando visito la landing (`/[lang]`) y selecciono un idioma — por ejemplo inglés — y luego navego a

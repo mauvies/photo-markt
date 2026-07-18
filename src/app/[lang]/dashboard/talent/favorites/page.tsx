@@ -54,7 +54,7 @@ export default async function TalentFavoritesPage({
     <SavedEventsGrid
       initialEvents={savedEventsResult.events}
       initialHasMore={savedEventsResult.hasMore}
-      eventLinkPrefix="/dashboard/talent/events"
+      eventLinkPrefix={`/${lang}/dashboard/talent/events`}
       activities={dict.activities}
       cardLabels={{
         photo: dict.eventCard.photo,

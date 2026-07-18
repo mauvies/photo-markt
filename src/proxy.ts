@@ -6,6 +6,7 @@ import { env } from '@/env.mjs';
 import { homeRedirectPath } from '@/lib/auth/home-redirect';
 import { defaultLocale } from '@/lib/i18n/config';
 import { localizedPath } from '@/lib/i18n/localized-path';
+import { resolvePreferredLocale } from '@/lib/i18n/resolve-preferred-locale';
 
 const LOCALES = ['es', 'en'] as const;
 
@@ -33,8 +34,11 @@ export async function proxy(request: NextRequest) {
   const hasLocale = (LOCALES as readonly string[]).includes(firstSegment);
 
   if (!hasLocale) {
-    const acceptLang = request.headers.get('accept-language') ?? '';
-    const preferred = acceptLang.toLowerCase().startsWith('es') ? 'es' : defaultLocale;
+    const preferred = resolvePreferredLocale(
+      request.cookies.get('preferred-locale')?.value,
+      request.headers.get('accept-language'),
+      defaultLocale,
+    );
     const base = pathname === '/' ? '' : pathname;
     const target = new URL(`/${preferred}${base}${search}`, request.url);
     return NextResponse.redirect(target);
