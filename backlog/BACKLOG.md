@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-147 | Rediseñar el hero de `/photographers` (quitar look de plantilla: blobs + texto gradiente → tratamiento anclado a foto deportiva; Option B por falta de assets) | — | todo |
+| 1 | P2 | T-147 | Rediseñar el hero de `/photographers` (quitar look de plantilla: blobs + texto gradiente → tratamiento anclado a foto deportiva; Option B por falta de assets) | — | doing |
 | 2 | P2 | T-151 | Auditar y actualizar dependencias por tiers de riesgo (audita y para; Tier 1 patch/minor + Tier 2 seguridad aquí; majors Next/React/Stripe/Supabase/Inngest = tickets separados). Gate de aprobación antes de aplicar | — | todo |
 | 3 | P3 | T-149 | Portada del wizard (paso 3): mover `coverDesc` a un tooltip (icono info junto al título) + cuadro full-height en desktop / compacto en mobile | — | todo |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
