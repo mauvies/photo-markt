@@ -9,6 +9,7 @@ import {
   getUserRoles,
 } from '@/database/queries';
 import { createClient, getUser } from '@/database/server';
+import { type PlanIntent, planIntentResumePath } from '@/lib/billing/plan-intent';
 import { getLangFromHeaders } from '@/lib/i18n/get-lang-from-headers';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 import {
@@ -65,10 +66,18 @@ function isUniqueViolation(error: unknown): boolean {
  *
  * Returns a {@link CompleteOnboardingResult} on recoverable failure; on success
  * it redirects (throws NEXT_REDIRECT) and does not return.
+ *
+ * `checkoutIntent` carries a plan chosen before signup. When present and the
+ * user onboarded as a **photographer**, we redirect into the server-validated
+ * resume path (which starts Stripe checkout for a paid plan, or lands on the
+ * overview for Free) instead of the plain dashboard — preserving the intent
+ * through onboarding. A talent onboarding ignores it (a plan only applies to
+ * photographers).
  */
 export async function completeOnboarding(
   initialRole: UserRole,
   username?: string,
+  checkoutIntent?: PlanIntent,
 ): Promise<CompleteOnboardingResult | undefined> {
   const role = userRoleSchema.parse(initialRole);
   const { supabase, user } = await getAuthenticatedClient();
@@ -112,8 +121,16 @@ export async function completeOnboarding(
 
   revalidatePath('/es/dashboard');
   revalidatePath('/en/dashboard');
-  const dashboardPath = role === ROLES.TALENT ? '/dashboard/talent' : '/dashboard/photographer';
   const lang = await getLangFromHeaders();
+
+  // Resume a pre-signup plan intent for a new photographer. `planIntentResumePath`
+  // returns an internal path only (Stripe checkout resume for paid, overview for
+  // Free) — never a raw redirect target.
+  if (checkoutIntent && role === ROLES.PHOTOGRAPHER) {
+    localizedRedirect(lang, planIntentResumePath(checkoutIntent));
+  }
+
+  const dashboardPath = role === ROLES.TALENT ? '/dashboard/talent' : '/dashboard/photographer';
   localizedRedirect(lang, dashboardPath);
 }
 

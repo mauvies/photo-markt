@@ -71,7 +71,12 @@ export function PhotoSelectionToolbar({
   className,
 }: PhotoSelectionToolbarProps) {
   return (
-    <div className={cn('z-30 bg-background/95 py-3 backdrop-blur-sm', className)}>
+    <div
+      className={cn(
+        'z-30 bg-background/95 py-3 backdrop-blur-sm -mx-3 px-3 sm:mx-0 sm:px-0',
+        className,
+      )}
+    >
       {/* Single row in both states so the toolbar height never changes — no
           layout shift when entering/leaving selection. While selecting, the
           filter tabs (`leading`) are hidden entirely and replaced by the

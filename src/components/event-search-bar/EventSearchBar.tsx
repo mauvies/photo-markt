@@ -837,7 +837,7 @@ export function EventSearchBar({
 
         {/* Desktop bar — always visible */}
         <div className="hidden md:flex justify-center">
-          <div className="w-full max-w-xl rounded-full border-2 bg-background shadow-md">
+          <div className="w-full max-w-xl rounded-full border-2 bg-background shadow-sm">
             <div className="flex items-stretch">
               {/* Where */}
               <div

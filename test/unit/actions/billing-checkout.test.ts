@@ -16,18 +16,27 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { stripeMock, supabaseMock, getSubscriptionMock } = vi.hoisted(() => ({
-  stripeMock: {
-    customers: { create: vi.fn() },
-    checkout: { sessions: { create: vi.fn() } },
-    subscriptions: { retrieve: vi.fn(), update: vi.fn() },
-  },
-  supabaseMock: {
-    auth: { getUser: vi.fn() },
-    from: vi.fn(),
-  },
-  getSubscriptionMock: vi.fn(),
-}));
+const { stripeMock, supabaseMock, adminMock, getSubscriptionMock, getCurrentPlanMock } = vi.hoisted(
+  () => ({
+    stripeMock: {
+      customers: { create: vi.fn() },
+      checkout: { sessions: { create: vi.fn() } },
+      subscriptions: { retrieve: vi.fn(), update: vi.fn() },
+    },
+    supabaseMock: {
+      auth: { getUser: vi.fn() },
+      from: vi.fn(),
+    },
+    // `subscriptions` is a system-managed table (RLS on, no policies) so the
+    // action MUST read/insert it via the service-role client, not the
+    // user-scoped one. This mock stands in for `supabaseAdmin`.
+    adminMock: {
+      from: vi.fn(),
+    },
+    getSubscriptionMock: vi.fn(),
+    getCurrentPlanMock: vi.fn(),
+  }),
+);
 
 vi.mock('@/lib/stripe/config', () => ({ stripe: stripeMock }));
 
@@ -35,8 +44,11 @@ vi.mock('@/database/server', () => ({
   createClient: vi.fn(async () => supabaseMock),
 }));
 
+vi.mock('@/database/supabase-admin', () => ({ supabaseAdmin: adminMock }));
+
 vi.mock('@/database/queries/subscriptions', () => ({
   getSubscription: (...args: unknown[]) => getSubscriptionMock(...args),
+  getCurrentPlan: (...args: unknown[]) => getCurrentPlanMock(...args),
 }));
 
 // Monthly prices configured; PRO yearly deliberately left empty so the yearly
@@ -62,7 +74,14 @@ beforeEach(() => {
     data: { user: { id: 'user-1', email: 'photographer@example.com' } },
     error: null,
   });
-  supabaseMock.from.mockReturnValue({ insert: vi.fn(async () => ({ data: null, error: null })) });
+  // Default: the service-role client accepts the subscription insert. The
+  // user-scoped client is deliberately given a throwing `from` so any attempt
+  // to touch `subscriptions` through it fails the test loudly (regression:
+  // subscription writes must never go through the RLS-blocked user client).
+  adminMock.from.mockReturnValue({ insert: vi.fn(async () => ({ data: null, error: null })) });
+  supabaseMock.from.mockImplementation(() => {
+    throw new Error('subscriptions must be written via supabaseAdmin, not the user-scoped client');
+  });
 });
 
 describe('createBillingCheckoutAction — Stripe failure handling', () => {
@@ -101,7 +120,7 @@ describe('createBillingCheckoutAction — Stripe failure handling', () => {
     getSubscriptionMock.mockResolvedValue(null); // create path → inserts a row
     stripeMock.customers.create.mockResolvedValue({ id: 'cus_new' });
     // Supabase returns { error } instead of throwing.
-    supabaseMock.from.mockReturnValue({
+    adminMock.from.mockReturnValue({
       insert: vi.fn(async () => ({ data: null, error: { message: 'insert failed' } })),
     });
 
@@ -110,6 +129,27 @@ describe('createBillingCheckoutAction — Stripe failure handling', () => {
     });
     // Must not proceed to create a checkout session after the insert failed.
     expect(stripeMock.checkout.sessions.create).not.toHaveBeenCalled();
+  });
+
+  it('inserts the subscription row via the service-role client, never the user-scoped one (RLS regression)', async () => {
+    getSubscriptionMock.mockResolvedValue(null); // create path → inserts a row
+    stripeMock.customers.create.mockResolvedValue({ id: 'cus_new' });
+    const adminInsert = vi.fn(async () => ({ data: null, error: null }));
+    adminMock.from.mockReturnValue({ insert: adminInsert });
+    stripeMock.checkout.sessions.create.mockResolvedValue({ url: 'https://checkout.stripe.com/x' });
+
+    await expect(createBillingCheckoutAction('starter')).resolves.toEqual({
+      url: 'https://checkout.stripe.com/x',
+    });
+
+    // The insert went through supabaseAdmin (service role) — the previous
+    // user-scoped insert failed with 42501 under RLS. The user client's `from`
+    // throws in beforeEach, so reaching here proves it was never used.
+    expect(adminMock.from).toHaveBeenCalledWith('subscriptions');
+    expect(adminInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ user_id: 'user-1', plan_id: 'starter', status: 'incomplete' }),
+    );
+    expect(supabaseMock.from).not.toHaveBeenCalled();
   });
 
   it('returns yearly_unavailable (a distinct, actionable code) when the yearly price env is missing', async () => {
