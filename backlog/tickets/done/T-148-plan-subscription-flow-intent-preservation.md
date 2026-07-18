@@ -1,11 +1,11 @@
 # T-148 · Arreglar el flujo de suscripción a plan para usuarios nuevos/no autenticados (preservar intención en signup + retorno post-pago)
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno (no existe un ticket separado del "bug RLS 42501 de subscriptions"; el concern es **in-scope** aquí — ver Parte 1)
 - **Rama:** `feat/plan-subscription-intent-flow` (tipo = feat)
 - **OpenSpec change:** sí (auth + pagos + multi-archivo + seguridad — capturar diseño/spec antes; `/opsx:propose` → `/opsx:apply`)
-- **PR:** —
+- **PR:** #206
 
 ## Requerimiento
 Un usuario **no autenticado** en `/photographers` que elige un plan en pricing hoy **no tiene camino funcional para suscribirse** — ni Free ni de pago. El flujo correcto **preserva el plan elegido a través del signup**, ramifica por tipo de plan, y devuelve al usuario al dashboard en estado de éxito tras el pago — manejando el gap entre el redirect de Stripe y el provisioning por webhook. Investigar por qué nada funciona hoy e implementar el flujo estándar de preservación de intención end-to-end. **La activación del plan la hace SIEMPRE el webhook, nunca el `success_url`.**
