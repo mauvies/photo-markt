@@ -135,7 +135,10 @@ export async function retrieveConnectBalance(accountId: string): Promise<{
   available: number;
   pending: number;
 }> {
-  const balance = await stripe.balance.retrieve({ stripeAccount: accountId });
+  // stripe-node v22 separates request params from request options: the
+  // connected-account header (`stripeAccount`) is a RequestOption (2nd arg),
+  // no longer accepted inside the params object.
+  const balance = await stripe.balance.retrieve(undefined, { stripeAccount: accountId });
   const available = balance.available
     .filter((b) => b.currency === 'usd')
     .reduce((sum, b) => sum + b.amount, 0);
