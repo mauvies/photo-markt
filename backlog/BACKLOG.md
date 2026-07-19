@@ -11,15 +11,18 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-152 | Actualizar Stripe SDK (major 20 → 22) — follow-up de T-151; pagos, `/code-review ultra` | — | todo |
-| 2 | P3 | T-149 | Portada del wizard (paso 3): mover `coverDesc` a un tooltip (icono info junto al título) + cuadro full-height en desktop / compacto en mobile | — | todo |
-| 3 | P3 | T-153 | Actualizar TypeScript (major 5.9 → 7.0, reescritura nativa) — follow-up de T-151 | — | todo |
-| 4 | P3 | T-154 | Actualizar archiver (major 7 → 8) + `@types/archiver` — follow-up de T-151 | — | todo |
-| 5 | P3 | T-155 | Actualizar Biome (2.3 → 2.5) + limpieza de lint (held en T-151: panics 2.5.4 + reglas nuevas) | — | todo |
+| 1 | P2 | T-158 | Fix: el resumen sticky del carrito ("Proceed to checkout") se mete debajo del nav al scrollear (`top-4` ignora `--header-height`) — invitado + autenticado | — | todo |
+| 2 | P2 | T-152 | Actualizar Stripe SDK (major 20 → 22) — follow-up de T-151; pagos, `/code-review ultra` | — | todo |
+| 3 | P3 | T-149 | Portada del wizard (paso 3): mover `coverDesc` a un tooltip (icono info junto al título) + cuadro full-height en desktop / compacto en mobile | — | todo |
+| 4 | P3 | T-156 | Skeletons de home y `/dashboard/talent/events` no cubren el hero (título+subtítulo) ni el heading "Latest events" — follow-up de T-128 | — | todo |
+| 5 | P3 | T-153 | Actualizar TypeScript (major 5.9 → 7.0, reescritura nativa) — follow-up de T-151 | — | todo |
+| 6 | P3 | T-154 | Actualizar archiver (major 7 → 8) + `@types/archiver` — follow-up de T-151 | — | todo |
+| 7 | P3 | T-155 | Actualizar Biome (2.3 → 2.5) + limpieza de lint (held en T-151: panics 2.5.4 + reglas nuevas) | — | todo |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |
 | — | P2 | T-141 | [TRIPWIRE] CAPTCHA en la búsqueda facial anónima — revisitar SOLO al subir el cap global de T-034 para un evento real | **blocked:** tripwire (Dep T-034) | blocked |
 | — | P2 | T-129 | [DISEÑO] "Nearby first": implementar la geolocalización del buscador de eventos o podar el plumbing muerto (hallazgo de T-124) | **blocked:** decisión de producto (implementar vs podar) | blocked |
+| — | P3 | T-157 | [DISEÑO] Clarificar el papel de `/events` (catálogo SEO vs. redundante con la home) — ¿mantener/diferenciar/podar? | **blocked:** decisión de producto | blocked |
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
 ### Clusters (tocan el mismo código — ejecutar contiguos y en orden)

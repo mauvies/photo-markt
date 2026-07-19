@@ -62,7 +62,7 @@ export async function EventsExploreView({
   const key = `${where ?? ''}-${activity ?? ''}-${dateFrom ?? ''}-${dateTo ?? ''}-${preset ?? ''}-${photographer ?? ''}`;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <div>
         {/* Hero — horizontal padding comes from the parent container (the home
           page wrapper / the talent dashboard layout) so both pages line up. */}

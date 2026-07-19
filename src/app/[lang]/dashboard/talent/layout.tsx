@@ -69,7 +69,7 @@ export default async function TalentLayout({ children }: { children: React.React
           cart: dict.nav.cart,
         }}
       />
-      <div className="mx-auto w-full max-w-[1300px] flex flex-1 flex-col gap-6 pt-4 pb-20 px-4 sm:pt-10 sm:px-6 lg:px-8 ">
+      <div className="mx-auto w-full max-w-[1300px] flex flex-1 flex-col gap-6 pt-4 pb-20 px-4 sm:pt-6 sm:px-6 lg:px-8 ">
         {children}
       </div>
     </div>
