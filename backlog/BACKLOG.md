@@ -11,12 +11,12 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-152 | Actualizar Stripe SDK (major 20 → 22) — follow-up de T-151; pagos, `/code-review ultra` | — | todo |
-| 2 | P3 | T-149 | Portada del wizard (paso 3): mover `coverDesc` a un tooltip (icono info junto al título) + cuadro full-height en desktop / compacto en mobile | — | todo |
-| 3 | P3 | T-156 | Skeletons de home y `/dashboard/talent/events` no cubren el hero (título+subtítulo) ni el heading "Latest events" — follow-up de T-128 | — | todo |
-| 4 | P3 | T-153 | Actualizar TypeScript (major 5.9 → 7.0, reescritura nativa) — follow-up de T-151 | — | todo |
-| 5 | P3 | T-154 | Actualizar archiver (major 7 → 8) + `@types/archiver` — follow-up de T-151 | — | todo |
-| 6 | P3 | T-155 | Actualizar Biome (2.3 → 2.5) + limpieza de lint (held en T-151: panics 2.5.4 + reglas nuevas) | — | todo |
+| 1 | P3 | T-149 | Portada del wizard (paso 3): mover `coverDesc` a un tooltip (icono info junto al título) + cuadro full-height en desktop / compacto en mobile | — | todo |
+| 2 | P3 | T-156 | Skeletons de home y `/dashboard/talent/events` no cubren el hero (título+subtítulo) ni el heading "Latest events" — follow-up de T-128 | — | todo |
+| 3 | P3 | T-153 | Actualizar TypeScript (major 5.9 → 7.0, reescritura nativa) — follow-up de T-151 | — | todo |
+| 4 | P3 | T-154 | Actualizar archiver (major 7 → 8) + `@types/archiver` — follow-up de T-151 | — | todo |
+| 5 | P3 | T-155 | Actualizar Biome (2.3 → 2.5) + limpieza de lint (held en T-151: panics 2.5.4 + reglas nuevas) | — | todo |
+| 6 | P3 | T-159 | Webhook de suscripción guarda `current_period_end` siempre null (campo movido a items en basil) — hallazgo pre-existente/inerte del review de T-152 | — | todo |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |
 | — | P2 | T-141 | [TRIPWIRE] CAPTCHA en la búsqueda facial anónima — revisitar SOLO al subir el cap global de T-034 para un evento real | **blocked:** tripwire (Dep T-034) | blocked |
@@ -43,6 +43,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-152** · Chore/Deps-Pagos (P2): upgrade del SDK `stripe` **20.4.1 → 22.3.2** (dos majors, aplicados de a uno: v20→v21→v22, revisando cada migration guide). **Cambios que sí tocaron código** (los únicos de nuestra superficie): **(1)** pin de `apiVersion` a `2026-06-24.dahlia` (v21 y v22 pinnean la línea `dahlia`; 22.3.2 trae la revisión 2026-06-24) — actualizado en el cliente compartido (`src/lib/stripe/config.ts`), el script de test-customer y el cliente de firma del test del webhook; **(2)** v22 **separa params de request-options**: `balance.retrieve` ya no acepta `stripeAccount` dentro del objeto de params → movido a `RequestOptions` (2do arg) en `retrieveConnectBalance`. Todo lo demás ya era v22-compatible: `new Stripe()` (no la forma callable removida), async/await (sin callbacks), orden params-antes-de-options (transfers/paymentIntents), sin internals de `StripeResource` ni host/key per-request. Test de regresión (`test/unit/stripe-connect-balance.test.ts`) fija la forma de llamada v22 de `balance.retrieve` (params `undefined`, options `{ stripeAccount }`) + la suma USD-only — falla con la forma vieja de un solo arg, pasa después. **`/code-review high` (workflow):** finding **[0] CONFIRMED diferido → T-159** (el webhook de suscripción lee `current_period_end` a nivel raíz, campo que basil movió a `subscription.items.data[]`; **pre-existente e inerte** — clover ya era post-basil ⇒ delta cero, y la columna es write-only sin lector hoy; se dejó fuera del bump mecánico y se filó T-159 con su propio test); finding **[2] PLAUSIBLE** (¿otras response-shapes cambiaron clover→dahlia? — los campos que parseamos son core estables; el único version-sensitive es [0]; gap de 4 meses muy posterior al movimiento de basil; riesgo residual cubierto por el smoke-test manual del DoD + los 17 tests de integración del webhook). Verde: **build de producción + typecheck + lint + 1269 tests** (incl. los 17 de firma/parseo del webhook contra un Supabase local real). **Ojo:** regenera `pnpm-lock.yaml` (sin otros PRs de deps abiertos — #210/#211 ya mergeados). Pendiente pre-merge (DoD): smoke-test manual (checkout de foto, webhook, transfer per-order, alta/baja de suscripción) + `/code-review ultra` cloud (user-triggered). Filó **T-159** — PR #213
 
 - **T-158** · UI/CSS (P2): el resumen sticky del carrito ("Proceed to checkout") se ancla **justo debajo del nav** — ambas superficies (guest + autenticado) ahora usan `sticky top-[calc(var(--header-height)+1rem)]` en vez de `top-4`, así al scrollear no se solapa con el header (`--header-height` = 4.5rem). Offset basado en CSS var en lugar de hardcoded. Test de regresión source-level verifica que ambos archivos (`guest-cart-content.tsx`, `cart-content.tsx`) llevan el nuevo offset y el viejo `top-4` está ausente — rojo antes / verde después. Verde: 692 unit + typecheck + lint — **PR #212**
 
