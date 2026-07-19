@@ -13,6 +13,12 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
+    // Explicit since TypeScript 6: dotted packages under node_modules/@types
+    // (`@types/google.maps`, source of the ambient `google` namespace) are no
+    // longer auto-included in the program. `node` must be listed too — setting
+    // `types` disables auto-inclusion for every global @types package.
+    // Import-resolved types (react, react-dom, archiver) need no entry.
+    "types": ["node", "google.maps"],
     "plugins": [
       {
         "name": "next"
