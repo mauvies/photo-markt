@@ -1,11 +1,22 @@
 # T-153 · Actualizar TypeScript (major 5.9 → 7.0)
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done (re-scoped: 5.9 → **6.0.3**; el salto a 7.x quedó verificado-bloqueado por Next → T-160)
 - **Blockers:** ninguno
 - **Rama:** `chore/typescript-7`  (tipo = chore)
 - **OpenSpec change:** —  (no aplica: tooling de tipos, sin cambio de comportamiento)
-- **PR:** —
+- **PR:** #216
+
+## Outcome (2026-07-19)
+- **Shipped: `typescript` 5.9.3 → 6.0.3** (bridge major que impone las deprecations de TS 7).
+- **7.0.2 probado y bloqueado:** `tsc --noEmit` y Biome pasan, pero `pnpm build` falla — la
+  integración de type-checking de `next build` (Next 16.2.10, el latest estable) carga la API JS
+  del paquete `typescript`, que el 7.x nativo no expone → "TS no instalado" → crash del build
+  worker. El gate del ticket ("confirmar soporte de Next antes de mergear") ⇒ no se mergea 7.
+- **Fix requerido por TS 6:** `"types": ["node", "google.maps"]` en `tsconfig.json` (TS 6 dejó
+  de auto-incluir @types con punto en el nombre; el namespace `google` quedaba fuera).
+- **`@types/node` 25→26: declinado** (runtime Node 24; tipos 26 anunciarían APIs inexistentes).
+- Follow-up: **T-160** (blocked — re-probar 7.x en el próximo bump de Next, 16.3+).
 
 ## Requerimiento
 Follow-up de T-151 (auditoría de deps). `typescript` está en `5.9.3` y el latest es `7.0.2`
