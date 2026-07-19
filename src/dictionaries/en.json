@@ -920,6 +920,7 @@
     "createFailedEventDiscarded": "We couldn't create your event, so it was discarded — nothing was saved. Please try again.",
     "coverLabel": "Cover image (optional)",
     "coverDesc": "Shown as the event's card image. If you skip this, the first photo is used.",
+    "coverInfoAria": "More info about the cover image",
     "coverSelect": "Choose a cover image",
     "coverRemove": "Remove",
     "coverUploadFailed": "We couldn't upload the cover image. Your event was created without it — you can add one later.",

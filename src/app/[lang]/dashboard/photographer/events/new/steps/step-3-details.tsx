@@ -1,7 +1,7 @@
 'use client';
 
 import { format } from 'date-fns';
-import { ChevronDownIcon } from 'lucide-react';
+import { ChevronDownIcon, Info } from 'lucide-react';
 import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
@@ -49,20 +50,39 @@ export function Step3Details({
 
   return (
     // Two columns on desktop: the cover image on the left, all the event data
-    // on the right. Stacks (cover first) on mobile.
-    <div className="grid items-start gap-6 md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
+    // on the right. Stacks (cover first) on mobile. `md:items-stretch` lets
+    // the left column grow to match the height of the (taller) right column
+    // of fields, so the cover box can fill it — see the left column below.
+    <div className="grid items-start gap-6 md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] md:items-stretch">
       {/* Left column — optional dedicated cover/presentation image (T-055).
-          Shown on the event card; falls back to the first photo when empty. */}
-      <div className="grid gap-2">
-        <Label htmlFor="cover-image">{t('coverLabel')}</Label>
-        <p className="text-xs text-muted-foreground">{t('coverDesc')}</p>
+          Shown on the event card; falls back to the first photo when empty.
+          `flex flex-col` + `md:h-full` on the column and `md:flex-1` on the
+          box let the box fill the full height of the right column on desktop;
+          the box stays a compact fixed height on mobile so it doesn't
+          dominate the stacked layout. */}
+      <div className="flex flex-col gap-2 md:h-full">
+        <div className="flex items-center gap-1">
+          <Label htmlFor="cover-image">{t('coverLabel')}</Label>
+          <Tooltip>
+            <TooltipTrigger
+              type="button"
+              aria-label={t('coverInfoAria')}
+              className="text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Info className="size-3.5" />
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="max-w-56">{t('coverDesc')}</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
         {coverPreviewUrl ? (
-          <div className="relative w-full overflow-hidden rounded-lg border border-input">
+          <div className="relative h-40 w-full overflow-hidden rounded-lg border border-input md:h-full md:flex-1">
             {/* biome-ignore lint/performance/noImgElement: local object-URL preview — next/image can't optimize blob: URLs */}
             <img
               src={coverPreviewUrl}
               alt={t('coverLabel')}
-              className="aspect-video w-full object-cover"
+              className="h-full w-full object-cover"
             />
             <Button
               type="button"
@@ -77,7 +97,7 @@ export function Step3Details({
         ) : (
           <label
             htmlFor="cover-image"
-            className="flex aspect-video w-full cursor-pointer items-center justify-center rounded-lg border border-dashed border-input p-6 text-center text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/40"
+            className="flex h-40 w-full cursor-pointer items-center justify-center rounded-lg border border-dashed border-input p-6 text-center text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/40 md:h-full md:flex-1"
           >
             {t('coverSelect')}
             <input
