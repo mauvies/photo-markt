@@ -1,11 +1,11 @@
 # T-156 · Skeletons de home y talent/events no cubren hero + heading
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/skeletons-explore-hero-heading`  (tipo = feat | fix | chore | refactor)
 - **OpenSpec change:** —  (se crea al ejecutar, si el cambio toca >1 archivo o es ambiguo)
-- **PR:** —
+- **PR:** #215
 
 ## Requerimiento
 > ajustar bien el layout los loading skeletons de las rutas del home y page
