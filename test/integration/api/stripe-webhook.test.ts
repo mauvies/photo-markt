@@ -75,7 +75,7 @@ const WEBHOOK_SECRET = 'whsec_test_dummy_for_tests_at_least_32_chars';
  * real Stripe SDK so signature semantics match production exactly.
  */
 function signedWebhookRequest(event: object, opts?: { secret?: string }): Request {
-  const stripe = new Stripe('sk_test_dummy', { apiVersion: '2026-02-25.clover' });
+  const stripe = new Stripe('sk_test_dummy', { apiVersion: '2026-06-24.dahlia' });
   const payload = JSON.stringify(event);
   const signature = stripe.webhooks.generateTestHeaderString({
     payload,
@@ -117,7 +117,7 @@ describe('app/api/stripe/webhook — signature verification', () => {
   });
 
   it('rejects requests with a valid signature but tampered body', async () => {
-    const stripe = new Stripe('sk_test_dummy', { apiVersion: '2026-02-25.clover' });
+    const stripe = new Stripe('sk_test_dummy', { apiVersion: '2026-06-24.dahlia' });
     const original = JSON.stringify({ id: 'evt_test', type: 'noop' });
     const signature = stripe.webhooks.generateTestHeaderString({
       payload: original,

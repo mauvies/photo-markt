@@ -1,11 +1,11 @@
 # T-152 · Actualizar Stripe SDK (major 20 → 22)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `chore/stripe-sdk-v22`  (tipo = chore)
 - **OpenSpec change:** —  (probable: toca pagos; crear al ejecutar)
-- **PR:** —
+- **PR:** #213
 
 ## Requerimiento
 Follow-up de T-151 (auditoría de deps, `docs/DEPENDENCY_AUDIT.md`). El SDK `stripe` está en
