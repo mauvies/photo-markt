@@ -1,11 +1,11 @@
 # T-158 · El resumen sticky del carrito ("Proceed to checkout") se mete debajo del nav al scrollear
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/cart-summary-sticky-offset`  (tipo = feat | fix | chore | refactor)
 - **OpenSpec change:** —  (se crea al ejecutar, si el cambio toca >1 archivo o es ambiguo)
-- **PR:** —
+- **PR:** #212
 
 ## Requerimiento
 > el componente de "proceed to checkout" en la página del carrito no se está quedando en
