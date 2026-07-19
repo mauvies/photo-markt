@@ -1,11 +1,11 @@
 # T-154 · Actualizar archiver (major 7 → 8) + @types/archiver
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `chore/archiver-8`  (tipo = chore)
 - **OpenSpec change:** —  (no aplica: cambio aislado)
-- **PR:** —
+- **PR:** #217
 
 ## Requerimiento
 Follow-up de T-151 (auditoría de deps). `archiver` está en `7.0.1`, latest `8.0.0` (major);
