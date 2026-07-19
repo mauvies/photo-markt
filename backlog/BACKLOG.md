@@ -11,13 +11,12 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-158 | Fix: el resumen sticky del carrito ("Proceed to checkout") se mete debajo del nav al scrollear (`top-4` ignora `--header-height`) — invitado + autenticado | — | todo |
-| 2 | P2 | T-152 | Actualizar Stripe SDK (major 20 → 22) — follow-up de T-151; pagos, `/code-review ultra` | — | todo |
-| 3 | P3 | T-149 | Portada del wizard (paso 3): mover `coverDesc` a un tooltip (icono info junto al título) + cuadro full-height en desktop / compacto en mobile | — | todo |
-| 4 | P3 | T-156 | Skeletons de home y `/dashboard/talent/events` no cubren el hero (título+subtítulo) ni el heading "Latest events" — follow-up de T-128 | — | todo |
-| 5 | P3 | T-153 | Actualizar TypeScript (major 5.9 → 7.0, reescritura nativa) — follow-up de T-151 | — | todo |
-| 6 | P3 | T-154 | Actualizar archiver (major 7 → 8) + `@types/archiver` — follow-up de T-151 | — | todo |
-| 7 | P3 | T-155 | Actualizar Biome (2.3 → 2.5) + limpieza de lint (held en T-151: panics 2.5.4 + reglas nuevas) | — | todo |
+| 1 | P2 | T-152 | Actualizar Stripe SDK (major 20 → 22) — follow-up de T-151; pagos, `/code-review ultra` | — | todo |
+| 2 | P3 | T-149 | Portada del wizard (paso 3): mover `coverDesc` a un tooltip (icono info junto al título) + cuadro full-height en desktop / compacto en mobile | — | todo |
+| 3 | P3 | T-156 | Skeletons de home y `/dashboard/talent/events` no cubren el hero (título+subtítulo) ni el heading "Latest events" — follow-up de T-128 | — | todo |
+| 4 | P3 | T-153 | Actualizar TypeScript (major 5.9 → 7.0, reescritura nativa) — follow-up de T-151 | — | todo |
+| 5 | P3 | T-154 | Actualizar archiver (major 7 → 8) + `@types/archiver` — follow-up de T-151 | — | todo |
+| 6 | P3 | T-155 | Actualizar Biome (2.3 → 2.5) + limpieza de lint (held en T-151: panics 2.5.4 + reglas nuevas) | — | todo |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |
 | — | P2 | T-141 | [TRIPWIRE] CAPTCHA en la búsqueda facial anónima — revisitar SOLO al subir el cap global de T-034 para un evento real | **blocked:** tripwire (Dep T-034) | blocked |
@@ -44,6 +43,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-158** · UI/CSS (P2): el resumen sticky del carrito ("Proceed to checkout") se ancla **justo debajo del nav** — ambas superficies (guest + autenticado) ahora usan `sticky top-[calc(var(--header-height)+1rem)]` en vez de `top-4`, así al scrollear no se solapa con el header (`--header-height` = 4.5rem). Offset basado en CSS var en lugar de hardcoded. Test de regresión source-level verifica que ambos archivos (`guest-cart-content.tsx`, `cart-content.tsx`) llevan el nuevo offset y el viejo `top-4` está ausente — rojo antes / verde después. Verde: 692 unit + typecheck + lint — **PR #212**
 
 - **T-151** · Chore/Deps (P2): auditoría de dependencias por tiers de riesgo + aplicación de los tiers aprobados (gate de aprobación respetado — Parte 1 auditó y paró; el usuario aprobó Tier 1 + Tier 2). **Reporte:** `docs/DEPENDENCY_AUDIT.md` (`pnpm audit` + `pnpm outdated` agrupados en Tier 1 patch/minor, Tier 2 seguridad, Tier 3 majors, con breaking changes por major). **Tier 2 (seguridad)** — 3 advisories, todas transitivas y dev/build-time, parcheadas vía `pnpm.overrides` sin majors: `postcss <8.5.10 → 8.5.19` (dedupe; XSS-in-stringify GHSA-qx2v-qp2m-jg93, pinneado stale por Next) + `vite 8.0.12 → 8.0.16` (dev-only vía vitest; `server.fs.deny` bypass high GHSA-fx2h-pf6j-xcff + launch-editor NTLMv2 GHSA-v6wh-96g9-6wx3). El override de rango `>=8.0.16` no forzó re-resolución en pnpm v10.30 → pin exacto `8.0.16` (satisface el peer de vitest). `pnpm audit` → sin vulnerabilidades. **PR #210**. **Tier 1 (patch/minor)** — next 16.2.6→16.2.10, react/react-dom 19.2.1→19.2.7, supabase-js 2.110.5→2.110.7, aws-rekognition 3.1087→3.1090, sentry 10.65→10.66, inngest 4.12.1→4.13.0, lucide 1.24→1.25, tailwind(+postcss) 4.3.2→4.3.3. **PR #211**. **Biome held** (movido a T-155): 2.4.x/2.5.x promueven reglas a error (15 err + 11 warn) y 2.5.4 **panica** (`index out of bounds ... 446`) en ~15 archivos — no es drop-in, dev-only. **Tier 1-caution** (sharp, @supabase/ssr, supabase CLI) held para revisión individual. **Majors → tickets follow-up filados:** T-152 (Stripe 20→22), T-153 (TypeScript 5.9→7), T-154 (archiver 7→8), T-155 (Biome cleanup). Verde en ambos tiers: 690 unit + 575 integración + typecheck + lint + build. **Ojo:** los 2 PRs regeneran `pnpm-lock.yaml` → el que mergee segundo necesita `pnpm install` para reconciliar el lockfile — PRs #210 (audit + Tier 2) y #211 (Tier 1)
 

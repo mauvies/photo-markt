@@ -365,7 +365,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
             (h-8 button + mb-2 = 40px) so its top lines up with the first cart
             item instead of the header row. */}
         <div className="hidden min-w-0 flex-1 md:mt-10 md:block">
-          <div className="sticky top-4 self-start rounded-lg border border-border bg-card p-6 shadow-lg">
+          <div className="sticky top-[calc(var(--header-height)+1rem)] self-start rounded-lg border border-border bg-card p-6 shadow-lg">
             <div className="space-y-4">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">

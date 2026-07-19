@@ -233,7 +233,7 @@ export function GuestCartContent() {
 
         {/* Right — summary sticky (desktop) */}
         <div className="hidden md:block flex-1 min-w-0">
-          <div className="sticky top-4 self-start rounded-lg border border-border bg-card p-6 shadow-lg">
+          <div className="sticky top-[calc(var(--header-height)+1rem)] self-start rounded-lg border border-border bg-card p-6 shadow-lg">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-muted-foreground">{t('subtotal')}</span>
