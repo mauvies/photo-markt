@@ -1,11 +1,11 @@
 # T-149 · Portada del wizard (paso 3): descripción → tooltip + altura del cuadro (full-height desktop / compacto mobile)
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/cover-field-tooltip-height` (tipo = feat)
 - **OpenSpec change:** — (UI aislada en un componente; no toca pagos/BD/auth)
-- **PR:** —
+- **PR:** #214
 
 ## Requerimiento
 En `/dashboard/photographer/events/new?step=3` (paso "detalles"), sobre el campo **"Imagen de portada (opcional)"**:
