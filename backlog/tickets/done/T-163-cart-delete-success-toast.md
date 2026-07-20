@@ -1,11 +1,11 @@
 # T-163 · El borrado del carrito muestra toast de éxito (debería ser silencioso; solo el error debe notificar)
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/cart-delete-silent-success`  (tipo = fix)
 - **OpenSpec change:** —  (UX/toast puro, no toca pagos/BD/auth)
-- **PR:** —
+- **PR:** #223
 
 ## Requerimiento (reporte del usuario)
 > Al borrar ítems del carrito salen **notificaciones para las acciones exitosas** de borrado, cuando
