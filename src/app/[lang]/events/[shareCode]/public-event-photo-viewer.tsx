@@ -40,6 +40,7 @@ import { type EventBulkActionKey, eventBulkActionKeys } from '@/lib/event-bulk-a
 import { filterEventPhotoPages, filterEventPhotos } from '@/lib/event-photo-filter';
 import { resolveGalleryCounts } from '@/lib/gallery-photo-count';
 import type { GuestCartItem } from '@/lib/guest-cart';
+import { localizedPath } from '@/lib/i18n/localized-path';
 import { getEventPhotoDownloadUrlAction, loadMoreEventPhotos } from './actions';
 import { buildBuckets, type FaceSearchResultsLabels } from './face-search-shared';
 import { readGuestUploads, removeGuestUpload } from './guest-uploads-storage';
@@ -297,8 +298,12 @@ export function PublicEventPhotoViewer({
   }, [isAuthenticated, authCartPhotos, displayablePhotos, guestCart]);
 
   // Where the "View cart" toast action navigates — the authenticated cart for
-  // signed-in viewers, the guest cart route for everyone else.
-  const cartHref = isAuthenticated ? '/dashboard/talent/cart' : '/cart';
+  // signed-in viewers, the guest cart route for everyone else. Prefix with the
+  // active locale (T-168): this is a full-page `window.location.href` nav, so a
+  // bare path would let the middleware re-detect the locale from accept-language
+  // and flip the language. The sweep of T-161 missed this because the target is
+  // held in a variable, not an inline href/router.push the grep matched.
+  const cartHref = localizedPath(locale, isAuthenticated ? '/dashboard/talent/cart' : '/cart');
 
   // Adds one photo to the active cart (optimistic auth cart or guest cart)
   // without any UI feedback. Returns false when the id isn't in the current

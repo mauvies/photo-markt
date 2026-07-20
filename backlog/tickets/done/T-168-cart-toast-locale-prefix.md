@@ -1,11 +1,11 @@
 # T-168 · El toast "foto agregada al carrito" flipea el idioma al navegar al carrito
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/cart-toast-locale-prefix`  (tipo = fix)
 - **OpenSpec change:** —  (bug de i18n/routing acotado, un archivo; no toca pagos/auth/BD)
-- **PR:** —
+- **PR:** #226
 
 ## Requerimiento (reporte del usuario)
 > Si navego al carrito desde la toast notification de "1 foto ha sido agregada al carrito", la página
