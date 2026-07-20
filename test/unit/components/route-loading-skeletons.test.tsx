@@ -20,13 +20,18 @@ afterEach(cleanup);
 // both, so those blocks still shifted on load. The home page also had no
 // `loading.tsx` at all.
 
-describe('/events loading.tsx', () => {
-  it('matches the page shell margins and renders the real card grid, not a bare spinner', () => {
+describe('/events loading.tsx (T-157: now mirrors the home)', () => {
+  it('matches the home shell exactly — /events became an alias of the home explore view', () => {
     const { container } = render(<EventsListingLoading />);
-    expect(container.innerHTML).toContain('mx-auto max-w-[1300px] w-full flex-1 px-4 pt-6 pb-10');
+    // Same wrapper the home loading uses (T-156), not the old bar+grid shell.
+    expect(container.innerHTML).toContain(
+      'mx-auto w-full max-w-[1300px] px-4 pb-10 pt-4 sm:pt-6 sm:px-6 lg:px-8',
+    );
+    // Full EventsExploreView skeleton: hero (sm:h-12/sm:h-6), heading (sm:h-7), grid.
+    expect(container.innerHTML).toContain('sm:h-12');
+    expect(container.innerHTML).toContain('sm:h-7');
     expect(container.innerHTML).toContain('aspect-[4/3]');
-    // The old loading.tsx rendered nothing but a bare <Spinner /> (an
-    // <output> element) — a page-shaped skeleton replaces it entirely.
+    // No bare <Spinner /> (an <output> element).
     expect(container.querySelector('output')).toBeNull();
   });
 });
