@@ -238,7 +238,7 @@ export async function cancelSubscriptionAction(): Promise<void> {
   // createBillingCheckoutAction). The user-scoped client is RLS-blocked here.
   const subscription = await getSubscription(supabaseAdmin, user.id);
 
-  if (!subscription || !subscription.stripe_subscription_id) {
+  if (!subscription?.stripe_subscription_id) {
     throw new Error('No active subscription found');
   }
 

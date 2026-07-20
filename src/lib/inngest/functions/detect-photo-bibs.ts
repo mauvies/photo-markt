@@ -106,7 +106,7 @@ export async function runDetectPhotoBibsFlow(
   const state = await step.run('check-bib-state', async () => {
     return await getEventBibDetectionState(adminClient, eventId);
   });
-  if (!state || !state.enabled || state.containsMinors) {
+  if (!state?.enabled || state.containsMinors) {
     return { skipped: true, reason: 'not-enabled' };
   }
 

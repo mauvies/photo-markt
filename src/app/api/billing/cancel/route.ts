@@ -23,7 +23,7 @@ export async function POST() {
   // Get user's subscription
   const subscription = await getSubscription(supabase, user.id);
 
-  if (!subscription || !subscription.stripe_subscription_id) {
+  if (!subscription?.stripe_subscription_id) {
     return NextResponse.json({ error: 'No active subscription found' }, { status: 404 });
   }
 

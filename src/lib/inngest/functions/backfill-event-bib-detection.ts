@@ -85,7 +85,7 @@ export async function runBackfillEventBibDetectionFlow(
     return await getEventBibDetectionState(adminClient, eventId);
   });
 
-  if (!state || !state.enabled || state.containsMinors) {
+  if (!state?.enabled || state.containsMinors) {
     return { skipped: true, reason: 'event-not-eligible' };
   }
 
