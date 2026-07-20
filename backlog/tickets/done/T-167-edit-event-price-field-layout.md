@@ -1,11 +1,11 @@
 # T-167 · El campo "Price per Photo" del formulario de edición se ve mal (el `$` queda desalineado del número)
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/edit-event-price-field-layout`  (tipo = fix)
 - **OpenSpec change:** —  (bug de layout/CSS puro)
-- **PR:** —
+- **PR:** #229
 
 ## Requerimiento (reporte del usuario)
 > Al editar un evento desde el dashboard de fotógrafos, el campo de **precio por foto se muestra super
