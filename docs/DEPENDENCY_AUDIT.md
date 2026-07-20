@@ -87,6 +87,18 @@ dedicated follow-up ticket** — bump to a non-panicking version (e.g. latest 2.
 newer 2.5.x fixes the panic), then fix or `biome-ignore` the newly-flagged rules in one
 focused change.
 
+> **Resolved by T-155 (PR #218): pinned to `2.4.16`.** Re-verified on 2026-07-20 that
+> **`2.5.4` (still the latest 2.5.x) continues to panic** — same `index out of bounds …
+> index is 446`, now traced to `biome_module_graph/src/js_module_info/module_resolver.rs:500`
+> (the project-aware module-graph resolver, likely the `nursery/noFloatingPromises` domain
+> rule), firing on ~40 files. No 2.5.x fixes it yet, so the ticket's gate ("bump to a version
+> that doesn't panic") lands on **`2.4.16`** (latest 2.4.x; zero panics). The newly-promoted
+> rules were resolved: `useOptionalChain` (×11, incl. inngest gates) + `organizeImports`
+> (×15) auto-fixed; `noArrayIndexKey` (×4) `biome-ignore`d (2 static skeletons matching the
+> existing `event-card-skeleton.tsx` pattern, 2 fixed-order `url`-keyed thumbnail lists where
+> the index only disambiguates null/dupe urls). `noSvgWithoutTitle` no longer flags on the
+> current tree. **Retry 2.5.x when a newer patch closes the module-resolver panic.**
+
 ### Tier 1 — **caution** (pre-1.0 `0.x` minor = potentially breaking; and native libs)
 
 Semver treats a `0.x` minor bump as allowed-to-break. Group these but verify a full

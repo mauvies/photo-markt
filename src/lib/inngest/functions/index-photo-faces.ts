@@ -480,7 +480,7 @@ export async function runIndexPhotoFacesFlow(
     // 2c. AI matching disabled, event flagged as containing minors, or no
     //     collection materialized yet → done; nothing to send to AWS.
     const state = ctx.eventState;
-    if (!state || !state.enabled || state.containsMinors || !state.collectionId) {
+    if (!state?.enabled || state.containsMinors || !state.collectionId) {
       return finalize({ outcome: 'no-ai' as const });
     }
 

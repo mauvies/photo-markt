@@ -63,7 +63,7 @@ export default async function DownloadPage({
 
   const guestOrder = await getGuestOrderWithItems(supabaseAdmin, downloadToken.guest_order_id);
 
-  if (!guestOrder || guestOrder.status !== 'completed') {
+  if (guestOrder?.status !== 'completed') {
     notFound();
   }
 

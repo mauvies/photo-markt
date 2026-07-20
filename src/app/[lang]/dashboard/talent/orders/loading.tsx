@@ -13,6 +13,7 @@ export default function OrdersLoading() {
 
       <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
         {Array.from({ length: 3 }).map((_, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton items, count never changes
           <Card key={`stat-${i + 1}`}>
             <CardContent className="flex flex-col gap-2 p-4 sm:p-5">
               <div className="flex items-center justify-between">
@@ -28,6 +29,7 @@ export default function OrdersLoading() {
 
       <div className="flex flex-col gap-3">
         {Array.from({ length: 4 }).map((_, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton items, count never changes
           <Card key={`order-${i + 1}`} className="p-0">
             <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5">
               <Skeleton className="h-20 w-20 shrink-0 rounded-lg" />

@@ -102,7 +102,7 @@ export async function runBackfillEventIndexingFlow(
     return await getEventRekognitionState(adminClient, eventId);
   });
 
-  if (!state || !state.enabled || state.containsMinors) {
+  if (!state?.enabled || state.containsMinors) {
     return { skipped: true, reason: 'event-not-eligible' };
   }
 

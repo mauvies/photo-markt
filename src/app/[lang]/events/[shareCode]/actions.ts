@@ -88,7 +88,7 @@ export async function deleteContributorPhotoAction(input: {
 
   const adminClient = supabaseAdmin as unknown as SupabaseServerClient;
   const event = await getEventByShareCode(adminClient, shareCode);
-  if (!event || !event.is_collaborative) {
+  if (!event?.is_collaborative) {
     throw new Error('Event not found.');
   }
 
@@ -294,7 +294,7 @@ export async function searchFacesInEvent(
   // 2. Verify AI matching is eligible. `containsMinors=true` and missing
   //    `collectionId` are both reasons to refuse without making the AWS call.
   const state = await getEventRekognitionState(adminClient, event.id);
-  if (!state || !state.enabled || state.containsMinors || !state.collectionId) {
+  if (!state?.enabled || state.containsMinors || !state.collectionId) {
     throw new Error('This event no longer supports face search.');
   }
   const collectionId = state.collectionId;
@@ -560,7 +560,7 @@ export async function searchPhotosByBibInEvent(
   if (!event) throw new Error('Event not found.');
 
   const state = await getEventBibDetectionState(adminClient, event.id);
-  if (!state || !state.enabled || state.containsMinors) {
+  if (!state?.enabled || state.containsMinors) {
     throw new Error('This event does not support bib search.');
   }
 
@@ -630,7 +630,7 @@ export async function getEventPhotoDownloadUrlAction(
 
   const adminClient = supabaseAdmin as unknown as SupabaseServerClient;
   const photo = await getPhotoForDownload(adminClient, photoId, eventId);
-  if (!photo || !photo.original_url) {
+  if (!photo?.original_url) {
     throw new Error('Photo not found.');
   }
 

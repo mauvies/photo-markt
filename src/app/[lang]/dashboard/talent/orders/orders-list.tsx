@@ -130,6 +130,7 @@ function ThumbnailStack({
   return (
     <div className="grid h-20 w-20 shrink-0 grid-cols-2 grid-rows-2 gap-0.5 overflow-hidden rounded-lg border">
       {thumbnails.slice(0, 4).map((url, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: url is the key; the index only disambiguates duplicate/null urls in this fixed-order, display-only list
         <div key={`${url ?? 'unavailable'}-${i}`} className="relative bg-muted">
           <OrderThumbnailTile url={url} unavailableLabel={unavailableLabel} showLabel={false} />
           {/* Overflow chip sits on the last tile when there are more photos
@@ -208,6 +209,7 @@ function OrderCard({
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
             {order.thumbnails.map((url, i) => (
               <div
+                // biome-ignore lint/suspicious/noArrayIndexKey: url is the key; the index only disambiguates duplicate/null urls in this fixed-order, display-only list
                 key={`${url ?? 'unavailable'}-${i}`}
                 className="relative aspect-square overflow-hidden rounded-md border bg-muted"
               >
