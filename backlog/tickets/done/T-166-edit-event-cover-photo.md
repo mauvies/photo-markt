@@ -1,11 +1,11 @@
 # T-166 · No se puede agregar/cambiar la cover photo al editar un evento
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/edit-event-cover-photo`  (tipo = feat)
 - **OpenSpec change:** —  (feature de UI + storage; el patrón ya existe en el wizard de creación, requerimiento claro — evaluar OpenSpec al ejecutar solo si el action de update se complica)
-- **PR:** —
+- **PR:** #225
 
 ## Requerimiento (reporte del usuario)
 > Al editar un evento desde el dashboard de fotógrafos, **no existe la posibilidad de agregar o
