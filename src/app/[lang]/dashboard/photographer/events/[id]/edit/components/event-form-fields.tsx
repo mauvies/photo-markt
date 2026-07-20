@@ -148,8 +148,12 @@ export function EventFormFields({
         )}
       </form.Field>
 
-      {/* Row 3: Date + Price per Photo */}
-      <div className="grid gap-4 md:grid-cols-2">
+      {/* Row 3: Date + Price per Photo. `items-start` keeps the Price cell from
+          stretching to match the taller Date column (Date + Session time) — a
+          stretched cell grew the price field's `.relative` box so the
+          `top-1/2`-centered `$` floated below the number (T-167). Mirrors the
+          create wizard's date+price row. */}
+      <div className="grid items-start gap-4 md:grid-cols-2">
         <form.Field
           name="date"
           validators={{
@@ -281,7 +285,9 @@ export function EventFormFields({
                     onBlur={field.handleBlur}
                     placeholder="0.00"
                     aria-invalid={isInvalid}
-                    className="pl-7"
+                    // `text-sm` matches the create wizard's price input so the
+                    // `$` prefix and the value share one line-height (T-167).
+                    className="pl-7 text-sm"
                     suppressHydrationWarning
                   />
                 </div>
