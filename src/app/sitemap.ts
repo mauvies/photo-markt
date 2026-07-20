@@ -57,12 +57,10 @@ export function buildSitemapEntries(
       changeFrequency: 'monthly',
       priority: 1,
     },
-    {
-      url: `${siteUrl}/events`,
-      lastModified: new Date(),
-      changeFrequency: 'daily',
-      priority: 0.8,
-    },
+    // NOTE: `/events` is intentionally NOT listed. It's an alias of the home
+    // that carries `rel=canonical` → the home (T-157), so it's a non-canonical
+    // URL and must not be submitted in the sitemap. The per-event detail pages
+    // below (`/events/<slug>`) are the real indexed events surface.
     {
       url: `${siteUrl}/pricing`,
       lastModified: new Date(),

@@ -1,9 +1,14 @@
 /**
  * Tests for the XML sitemap (`src/app/sitemap.ts`).
  *
- * Characterization (content must stay identical): the sitemap lists the three
- * static pages plus one URL per public, non-deleted event, using the slug when
- * present and the id as fallback.
+ * Characterization (content must stay identical): the sitemap lists the two
+ * static pages (home + pricing) plus one URL per public, non-deleted event,
+ * using the slug when present and the id as fallback.
+ *
+ * Regression (T-157): the bare `/events` listing URL must NOT be in the
+ * sitemap — it became an alias of the home carrying `rel=canonical` → the
+ * home, so it's a non-canonical URL. The per-event `/events/<slug>` detail
+ * URLs stay.
  *
  * Regression (F-04, caching audit T-083): the events query must run cached and
  * tagged `events-public` — before this fix `sitemap()` scanned the whole
@@ -31,12 +36,22 @@ import sitemap, { buildSitemapEntries, type SitemapEvent } from '@/app/sitemap';
 const SITE = 'https://photomarkt.com';
 
 describe('buildSitemapEntries', () => {
-  it('lists the three static pages with their fixed priorities', () => {
+  it('lists the two static pages with their fixed priorities', () => {
     const entries = buildSitemapEntries(SITE, []);
-    expect(entries.map((e) => e.url)).toEqual([SITE, `${SITE}/events`, `${SITE}/pricing`]);
+    expect(entries.map((e) => e.url)).toEqual([SITE, `${SITE}/pricing`]);
     expect(entries[0].priority).toBe(1);
-    expect(entries[1].priority).toBe(0.8);
-    expect(entries[2].priority).toBe(0.7);
+    expect(entries[1].priority).toBe(0.7);
+  });
+
+  it('does not list the bare /events alias (non-canonical, T-157)', () => {
+    const events: SitemapEvent[] = [
+      { id: 'id-1', slug: 'marathon-2026', updated_at: '2026-01-02T00:00:00.000Z' },
+    ];
+    const urls = buildSitemapEntries(SITE, events).map((e) => e.url);
+    // The bare listing URL is gone…
+    expect(urls).not.toContain(`${SITE}/events`);
+    // …but the per-event detail URL remains.
+    expect(urls).toContain(`${SITE}/events/marathon-2026`);
   });
 
   it('appends one daily-priority URL per event — slug when present, id as fallback', () => {
@@ -44,7 +59,7 @@ describe('buildSitemapEntries', () => {
       { id: 'id-1', slug: 'marathon-2026', updated_at: '2026-01-02T00:00:00.000Z' },
       { id: 'id-2', slug: null, updated_at: null },
     ];
-    const eventEntries = buildSitemapEntries(SITE, events).slice(3);
+    const eventEntries = buildSitemapEntries(SITE, events).slice(2);
 
     expect(eventEntries[0]).toMatchObject({
       url: `${SITE}/events/marathon-2026`,
@@ -87,7 +102,6 @@ describe('sitemap()', () => {
     const entries = await sitemap();
     expect(entries.map((e) => e.url)).toEqual([
       'http://127.0.0.1:3000',
-      'http://127.0.0.1:3000/events',
       'http://127.0.0.1:3000/pricing',
       'http://127.0.0.1:3000/events/s-1',
     ]);

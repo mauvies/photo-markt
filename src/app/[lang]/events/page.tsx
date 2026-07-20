@@ -1,13 +1,50 @@
+import type { Metadata } from 'next';
 import { getFilterOptionsAction } from '@/app/[lang]/dashboard/talent/events/actions';
-import { ExplorePageContent } from '@/app/[lang]/dashboard/talent/events/explore-page-content';
-import {
-  type PrefetchedEvents,
-  prefetchInitialEvents,
-} from '@/app/[lang]/dashboard/talent/events/prefetch-initial-events';
-import { type EventStatus, getTodayISOString, getYesterdayISOString } from '@/lib/event-status';
+import { EventsExploreView } from '@/components/events-explore-view';
+import { getUser } from '@/database/server';
+import { getSiteUrl } from '@/lib/get-site-url';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
-import { TranslationsProvider } from '@/lib/i18n/translations-provider';
+import { localizedRedirect } from '@/lib/i18n/redirect';
+
+/**
+ * `/events` is an **alias of the home explore experience** (T-157), not a
+ * separate surface:
+ *
+ * - **Anonymous / crawler:** renders the exact same `EventsExploreView` the
+ *   home (`/[lang]`) renders — hero + search + "Latest events" + grid. The
+ *   search bar keeps `basePath` on `/events` so searching stays on this URL.
+ * - **Authenticated:** redirected to the logged-in explore surface
+ *   (`/dashboard/talent/events`).
+ * - **SEO:** `generateMetadata` sets `rel=canonical` → the home (`/[lang]`) so
+ *   Google consolidates the signal there instead of treating this as duplicate
+ *   content. `/events` is intentionally dropped from the sitemap (non-canonical
+ *   URLs aren't listed); the per-event `/events/<slug>` detail pages are the
+ *   real indexed surface and are untouched.
+ *
+ * The `?status=` filter the old listing supported was removed — nothing linked
+ * to it and the home never exposed it.
+ */
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ lang: string }>;
+}): Promise<Metadata> {
+  const { lang } = await params;
+  const siteUrl = getSiteUrl();
+  // Canonical points at the home — /events is a mirror, not its own page.
+  return {
+    alternates: {
+      canonical: `${siteUrl}/${lang}`,
+      languages: {
+        es: `${siteUrl}/es`,
+        en: `${siteUrl}/en`,
+        'x-default': `${siteUrl}/es`,
+      },
+    },
+  };
+}
 
 export default async function PublicEventsPage({
   params,
@@ -20,70 +57,37 @@ export default async function PublicEventsPage({
     dateFrom?: string;
     dateTo?: string;
     preset?: string;
-    status?: string;
     photographer?: string;
   }>;
 }) {
   const { lang } = await params;
-  const dict = await getDictionary(lang as Locale);
-  const { where, activity, dateFrom, dateTo, preset, status, photographer } = await searchParams;
-  const filterOptions = await getFilterOptionsAction();
 
-  const validStatus: EventStatus | undefined =
-    status === 'upcoming' || status === 'completed' ? status : undefined;
+  // Logged-in users get their dashboard's explore surface; /events is the
+  // anonymous/crawler mirror. Checked before any data fetch so authed hits
+  // never do the prefetch work.
+  const user = await getUser();
+  if (user) {
+    localizedRedirect(lang, '/dashboard/talent/events');
+  }
 
-  // Map status to date filters so ExplorePageContent can use existing dateFrom/dateTo props
-  const statusDateFrom = validStatus === 'upcoming' ? getTodayISOString() : undefined;
-  const statusDateTo = validStatus === 'completed' ? getYesterdayISOString() : undefined;
+  const [dict, filterOptions, resolvedSearchParams] = await Promise.all([
+    getDictionary(lang as Locale),
+    getFilterOptionsAction(),
+    searchParams,
+  ]);
 
-  // Merge explicit date params with status-derived filters (status takes precedence)
-  const effectiveDateFrom = validStatus ? statusDateFrom : dateFrom || undefined;
-  const effectiveDateTo = validStatus ? statusDateTo : dateTo || undefined;
-
-  // Pre-fetch events server-side so the client skips the duplicate POST on
-  // mount. Only when a filter is in the URL — the unfiltered browse
-  // experience lives on the home page (`/`), which T-124 already
-  // server-renders via `EventsExploreView`.
-  const { initialEvents, initialTotal }: PrefetchedEvents =
-    where || validStatus
-      ? await prefetchInitialEvents({
-          filterOptions,
-          where,
-          activity,
-          dateFrom: effectiveDateFrom,
-          dateTo: effectiveDateTo,
-          photographer,
-        })
-      : {};
-
-  const searchKey = `${where ?? ''}-${activity ?? ''}-${dateFrom ?? ''}-${dateTo ?? ''}-${preset ?? ''}-${validStatus ?? ''}-${photographer ?? ''}`;
-
+  // Same wrapper + shared view as the home page so the two are pixel-identical.
+  // `basePath` stays on /events so a search from here doesn't bounce the user
+  // to the home; cards resolve to the public `/events/<code>` detail route.
   return (
-    <div className="flex min-h-screen flex-col">
-      <div className="mx-auto max-w-[1300px] w-full flex-1 px-4 pt-6 pb-10">
-        <TranslationsProvider
-          translations={{ ...dict.eventFilterBar, ...dict.eventCard, activities: dict.activities }}
-        >
-          <ExplorePageContent
-            key={searchKey}
-            searchKey={searchKey}
-            initialFilterOptions={filterOptions}
-            initialEvents={initialEvents}
-            initialTotal={initialTotal}
-            eventLinkPrefix={`/${lang}/events`}
-            loadOnMount={!where && !validStatus}
-            initialWhere={where}
-            initialActivity={activity}
-            initialDateFrom={effectiveDateFrom}
-            initialDateTo={effectiveDateTo}
-            initialPhotographerQuery={photographer}
-            initialPreset={preset}
-            hideTopFilters={true}
-            showFindMe={false}
-            eventSearchBarDict={dict.eventSearchBar}
-          />
-        </TranslationsProvider>
-      </div>
+    <div className="mx-auto w-full max-w-[1300px] px-4 pb-10 pt-4 sm:pt-6 sm:px-6 lg:px-8">
+      <EventsExploreView
+        dict={dict}
+        filterOptions={filterOptions}
+        searchParams={resolvedSearchParams}
+        basePath={`/${lang}/events`}
+        eventLinkPrefix={`/${lang}/events`}
+      />
     </div>
   );
 }

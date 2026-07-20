@@ -1,11 +1,28 @@
 # T-157 · [DISEÑO] Clarificar el papel de la ruta `/events` (¿mantener, diferenciar o podar?)
 
 - **Prioridad:** P3
-- **Estado:** blocked
-- **Blockers:** decisión de producto (mantener como catálogo SEO vs. diferenciar de la home vs. podar/redirigir)
-- **Rama:** `refactor/events-route-role`  (tipo = feat | fix | chore | refactor)
-- **OpenSpec change:** —  (se crea al ejecutar, si el cambio toca >1 archivo o es ambiguo)
-- **PR:** —
+- **Estado:** done
+- **Blockers:** ~~decisión de producto~~ **resuelta 2026-07-20 → ALIAS** (ver abajo)
+- **Rama:** `refactor/events-route-role`  (tipo = refactor)
+- **OpenSpec change:** —  (requerimiento ya claro tras la decisión; refactor de routing/SEO, no toca pagos/BD)
+- **PR:** #220
+
+## Decisión (2026-07-20): ALIAS
+
+`/events` (el **índice**) pasa a ser un **alias de la home**, no una superficie propia:
+- **Anónimo** (incl. Googlebot): `/events` renderiza el **mismo** `EventsExploreView` que la home
+  (hero + búsqueda + "Latest events" + grid) — antes era un listado sin hero.
+- **Autenticado**: `/events` **redirige** a `/[lang]/dashboard/talent/events` (su superficie logueada).
+- **SEO**: `/events` lleva `rel=canonical` → `/[lang]` (la home) para que Google consolide la señal
+  en la home en vez de tratarlo como contenido duplicado. Se **quita `/events` del sitemap** (no se
+  listan URLs no-canónicas); las URLs de detalle `/events/<slug>` **se quedan** (son las páginas
+  reales de cada evento). `robots.ts` sigue permitiendo `/events` (Google debe rastrearlo para ver
+  el canonical).
+- **Barra de búsqueda** en `/events`: `basePath=/[lang]/events` para que **se quede** en `/events`.
+- **Filtro `?status=`**: se **elimina** (solo lo usaba `/events`, nada lo enlazaba).
+- **`/events/[shareCode]` (detalle) intacto** — es el backbone del browsing/compra público.
+- Entradas internas (footer, empty-state carrito invitado, success checkout invitado, default de
+  `EventSearchBar`, rewrite de `safe-next`) siguen apuntando a `/events` válidamente (sigue vivo).
 
 ## Requerimiento
 > ahora mismo no sé bien qué papel cumple la ruta `/events`, ya que estamos usando
