@@ -1,11 +1,11 @@
 # T-155 · Actualizar Biome (2.3 → 2.5) + limpieza de lint
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `chore/biome-2.5-lint-cleanup`  (tipo = chore)
 - **OpenSpec change:** —  (no aplica: tooling dev, sin cambio de comportamiento)
-- **PR:** —
+- **PR:** #218 (bumpeado a **2.4.16**, no 2.5.4: la 2.5.x sigue paniqueando)
 
 ## Requerimiento
 Follow-up de T-151 (auditoría de deps). `@biomejs/biome` quedó **held** en Tier 1 porque el bump
