@@ -48,18 +48,23 @@ vi.mock('@/lib/i18n/translations-provider', () => ({
 // PhotoLightbox pulls a heavy import tree and only renders on interaction.
 vi.mock('@/components/photo-lightbox', () => ({ PhotoLightbox: () => null }));
 
-const { getCurrentCartMock, createCheckoutSessionActionMock, removePhotoFromCartActionMock } =
-  vi.hoisted(() => ({
-    getCurrentCartMock: vi.fn(),
-    createCheckoutSessionActionMock: vi.fn(),
-    removePhotoFromCartActionMock: vi.fn(),
-  }));
+const {
+  getCurrentCartMock,
+  clearCartActionMock,
+  createCheckoutSessionActionMock,
+  removePhotoFromCartActionMock,
+} = vi.hoisted(() => ({
+  getCurrentCartMock: vi.fn(),
+  clearCartActionMock: vi.fn(),
+  createCheckoutSessionActionMock: vi.fn(),
+  removePhotoFromCartActionMock: vi.fn(),
+}));
 
 // `./actions` is a "use server" module — mock it so the client test doesn't pull
 // server-only code. Only the runtime functions matter (types are erased).
 vi.mock('@/app/[lang]/dashboard/talent/cart/actions', () => ({
   getCurrentCart: getCurrentCartMock,
-  clearCartAction: vi.fn(),
+  clearCartAction: clearCartActionMock,
   createCheckoutSessionAction: createCheckoutSessionActionMock,
   removePhotoFromCartAction: removePhotoFromCartActionMock,
 }));
@@ -102,7 +107,10 @@ function renderCart(data: CartData = initialCartData, queryClient?: QueryClient)
 afterEach(() => {
   cleanup();
   toastMock.mockClear();
+  toastMock.success.mockClear();
+  toastMock.error.mockClear();
   getCurrentCartMock.mockReset();
+  clearCartActionMock.mockReset();
   createCheckoutSessionActionMock.mockReset();
   removePhotoFromCartActionMock.mockReset();
 });
@@ -216,6 +224,50 @@ describe('CartContent — optimistic remove (T-121)', () => {
     await waitFor(() => expect(screen.getByText('Surf Cup')).toBeTruthy());
     expect(queryClient.getQueryData<number>(['cart-count'])).toBe(1);
     expect(toastMock.error).toHaveBeenCalled();
+  });
+});
+
+// T-163: a successful delete is silent — the optimistic UI is the only success
+// feedback. Only the failure branch notifies (asserted above). The T-117
+// auto-heal notice (`itemsUnavailableRemoved`) is NOT a user-action success and
+// must stay (covered in the "removal notice" block above).
+describe('CartContent — successful delete is silent (T-163)', () => {
+  it('does not toast on a successful item removal', async () => {
+    removePhotoFromCartActionMock.mockResolvedValue(undefined);
+    getCurrentCartMock.mockResolvedValue({
+      items: [],
+      subtotalCents: 0,
+      itemCount: 0,
+      removedCount: 0,
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData<number>(['cart-count'], 1);
+
+    renderCart(initialCartData, queryClient);
+    fireEvent.click(screen.getByText('remove'));
+
+    // The item is gone (optimistic), the action resolved, and NO success toast.
+    await waitFor(() => expect(removePhotoFromCartActionMock).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('Surf Cup')).toBeNull());
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(toastMock.error).not.toHaveBeenCalled();
+  });
+
+  it('does not toast on a successful clear cart', async () => {
+    clearCartActionMock.mockResolvedValue(undefined);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData<number>(['cart-count'], 1);
+
+    renderCart(initialCartData, queryClient);
+    // Open the confirm dialog, then confirm — both the trigger and the action
+    // button carry the 'clearCart' label; the action button is the last one.
+    fireEvent.click(screen.getByText('clearCart'));
+    const clearButtons = screen.getAllByText('clearCart');
+    fireEvent.click(clearButtons[clearButtons.length - 1]);
+
+    await waitFor(() => expect(clearCartActionMock).toHaveBeenCalled());
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(toastMock.error).not.toHaveBeenCalled();
   });
 });
 
