@@ -1,11 +1,11 @@
 # T-162 · Inconsistencia de datos del carrito: ítems desactualizados/parciales tras agregar, y borrados que reaparecen (el contador sí se actualiza)
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/cart-revalidate-on-add`  (tipo = fix)
 - **OpenSpec change:** —  (bug-fix de caching/routing, no toca pagos/BD/auth de fondo)
-- **PR:** —
+- **PR:** #221
 
 ## Requerimiento (reporte del usuario)
 > En `/en/dashboard/talent/events/maraton-madrid-2026-madrid-spain-2026` agrego fotos al carrito.

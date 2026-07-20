@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, ShoppingCart, Trash2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useLayoutEffect, useState, useTransition } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { CartItemRow } from '@/components/cart/cart-item-row';
 import { CART_MERGE_STATE_KEY } from '@/components/guest-cart-merge';
@@ -46,6 +46,11 @@ export function CartContent({ initialCartData }: CartContentProps) {
   const [lightboxItem, setLightboxItem] = useState<CartItemDetail | null>(null);
   const router = useRouter();
   const queryClient = useQueryClient();
+  // How many optimistic removals are still awaiting their server confirmation
+  // (T-162). Gates both the server-truth reconcile below and the fresh-snapshot
+  // re-seed so a delete committing mid-sequence can't resurrect a sibling that
+  // was removed later.
+  const pendingRemovalsRef = useRef(0);
 
   // If localStorage has guest cart items, signal the skeleton immediately —
   // before the SIGNED_IN event fires — so the user never sees the empty state.
@@ -107,7 +112,15 @@ export function CartContent({ initialCartData }: CartContentProps) {
   // and shares one reactive source with the badge. This overwrites any stale
   // optimistic state on a fresh navigation, which is correct — the server is
   // authoritative on load.
+  //
+  // T-162: but NOT while removals are still in flight. A Server Action refresh
+  // triggered by one delete completing re-renders this route and hands down a
+  // new `initialCartData` snapshot — one that may have been captured before a
+  // sibling delete committed. Re-seeding from it mid-sequence would resurrect
+  // the later-removed item. Skip the re-seed until every removal has settled;
+  // the reconcile in `handleRemove` then pulls the consistent server state.
   useLayoutEffect(() => {
+    if (pendingRemovalsRef.current > 0) return;
     queryClient.setQueryData<CartData>(['cart-data'], initialCartData);
   }, [initialCartData, queryClient]);
 
@@ -153,18 +166,35 @@ export function CartContent({ initialCartData }: CartContentProps) {
     }
   }, [cartData.removedCount]);
 
-  // T-121: optimistic remove. The item drops from the shared ['cart-data']
+  // T-121/T-162: optimistic remove. The item drops from the shared ['cart-data']
   // source and the badge (['cart-count']) decrements instantly — before the
-  // server confirms — so the page and header never diverge. On failure we roll
-  // back to the exact prior state and surface a toast.
+  // server confirms — so the page and header never diverge.
+  //
+  // T-162 (deletes that reappear): removing several items in quick succession
+  // used to race. Each removal awaited its own `invalidateQueries` refetch of
+  // getCurrentCart; a refetch fired by an EARLIER delete could resolve while a
+  // LATER delete's DELETE hadn't committed, returning a server snapshot that
+  // still held the later item and overwriting the optimistic state that had
+  // already dropped it → it reappeared. Two guards close that:
+  //  1. `cancelQueries` before mutating aborts any in-flight reconcile so a
+  //     stale snapshot can't land on top of a newer removal; and
+  //  2. the reconcile refetch runs ONLY once every pending removal has settled
+  //     (`pendingRemovalsRef` back to 0), so it reads a consistent server state
+  //     with all deletes committed — never a mid-sequence one.
+  // On failure we re-insert ONLY the failed item (not a full snapshot, which
+  // would also resurrect siblings a concurrent removal legitimately dropped).
   const handleRemove = (photoId: string) => {
-    const previousData = queryClient.getQueryData<CartData>(['cart-data']) ?? cartData;
-    const previousCount = queryClient.getQueryData<number>(['cart-count']);
+    const base = queryClient.getQueryData<CartData>(['cart-data']) ?? cartData;
+    const removedItem = base.items.find((i) => i.photoId === photoId);
+
+    pendingRemovalsRef.current += 1;
+    // Abort any reconcile refetch in flight so it can't overwrite this removal.
+    queryClient.cancelQueries({ queryKey: ['cart-data'] });
     queryClient.setQueryData<CartData>(['cart-data'], (curr) => {
-      const base = curr ?? previousData;
-      const items = base.items.filter((i) => i.photoId !== photoId);
+      const current = curr ?? base;
+      const items = current.items.filter((i) => i.photoId !== photoId);
       return {
-        ...base,
+        ...current,
         items,
         itemCount: items.length,
         subtotalCents: items.reduce((sum, i) => sum + i.unitPriceCents, 0),
@@ -173,24 +203,41 @@ export function CartContent({ initialCartData }: CartContentProps) {
     queryClient.setQueryData<number>(['cart-count'], (n = 0) => Math.max(0, n - 1));
     setRemovingId(photoId);
     startTransition(async () => {
+      let succeeded = false;
       try {
         await removePhotoFromCartAction(photoId);
-        // Reconcile with server truth — covers the T-117 self-heal that may
-        // have removed additional now-unpurchasable rows.
-        await queryClient.invalidateQueries({ queryKey: ['cart-data'] });
-        queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+        succeeded = true;
         toast.success(t('removedFromCart'));
       } catch (error) {
-        // Exact rollback of both the list and the badge.
-        queryClient.setQueryData<CartData>(['cart-data'], previousData);
-        if (previousCount !== undefined) {
-          queryClient.setQueryData<number>(['cart-count'], previousCount);
-        } else {
-          queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+        // Targeted rollback: re-insert just the failed item and bump the badge
+        // back by one — never restore a whole snapshot.
+        if (removedItem) {
+          queryClient.setQueryData<CartData>(['cart-data'], (curr) => {
+            const current = curr ?? base;
+            if (current.items.some((i) => i.photoId === photoId)) return current;
+            const items = [...current.items, removedItem];
+            return {
+              ...current,
+              items,
+              itemCount: items.length,
+              subtotalCents: items.reduce((sum, i) => sum + i.unitPriceCents, 0),
+            };
+          });
         }
+        queryClient.setQueryData<number>(['cart-count'], (n = 0) => n + 1);
         const message = error instanceof Error ? error.message : t('failedRemoveItem');
         toast.error(message);
       } finally {
+        pendingRemovalsRef.current = Math.max(0, pendingRemovalsRef.current - 1);
+        // Reconcile with server truth only once ALL removals have settled — this
+        // covers the T-117 self-heal (rows removed for going unpurchasable)
+        // without a mid-sequence snapshot resurrecting a just-removed item. Skip
+        // when the last to settle failed: the targeted rollback already reflects
+        // reality and a refetch adds nothing.
+        if (succeeded && pendingRemovalsRef.current === 0) {
+          await queryClient.invalidateQueries({ queryKey: ['cart-data'] });
+          queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+        }
         setRemovingId(null);
       }
     });
