@@ -580,13 +580,16 @@ export async function POST(request: Request) {
         const priceId = subscription.items.data[0]?.price?.id ?? null;
         const planId = priceId ? STRIPE_PRICE_TO_PLAN[priceId] : 'free';
 
-        // biome-ignore lint/suspicious/noExplicitAny: subscription object
-        const sub = subscription as any;
-
+        // `current_period_end` moved off the subscription root onto each item
+        // in Stripe's `basil` API version (2025-03-31); our pinned version
+        // (dahlia) is well past it, so the root field is gone and the typed
+        // location is `items.data[].current_period_end`. We read `data[0]`, the
+        // same item the plan mapping above keys off: our subscriptions are
+        // always single-item (one plan → one price → one item), so every item
+        // shares one billing period. Epoch seconds, null if absent (T-159).
+        const itemPeriodEnd = subscription.items.data[0]?.current_period_end;
         const currentPeriodEnd =
-          typeof sub.current_period_end === 'number'
-            ? new Date(sub.current_period_end * 1000).toISOString()
-            : null;
+          typeof itemPeriodEnd === 'number' ? new Date(itemPeriodEnd * 1000).toISOString() : null;
 
         const { data: existingSubscription } = await supabaseAdmin
           .from('subscriptions')

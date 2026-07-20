@@ -1,11 +1,11 @@
 # T-159 · El webhook de suscripción guarda `current_period_end` siempre null (campo movido a los items en la API basil)
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/subscription-current-period-end`  (tipo = fix)
 - **OpenSpec change:** —  (probable: toca el webhook de pagos; crear al ejecutar)
-- **PR:** —
+- **PR:** #219
 
 ## Requerimiento
 Hallazgo CONFIRMED del `/code-review high` de T-152 (bump del SDK de Stripe 20→22).
