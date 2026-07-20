@@ -57,6 +57,7 @@ vi.mock('next/cache', () => ({
   unstable_cache: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn,
 }));
 
+import { revalidatePath } from 'next/cache';
 import {
   addPhotoToCartAction,
   clearCartAction,
@@ -488,6 +489,56 @@ describe('cart Server Actions', () => {
         guestItem(codeless.id), // same event, no own code → still merged via the pooled code
       ]);
       expect(merged).toBe(2);
+    });
+  });
+
+  // T-162: the add/remove/clear mutations must invalidate the cart route's
+  // client Router Cache so the NEXT navigation to the cart refetches instead of
+  // serving a stale prefetched RSC snapshot. Before the fix none of them called
+  // `revalidatePath`, so photos added from the event view didn't appear on the
+  // cart page until a manual F5. Mirrors the Stripe webhook's revalidation.
+  describe('cart route revalidation (T-162)', () => {
+    const CART_ROUTE = '/[lang]/dashboard/talent/cart';
+
+    it('addPhotoToCartAction revalidates the cart route', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id, { price_per_photo: 5 });
+      const photo = await createTestPhoto(event.id);
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+
+      vi.mocked(revalidatePath).mockClear();
+      await addPhotoToCartAction(photo.id);
+
+      expect(revalidatePath).toHaveBeenCalledWith(CART_ROUTE, 'page');
+    });
+
+    it('removePhotoFromCartAction revalidates the cart route', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id, { price_per_photo: 5 });
+      const photo = await createTestPhoto(event.id);
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+      await addPhotoToCartAction(photo.id);
+
+      vi.mocked(revalidatePath).mockClear();
+      await removePhotoFromCartAction(photo.id);
+
+      expect(revalidatePath).toHaveBeenCalledWith(CART_ROUTE, 'page');
+    });
+
+    it('clearCartAction revalidates the cart route', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const event = await createTestEvent(photographer.id, { price_per_photo: 5 });
+      const photo = await createTestPhoto(event.id);
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+      await addPhotoToCartAction(photo.id);
+
+      vi.mocked(revalidatePath).mockClear();
+      await clearCartAction();
+
+      expect(revalidatePath).toHaveBeenCalledWith(CART_ROUTE, 'page');
     });
   });
 });

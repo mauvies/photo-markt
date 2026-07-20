@@ -44,6 +44,14 @@ vi.mock('next/headers', () => ({
   headers: vi.fn(async () => new Headers({ host: '127.0.0.1:3000' })),
 }));
 
+// `revalidatePath` (added to the cart mutations in T-162) throws outside a Next
+// request scope, so stub `next/cache` for these direct action calls.
+vi.mock('next/cache', () => ({
+  revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
+  unstable_cache: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn,
+}));
+
 const createSessionMock = vi.fn(async (..._args: unknown[]) => ({
   url: 'https://checkout.stripe.test/session/cs_test_123',
 }));

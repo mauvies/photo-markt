@@ -12,7 +12,7 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // next/image stub that surfaces the `unoptimized` prop so the test can assert it.
@@ -64,7 +64,7 @@ vi.mock('@/app/[lang]/dashboard/talent/cart/actions', () => ({
   removePhotoFromCartAction: removePhotoFromCartActionMock,
 }));
 
-import type { CartData } from '@/app/[lang]/dashboard/talent/cart/actions';
+import type { CartData, CartItemDetail } from '@/app/[lang]/dashboard/talent/cart/actions';
 import { CartContent } from '@/app/[lang]/dashboard/talent/cart/cart-content';
 
 const SIGNED_ORIGINAL =
@@ -216,5 +216,73 @@ describe('CartContent — optimistic remove (T-121)', () => {
     await waitFor(() => expect(screen.getByText('Surf Cup')).toBeTruthy());
     expect(queryClient.getQueryData<number>(['cart-count'])).toBe(1);
     expect(toastMock.error).toHaveBeenCalled();
+  });
+});
+
+describe('CartContent — a delete does not reappear mid-removal (T-162)', () => {
+  const itemA: CartItemDetail = {
+    photoId: 'photo-A',
+    previewUrl: null,
+    photographerId: 'pg-1',
+    photographerName: 'Jane Doe',
+    photographerSlug: 'jane',
+    unitPriceCents: 1500,
+    eventTitle: 'Event A',
+    eventDate: '2026-01-01',
+    eventShareCode: 'AAA',
+  };
+  const itemB: CartItemDetail = { ...itemA, photoId: 'photo-B', eventTitle: 'Event B' };
+  const twoItems: CartData = {
+    items: [itemA, itemB],
+    subtotalCents: 3000,
+    itemCount: 2,
+    removedCount: 0,
+  };
+
+  // Symptom 2 of the report: removing items, some come back. The real mechanism
+  // is the fresh-snapshot re-seed — a Server Action mutation triggers a route
+  // refresh that hands CartContent a new `initialCartData`; if that snapshot was
+  // captured before the delete committed on the server, the mount-time re-seed
+  // (`setQueryData(['cart-data'], initialCartData)`) overwrites the optimistic
+  // removal and the item reappears. The fix skips the re-seed while a removal is
+  // still in flight. (React Query already discards out-of-order refetches, so
+  // the failure surfaced through this re-seed, not the reconcile.)
+  it('a route refresh with a stale snapshot during a pending removal does not resurrect the item', async () => {
+    // Removal never resolves → it stays "in flight" for the whole test, so the
+    // re-seed guard is under `pendingRemovalsRef > 0` the entire time.
+    removePhotoFromCartActionMock.mockImplementation(() => new Promise<void>(() => {}));
+    getCurrentCartMock.mockResolvedValue(twoItems);
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData<number>(['cart-count'], 2);
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <CartContent initialCartData={twoItems} />
+      </QueryClientProvider>,
+    );
+
+    // Remove B optimistically (its server action never confirms).
+    await act(async () => {
+      fireEvent.click(screen.getAllByText('remove')[1]);
+    });
+    expect(screen.queryByText('Event B')).toBeNull();
+    expect(screen.getByText('Event A')).toBeTruthy();
+
+    // Simulate the Server Action-triggered route refresh: a NEW initialCartData
+    // object (new reference → the effect re-runs) whose snapshot predates B's
+    // commit, so it still lists B.
+    const staleRefresh: CartData = { ...twoItems, items: [itemA, itemB] };
+    await act(async () => {
+      rerender(
+        <QueryClientProvider client={queryClient}>
+          <CartContent initialCartData={staleRefresh} />
+        </QueryClientProvider>,
+      );
+    });
+
+    // Before the fix the re-seed overwrote the optimistic state and B came back.
+    // After the fix the guard skips the re-seed while the removal is pending.
+    expect(screen.queryByText('Event B')).toBeNull();
+    expect(screen.getByText('Event A')).toBeTruthy();
   });
 });

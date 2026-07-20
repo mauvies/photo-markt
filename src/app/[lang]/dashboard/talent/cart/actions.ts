@@ -1,5 +1,6 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import { userHasRole } from '@/app/[lang]/actions/roles';
 import {
@@ -228,6 +229,14 @@ export async function addPhotoToCartAction(photoId: string, shareCode?: string):
     unitPriceCents,
     accessShareCode,
   );
+
+  // Invalidate the cart route's client Router Cache (T-162). This action is
+  // usually called from the event view, so the cart page is NOT the current
+  // route and the Server Action's automatic same-route refresh doesn't reach
+  // it — without this, `experimental.staleTimes.dynamic` serves a stale
+  // prefetched RSC payload of the cart on the next navigation and the just-added
+  // photos don't appear until a manual F5. Same pattern the Stripe webhook uses.
+  revalidatePath('/[lang]/dashboard/talent/cart', 'page');
 }
 
 /**
@@ -250,6 +259,9 @@ export async function removePhotoFromCartAction(photoId: string): Promise<void> 
 
   const cart = await getOrCreateCart(supabase, user.id);
   await dbRemovePhotoFromCart(supabase, cart.id, photoId);
+
+  // Keep the cart route's Router Cache in sync on the next navigation (T-162).
+  revalidatePath('/[lang]/dashboard/talent/cart', 'page');
 }
 
 /**
@@ -273,6 +285,9 @@ export async function clearCartAction(): Promise<void> {
 
   const cart = await getOrCreateCart(supabase, user.id);
   await dbClearCart(supabase, cart.id);
+
+  // Keep the cart route's Router Cache in sync on the next navigation (T-162).
+  revalidatePath('/[lang]/dashboard/talent/cart', 'page');
 }
 
 /**
