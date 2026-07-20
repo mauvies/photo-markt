@@ -189,7 +189,13 @@ export function CartContent({ initialCartData }: CartContentProps) {
 
     pendingRemovalsRef.current += 1;
     // Abort any reconcile refetch in flight so it can't overwrite this removal.
+    // Cancel BOTH the cart list and the nav count (T-165): the count query
+    // (['cart-count'], read by the persistent nav) is fed by an absolute
+    // getCartItemCount SELECT; a stale in-flight count refetch left running
+    // could resolve late with a partially-committed count and overwrite the
+    // optimistic 0, leaving the nav cart button stuck on a phantom number.
     queryClient.cancelQueries({ queryKey: ['cart-data'] });
+    queryClient.cancelQueries({ queryKey: ['cart-count'] });
     queryClient.setQueryData<CartData>(['cart-data'], (curr) => {
       const current = curr ?? base;
       const items = current.items.filter((i) => i.photoId !== photoId);
@@ -237,7 +243,16 @@ export function CartContent({ initialCartData }: CartContentProps) {
         // reality and a refetch adds nothing.
         if (succeeded && pendingRemovalsRef.current === 0) {
           await queryClient.invalidateQueries({ queryKey: ['cart-data'] });
-          queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+          // Derive the nav count from the reconciled cart list — the single
+          // source of truth — instead of a separate absolute getCartItemCount
+          // refetch that could observe a mid-sequence, partially-committed
+          // delete set and clobber the optimistic 0 (T-165). The cart-data
+          // reconcile above is already gated (all removals settled) and
+          // cancel-guarded, so its itemCount is authoritative.
+          const reconciled = queryClient.getQueryData<CartData>(['cart-data']);
+          if (reconciled) {
+            queryClient.setQueryData<number>(['cart-count'], reconciled.itemCount);
+          }
         }
         setRemovingId(null);
       }
@@ -247,6 +262,9 @@ export function CartContent({ initialCartData }: CartContentProps) {
   const handleClearCart = () => {
     const previousData = queryClient.getQueryData<CartData>(['cart-data']) ?? cartData;
     const previousCount = queryClient.getQueryData<number>(['cart-count']);
+    // Abort any in-flight count refetch so it can't resolve late over the 0 (T-165).
+    queryClient.cancelQueries({ queryKey: ['cart-data'] });
+    queryClient.cancelQueries({ queryKey: ['cart-count'] });
     queryClient.setQueryData<CartData>(['cart-data'], (curr) => ({
       ...(curr ?? previousData),
       items: [],
@@ -257,7 +275,10 @@ export function CartContent({ initialCartData }: CartContentProps) {
     startTransition(async () => {
       try {
         await clearCartAction();
-        queryClient.invalidateQueries({ queryKey: ['cart-count'] });
+        // The cart is empty after a successful clear — the optimistic 0 is
+        // authoritative. Set it directly rather than an absolute getCartItemCount
+        // refetch that could race a concurrent count fetch (T-165).
+        queryClient.setQueryData<number>(['cart-count'], 0);
         // Success is silent (T-163) — the optimistic clear is the only feedback.
       } catch (error) {
         queryClient.setQueryData<CartData>(['cart-data'], previousData);

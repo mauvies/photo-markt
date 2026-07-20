@@ -53,11 +53,13 @@ const {
   clearCartActionMock,
   createCheckoutSessionActionMock,
   removePhotoFromCartActionMock,
+  getCartItemCountActionMock,
 } = vi.hoisted(() => ({
   getCurrentCartMock: vi.fn(),
   clearCartActionMock: vi.fn(),
   createCheckoutSessionActionMock: vi.fn(),
   removePhotoFromCartActionMock: vi.fn(),
+  getCartItemCountActionMock: vi.fn(),
 }));
 
 // `./actions` is a "use server" module — mock it so the client test doesn't pull
@@ -67,10 +69,20 @@ vi.mock('@/app/[lang]/dashboard/talent/cart/actions', () => ({
   clearCartAction: clearCartActionMock,
   createCheckoutSessionAction: createCheckoutSessionActionMock,
   removePhotoFromCartAction: removePhotoFromCartActionMock,
+  getCartItemCountAction: getCartItemCountActionMock,
 }));
 
 import type { CartData, CartItemDetail } from '@/app/[lang]/dashboard/talent/cart/actions';
 import { CartContent } from '@/app/[lang]/dashboard/talent/cart/cart-content';
+import { useCartItemCount } from '@/hooks/use-cart-item-count';
+
+// Probe that mounts the real nav count hook — it registers the ['cart-count']
+// query with its absolute getCartItemCount queryFn, exactly as the persistent
+// nav does, so tests can exercise the cross-component count race (T-165).
+function NavCountProbe() {
+  const count = useCartItemCount();
+  return <div data-testid="nav-count">{count}</div>;
+}
 
 const SIGNED_ORIGINAL =
   'https://ref.supabase.co/storage/v1/object/sign/photos/owner/event/photo.jpg?token=abc';
@@ -109,6 +121,7 @@ afterEach(() => {
   toastMock.mockClear();
   toastMock.success.mockClear();
   toastMock.error.mockClear();
+  getCartItemCountActionMock.mockReset();
   getCurrentCartMock.mockReset();
   clearCartActionMock.mockReset();
   createCheckoutSessionActionMock.mockReset();
@@ -336,5 +349,97 @@ describe('CartContent — a delete does not reappear mid-removal (T-162)', () =>
     // After the fix the guard skips the re-seed while the removal is pending.
     expect(screen.queryByText('Event B')).toBeNull();
     expect(screen.getByText('Event A')).toBeTruthy();
+  });
+});
+
+// T-165: deleting several items fast left the nav cart button stuck on a stale
+// count (e.g. 2). The count lives in a separate ['cart-count'] query fed by an
+// absolute getCartItemCount SELECT; a reconcile refetch fired mid-sequence could
+// observe a partially-committed delete set and resolve AFTER the optimistic 0,
+// overwriting it. The fix cancels ['cart-count'] on each removal and derives the
+// count from the reconciled ['cart-data'] instead of the racy absolute refetch.
+describe('CartContent — nav count stays 0 after deleting all items (T-165)', () => {
+  const mk = (id: string, title: string): CartItemDetail => ({
+    photoId: id,
+    previewUrl: null,
+    photographerId: 'pg-1',
+    photographerName: 'Jane Doe',
+    photographerSlug: 'jane',
+    unitPriceCents: 1000,
+    eventTitle: title,
+    eventDate: '2026-01-01',
+    eventShareCode: 'AAA',
+  });
+  const fourItems = [
+    mk('p1', 'Event 1'),
+    mk('p2', 'Event 2'),
+    mk('p3', 'Event 3'),
+    mk('p4', 'Event 4'),
+  ];
+  const fourCart: CartData = {
+    items: fourItems,
+    subtotalCents: 4000,
+    itemCount: 4,
+    removedCount: 0,
+  };
+
+  it('a late, partial absolute count refetch cannot resurrect the nav count', async () => {
+    // Fake server: a delete "commits" when its (immediate) action resolves.
+    const committed = new Set<string>();
+    removePhotoFromCartActionMock.mockImplementation(async (id: string) => {
+      committed.add(id);
+    });
+    // cart-data reconcile reflects the committed set.
+    getCurrentCartMock.mockImplementation(async () => {
+      const items = fourItems.filter((i) => !committed.has(i.photoId));
+      return {
+        items,
+        itemCount: items.length,
+        subtotalCents: items.reduce((s, i) => s + i.unitPriceCents, 0),
+        removedCount: 0,
+      };
+    });
+    // The absolute count SELECT is held open so the test controls when (and with
+    // what stale value) it resolves.
+    const countResolvers: Array<(n: number) => void> = [];
+    getCartItemCountActionMock.mockImplementation(
+      () =>
+        new Promise<number>((resolve) => {
+          countResolvers.push(resolve);
+        }),
+    );
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    // Seed a fresh count so the nav hook doesn't fetch on mount (staleTime 30s).
+    queryClient.setQueryData<number>(['cart-count'], 4);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CartContent initialCartData={fourCart} />
+        <NavCountProbe />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByTestId('nav-count').textContent).toBe('4');
+
+    // Delete every item, letting each settle (its reconcile fires) before the
+    // next — the sequential-fast pattern that produced the stuck count.
+    for (let i = 0; i < fourItems.length; i++) {
+      await act(async () => {
+        // Always remove the first remaining item (the grid shrinks each pass).
+        fireEvent.click(screen.getAllByText('remove')[0]);
+      });
+    }
+
+    // Optimistically empty now.
+    await waitFor(() => expect(queryClient.getQueryData<number>(['cart-count'])).toBe(0));
+
+    // Any absolute count refetch the old code queued resolves LAST with a stale
+    // partial count (2). With the fix, no such refetch exists (the page derives
+    // the count from cart-data), so this is a no-op; without it, the 2 clobbered 0.
+    await act(async () => {
+      for (const resolve of countResolvers.splice(0)) resolve(2);
+    });
+
+    expect(queryClient.getQueryData<number>(['cart-count'])).toBe(0);
+    expect(screen.getByTestId('nav-count').textContent).toBe('0');
   });
 });
