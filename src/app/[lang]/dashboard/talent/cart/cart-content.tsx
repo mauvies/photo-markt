@@ -207,7 +207,8 @@ export function CartContent({ initialCartData }: CartContentProps) {
       try {
         await removePhotoFromCartAction(photoId);
         succeeded = true;
-        toast.success(t('removedFromCart'));
+        // Success is silent (T-163): the optimistic UI already removed the item,
+        // so a success toast is redundant noise. Only failure notifies.
       } catch (error) {
         // Targeted rollback: re-insert just the failed item and bump the badge
         // back by one — never restore a whole snapshot.
@@ -257,7 +258,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
       try {
         await clearCartAction();
         queryClient.invalidateQueries({ queryKey: ['cart-count'] });
-        toast.success(t('cartCleared'));
+        // Success is silent (T-163) — the optimistic clear is the only feedback.
       } catch (error) {
         queryClient.setQueryData<CartData>(['cart-data'], previousData);
         if (previousCount !== undefined) {
