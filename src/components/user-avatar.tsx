@@ -4,6 +4,7 @@ import type { User } from '@supabase/supabase-js';
 import { LayoutDashboard, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/database/client';
+import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -22,16 +23,17 @@ interface Props {
 export function UserAvatar({ user }: Props) {
   const router = useRouter();
   const supabase = createClient();
+  const lp = useLocalizedPath();
   const { t } = useTranslations<Dictionary['nav']>();
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    router.push('/');
+    router.push(lp('/'));
     router.refresh();
   };
 
   const goToDashboard = () => {
-    router.push('/dashboard');
+    router.push(lp('/dashboard'));
   };
 
   return (

@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { createClient } from '@/database/client';
+import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { RoleSlug } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 
@@ -61,6 +62,7 @@ export function DashboardUserMenu({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const lp = useLocalizedPath();
   const [optimisticRole, addOptimisticRole] = useOptimistic<RoleSlug, RoleSlug>(
     activeRole,
     (_, role) => role,
@@ -79,7 +81,7 @@ export function DashboardUserMenu({
     } catch {
       // Non-fatal — browser-side signOut already cleared the session.
     }
-    router.push('/');
+    router.push(lp('/'));
     router.refresh();
   };
 
@@ -90,7 +92,7 @@ export function DashboardUserMenu({
       try {
         const result = await switchRole(role);
         addOptimisticRole(result.activeRole);
-        router.push(role === 'photographer' ? '/dashboard/photographer' : '/dashboard/talent');
+        router.push(lp(role === 'photographer' ? '/dashboard/photographer' : '/dashboard/talent'));
       } catch {
         addOptimisticRole(activeRole);
       }
@@ -100,14 +102,16 @@ export function DashboardUserMenu({
   // Photographer "Profile" → dashboard-wrapped preview so the dashboard
   // sidebar/header stay visible. The public profile URL is reserved for
   // sharing externally (via the "Copy profile link" button on the page).
-  const profileUrl =
+  const profileUrl = lp(
     optimisticRole === 'photographer'
       ? '/dashboard/photographer/profile/preview'
-      : '/dashboard/talent/profile';
-  const settingsUrl =
+      : '/dashboard/talent/profile',
+  );
+  const settingsUrl = lp(
     optimisticRole === 'photographer'
       ? '/dashboard/photographer/settings'
-      : '/dashboard/talent/settings';
+      : '/dashboard/talent/settings',
+  );
 
   const isProfileActive = pathname.startsWith(profileUrl);
   const isSettingsActive = pathname.startsWith(settingsUrl);
@@ -214,13 +218,13 @@ export function DashboardUserMenu({
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
-            <Link href={`/dashboard/${optimisticRole}/support`}>
+            <Link href={lp(`/dashboard/${optimisticRole}/support`)}>
               <LifeBuoy className="mr-2 h-4 w-4" />
               <span>{navLabels.support ?? 'Support'}</span>
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
-            <Link href={`/dashboard/${optimisticRole}/feedback`}>
+            <Link href={lp(`/dashboard/${optimisticRole}/feedback`)}>
               <Send className="mr-2 h-4 w-4" />
               <span>{navLabels.feedback ?? 'Feedback'}</span>
             </Link>
@@ -229,7 +233,7 @@ export function DashboardUserMenu({
               the top nav so it doesn't compete with primary destinations. */}
           {optimisticRole === 'talent' && navLabels.privacy ? (
             <DropdownMenuItem asChild className={MENU_ITEM_CLASS}>
-              <Link href="/dashboard/talent/privacy">
+              <Link href={lp('/dashboard/talent/privacy')}>
                 <Shield className="mr-2 h-4 w-4" />
                 <span>{navLabels.privacy}</span>
               </Link>

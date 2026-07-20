@@ -1,11 +1,11 @@
 # T-161 · Links in-app que pierden el prefijo `/[lang]` → flip de locale (es→en) + skeleton del home en la transición
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/locale-prefix-inapp-links`  (tipo = fix)
 - **OpenSpec change:** —  (bug-fix de i18n/routing, no toca pagos/BD/auth)
-- **PR:** —
+- **PR:** #222
 
 > **Alcance ampliado (2026-07-20):** el reporte original era el botón del carrito, pero una
 > auditoría encontró **~20 call-sites en 14 archivos** con el mismo defecto (href/`router.push`

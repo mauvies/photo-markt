@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { BillingPeriodToggle } from '@/components/billing-period-toggle';
 import { PricingPlanButton } from '@/components/pricing-plan-button';
 import { Badge } from '@/components/ui/badge';
+import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { getPlanFeatures } from '@/lib/plan-features';
 import { type BillingPeriod, getPlanById } from '@/lib/plans';
@@ -15,6 +16,7 @@ type PricingT = Dictionary['pricingSection'];
 export function PricingSection({ isAuthenticated, t }: { isAuthenticated: boolean; t: PricingT }) {
   const [billing, setBilling] = useState<BillingPeriod>('yearly');
   const isYearly = billing === 'yearly';
+  const lp = useLocalizedPath();
 
   // Shared with the billing settings page so the two never drift apart.
   const planFeatures = getPlanFeatures(t);
@@ -162,7 +164,10 @@ export function PricingSection({ isAuthenticated, t }: { isAuthenticated: boolea
         <div className="mx-auto mt-4 max-w-6xl pt-6 text-center">
           <p className="text-[11px] text-muted-foreground">
             {t.footerNote}{' '}
-            <Link href="/contact" className="underline underline-offset-4 hover:text-foreground">
+            <Link
+              href={lp('/contact')}
+              className="underline underline-offset-4 hover:text-foreground"
+            >
               {t.footerContact}
             </Link>
             .

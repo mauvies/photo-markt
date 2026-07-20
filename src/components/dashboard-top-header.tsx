@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { getLangFromHeaders } from '@/lib/i18n/get-lang-from-headers';
+import { localizedPath } from '@/lib/i18n/localized-path';
 import type { RoleSlug } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 
@@ -28,7 +29,7 @@ export async function DashboardTopHeader({
   return (
     <div className="pointer-events-none absolute top-4 right-4 z-40 hidden md:flex md:items-center md:gap-3">
       {activeRole === 'talent' && (
-        <Link href="/dashboard/talent/cart" className="pointer-events-auto">
+        <Link href={localizedPath(lang, '/dashboard/talent/cart')} className="pointer-events-auto">
           <Button
             variant="ghost"
             size="sm"

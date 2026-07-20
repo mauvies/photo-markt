@@ -3,6 +3,7 @@
 import { Compass, FolderOpen, ShoppingCart } from 'lucide-react';
 import Link from 'next/link';
 import { buttonVariants } from '@/components/ui/button';
+import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { cn } from '@/lib/utils';
 
 interface QuickActionsProps {
@@ -10,12 +11,13 @@ interface QuickActionsProps {
 }
 
 export function QuickActions({ cartItemCount }: QuickActionsProps) {
+  const lp = useLocalizedPath();
   return (
     <div className="rounded-xl border bg-card p-4 shadow-sm">
       <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Quick Actions</h2>
       <div className="space-y-2 sm:space-y-3">
         <Link
-          href="/dashboard/talent/events"
+          href={lp('/dashboard/talent/events')}
           className={cn(
             buttonVariants({ variant: 'default', size: 'lg' }),
             'w-full justify-start text-sm sm:text-base',
@@ -25,7 +27,7 @@ export function QuickActions({ cartItemCount }: QuickActionsProps) {
           Explore Events
         </Link>
         <Link
-          href="/dashboard/talent/favorites"
+          href={lp('/dashboard/talent/favorites')}
           className={cn(
             buttonVariants({ variant: 'outline', size: 'lg' }),
             'w-full justify-start text-sm sm:text-base',
@@ -36,7 +38,7 @@ export function QuickActions({ cartItemCount }: QuickActionsProps) {
         </Link>
         {cartItemCount > 0 && (
           <Link
-            href="/dashboard/talent/cart"
+            href={lp('/dashboard/talent/cart')}
             className={cn(
               buttonVariants({ variant: 'outline', size: 'lg' }),
               'w-full justify-start text-sm sm:text-base relative',

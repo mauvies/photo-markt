@@ -13,6 +13,12 @@ vi.mock('@/components/guest-cart-provider', () => ({
   useGuestCart: () => ({ itemCount: mockGuestItemCount }),
 }));
 
+// The active locale comes from the [lang] route param — mock it so
+// useLocalizedPath resolves the prefix (T-161).
+vi.mock('next/navigation', () => ({
+  useParams: () => ({ lang: 'es' }),
+}));
+
 import { CartLinkButton } from '@/components/cart-link-button';
 
 afterEach(() => {
@@ -58,5 +64,26 @@ describe('CartLinkButton (T-114 layout-shift regression)', () => {
     const filledSlot = filledContainer.firstElementChild;
     expect(filledSlot?.className).toBe(emptySlot?.className);
     expect(screen.getByRole('button', { name: /shopping cart/i })).toBeTruthy();
+  });
+});
+
+// T-161: the cart link (and ~20 other in-app links) dropped the `/[lang]`
+// prefix, so the middleware re-detected the locale from `accept-language` and
+// flipped es→en on navigation. The href must carry the active locale.
+describe('CartLinkButton (T-161 locale prefix)', () => {
+  it('prefixes the auth cart link with the active locale', () => {
+    mockCartItemCount = 2;
+    render(<CartLinkButton />);
+    const link = screen.getByRole('button', { name: /shopping cart/i }).closest('a');
+    // Before the fix this was the bare `/dashboard/talent/cart`.
+    expect(link?.getAttribute('href')).toBe('/es/dashboard/talent/cart');
+  });
+
+  it('prefixes the guest cart link with the active locale', () => {
+    mockGuestItemCount = 2;
+    render(<CartLinkButton guest />);
+    const link = screen.getByRole('button', { name: /shopping cart/i }).closest('a');
+    // Before the fix this was the bare `/cart`.
+    expect(link?.getAttribute('href')).toBe('/es/cart');
   });
 });
