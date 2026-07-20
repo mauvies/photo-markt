@@ -73,7 +73,17 @@ export function CookieConsent({
       <CookiePreferencesPanel
         open={view === 'panel'}
         onOpenChange={(open) => {
-          if (!open) setView('closed');
+          if (open) return;
+          // Dismissing the panel (X / Esc / click-outside) while the user is
+          // still undecided counts as "reject non-essential" (T-170) — persist
+          // it so the banner doesn't reappear on the next navigation and
+          // analytics stays off. A user who already decided (opened the panel
+          // from the footer) keeps their prior choice untouched.
+          if (consent === null) {
+            commit(rejectAllConsent());
+          } else {
+            setView('closed');
+          }
         }}
         dict={dict}
         initial={panelInitial}
