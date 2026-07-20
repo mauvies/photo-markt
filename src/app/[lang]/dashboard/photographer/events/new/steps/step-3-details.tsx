@@ -1,8 +1,9 @@
 'use client';
 
 import { format } from 'date-fns';
-import { ChevronDownIcon, Info } from 'lucide-react';
+import { ChevronDownIcon } from 'lucide-react';
 import { useId, useState } from 'react';
+import { EventCoverField } from '@/components/event-cover-field';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
@@ -16,7 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
@@ -56,65 +56,20 @@ export function Step3Details({
     <div className="grid items-start gap-6 md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] md:items-stretch">
       {/* Left column — optional dedicated cover/presentation image (T-055).
           Shown on the event card; falls back to the first photo when empty.
-          `flex flex-col` + `md:h-full` on the column and `md:flex-1` on the
-          box let the box fill the full height of the right column on desktop;
-          the box stays a compact fixed height on mobile so it doesn't
-          dominate the stacked layout. */}
-      <div className="flex flex-col gap-2 md:h-full">
-        <div className="flex items-center gap-1">
-          <Label htmlFor="cover-image">{t('coverLabel')}</Label>
-          <Tooltip>
-            <TooltipTrigger
-              type="button"
-              aria-label={t('coverInfoAria')}
-              className="text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <Info className="size-3.5" />
-            </TooltipTrigger>
-            <TooltipContent>
-              <p className="max-w-56">{t('coverDesc')}</p>
-            </TooltipContent>
-          </Tooltip>
-        </div>
-        {coverPreviewUrl ? (
-          <div className="relative h-40 w-full overflow-hidden rounded-lg border border-input md:h-full md:flex-1">
-            {/* biome-ignore lint/performance/noImgElement: local object-URL preview — next/image can't optimize blob: URLs */}
-            <img
-              src={coverPreviewUrl}
-              alt={t('coverLabel')}
-              className="h-full w-full object-cover"
-            />
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="absolute right-2 top-2"
-              onClick={() => onCoverChange(null)}
-            >
-              {t('coverRemove')}
-            </Button>
-          </div>
-        ) : (
-          <label
-            htmlFor="cover-image"
-            className="flex h-40 w-full cursor-pointer items-center justify-center rounded-lg border border-dashed border-input p-6 text-center text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/40 md:h-full md:flex-1"
-          >
-            {t('coverSelect')}
-            <input
-              id="cover-image"
-              type="file"
-              accept="image/*"
-              className="sr-only"
-              onChange={(event) => {
-                const file = event.target.files?.[0] ?? null;
-                if (file) onCoverChange(file);
-                // Allow re-selecting the same file after removing it.
-                event.target.value = '';
-              }}
-            />
-          </label>
-        )}
-      </div>
+          `fill` lets the box grow to match the right column's height on desktop
+          while staying compact on mobile. Shared with the edit form (T-166). */}
+      <EventCoverField
+        previewUrl={coverPreviewUrl}
+        onCoverChange={onCoverChange}
+        fill
+        labels={{
+          label: t('coverLabel'),
+          desc: t('coverDesc'),
+          infoAria: t('coverInfoAria'),
+          select: t('coverSelect'),
+          remove: t('coverRemove'),
+        }}
+      />
 
       {/* Right column — event details. */}
       <div className="grid gap-4">

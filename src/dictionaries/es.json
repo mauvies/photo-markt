@@ -924,6 +924,7 @@
     "coverSelect": "Elige una imagen de portada",
     "coverRemove": "Quitar",
     "coverUploadFailed": "No pudimos subir la imagen de portada. Tu evento se creó sin ella — puedes añadir una más tarde.",
+    "coverUpdateFailed": "No pudimos actualizar la imagen de portada. Inténtalo de nuevo.",
     "storageLimitReached": "Límite de almacenamiento alcanzado — mejora tu plan para subir más fotos.",
     "eventLimitReachedShort": "Límite de eventos alcanzado — mejora tu plan para crear más.",
     "photosKeptSoldOnEdit": "Las fotos vendidas se conservaron para sus compradores y se ocultaron de tu galería.",

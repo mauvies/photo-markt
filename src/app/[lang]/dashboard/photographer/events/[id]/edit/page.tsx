@@ -1,5 +1,6 @@
 import { DashboardHeader } from '@/components/dashboard-header';
 import { getEvent } from '@/database/queries';
+import { createSignedUrl } from '@/database/queries/storage';
 import type { SupabaseServerClient } from '@/database/queries/types';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
@@ -44,6 +45,19 @@ export default async function EditEventPage({
     user.id,
   );
 
+  // Sign the dedicated cover (T-055/T-166) for the edit form's initial preview.
+  // A dedicated cover is always direct-signed (promotional image, not a for-sale
+  // photo). `getEvent` selects `*`, so `cover_path` is present at runtime even
+  // though the `Event` type doesn't declare it (read defensively, like the AI
+  // columns). Sign with the service-role client — the `photos` bucket is private.
+  const coverPath = (event as unknown as Record<string, unknown>).cover_path as
+    | string
+    | null
+    | undefined;
+  const initialCoverUrl = coverPath
+    ? await createSignedUrl(supabaseAdmin as unknown as SupabaseServerClient, 'photos', coverPath)
+    : null;
+
   return (
     <div>
       <DashboardHeader title="Edit Event" />
@@ -52,7 +66,11 @@ export default async function EditEventPage({
       </p>
       <div className="mt-6">
         <TranslationsProvider translations={dict.newEvent}>
-          <EditEventForm event={event} initialPhotos={photosWithUrls} />
+          <EditEventForm
+            event={event}
+            initialPhotos={photosWithUrls}
+            initialCoverUrl={initialCoverUrl}
+          />
         </TranslationsProvider>
       </div>
     </div>

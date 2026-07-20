@@ -924,6 +924,7 @@
     "coverSelect": "Choose a cover image",
     "coverRemove": "Remove",
     "coverUploadFailed": "We couldn't upload the cover image. Your event was created without it — you can add one later.",
+    "coverUpdateFailed": "We couldn't update the cover image. Please try again.",
     "storageLimitReached": "Storage limit reached — upgrade your plan to upload more photos.",
     "eventLimitReachedShort": "Event limit reached — upgrade your plan to create more.",
     "photosKeptSoldOnEdit": "Sold photos were kept for their buyers and hidden from your gallery.",

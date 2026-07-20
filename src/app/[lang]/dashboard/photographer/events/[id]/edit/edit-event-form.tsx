@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
+import { EventCoverField } from '@/components/event-cover-field';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -17,6 +18,7 @@ import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { getPlanLimitType, isPlanLimitError } from '@/lib/plan-limits';
 import { usePhotoUpload } from '@/lib/use-photo-upload';
+import { removeEventCoverAction, uploadEventCoverAction } from '../../new/actions';
 import { updateEventAction } from './actions';
 import { EventFormFields } from './components/event-form-fields';
 import { EventPhotoGrid } from './components/event-photo-grid';
@@ -31,13 +33,19 @@ import {
 interface EditEventFormProps {
   event: Event;
   initialPhotos: PhotoWithUrl[];
+  /** Signed URL of the event's dedicated cover, or null when it has none (T-166). */
+  initialCoverUrl: string | null;
 }
 
-export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
+export function EditEventForm({ event, initialPhotos, initialCoverUrl }: EditEventFormProps) {
   const router = useRouter();
   const { t } = useTranslations<Dictionary['newEvent']>();
   const lp = useLocalizedPath();
   const [isPending, startTransition] = useTransition();
+  // Dedicated cover (T-166): the standalone cover actions persist immediately
+  // (the event already exists), independent of the Save button below.
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(initialCoverUrl);
+  const [isCoverPending, startCoverTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [datePopoverOpen, setDatePopoverOpen] = useState(false);
@@ -107,6 +115,43 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
 
   const removeFile = (target: File) => {
     setNewFiles((prev) => prev.filter((file) => file !== target));
+  };
+
+  // Dedicated cover management (T-166). Persists immediately via the standalone
+  // owner-only actions (the event already exists) — decoupled from the Save
+  // button. Success is silent (the preview is the feedback); failure rolls the
+  // preview back and toasts. Object-URL previews are revoked once superseded.
+  const handleCoverChange = (file: File | null) => {
+    const prior = coverPreviewUrl;
+    if (file) {
+      const objectUrl = URL.createObjectURL(file);
+      setCoverPreviewUrl(objectUrl);
+      startCoverTransition(async () => {
+        try {
+          const formData = new FormData();
+          formData.append('cover', file);
+          await uploadEventCoverAction(event.id, formData);
+          if (prior?.startsWith('blob:')) URL.revokeObjectURL(prior);
+        } catch (error) {
+          console.error(error);
+          URL.revokeObjectURL(objectUrl);
+          setCoverPreviewUrl(prior);
+          toast.error(t('coverUpdateFailed' as keyof Dictionary['newEvent']));
+        }
+      });
+    } else {
+      setCoverPreviewUrl(null);
+      startCoverTransition(async () => {
+        try {
+          await removeEventCoverAction(event.id);
+          if (prior?.startsWith('blob:')) URL.revokeObjectURL(prior);
+        } catch (error) {
+          console.error(error);
+          setCoverPreviewUrl(prior);
+          toast.error(t('coverUpdateFailed' as keyof Dictionary['newEvent']));
+        }
+      });
+    }
   };
 
   const [newFilePreviews, setNewFilePreviews] = useState<PendingPhoto[]>([]);
@@ -249,6 +294,24 @@ export function EditEventForm({ event, initialPhotos }: EditEventFormProps) {
             {submitError}
           </div>
         )}
+
+        {/* Dedicated cover image (T-166) — managed independently of Save, via the
+            standalone cover actions. Compact so it doesn't dominate the form. */}
+        <div className="max-w-sm">
+          <EventCoverField
+            previewUrl={coverPreviewUrl}
+            onCoverChange={handleCoverChange}
+            busy={isCoverPending}
+            inputId="edit-cover-image"
+            labels={{
+              label: t('coverLabel'),
+              desc: t('coverDesc'),
+              infoAria: t('coverInfoAria'),
+              select: t('coverSelect'),
+              remove: t('coverRemove'),
+            }}
+          />
+        </div>
 
         {/* Top Row: Form and Upload Section */}
         <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
