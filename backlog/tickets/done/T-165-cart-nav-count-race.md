@@ -1,7 +1,7 @@
 # T-165 · El contador del carrito en el nav queda pegado (race al borrar varios ítems rápido)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `fix/cart-nav-count-race`  (tipo = fix)
 - **OpenSpec change:** —  (bug de estado en cliente; no toca pagos/BD/auth de fondo)
