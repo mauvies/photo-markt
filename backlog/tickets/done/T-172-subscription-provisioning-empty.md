@@ -1,11 +1,11 @@
 # T-172 · Plan Pro no da eventos ilimitados: tabla `subscriptions` vacía en prod → todos resuelven a Free
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done (Scenario 2 — no es bug; ver PR)
 - **Blockers:** ninguno (pero el **primer paso es verificar Stripe** — de eso depende la severidad real; ver Notas)
 - **Rama:** `fix/subscription-provisioning`  (tipo = fix)
 - **OpenSpec change:** —  (evaluar al ejecutar: toca pagos/webhook → **`/code-review` obligatorio** antes de commit)
-- **PR:** —
+- **PR:** #230
 
 ## Requerimiento (reporte del usuario)
 > Como fotógrafo, ¿por qué solo me deja crear **5 eventos** si tengo el plan **Pro**, que debería
