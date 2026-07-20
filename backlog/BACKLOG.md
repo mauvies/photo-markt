@@ -11,9 +11,10 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P3 | T-164 | Warning del SDK de Stripe "recommend Accounts v2" en el dashboard del fotógrafo (v1 sigue soportada; decisión aceptar-v1 vs migrar) — follow-up de T-152 | — | todo |
-| 2 | P3 | T-167 | El campo "Price per Photo" del edit form se ve raro: el `$` queda desalineado bajo el número (grid stretch de Row 3 estira la celda del precio) — mismo archivo que T-166, coordinar merge | — | todo |
-| 3 | P3 | T-169 | Arreglar el layout del banner de cookies: botones (desktop+mobile) y en mobile mostrarlo casi al fondo (offset actual 4.5rem por el bottom-nav). Cluster con T-170, mismo componente | — | todo |
+| 1 | P2 | T-171 | El skeleton del home se filtra a otras páginas: `[lang]/loading.tsx` (EventsExploreViewSkeleton) vive en la raíz de `[lang]` → cae en `photographer/[slug]`, `photographers`, `cart`, etc. Scopear (route group `(home)`) para que solo home y talent/events muestren sus skeletons | — | todo |
+| 2 | P3 | T-164 | Warning del SDK de Stripe "recommend Accounts v2" en el dashboard del fotógrafo (v1 sigue soportada; decisión aceptar-v1 vs migrar) — follow-up de T-152 | — | todo |
+| 3 | P3 | T-167 | El campo "Price per Photo" del edit form se ve raro: el `$` queda desalineado bajo el número (grid stretch de Row 3 estira la celda del precio) — mismo archivo que T-166, coordinar merge | — | todo |
+| 4 | P3 | T-169 | Arreglar el layout del banner de cookies: botones (desktop+mobile) y en mobile mostrarlo casi al fondo (offset actual 4.5rem por el bottom-nav). Cluster con T-170, mismo componente | — | todo |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |
