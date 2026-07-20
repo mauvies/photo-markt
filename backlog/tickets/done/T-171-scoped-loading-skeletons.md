@@ -1,11 +1,11 @@
 # T-171 · El skeleton del home se filtra a otras páginas (loading.tsx en la raíz de `[lang]`)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/scoped-loading-skeletons`  (tipo = fix)
 - **OpenSpec change:** —  (routing/UI de loading states; no toca pagos/auth/BD)
-- **PR:** —
+- **PR:** #228
 
 ## Requerimiento (reporte del usuario)
 > La página `/en/photographer/mauricioviera` cuando carga usa los **skeletons de la home page**. Revisar
