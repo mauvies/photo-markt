@@ -1,11 +1,11 @@
 # T-170 · El banner de cookies reaparece tras cerrarlo (semántica de la X / persistencia)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno (lleva una **decisión de producto** pequeña que se puede tomar al arrancar — ver Notas)
 - **Rama:** `fix/cookie-banner-dismiss-persistence`  (tipo = fix)
 - **OpenSpec change:** —  (comportamiento acotado de un componente; no toca pagos/BD/auth)
-- **PR:** —
+- **PR:** #227
 
 ## Requerimiento (reporte del usuario)
 > Cerré el banner con la **X**, no sé si esto es deseado. Y luego, al visitar la página del **carrito**,

@@ -127,6 +127,47 @@ describe('CookieConsent granular panel', () => {
   });
 });
 
+describe('CookieConsent dismiss persistence (T-170)', () => {
+  it('dismissing the panel while undecided persists a reject so the banner does not reappear', async () => {
+    const { unmount } = renderConsent();
+    // Undecided → banner is up. Open the granular panel, then close it via the
+    // Dialog X (no explicit choice).
+    fireEvent.click(await screen.findByRole('button', { name: en.cookieConsent.customize }));
+    await screen.findByText(en.cookieConsent.manageTitle);
+    fireEvent.click(screen.getByRole('button', { name: /close/i }));
+
+    // Before the fix the dismiss wrote nothing → readCookieConsent stayed null →
+    // the banner remounted on the next page. Now it persists analytics-off.
+    await waitFor(() => expect(JSON.parse(stored() ?? '{}')).toEqual({ analytics: false }));
+    expect(screen.queryByTestId('web-analytics')).toBeNull();
+
+    // Simulate navigating to another page (e.g. the cart): a fresh mount must
+    // NOT show the banner, because a decision is now stored.
+    unmount();
+    cleanup();
+    renderConsent();
+    await waitFor(() => expect(screen.queryByText(en.cookieConsent.title)).toBeNull());
+    expect(screen.queryByTestId('web-analytics')).toBeNull();
+  });
+
+  it('dismissing the panel does NOT overwrite an existing decision (footer re-open)', async () => {
+    // Already decided: analytics granted. Open the panel from the footer and
+    // close it without saving — the prior choice must survive untouched.
+    window.localStorage.setItem(COOKIE_CONSENT_STORAGE_KEY, JSON.stringify({ analytics: true }));
+    renderConsent();
+    await waitFor(() => expect(screen.queryByText(en.cookieConsent.title)).toBeNull());
+
+    openCookiePreferences();
+    await screen.findByText(en.cookieConsent.manageTitle);
+    fireEvent.click(screen.getByRole('button', { name: /close/i }));
+
+    // Still granted — the dismiss must not downgrade an existing decision to reject.
+    await waitFor(() => expect(screen.queryByText(en.cookieConsent.manageTitle)).toBeNull());
+    expect(JSON.parse(stored() ?? '{}')).toEqual({ analytics: true });
+    expect(screen.queryByTestId('web-analytics')).toBeTruthy();
+  });
+});
+
 describe('cookieConsent dictionary parity', () => {
   it('has the same non-empty keys in both locales, translated', () => {
     const keys = Object.keys(en.cookieConsent).sort();
