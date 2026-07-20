@@ -798,6 +798,45 @@ describe('app/api/stripe/webhook — customer.subscription.* events', () => {
     expect(data?.[0]?.status).toBe('active');
   });
 
+  it('persists current_period_end from items.data[0] (moved off the root in basil, T-159)', async () => {
+    const sb = createServiceClient();
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    await stubCustomerRetrieve(photographer.id);
+
+    // Fixed future epoch (seconds) so the assertion is deterministic.
+    const periodEnd = 1_924_992_000; // 2031-01-01T00:00:00Z
+    const req = signedWebhookRequest({
+      id: 'evt_sub_period_end',
+      type: 'customer.subscription.updated',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: 'sub_test_period_end',
+          object: 'subscription',
+          customer: 'cus_test_mock',
+          status: 'active',
+          // Stripe's `basil` API version (2025-03-31) moved current_period_end
+          // off the subscription root onto each item. Deliberately NOT at the
+          // root here — the pre-fix code read the (now-absent) root field and
+          // wrote null, so this asserts the item is read instead.
+          items: {
+            data: [{ price: { id: 'price_test_pro' }, current_period_end: periodEnd }],
+          },
+        },
+      },
+    });
+    expect((await POST(req)).status).toBe(200);
+
+    const { data } = await sb
+      .from('subscriptions')
+      .select('current_period_end')
+      .eq('user_id', photographer.id)
+      .single();
+    // Compare as epoch to be robust against timestamptz formatting.
+    expect(data?.current_period_end).not.toBeNull();
+    expect(new Date(data?.current_period_end as string).getTime()).toBe(periodEnd * 1000);
+  });
+
   it('customer.subscription.deleted marks the subscription as canceled', async () => {
     const sb = createServiceClient();
     const photographer = await createTestUser('PHOTOGRAPHER');
