@@ -1,13 +1,10 @@
-import { EventsExploreViewSkeleton } from '@/components/events-explore-view-skeleton';
+import { Spinner } from '@/components/ui/spinner';
 
-// Mirrors `page.tsx`'s wrapper (`mx-auto w-full max-w-[1300px] px-4 pb-10
-// pt-4 sm:pt-6 sm:px-6 lg:px-8`) plus the full `EventsExploreView` shell
-// (hero, search bar, "Latest events" heading, card grid) so the first paint
-// doesn't jump once real content hydrates (T-156).
+// Neutral safety-net loading fallback for any async route under `[lang]/*` that
+// doesn't ship its own `loading.tsx` (e.g. `photographer/[slug]`, `cart`,
+// `checkout`, `onboarding`, `download`). The home's card-grid skeleton lives in
+// the `(home)` route group so it no longer leaks here (T-171) — this is a plain
+// spinner, never a page-specific shell.
 export default function Loading() {
-  return (
-    <div className="mx-auto w-full max-w-[1300px] px-4 pb-10 pt-4 sm:pt-6 sm:px-6 lg:px-8">
-      <EventsExploreViewSkeleton />
-    </div>
-  );
+  return <Spinner />;
 }
