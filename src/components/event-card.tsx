@@ -179,7 +179,7 @@ function VisibilityBadge({ isPublic, privateLabel }: { isPublic: boolean; privat
   );
 }
 
-function PhotographerRow({
+function _PhotographerRow({
   displayName,
   username,
   avatarUrl,
@@ -248,7 +248,7 @@ export function EventCard({
   coverUrl,
   coverThumbUrl,
   status,
-  photographer,
+  // photographer,
   ownerStats,
   actions,
   onSaveToggled,
@@ -420,14 +420,14 @@ export function EventCard({
           </div>
         </Link>
 
-        {!isOwner && photographer && (
+        {/* {!isOwner && photographer && (
           <PhotographerRow
             displayName={photographer.displayName}
             username={photographer.username}
             avatarUrl={photographer.avatarUrl}
             locale={locale}
           />
-        )}
+        )} */}
       </div>
 
       {actions && (!coverSrc || imageStatus === 'loaded') && (

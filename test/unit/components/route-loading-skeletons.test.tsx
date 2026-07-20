@@ -1,11 +1,12 @@
 /** @vitest-environment happy-dom */
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
+import HomeLoading from '@/app/[lang]/(home)/loading';
 import TalentEventDetailLoading from '@/app/[lang]/dashboard/talent/events/[id]/loading';
 import TalentEventsLoading from '@/app/[lang]/dashboard/talent/events/loading';
 import EventDetailLoading from '@/app/[lang]/events/[shareCode]/loading';
 import EventsListingLoading from '@/app/[lang]/events/loading';
-import HomeLoading from '@/app/[lang]/loading';
+import RootLangLoading from '@/app/[lang]/loading';
 
 afterEach(cleanup);
 
@@ -36,7 +37,7 @@ describe('/events loading.tsx (T-157: now mirrors the home)', () => {
   });
 });
 
-describe('/[lang] home loading.tsx (T-156: previously missing)', () => {
+describe('/[lang]/(home) loading.tsx (T-156; scoped to the (home) group in T-171)', () => {
   it('matches the page shell margins, the hero + heading placeholders, and the real card grid', () => {
     const { container } = render(<HomeLoading />);
     expect(container.innerHTML).toContain(
@@ -48,6 +49,24 @@ describe('/[lang] home loading.tsx (T-156: previously missing)', () => {
     // "Latest events" heading placeholder.
     expect(container.innerHTML).toContain('sm:h-7');
     expect(container.innerHTML).toContain('aspect-[4/3]');
+  });
+});
+
+// T-171: the home's EventsExploreView card-grid skeleton used to live at
+// `[lang]/loading.tsx` — the Suspense fallback for the WHOLE `[lang]/*` subtree,
+// so any async route without its own loading.tsx (photographer/[slug],
+// photographers, cart, checkout, onboarding, download, dashboard root) inherited
+// the home skeleton. The home now owns it inside the `(home)` route group, and
+// the root `[lang]/loading.tsx` is a neutral spinner safety-net.
+describe('/[lang] root loading.tsx is neutral (T-171)', () => {
+  it('renders a plain spinner, never the home card-grid skeleton', () => {
+    const { container } = render(<RootLangLoading />);
+    // A bare <Spinner /> is an <output> element with a "Loading" sr-only label.
+    expect(container.querySelector('output')).not.toBeNull();
+    // None of the home-skeleton fingerprints leak into non-home routes.
+    expect(container.innerHTML).not.toContain('aspect-[4/3]');
+    expect(container.innerHTML).not.toContain('max-w-[1300px]');
+    expect(container.innerHTML).not.toContain('sm:h-12');
   });
 });
 

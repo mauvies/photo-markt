@@ -2,7 +2,7 @@ import { cacheLife, cacheTag } from 'next/cache';
 import { EventsExploreView } from '@/components/events-explore-view';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
-import { getFilterOptionsAction } from './dashboard/talent/events/actions';
+import { getFilterOptionsAction } from '../dashboard/talent/events/actions';
 
 async function getCachedDictionary(lang: string) {
   'use cache';
