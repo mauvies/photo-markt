@@ -3,6 +3,7 @@
 import { AlertCircle, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 
@@ -14,6 +15,7 @@ interface PayoutProfileBannerProps {
 
 export function PayoutProfileBanner({ isComplete }: PayoutProfileBannerProps) {
   const { t } = useTranslations<EarningsT>();
+  const lp = useLocalizedPath();
 
   if (isComplete) {
     return null;
@@ -31,7 +33,7 @@ export function PayoutProfileBanner({ isComplete }: PayoutProfileBannerProps) {
             {t('payoutProfileBannerDesc')}
           </p>
           <div className="mt-3">
-            <Link href="/dashboard/photographer/settings/payout-profile">
+            <Link href={lp('/dashboard/photographer/settings/payout-profile')}>
               <Button
                 size="sm"
                 variant="outline"

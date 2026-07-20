@@ -5,16 +5,19 @@ import Link from 'next/link';
 import { useGuestCart } from '@/components/guest-cart-provider';
 import { Button } from '@/components/ui/button';
 import { useCartItemCount } from '@/hooks/use-cart-item-count';
+import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { cn } from '@/lib/utils';
 
 function AuthCartLinkButton() {
   const cartItemCount = useCartItemCount();
-  return <CartIconButton href="/dashboard/talent/cart" count={cartItemCount} />;
+  const lp = useLocalizedPath();
+  return <CartIconButton href={lp('/dashboard/talent/cart')} count={cartItemCount} />;
 }
 
 function GuestCartLinkButton() {
   const { itemCount } = useGuestCart();
-  return <CartIconButton href="/cart" count={itemCount} />;
+  const lp = useLocalizedPath();
+  return <CartIconButton href={lp('/cart')} count={itemCount} />;
 }
 
 function CartIconButton({ href, count }: { href: string; count: number }) {

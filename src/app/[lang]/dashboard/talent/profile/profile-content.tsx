@@ -7,6 +7,7 @@ import { useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import type { ProfileData } from './actions';
 import { ProfilePhotoViewer } from './profile-photo-viewer';
@@ -24,6 +25,10 @@ export function ProfileContent({
 }: ProfileContentProps) {
   const { profile, stats, photos } = initialData;
   const router = useRouter();
+  const lp = useLocalizedPath();
+  // Stable primitive (lang doesn't change within a render tree) — safe to use
+  // as an effect dependency without re-running on every render.
+  const profilePath = lp('/dashboard/talent/profile');
 
   useEffect(() => {
     if (!showSuccessMessage) return;
@@ -31,10 +36,10 @@ export function ProfileContent({
     // Re-fetch server data after a delay to allow the Stripe webhook to process, then clean URL
     const timer = setTimeout(() => {
       router.refresh();
-      router.replace('/dashboard/talent/profile', { scroll: false });
+      router.replace(profilePath, { scroll: false });
     }, 3000);
     return () => clearTimeout(timer);
-  }, [showSuccessMessage, router, translations.purchaseSuccess]);
+  }, [showSuccessMessage, router, translations.purchaseSuccess, profilePath]);
 
   const displayName = profile?.display_name || profile?.username || 'User';
 
@@ -135,10 +140,10 @@ export function ProfileContent({
             {translations.emptyDescription}
           </p>
           <div className="flex flex-wrap justify-center gap-3">
-            <Link href="/dashboard/talent/events">
+            <Link href={lp('/dashboard/talent/events')}>
               <Button>{translations.exploreEvents}</Button>
             </Link>
-            <Link href="/dashboard/talent/favorites">
+            <Link href={lp('/dashboard/talent/favorites')}>
               <Button variant="outline">{translations.viewFavorites}</Button>
             </Link>
           </div>

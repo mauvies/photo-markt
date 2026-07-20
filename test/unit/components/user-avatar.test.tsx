@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useParams: () => ({ lang: 'es' }),
 }));
 
 vi.mock('@/database/client', () => ({

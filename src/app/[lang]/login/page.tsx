@@ -13,6 +13,7 @@ import { parsePlanIntent, planIntentResumePath } from '@/lib/billing/plan-intent
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { getLangFromHeaders } from '@/lib/i18n/get-lang-from-headers';
+import { localizedPath } from '@/lib/i18n/localized-path';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 
@@ -234,7 +235,7 @@ export default async function Login({
               {dict.auth.noAccount}{' '}
               <Link
                 className="text-sky-600 hover:underline"
-                href={`/signup${nextQuerySuffix(nextParam, '?')}`}
+                href={localizedPath(lang, `/signup${nextQuerySuffix(nextParam, '?')}`)}
               >
                 {dict.auth.signUpHere}
               </Link>

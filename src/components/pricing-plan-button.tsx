@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 import { createBillingCheckoutAction } from '@/app/[lang]/dashboard/photographer/billing/actions';
 import { Button } from '@/components/ui/button';
+import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { BillingPeriod } from '@/lib/plans';
 
 interface PricingPlanButtonProps {
@@ -30,6 +31,7 @@ export function PricingPlanButton({
   className,
 }: PricingPlanButtonProps) {
   const router = useRouter();
+  const lp = useLocalizedPath();
   const [isPending, startTransition] = useTransition();
   const isStarter = planId === 'starter';
 
@@ -37,7 +39,7 @@ export function PricingPlanButton({
     return (
       // Carry the Free intent through signup so the flow is symmetric with the
       // paid CTAs; resolves to the dashboard overview (no subscription row).
-      <Link href="/signup?plan=free" className={className}>
+      <Link href={lp('/signup?plan=free')} className={className}>
         <Button
           variant="outline"
           size="lg"
@@ -62,7 +64,7 @@ export function PricingPlanButton({
 
   if (!isAuthenticated) {
     return (
-      <Link href={`/signup?plan=${planId}&period=${period}`} className={className}>
+      <Link href={lp(`/signup?plan=${planId}&period=${period}`)} className={className}>
         <Button variant="default" size="lg" className={buttonClassName}>
           {label}
           <ArrowRight className="h-4 w-4" />
@@ -79,15 +81,15 @@ export function PricingPlanButton({
           // Checkout couldn't start (Stripe failure or yearly not configured).
           // Fall back to the signup flow preserving plan/period — same as the
           // prior behavior when these failures threw.
-          router.push(`/signup?plan=${planId}&period=${period}`);
+          router.push(lp(`/signup?plan=${planId}&period=${period}`));
         } else if ('url' in result) {
           window.location.href = result.url;
         } else if (result.updated) {
-          router.push('/dashboard/photographer/settings?updated=true');
+          router.push(lp('/dashboard/photographer/settings?updated=true'));
         }
       } catch (error) {
         console.error('Checkout error:', error);
-        router.push(`/signup?plan=${planId}&period=${period}`);
+        router.push(lp(`/signup?plan=${planId}&period=${period}`));
       }
     });
   };

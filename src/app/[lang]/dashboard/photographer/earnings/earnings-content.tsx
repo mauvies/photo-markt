@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { PhotographerEarning } from '@/database/queries/earnings';
 import type { Payout } from '@/database/queries/payouts';
+import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
@@ -192,6 +193,7 @@ function EarningsTable({ earnings, className }: EarningsTableProps) {
 
 export function EarningsContent() {
   const { t } = useTranslations<EarningsT>();
+  const lp = useLocalizedPath();
 
   const { data, isFetching } = useQuery({
     queryKey: ['earnings'] as const,
@@ -236,7 +238,7 @@ export function EarningsContent() {
                 ? t('connectBannerPending')
                 : t('connectBannerRestricted')}
           </p>
-          <Link href="/dashboard/photographer/settings/payout-profile">
+          <Link href={lp('/dashboard/photographer/settings/payout-profile')}>
             <Button size="sm" variant="outline">
               {t('connectBannerButton')}
             </Button>

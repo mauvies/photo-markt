@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 import { signInWithGoogle } from '@/app/auth/google/actions';
 import { Button } from '@/components/ui/button';
+import { useLocalizedPath } from '@/hooks/use-localized-path';
 
 interface GoogleSignInButtonProps {
   plan?: string;
@@ -29,6 +30,7 @@ export function GoogleSignInButton({
 }: GoogleSignInButtonProps) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+  const lp = useLocalizedPath();
 
   const handleClick = () => {
     startTransition(async () => {
@@ -36,12 +38,12 @@ export function GoogleSignInButton({
       const nextSuffix = next ? `&next=${encodeURIComponent(next)}` : '';
       if (result.error) {
         router.push(
-          `/login?message=Could not sign in with Google. Reason: ${result.error}${nextSuffix}`,
+          lp(`/login?message=Could not sign in with Google. Reason: ${result.error}${nextSuffix}`),
         );
       } else if (result.url) {
         window.location.href = result.url;
       } else {
-        router.push(`/login?message=Failed to initiate Google sign-in${nextSuffix}`);
+        router.push(lp(`/login?message=Failed to initiate Google sign-in${nextSuffix}`));
       }
     });
   };

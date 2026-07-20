@@ -33,6 +33,7 @@ import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
 import { showAddedToCartToast } from '@/lib/cart-toast';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
+import { localizedPath } from '@/lib/i18n/localized-path';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
   listMyTaggedPhotos,
@@ -61,7 +62,10 @@ export function TalentPhotosGrid({
   const params = useParams<{ lang: string }>();
   const router = useRouter();
   const lp = useLocalizedPath();
-  const dateLocale = params?.lang === 'es' ? es : enUS;
+  // Stable primitive for use inside memos/effects (unlike the `lp` closure,
+  // which is a fresh function each render).
+  const lang = params?.lang ?? 'es';
+  const dateLocale = lang === 'es' ? es : enUS;
   const [groups, setGroups] = useState(initialGroups);
   const [offset, setOffset] = useState(
     initialGroups.reduce((sum, g) => sum + g.dates.reduce((s, d) => s + d.photos.length, 0), 0),
@@ -266,7 +270,7 @@ export function TalentPhotosGrid({
               <div className="flex flex-wrap items-baseline gap-1.5">
                 {event.event_id ? (
                   <Link
-                    href={`/dashboard/talent/events/${event.event_id}`}
+                    href={localizedPath(lang, `/dashboard/talent/events/${event.event_id}`)}
                     className="text-sm font-semibold text-foreground hover:underline"
                   >
                     {event.event_name ?? t('uncategorized')}
@@ -292,7 +296,7 @@ export function TalentPhotosGrid({
       });
     }
     return result;
-  }, [dateGroups, dateLocale, t, firstDateKey]);
+  }, [dateGroups, dateLocale, t, firstDateKey, lang]);
 
   const galleryProps = useMemo(
     () => ({

@@ -4,6 +4,7 @@ import { AlertCircle, CheckCircle2, MapPin } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import type { Profile } from '@/database/queries/profiles';
+import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
@@ -16,6 +17,7 @@ interface PayoutProfileSectionProps {
 
 export function PayoutProfileSection({ profile }: PayoutProfileSectionProps) {
   const { t } = useTranslations<PhotographerDashboardT>();
+  const lp = useLocalizedPath();
 
   const isComplete = profile?.is_payout_profile_complete ?? false;
   const connectStatus = profile?.stripe_connect_status ?? 'not_connected';
@@ -41,7 +43,7 @@ export function PayoutProfileSection({ profile }: PayoutProfileSectionProps) {
           <h2 className="text-lg sm:text-xl font-semibold">{t('payoutProfileTitle')}</h2>
           <p className="text-sm text-muted-foreground mt-1">{t('payoutProfileDesc')}</p>
         </div>
-        <Link href="/dashboard/photographer/settings/payout-profile">
+        <Link href={lp('/dashboard/photographer/settings/payout-profile')}>
           <Button variant="outline" size="sm">
             {isComplete ? t('payoutProfileEdit') : t('payoutProfileCompleteButton')}
           </Button>

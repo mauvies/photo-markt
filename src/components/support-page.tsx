@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
+import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
@@ -55,8 +56,9 @@ interface SupportPageProps {
 
 export function SupportPage({ userRole, isPro = false, planName = 'Free' }: SupportPageProps) {
   const { t } = useTranslations<SupportT>();
+  const lp = useLocalizedPath();
   const isPhotographer = userRole === 'photographer';
-  const backHref = isPhotographer ? '/dashboard/photographer' : '/dashboard/talent';
+  const backHref = lp(isPhotographer ? '/dashboard/photographer' : '/dashboard/talent');
 
   const quickActions = isPhotographer ? t('quickActionsPhotographer') : t('quickActionsTalent');
   const quickActionIcons = isPhotographer
@@ -263,7 +265,7 @@ export function SupportPage({ userRole, isPro = false, planName = 'Free' }: Supp
               )}
               {isPhotographer && !isPro && (
                 <Link
-                  href="/dashboard/photographer/settings?tab=billing"
+                  href={lp('/dashboard/photographer/settings?tab=billing')}
                   className="block text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
                 >
                   {t('upgradeForPriority')}
