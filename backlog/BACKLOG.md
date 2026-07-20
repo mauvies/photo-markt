@@ -11,6 +11,10 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
+| 1 | P1 | T-162 | Inconsistencia de datos del carrito: ítems stale/parciales tras agregar + borrados que reaparecen (falta `revalidatePath` + race de optimistic/refetch; el contador sí se actualiza) | — | todo |
+| 2 | P2 | T-161 | Barrido: ~20 links in-app sin prefijo `/[lang]` → flip de locale (es→en) + skeleton del home en la transición (reportado en el carrito) — resto del barrido de T-150 | — | todo |
+| 3 | P3 | T-163 | El borrado del carrito muestra toast de éxito (debería ser silencioso; solo error notifica) — mismo archivo que T-162, coordinar merge | Dep T-162 | todo |
+| 4 | P3 | T-164 | Warning del SDK de Stripe "recommend Accounts v2" en el dashboard del fotógrafo (v1 sigue soportada; decisión aceptar-v1 vs migrar) — follow-up de T-152 | — | todo |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |
