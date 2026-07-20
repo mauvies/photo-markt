@@ -1,6 +1,6 @@
 import { once } from 'node:events';
 import { Readable } from 'node:stream';
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 import { type NextRequest, NextResponse } from 'next/server';
 import { getPurchasedPhotoIdsForEvent } from '@/database/queries/orders';
 import { createClient } from '@/database/server';
@@ -143,8 +143,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // ── Stream a ZIP ───────────────────────────────────────────────────────
   // `store` (no compression): JPEGs are already compressed, so storing is
-  // faster and lighter on CPU.
-  const archive = archiver('zip', { store: true });
+  // faster and lighter on CPU. archiver 8 replaced the callable default
+  // factory (`archiver('zip', opts)`) with named classes.
+  const archive = new ZipArchive({ store: true });
   archive.on('error', (err) => console.error('[event-download] archive error', err));
 
   // Build in the background. One photo is fetched and zipped at a time, and
