@@ -757,6 +757,44 @@ describe('app/api/stripe/webhook — customer.subscription.* events', () => {
     expect(data?.stripe_customer_id).toBe('cus_test_mock');
   });
 
+  it('maps the yearly Pro price to plan_id=pro (T-172: yearly price mapping)', async () => {
+    // The provisioning code is correct for monthly (covered above); the DoD of
+    // T-172 calls out the YEARLY price path explicitly, since yearly is a
+    // separate Stripe Price ID (STRIPE_PRICE_PRO_YEARLY = 'price_test_pro_yearly'
+    // per test/setup.ts). If the yearly id were missing from STRIPE_PRICE_TO_PLAN,
+    // plan_id would fall through to undefined and getCurrentPlan would treat the
+    // paying subscriber as Free — the exact money/entitlement failure this
+    // ticket guards against. This pins the yearly → pro mapping end-to-end.
+    const sb = createServiceClient();
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    await stubCustomerRetrieve(photographer.id);
+
+    const req = signedWebhookRequest({
+      id: 'evt_sub_created_yearly',
+      type: 'customer.subscription.created',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: 'sub_test_created_yearly',
+          object: 'subscription',
+          customer: 'cus_test_mock',
+          status: 'active',
+          current_period_end: Math.floor(Date.now() / 1000) + 365 * 86400,
+          items: { data: [{ price: { id: 'price_test_pro_yearly' } }] },
+        },
+      },
+    });
+    expect((await POST(req)).status).toBe(200);
+
+    const { data } = await sb
+      .from('subscriptions')
+      .select('plan_id, status')
+      .eq('user_id', photographer.id)
+      .single();
+    expect(data?.plan_id).toBe('pro');
+    expect(data?.status).toBe('active');
+  });
+
   it('customer.subscription.updated refreshes the existing row in place', async () => {
     const sb = createServiceClient();
     const photographer = await createTestUser('PHOTOGRAPHER');
