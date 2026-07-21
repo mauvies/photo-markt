@@ -2,6 +2,7 @@ import { DashboardHeader } from '@/components/dashboard-header';
 import { EventShareCode } from '@/components/event-share-code';
 import {
   countEventPhotos,
+  countEventPhotosByStatus,
   createPhotoUrlMap,
   getEvent,
   getEventPhotographers,
@@ -38,6 +39,7 @@ import { EventPhotoAlbum } from './event-photo-album';
 import { OrganizerUploadSection } from './organizer-upload-section';
 import { buildOwnerPhotoAlbumItem } from './owner-album-item';
 import { PhotographersSection } from './photographers-section';
+import { PhotosProcessingNotice } from './photos-processing-notice';
 import { RejectedToast } from './rejected-toast';
 
 export default async function EventDetailPage({
@@ -120,26 +122,31 @@ export default async function EventDetailPage({
   // "Load more" fetches the rest via `loadMoreOwnerEventPhotos`), the small
   // un-paginated pending queue, the organizer photographers list, and the true
   // non-rejected total (for `RejectedToast`) are all independent.
-  const [{ photos, hasMore }, pendingPhotos, eventPhotographers, visibleCount] = await Promise.all([
-    getEventPhotosPage(adminClient, id, user.id, {
-      skipUserIdFilter: true,
-      includePending: !showPendingTab,
-      limit: EVENT_GALLERY_PAGE_SIZE,
-      offset: 0,
-    }),
-    showPendingTab
-      ? getEventPhotos(adminClient, id, user.id, {
-          status: 'pending',
-          skipUserIdFilter: true,
-          // The owner's own uploads auto-approve and must never sit in the
-          // moderation queue — exclude them regardless of the worker's
-          // transient state (race window or a worker that never promoted them).
-          excludeOwnerUploads: true,
-        })
-      : Promise.resolve([]),
-    event.type === 'organizer' ? getEventPhotographers(supabase, id) : Promise.resolve([]),
-    countEventPhotos(adminClient, id),
-  ]);
+  const [{ photos, hasMore }, pendingPhotos, eventPhotographers, visibleCount, approvedCount] =
+    await Promise.all([
+      getEventPhotosPage(adminClient, id, user.id, {
+        skipUserIdFilter: true,
+        includePending: !showPendingTab,
+        limit: EVENT_GALLERY_PAGE_SIZE,
+        offset: 0,
+      }),
+      showPendingTab
+        ? getEventPhotos(adminClient, id, user.id, {
+            status: 'pending',
+            skipUserIdFilter: true,
+            // The owner's own uploads auto-approve and must never sit in the
+            // moderation queue — exclude them regardless of the worker's
+            // transient state (race window or a worker that never promoted them).
+            excludeOwnerUploads: true,
+          })
+        : Promise.resolve([]),
+      event.type === 'organizer' ? getEventPhotographers(supabase, id) : Promise.resolve([]),
+      countEventPhotos(adminClient, id),
+      // Approved-only total — only the tab-less (solo) view needs it, to spell
+      // out how many of `visibleCount` are actually public vs still processing
+      // (T-174). Moderation events already break this out via the Pending tab.
+      showPendingTab ? Promise.resolve(0) : countEventPhotosByStatus(adminClient, id, ['approved']),
+    ]);
 
   // Round 2 — signing (approved + pending originals), talent tags, and uploader
   // profiles all depend only on the fetched photos, so run them together. Tags
@@ -346,6 +353,16 @@ export default async function EventDetailPage({
           </TranslationsProvider>
         </div>
       )}
+      {!showPendingTab ? (
+        <PhotosProcessingNotice
+          pendingCount={visibleCount - approvedCount}
+          approvedCount={approvedCount}
+          labels={{
+            processingOne: dict.events.photosProcessingOne,
+            processingMany: dict.events.photosProcessingMany,
+          }}
+        />
+      ) : null}
       <div className="mt-4">
         <TranslationsProvider translations={dict.events}>
           {showPendingTab ? (

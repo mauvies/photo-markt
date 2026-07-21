@@ -63,7 +63,7 @@
   "home": {
     "heroHeadline1": "Find Your",
     "heroHeadline2": "Photos In Seconds.",
-    "heroSubtitle": "Use our smart search to find photos from your favorite events or sessions.",
+    "heroSubtitle": "Find your event and use our smart search to quickly discover your photos.",
     "heroDisclaimer": "No account needed · Buy in minutes · Instant downloads",
     "haveAccessCode": "Have an access code?",
     "accessPrivateEvent": "Access private event",
@@ -206,6 +206,8 @@
     "noPhotosYet": "No photos yet",
     "perPhoto": "per photo",
     "photosCount": "Photos ({n})",
+    "photosProcessingOne": "1 of your photos is still processing and won't appear on your public event page until it's ready. {approved} of {total} are visible publicly now.",
+    "photosProcessingMany": "{pending} of your photos are still processing and won't appear on your public event page until they're ready. {approved} of {total} are visible publicly now.",
     "selectButton": "Select",
     "exitSelection": "Exit selection",
     "removeButton": "Remove",
