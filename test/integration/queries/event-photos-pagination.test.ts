@@ -194,30 +194,57 @@ describe('database/queries/photos — pagination (T-060)', () => {
     expect(widened.photos).toHaveLength(2);
   });
 
-  it('getUploadedPhotoIdsForUserInEvent returns owner + contributor uploads', async () => {
+  // T-173: "My photos" must count only what the viewer actually uploaded
+  // (`uploaded_by`), approved-only — never every row whose `user_id` is the
+  // event owner. A guest-collaborative upload sets `photos.user_id` to the OWNER
+  // while `uploaded_by` is the real uploader (or null for an anon guest), so the
+  // old `user_id`-OR-`uploaded_by` match made the owner-as-talent count every
+  // guest upload as theirs ("My photos" > "All photos").
+  it("getUploadedPhotoIdsForUserInEvent counts only the viewer's own approved uploads (T-173)", async () => {
     const owner = await createTestUser('PHOTOGRAPHER');
     const contributor = await createTestUser('TALENT');
     const event = await createTestEvent(owner.id);
     const service = createServiceClient();
 
+    // Owner's own upload — user_id = uploaded_by = owner.
     const ownerPhoto = await insertPhoto(service, {
       eventId: event.id,
       ownerId: owner.id,
       takenAt: '2026-06-01T10:00:00.000Z',
+      uploadedBy: owner.id,
     });
-    // Guest/contributor upload: row owner is the event owner, uploaded_by is
-    // the contributor (mirrors the collaborative-upload shape).
+    // Authenticated contributor upload — row owner (user_id) is the event owner,
+    // uploaded_by is the contributor (the guest-collaborative shape).
     const contributorPhoto = await insertPhoto(service, {
       eventId: event.id,
       ownerId: owner.id,
       takenAt: '2026-06-02T10:00:00.000Z',
       uploadedBy: contributor.id,
     });
+    // Anonymous guest upload — user_id = owner, uploaded_by = null. This is the
+    // row that the old query wrongly attributed to the owner.
+    await insertPhoto(service, {
+      eventId: event.id,
+      ownerId: owner.id,
+      takenAt: '2026-06-03T10:00:00.000Z',
+      uploadedBy: null,
+    });
+    // The contributor's PENDING upload — must not count (approved-only parity
+    // with the talent-visible gallery).
+    await insertPhoto(service, {
+      eventId: event.id,
+      ownerId: owner.id,
+      takenAt: '2026-06-04T10:00:00.000Z',
+      uploadedBy: contributor.id,
+      uploadStatus: 'pending',
+    });
 
+    // Owner sees ONLY their own upload — not the contributor's, not the anon
+    // guest's (before the fix the owner got all three via `user_id.eq.owner`).
     const ownerIds = await getUploadedPhotoIdsForUserInEvent(sb, event.id, owner.id);
-    expect(ownerIds).toContain(ownerPhoto);
-    expect(ownerIds).toContain(contributorPhoto); // owner owns both rows
+    expect(ownerIds).toEqual([ownerPhoto]);
 
+    // Contributor sees ONLY their own approved upload — not the pending one.
     const contributorIds = await getUploadedPhotoIdsForUserInEvent(sb, event.id, contributor.id);
     expect(contributorIds).toEqual([contributorPhoto]);
   });
