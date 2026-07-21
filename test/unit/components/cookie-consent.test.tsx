@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CookieConsent } from '@/components/cookie-consent';
+import { CookieConsentBanner } from '@/components/cookie-consent-banner';
 import en from '@/dictionaries/en.json';
 import es from '@/dictionaries/es.json';
 import { COOKIE_CONSENT_STORAGE_KEY, openCookiePreferences } from '@/lib/cookie-consent';
@@ -178,5 +179,51 @@ describe('cookieConsent dictionary parity', () => {
     // The user-facing copy should actually be translated, not copied from English.
     expect(es.cookieConsent.title).not.toBe(en.cookieConsent.title);
     expect(es.cookieConsent.accept).not.toBe(en.cookieConsent.accept);
+  });
+});
+
+// T-169: banner layout — buttons stack full-width on mobile (no cramped wrap)
+// and align in a row on desktop; the mobile position drops near the bottom edge,
+// lifting above the mobile bottom-nav ONLY on routes that render it (dashboard).
+describe('CookieConsentBanner layout (T-169)', () => {
+  const noop = () => {};
+  function renderBanner(hasBottomNav: boolean) {
+    return render(
+      <CookieConsentBanner
+        dict={en.cookieConsent}
+        privacyHref="/en/privacy-policy"
+        hasBottomNav={hasBottomNav}
+        onAcceptAll={noop}
+        onRejectAll={noop}
+        onCustomize={noop}
+      />,
+    );
+  }
+
+  it('sits near the bottom on routes without a bottom-nav (public)', () => {
+    renderBanner(false);
+    const dialog = screen.getByRole('dialog', { name: en.cookieConsent.title });
+    expect(dialog.className).toContain('bottom-[calc(1rem+env(safe-area-inset-bottom))]');
+    // No longer floats 4.5rem up on non-dashboard routes.
+    expect(dialog.className).not.toContain('bottom-[calc(4.5rem+env(safe-area-inset-bottom))]');
+  });
+
+  it('lifts above the bottom-nav on dashboard routes', () => {
+    renderBanner(true);
+    const dialog = screen.getByRole('dialog', { name: en.cookieConsent.title });
+    expect(dialog.className).toContain('bottom-[calc(4.5rem+env(safe-area-inset-bottom))]');
+  });
+
+  it('stacks buttons full-width on mobile and rows them on desktop (no wrap)', () => {
+    renderBanner(false);
+    const accept = screen.getByText(en.cookieConsent.accept);
+    // Each button is full-width on mobile, auto on desktop.
+    expect(accept.className).toContain('w-full');
+    expect(accept.className).toContain('sm:w-auto');
+    // The button row is a column on mobile → row on desktop, not a cramped wrap.
+    const buttonRow = accept.parentElement as HTMLElement;
+    expect(buttonRow.className).toContain('flex-col');
+    expect(buttonRow.className).toContain('sm:flex-row');
+    expect(buttonRow.className).not.toContain('flex-wrap');
   });
 });
