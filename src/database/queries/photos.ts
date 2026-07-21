@@ -511,13 +511,20 @@ export async function countEventPhotosByStatus(
 }
 
 /**
- * Photo ids in an event uploaded by a given user — either as the row owner
- * (`user_id`, authenticated uploads) or as a guest contributor later linked to
- * the account (`uploaded_by`). Backs the talent "My photos" filter, which must
- * see the COMPLETE set of the viewer's uploads regardless of gallery
- * pagination (a match on page 3 still belongs under "My photos"). Must be
- * called with the service-role client for collaborative events, where guest
- * rows live outside the caller's RLS scope.
+ * Approved photo ids in an event that a given user actually uploaded. Backs the
+ * talent "My photos" filter, which must see the COMPLETE set of the viewer's
+ * uploads regardless of gallery pagination (a match on page 3 still belongs
+ * under "My photos"). Must be called with the service-role client for
+ * collaborative events, where guest rows live outside the caller's RLS scope.
+ *
+ * Matches on `uploaded_by` ONLY — the true uploader across every flow (owner,
+ * organizer-contributor, guest-collaborative). NOT `user_id` (T-173): a
+ * guest-collaborative upload sets `photos.user_id` to the EVENT OWNER, so
+ * matching `user_id` made the owner-viewing-their-own-event-as-talent count
+ * every guest upload as "theirs" (the impossible "My photos" > "All photos").
+ * Filters to `approved` to mirror the talent-visible gallery (which is
+ * approved-only), so "My photos" is always a subset of "All photos" and pending
+ * uploads are never counted.
  */
 export async function getUploadedPhotoIdsForUserInEvent(
   supabase: SupabaseServerClient,
@@ -529,7 +536,8 @@ export async function getUploadedPhotoIdsForUserInEvent(
     .select('id')
     .eq('event_id', eventId)
     .is('deleted_at', null)
-    .or(`user_id.eq.${userId},uploaded_by.eq.${userId}`);
+    .eq('upload_status', 'approved')
+    .eq('uploaded_by', userId);
 
   if (error) {
     throw new Error(`Failed to get uploaded photo ids: ${getErrorMessage(error)}`);
