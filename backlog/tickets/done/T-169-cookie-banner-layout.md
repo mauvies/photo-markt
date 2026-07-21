@@ -1,11 +1,11 @@
 # T-169 · Arreglar el layout del banner de cookies (botones desktop+mobile, posición en mobile)
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/cookie-banner-layout`  (tipo = fix)
 - **OpenSpec change:** —  (UI/layout puro, no toca pagos/auth/BD)
-- **PR:** —
+- **PR:** #233
 
 ## Requerimiento (reporte del usuario)
 > Arreglar el layout del banner de cookies, **sobre todo los botones** tanto en desktop como en mobile,
