@@ -474,6 +474,20 @@ sequenceDiagram
   end
 ```
 
+**Connect API version — Accounts v1 (deliberate, T-164).** Our entire Connect
+surface uses **Accounts v1**: `accounts.retrieve/create`, `accountLinks.create`,
+`balance.retrieve` (`src/lib/stripe/connect.ts`) and the webhook's
+`transfers.create`. Since the SDK bump to `stripe@22` (T-152), each v1 Accounts
+call relays a server-sent notice — "We recommend building your integration using
+Accounts v2" — via `process.emitWarning`. We stay on v1 **on purpose**: it is
+fully supported with no sunset date, and migrating to Accounts v2 is a large,
+payment-critical change (different account-creation/onboarding/retrieve/balance/
+transfer shapes) with no functional benefit today. It would be its own ticket
+with OpenSpec + `/code-review ultra`, not done ad hoc. The recommendation is
+informational, so `src/lib/stripe/suppress-accounts-v2-warning.ts` filters that
+one message out of process warnings (installed from `config.ts`); every other
+warning still surfaces.
+
 ### 4.4 Guest cart merge on login
 
 Guest carts live in `localStorage` under `photo-markt_guest_cart`. On `SIGNED_IN`,
