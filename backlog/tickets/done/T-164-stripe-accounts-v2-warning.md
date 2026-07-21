@@ -1,11 +1,11 @@
 # T-164 · Warning del SDK de Stripe: "We recommend building your integration using Accounts v2" en el dashboard del fotógrafo
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done (Opción A — aceptar v1)
 - **Blockers:** ninguno (pero lleva una **decisión** dentro: migrar a v2 vs. aceptar v1 — ver DoD)
 - **Rama:** `chore/stripe-accounts-v2-warning`  (tipo = chore)
 - **OpenSpec change:** —  (si se decide migrar a Accounts v2 → sí OpenSpec, es cambio de pagos; si se acepta v1, no)
-- **PR:** —
+- **PR:** #232
 
 ## Requerimiento (reporte del usuario)
 > En **dev**, al visitar `/en/dashboard/photographer`, aparece en consola:
