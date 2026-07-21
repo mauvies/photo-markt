@@ -1,11 +1,11 @@
 # T-173 · Conteo "My photos" inflado en eventos colaborativos (My > All, incluye pendientes)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/collab-my-photos-count`  (tipo = fix)
 - **OpenSpec change:** —  (bug de query/conteo acotado; no toca pagos/auth)
-- **PR:** —
+- **PR:** #231
 
 ## Requerimiento (reporte del usuario)
 > En `/dashboard/talent/events/marathon-paris-france-2026` sale **"All photos (14)"** y **"My photos (69)"**.
