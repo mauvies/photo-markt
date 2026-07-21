@@ -1,5 +1,6 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { WebAnalytics } from '@/components/analytics';
 import { CookieConsentBanner } from '@/components/cookie-consent-banner';
@@ -35,6 +36,11 @@ export function CookieConsent({
 }) {
   const [consent, setConsent] = useState<StoredConsent>('pending');
   const [view, setView] = useState<View>('closed');
+  // The mobile bottom-nav (`md:hidden`, ~4rem) only renders inside the dashboard
+  // layouts, so the banner only needs to lift above it there — on public routes
+  // it can sit near the bottom edge (T-169).
+  const pathname = usePathname();
+  const hasBottomNav = pathname?.includes('/dashboard') ?? false;
 
   useEffect(() => {
     const stored = readCookieConsent();
@@ -64,6 +70,7 @@ export function CookieConsent({
         <CookieConsentBanner
           dict={dict}
           privacyHref={privacyHref}
+          hasBottomNav={hasBottomNav}
           onAcceptAll={() => commit(acceptAllConsent())}
           onRejectAll={() => commit(rejectAllConsent())}
           onCustomize={() => setView('panel')}
