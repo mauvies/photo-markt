@@ -91,10 +91,22 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-### 5. (Optional) Testing AI background jobs locally (face indexing / thumbnails / bib detection)
+### 5. Run the Inngest worker locally (required for uploaded photos to appear)
 
-`pnpm dev` alone is **not** enough to exercise the Inngest-driven pipeline (face
-indexing, thumbnail generation, bib detection) end-to-end. `NEXT_PUBLIC_SUPABASE_URL`
+> **This is not optional if you upload photos locally.** The Inngest worker does
+> more than the AI pipeline — it also **promotes every upload from `pending` to
+> `approved`** (`indexPhotoFaces` → `promote-upload-status`). Public event pages
+> only show `approved` photos, so **without the worker running, freshly uploaded
+> photos stay `pending` forever and the public event page shows 0 photos** — even
+> though the photographer dashboard counts them. This happens **regardless of
+> whether face recognition / bib detection are enabled**: those toggles only
+> control the AWS calls; the approval step runs for every event. If you upload
+> photos and they never go public (no Inngest runs), this is why.
+
+`pnpm dev` alone does **not** start Inngest — it only serves the worker endpoint
+at `/api/inngest`; nothing delivers events to it. You also can't exercise the
+rest of the Inngest-driven pipeline (face indexing, thumbnail generation, bib
+detection) end-to-end without it. `NEXT_PUBLIC_SUPABASE_URL`
 in `.env.local` points at a **remote** Supabase project (staging), and
 `INNGEST_EVENT_KEY`/`INNGEST_SIGNING_KEY` are shared with whatever Vercel
 deployment is registered as the Inngest app. Without further setup,
@@ -106,24 +118,33 @@ worker's download fails with `Object not found`. This is a **dev-only**
 environment mismatch — production is unaffected, because the same production
 deployment both uploads and processes photos with the same env vars.
 
-To run the pipeline against your own machine, use the [Inngest Dev
-Server](https://www.inngest.com/docs/local-development):
+To run the worker against your own machine, use the [Inngest Dev
+Server](https://www.inngest.com/docs/local-development). Run it **alongside**
+`pnpm dev`, in a second terminal:
 
 ```bash
-npx inngest-cli@latest dev
+pnpm dev           # terminal 1 — Next.js (serves /api/inngest)
+pnpm dev:inngest   # terminal 2 — Inngest Dev Server, pointed at your local worker
 ```
 
-Then set `INNGEST_DEV=1` in `.env.local` (or leave it, if the SDK's automatic
-dev-mode detection already reaches `http://127.0.0.1:8288`) before running
-`pnpm dev`. With the Dev Server running, events sent from your local process are
-executed by your own `/api/inngest` route — the same process that has the
-photo — so uploads, indexing, and thumbnail generation stay consistent end-to-end.
+`pnpm dev:inngest` is just `npx inngest-cli@latest dev -u http://localhost:3000/api/inngest`.
+Open the Dev Server dashboard at [http://localhost:8288](http://localhost:8288)
+to watch runs (`indexPhotoFaces`, thumbnails, bib detection, crons). With it
+running, events sent from your local process are executed by your own
+`/api/inngest` route — the same process that has the photo — so uploads,
+approval, indexing, and thumbnail generation stay consistent end-to-end. Any
+photos already stuck at `pending` get promoted as soon as the worker drains the
+queue.
+
+> If you rely on the SDK's automatic dev-mode discovery instead of the `-u`
+> flag, set `INNGEST_DEV=1` in `.env.local` so it reaches `http://127.0.0.1:8288`.
 
 ## Commands
 
 | Command | Description |
 |---|---|
 | `pnpm dev` | Start development server |
+| `pnpm dev:inngest` | Start the Inngest Dev Server (run alongside `pnpm dev`; required for uploaded photos to be approved/processed locally) |
 | `pnpm build` | Production build |
 | `pnpm lint` | Biome check |
 | `pnpm lint:fix` | Biome check with auto-fix |
