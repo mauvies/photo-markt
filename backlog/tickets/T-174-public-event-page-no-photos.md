@@ -1,7 +1,26 @@
 # T-174 · La página pública del evento muestra 0 fotos aunque el dashboard del fotógrafo dice 35
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
+
+## Resolución (hallazgo del paso 1 + fix)
+**No es bug de la página pública** — su query es correcta (approved-only). Diagnóstico definitivo del
+ciclo de vida de `upload_status` (verificado en código):
+- Toda subida del owner entra `pending` en el insert (`attachPhotosToEvent` → `createPhoto` con
+  `upload_status: 'pending'` hardcodeado) y **solo el worker Inngest `indexPhotoFaces`** la promueve a
+  `approved` (step 3 `promote-upload-status`). Si el worker no corre (local sin worker levantado, o el
+  fallo de "Inngest prod sync drift"), las fotos del owner quedan `pending` **para siempre** → la pública
+  (approved-only) muestra 0. Es hipótesis **1b** del ticket: **entorno/worker**, no bug de código.
+- **No se pudo verificar el evento reportado en datos:** un `db:reset` (necesario para los grants de los
+  tests de integración) borró la BD local; solo quedó el evento de seed. La pública sigue siendo correcta
+  por diseño, así que se cerró por la vía UX (path 1 del DoD).
+
+**Fix (mejora de claridad UX, no toca el contrato de visibilidad):** en el dashboard del fotógrafo, para
+eventos **solo** (no-moderación, donde el grid mezcla approved+pending bajo un único "N fotos"), se
+añadió un aviso `PhotosProcessingNotice` que desglosa cuántas están **públicas ahora** vs cuántas **aún se
+están procesando** (approved vs pending), para que "35 fotos" no se lea como fotos perdidas cuando la
+pública muestra 0. Se renderiza solo cuando hay pendientes; los eventos de moderación ya desglosan esto
+via la pestaña Pending. La pública sigue mostrando **solo** approved + `deleted_at IS NULL`.
 - **Blockers:** ninguno (pero el **primer paso es verificar los `upload_status` en la BD** — de eso depende si es bug o estado esperado; ver DoD)
 - **Rama:** `fix/public-event-no-photos`  (tipo = fix)
 - **OpenSpec change:** —  (bug de visibilidad/estado; evaluar al ejecutar)

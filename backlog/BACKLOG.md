@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-174 | La página pública del evento (`/events/<slug>`) muestra 0 fotos aunque el dashboard del fotógrafo dice 35 — la pública filtra `upload_status='approved'` y el dashboard cuenta approved+pending; verificar en BD local si las 35 están `pending` (worker/aprobación → esperado) o `approved` (bug real de caching/query) | — | todo |
+| 1 | P2 | T-174 | La página pública del evento (`/events/<slug>`) muestra 0 fotos aunque el dashboard del fotógrafo dice 35 — la pública filtra `upload_status='approved'` y el dashboard cuenta approved+pending; verificar en BD local si las 35 están `pending` (worker/aprobación → esperado) o `approved` (bug real de caching/query) | — | doing |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |
