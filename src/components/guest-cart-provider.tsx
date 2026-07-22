@@ -7,6 +7,10 @@ interface GuestCartContextValue {
   items: GuestCartItem[];
   itemCount: number;
   subtotalCents: number;
+  /** False until localStorage has been read on mount. Consumers must not treat
+   * an empty cart as "genuinely empty" while this is false — the items may
+   * simply not have loaded yet, which would flash the empty state (T-176). */
+  hydrated: boolean;
   addItem: (item: GuestCartItem) => void;
   removeItem: (photoId: string) => void;
   clearCart: () => void;
@@ -17,6 +21,7 @@ const GuestCartContext = createContext<GuestCartContextValue>({
   items: [],
   itemCount: 0,
   subtotalCents: 0,
+  hydrated: false,
   addItem: () => {},
   removeItem: () => {},
   clearCart: () => {},
@@ -75,6 +80,7 @@ export function GuestCartProvider({ children }: { children: React.ReactNode }) {
         items,
         itemCount: items.length,
         subtotalCents,
+        hydrated,
         addItem,
         removeItem,
         clearCart,
