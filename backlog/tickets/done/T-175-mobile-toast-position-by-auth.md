@@ -1,11 +1,11 @@
 # T-175 · Posición del toast en mobile según estado de auth
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/mobile-toast-position-by-auth`  (tipo = feat | fix | chore | refactor)
 - **OpenSpec change:** —  (UI aislada, 1 archivo — no aplica)
-- **PR:** —
+- **PR:** #236
 
 ## Requerimiento
 En mobile, los toasts hoy salen **arriba para todos**. Eso es correcto para usuarios
