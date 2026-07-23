@@ -1,17 +1,23 @@
 'use client';
 
 import { Toaster as SonnerToaster, type ToasterProps } from 'sonner';
+import { useAuthUser } from '@/hooks/use-auth-user';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 export function Toaster(props: ToasterProps) {
-  // On mobile, show toasts at the top: a bottom toast covers the fixed bottom
-  // nav (and the "Ver carrito" action inside it), whereas a top toast blocks
-  // nothing. Desktop keeps the bottom-right placement.
   const isMobile = useIsMobile();
+  // On mobile, placement depends on auth state. Authenticated viewers have the
+  // fixed bottom nav (and its "Ver carrito" action), which a bottom toast would
+  // cover — so they get a top toast. Unauthenticated viewers have no bottom nav,
+  // so bottom is the better, less intrusive placement for them. `user` is
+  // `undefined` until auth resolves; treat that window as authenticated so we
+  // never risk covering a nav that may be there. Desktop keeps bottom-right.
+  const { user } = useAuthUser();
+  const mobilePosition = user === null ? 'bottom-center' : 'top-center';
 
   return (
     <SonnerToaster
-      position={isMobile ? 'top-center' : 'bottom-right'}
+      position={isMobile ? mobilePosition : 'bottom-right'}
       closeButton
       duration={4000}
       gap={10}
