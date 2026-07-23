@@ -25,13 +25,14 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { useLoginHref, useSignupHref } from '@/hooks/use-login-href';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 
 export function GuestCartContent() {
-  const { items, removeItem, clearCart, subtotalCents } = useGuestCart();
+  const { items, removeItem, clearCart, subtotalCents, hydrated } = useGuestCart();
   const router = useRouter();
   const queryClient = useQueryClient();
   const photoIds = useMemo(() => items.map((item) => item.photoId), [items]);
@@ -129,6 +130,33 @@ export function GuestCartContent() {
   };
 
   const formatPrice = (cents: number) => (cents === 0 ? t('free') : `$${(cents / 100).toFixed(2)}`);
+
+  // The guest cart lives in localStorage and is read on mount, so `items` is
+  // empty on the first client render regardless of whether the cart truly is.
+  // Show a skeleton until hydration completes — never the empty state — so a
+  // populated cart doesn't flash "empty" before its items paint (T-176). Only
+  // after hydration is `items.length === 0` a genuine empty cart.
+  if (!hydrated) {
+    return (
+      <div className="space-y-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex gap-4 rounded-lg border border-border bg-card p-3">
+            <Skeleton className="h-24 w-24 shrink-0 rounded-lg" />
+            <div className="flex flex-1 flex-col gap-2 justify-between py-1">
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-3 w-1/2" />
+              </div>
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-6 w-16" />
+                <Skeleton className="h-8 w-20" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (

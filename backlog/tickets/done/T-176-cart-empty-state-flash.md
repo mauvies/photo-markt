@@ -1,11 +1,11 @@
 # T-176 · El carrito parpadea el estado vacío antes de renderizar los ítems
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/cart-empty-state-flash`  (tipo = feat | fix | chore | refactor)
 - **OpenSpec change:** —  (bug acotado; se decide al ejecutar si toca >1 archivo)
-- **PR:** —
+- **PR:** #235
 
 ## Requerimiento
 Al navegar al carrito con ítems dentro, la página primero renderiza el estado "tu carrito está

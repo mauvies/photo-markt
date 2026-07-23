@@ -82,16 +82,22 @@ const CART_ITEM = {
 
 const removeItemMock = vi.fn();
 
+// Mutable so individual tests can drive the hydration/items state the provider
+// exposes (T-176). Defaults to a hydrated cart with one item, matching the
+// pre-existing tests below.
+const guestCartValue = {
+  items: [CART_ITEM] as (typeof CART_ITEM)[],
+  itemCount: 1,
+  subtotalCents: 1500,
+  hydrated: true,
+  addItem: vi.fn(),
+  removeItem: removeItemMock,
+  clearCart: vi.fn(),
+  hasItem: () => false,
+};
+
 vi.mock('@/components/guest-cart-provider', () => ({
-  useGuestCart: () => ({
-    items: [CART_ITEM],
-    itemCount: 1,
-    subtotalCents: 1500,
-    addItem: vi.fn(),
-    removeItem: removeItemMock,
-    clearCart: vi.fn(),
-    hasItem: () => false,
-  }),
+  useGuestCart: () => guestCartValue,
 }));
 
 import { GuestCartContent } from '@/app/[lang]/cart/guest-cart-content';
@@ -113,6 +119,11 @@ afterEach(() => {
   createGuestCheckoutSessionAction.mockReset();
   removeItemMock.mockReset();
   toastMock.mockClear();
+  // Restore the default hydrated-with-one-item state for the next test.
+  guestCartValue.items = [CART_ITEM];
+  guestCartValue.itemCount = 1;
+  guestCartValue.subtotalCents = 1500;
+  guestCartValue.hydrated = true;
 });
 
 describe('GuestCartContent — live preview resolution (T-115)', () => {
@@ -194,5 +205,37 @@ describe('GuestCartContent — checkout failure re-validates the cart (T-117)', 
     // (rate-limited) checkout indefinitely. After the fix, the failure
     // triggers a fresh validation call.
     await waitFor(() => expect(loadGuestCartStateAction).toHaveBeenCalled());
+  });
+});
+
+describe('GuestCartContent — no empty-state flash before hydration (T-176)', () => {
+  it('renders a skeleton, not the empty state, while the cart is still hydrating from localStorage', () => {
+    // A populated localStorage cart is `items: []` on the first client render,
+    // before the provider's mount effect reads it (`hydrated: false`).
+    guestCartValue.items = [];
+    guestCartValue.itemCount = 0;
+    guestCartValue.subtotalCents = 0;
+    guestCartValue.hydrated = false;
+
+    const { container } = renderCart();
+
+    // Before the fix, an unhydrated empty `items` fell straight through to the
+    // empty state, flashing "empty" on a cart that may actually have items.
+    // After the fix, a skeleton shows until hydration resolves.
+    expect(container.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0);
+    expect(screen.queryByText('empty')).toBeNull();
+    expect(screen.queryByText('browseEvents')).toBeNull();
+  });
+
+  it('renders the empty state once hydration confirms the cart is genuinely empty', () => {
+    guestCartValue.items = [];
+    guestCartValue.itemCount = 0;
+    guestCartValue.subtotalCents = 0;
+    guestCartValue.hydrated = true;
+
+    const { container } = renderCart();
+
+    expect(screen.getByText('empty')).toBeTruthy();
+    expect(container.querySelectorAll('[data-slot="skeleton"]').length).toBe(0);
   });
 });
