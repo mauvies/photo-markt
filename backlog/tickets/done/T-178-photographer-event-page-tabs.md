@@ -1,7 +1,7 @@
 # T-178 · Reestructurar la página de evento del fotógrafo en tabs
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno (pero **debe mergear ANTES** del ticket de la sección Share — le deja el hogar)
 - **Rama:** `refactor/photographer-event-page-tabs`  (tipo = refactor — reestructura organizativa, sin cambio de comportamiento)
 - **OpenSpec change:** —  (probable: toca `page.tsx` + wrapper de tabs + header + i18n → >1 archivo; decidir al ejecutar)
