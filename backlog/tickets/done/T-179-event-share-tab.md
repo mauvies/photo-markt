@@ -1,11 +1,11 @@
 # T-179 · Construir el tab Share de la página de evento del fotógrafo
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno (Dep **T-178** — el tab Share es su hogar; si T-178 no ha aterrizado, hay fallback: bloque standalone. Ver Notas)
 - **Rama:** `feat/event-share-tab`  (tipo = feat)
 - **OpenSpec change:** —  (probable innecesario: reusa componentes existentes, 1 tab; decidir al ejecutar)
-- **PR:** —
+- **PR:** #239
 
 ## Requerimiento
 Cuando un fotógrafo abre uno de sus eventos en `/dashboard/photographer/events/[id]`, no hay una forma fácil de agarrar el link para enviárselo a un atleta que pide sus fotos. El ticket de reestructura en tabs (**T-178**) crea un tab **"Share"** como su hogar — este ticket lo llena.
