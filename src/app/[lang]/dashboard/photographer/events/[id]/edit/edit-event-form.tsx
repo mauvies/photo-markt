@@ -9,7 +9,6 @@ import { z } from 'zod';
 import { EventCoverField } from '@/components/event-cover-field';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { UploadProgressDialog } from '@/components/upload-progress-dialog';
 import { Dropzone } from '@/components/uploader/Dropzone';
 import type { Event } from '@/database/queries/events';
@@ -20,6 +19,7 @@ import { getPlanLimitType, isPlanLimitError } from '@/lib/plan-limits';
 import { usePhotoUpload } from '@/lib/use-photo-upload';
 import { removeEventCoverAction, uploadEventCoverAction } from '../../new/actions';
 import { updateEventAction } from './actions';
+import { EventAiSettingsFields } from './components/event-ai-settings-fields';
 import { EventFormFields } from './components/event-form-fields';
 import { EventPhotoGrid } from './components/event-photo-grid';
 import {
@@ -29,6 +29,7 @@ import {
   type PendingPhoto,
   type PhotoWithUrl,
 } from './edit-event-schema';
+import { buildEventUpdateFormData } from './event-form-data';
 
 interface EditEventFormProps {
   event: Event;
@@ -187,43 +188,7 @@ export function EditEventForm({ event, initialPhotos, initialCoverUrl }: EditEve
         const parsed = eventSchema.parse(value);
         setSubmitError(null);
 
-        const formData = new FormData();
-        formData.append('name', parsed.name.trim());
-        formData.append('activity', parsed.activity);
-        formData.append('date', parsed.date);
-        // Always send session_time (even empty) so clearing it persists as null.
-        formData.append('session_time', parsed.session_time?.trim() ?? '');
-        if (parsed.city?.trim()) {
-          formData.append('city', parsed.city.trim());
-        }
-        // Always send state/country (even empty) so switching to a place
-        // without one, or clearing, persists (T-107).
-        formData.append('state', parsed.state?.trim() ?? '');
-        formData.append('country', parsed.country?.trim() ?? '');
-        formData.append('is_public', parsed.is_public ? 'true' : 'false');
-        formData.append('watermark_enabled', parsed.watermark_enabled ? 'true' : 'false');
-        formData.append('is_collaborative', parsed.is_collaborative ? 'true' : 'false');
-        formData.append('allow_guest_upload', parsed.allow_guest_upload ? 'true' : 'false');
-        formData.append(
-          'require_upload_approval',
-          parsed.require_upload_approval ? 'true' : 'false',
-        );
-        formData.append('ai_matching_enabled', parsed.ai_matching_enabled ? 'true' : 'false');
-        formData.append('bib_detection_enabled', parsed.bib_detection_enabled ? 'true' : 'false');
-        formData.append('reveal_gate_enabled', parsed.reveal_gate_enabled ? 'true' : 'false');
-        // `contains_minors` is read-only post-creation. We still send the
-        // current value so the server-side guard can compare and reject any
-        // tampering. The form input is disabled either way.
-        formData.append('contains_minors', parsed.contains_minors ? 'true' : 'false');
-        if (parsed.price_per_photo !== undefined && parsed.price_per_photo !== null) {
-          const price =
-            typeof parsed.price_per_photo === 'string'
-              ? Number.parseFloat(parsed.price_per_photo)
-              : parsed.price_per_photo;
-          if (!Number.isNaN(price) && price >= 0) {
-            formData.append('price_per_photo', price.toString());
-          }
-        }
+        const formData = buildEventUpdateFormData(parsed);
 
         const photoIdsToDelete = Array.from(pendingDeletions);
 
@@ -341,112 +306,8 @@ export function EditEventForm({ event, initialPhotos, initialCoverUrl }: EditEve
           </div>
         </div>
 
-        {/* AI matching + bib detection block */}
-        <div className="grid gap-3 md:grid-cols-2">
-          <form.Subscribe selector={(state) => state.values.contains_minors}>
-            {(containsMinors) => (
-              <>
-                <form.Field name="ai_matching_enabled">
-                  {(field) => (
-                    <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
-                      <div className="grid gap-1">
-                        <Label htmlFor="edit_ai_matching_enabled">
-                          {t('aiMatchingLabel' as keyof Dictionary['newEvent'])}
-                        </Label>
-                        <p className="text-xs text-muted-foreground">
-                          {containsMinors
-                            ? t('aiMatchingDisabledByMinors' as keyof Dictionary['newEvent'])
-                            : t('aiMatchingDesc' as keyof Dictionary['newEvent'])}
-                        </p>
-                      </div>
-                      <Switch
-                        id="edit_ai_matching_enabled"
-                        checked={!containsMinors && field.state.value}
-                        disabled={containsMinors}
-                        onCheckedChange={(checked) => {
-                          field.handleChange(checked);
-                          field.handleBlur();
-                          if (!checked) form.setFieldValue('reveal_gate_enabled', false);
-                        }}
-                      />
-                    </div>
-                  )}
-                </form.Field>
-                <form.Subscribe selector={(state) => state.values.ai_matching_enabled}>
-                  {(aiEnabled) => (
-                    <form.Field name="reveal_gate_enabled">
-                      {(field) => {
-                        const available = !containsMinors && aiEnabled;
-                        return (
-                          <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
-                            <div className="grid gap-1">
-                              <Label htmlFor="edit_reveal_gate_enabled">
-                                {t('revealGateLabel' as keyof Dictionary['newEvent'])}
-                              </Label>
-                              <p className="text-xs text-muted-foreground">
-                                {containsMinors
-                                  ? t('revealGateDisabledByMinors' as keyof Dictionary['newEvent'])
-                                  : !aiEnabled
-                                    ? t('revealGateRequiresAi' as keyof Dictionary['newEvent'])
-                                    : t('revealGateDesc' as keyof Dictionary['newEvent'])}
-                              </p>
-                            </div>
-                            <Switch
-                              id="edit_reveal_gate_enabled"
-                              checked={available && field.state.value}
-                              disabled={!available}
-                              onCheckedChange={(checked) => {
-                                field.handleChange(checked);
-                                field.handleBlur();
-                              }}
-                            />
-                          </div>
-                        );
-                      }}
-                    </form.Field>
-                  )}
-                </form.Subscribe>
-                <form.Field name="bib_detection_enabled">
-                  {(field) => (
-                    <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
-                      <div className="grid gap-1">
-                        <Label htmlFor="edit_bib_detection_enabled">
-                          {t('bibDetectionLabel' as keyof Dictionary['newEvent'])}
-                        </Label>
-                        <p className="text-xs text-muted-foreground">
-                          {containsMinors
-                            ? t('bibDetectionDisabledByMinors' as keyof Dictionary['newEvent'])
-                            : t('bibDetectionDesc' as keyof Dictionary['newEvent'])}
-                        </p>
-                      </div>
-                      <Switch
-                        id="edit_bib_detection_enabled"
-                        checked={!containsMinors && field.state.value}
-                        disabled={containsMinors}
-                        onCheckedChange={(checked) => {
-                          field.handleChange(checked);
-                          field.handleBlur();
-                        }}
-                      />
-                    </div>
-                  )}
-                </form.Field>
-                {/* `contains_minors` is read-only after event creation. */}
-                <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3 opacity-90">
-                  <div className="grid gap-1">
-                    <Label htmlFor="edit_contains_minors">
-                      {t('containsMinorsLabel' as keyof Dictionary['newEvent'])}
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      {t('containsMinorsImmutableHelper' as keyof Dictionary['newEvent'])}
-                    </p>
-                  </div>
-                  <Switch id="edit_contains_minors" checked={containsMinors} disabled />
-                </div>
-              </>
-            )}
-          </form.Subscribe>
-        </div>
+        {/* AI matching + reveal gate + bib detection + minors block. */}
+        <EventAiSettingsFields form={form} />
 
         {/* Photos Section - Full Width */}
         <div className="space-y-2">

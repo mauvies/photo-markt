@@ -1377,9 +1377,15 @@
     "disabled": "Disabled",
     "yes": "Yes",
     "no": "No",
-    "settings": "Settings",
-    "showMore": "Show more details",
-    "showLess": "Show less",
+    "infoTitle": "Event info",
+    "settingsTitle": "Event settings",
+    "editInfoTitle": "Edit event info",
+    "editSettingsTitle": "Edit event settings",
+    "editInfoSubtitle": "Update the event's name, activity, date, location and price.",
+    "editSettingsSubtitle": "Update the event's photo and matching settings.",
+    "saveChanges": "Save changes",
+    "saving": "Saving…",
+    "cancel": "Cancel",
     "edit": "Edit"
   },
   "shareEvent": {

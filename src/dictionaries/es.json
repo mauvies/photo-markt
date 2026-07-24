@@ -1377,9 +1377,15 @@
     "disabled": "Desactivado",
     "yes": "Sí",
     "no": "No",
-    "settings": "Configuración",
-    "showMore": "Mostrar más detalles",
-    "showLess": "Mostrar menos",
+    "infoTitle": "Información del evento",
+    "settingsTitle": "Configuración del evento",
+    "editInfoTitle": "Editar información del evento",
+    "editSettingsTitle": "Editar configuración del evento",
+    "editInfoSubtitle": "Actualiza el nombre, actividad, fecha, ubicación y precio del evento.",
+    "editSettingsSubtitle": "Actualiza la configuración de fotos y coincidencias del evento.",
+    "saveChanges": "Guardar cambios",
+    "saving": "Guardando…",
+    "cancel": "Cancelar",
     "edit": "Editar"
   },
   "shareEvent": {

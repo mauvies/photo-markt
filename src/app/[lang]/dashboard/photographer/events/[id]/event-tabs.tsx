@@ -41,7 +41,7 @@ export function EventTabs({ initialTab, labels, photos, details, share }: EventT
   };
 
   return (
-    <Tabs value={tab} onValueChange={handleChange} className="mt-6">
+    <Tabs value={tab} onValueChange={handleChange} className="mt-4">
       <TabsList>
         <TabsTrigger value="photos">{labels.photos}</TabsTrigger>
         <TabsTrigger value="details">{labels.details}</TabsTrigger>

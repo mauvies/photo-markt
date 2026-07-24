@@ -36,9 +36,10 @@ import { getPhotoTags } from './actions';
 import { AiStatusCard } from './ai-status-card';
 import { BibStatusCard } from './bib-status-card';
 import { EventActionsMenu } from './event-actions-menu';
-import { EventDetailsCard } from './event-details-card';
+import { EventInfoCard } from './event-info-card';
 import { EventModerationTabs } from './event-moderation-tabs';
 import { EventPhotoAlbum } from './event-photo-album';
+import { EventSettingsCard } from './event-settings-card';
 import { EventShareTab } from './event-share-tab';
 import { parseEventTab } from './event-tab';
 import { EventTabs } from './event-tabs';
@@ -223,14 +224,15 @@ export default async function EventDetailPage({
   // just the first page), so `RejectedToast` diffs against the real count.
   const rejectedToastLabel = dict.newEvent.uploadRejectedToast;
 
-  // The three sections above the gallery — "Event details", the live AI
-  // indexing status and "Share event". AI and Share are conditional (`null`
-  // when they don't apply); "Event details" is always present.
-  const detailsCard = (
-    <EventDetailsCard
+  // The Details tab splits the event configuration into two cards (T-179):
+  // "Event info" (date/location/activity/type/price/visibility) and "Event
+  // settings" (the on/off toggles). Each has its own Edit button that opens a
+  // scoped edit page (`?section=info` / `?section=settings`) so editing is
+  // localized rather than opening the whole-event form.
+  const infoCard = (
+    <EventInfoCard
       t={dict.eventDetails}
       type={event.type}
-      isCollaborative={event.is_collaborative}
       activityLabel={
         dict.activities[event.activity as keyof typeof dict.activities] ?? event.activity
       }
@@ -242,13 +244,20 @@ export default async function EventDetailPage({
       })}
       pricePerPhoto={event.price_per_photo}
       isPublic={event.is_public}
+      editHref={localizedPath(lang, `/dashboard/photographer/events/${id}/edit?section=info`)}
+    />
+  );
+  const settingsCard = (
+    <EventSettingsCard
+      t={dict.eventDetails}
+      isCollaborative={event.is_collaborative}
       watermarkEnabled={event.watermark_enabled}
       aiMatchingEnabled={aiMatchingEnabled}
       bibDetectionEnabled={bibDetectionEnabled}
       containsMinors={containsMinors}
       requireUploadApproval={event.require_upload_approval}
       allowGuestUpload={event.allow_guest_upload}
-      editHref={localizedPath(lang, `/dashboard/photographer/events/${id}/edit`)}
+      editHref={localizedPath(lang, `/dashboard/photographer/events/${id}/edit?section=settings`)}
     />
   );
 
@@ -450,7 +459,8 @@ export default async function EventDetailPage({
   // then the organizer photographers section.
   const detailsTab = (
     <div className="space-y-4">
-      {detailsCard}
+      {infoCard}
+      {settingsCard}
       {aiStatusCard || bibStatusCard ? (
         <div className="grid gap-4 md:grid-cols-2">
           {aiStatusCard}
