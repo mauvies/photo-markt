@@ -2,18 +2,7 @@
 
 import { type ReactNode, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-
-export type EventTab = 'photos' | 'details' | 'share';
-
-/**
- * Resolve the `?tab=` search param into a valid top-level tab, defaulting to
- * `photos` (the tab the photographer lands on when opening an event). Mirrors
- * the Sales page's `parseTab` helper — same URL-driven pattern.
- */
-export function parseEventTab(value: string | string[] | undefined): EventTab {
-  const raw = Array.isArray(value) ? value[0] : value;
-  return raw === 'details' || raw === 'share' ? raw : 'photos';
-}
+import { type EventTab, parseEventTab } from './event-tab';
 
 type EventTabsProps = {
   initialTab: EventTab;
