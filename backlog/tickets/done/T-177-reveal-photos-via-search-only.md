@@ -1,7 +1,8 @@
 # T-177 · [PLAN] Setting por evento: revelar fotos solo vía búsqueda facial/dorsal
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
+- **PR:** #237
 - **Blockers:** ninguno — **PERO requiere modo PLAN + aprobación antes de implementar** (feature de control de acceso). NO ejecutar autónomamente con `/work-next`.
 - **Rama:** `feat/reveal-photos-via-search-only`  (tipo = feat | fix | chore | refactor)
 - **OpenSpec change:** requerido (>1 archivo, seguridad/control de acceso) — `/opsx:propose` al arrancar.
