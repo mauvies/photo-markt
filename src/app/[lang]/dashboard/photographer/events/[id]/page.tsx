@@ -1,5 +1,6 @@
 import { DashboardHeader } from '@/components/dashboard-header';
 import { EventShareCode } from '@/components/event-share-code';
+import { Badge } from '@/components/ui/badge';
 import {
   countEventPhotos,
   countEventPhotosByStatus,
@@ -36,6 +37,7 @@ import { EventActionsMenu } from './event-actions-menu';
 import { EventDetailsCard } from './event-details-card';
 import { EventModerationTabs } from './event-moderation-tabs';
 import { EventPhotoAlbum } from './event-photo-album';
+import { EventTabs, parseEventTab } from './event-tabs';
 import { OrganizerUploadSection } from './organizer-upload-section';
 import { buildOwnerPhotoAlbumItem } from './owner-album-item';
 import { PhotographersSection } from './photographers-section';
@@ -47,14 +49,16 @@ export default async function EventDetailPage({
   searchParams,
 }: {
   params: Promise<{ lang: string; id: string }>;
-  searchParams: Promise<{ uploaded?: string }>;
+  searchParams: Promise<{ uploaded?: string; tab?: string | string[] }>;
 }) {
   const { lang, id } = await params;
   // `uploaded` is the count of photos the client attached in the previous
   // wizard/edit submit. If the worker later rejects any of those (invalid
   // bytes, size-mismatch), the rendered grid will show fewer than `uploaded`
   // — `RejectedToast` does the diff and fires a single toast.
-  const { uploaded: uploadedParam } = await searchParams;
+  // `tab` selects the active top-level tab (Photos/Details/Share, T-178).
+  const { uploaded: uploadedParam, tab: tabParam } = await searchParams;
+  const initialTab = parseEventTab(tabParam);
   const dict = await getDictionary(lang as Locale);
   const supabase = await createClient();
 
@@ -312,47 +316,34 @@ export default async function EventDetailPage({
     />
   ) : null;
 
-  // 1–4 cards depending on which sections apply — the grid column count matches
-  // so the present cards share one equal-height row on desktop. With all four
-  // present, wrap to a 2×2 on md and a single row only from lg up.
-  const sectionCount = 1 + (aiStatusCard ? 1 : 0) + (bibStatusCard ? 1 : 0) + (shareCard ? 1 : 0);
+  // The Details tab holds 1–3 cards (Event details + optional AI + optional
+  // bib) — the grid column count matches so the present cards share one
+  // equal-height row on desktop. Share lives in its own tab now (T-178).
+  const sectionCount = 1 + (aiStatusCard ? 1 : 0) + (bibStatusCard ? 1 : 0);
   const sectionsGridClass =
-    sectionCount >= 4
-      ? 'md:grid-cols-2 lg:grid-cols-4'
-      : sectionCount === 3
-        ? 'md:grid-cols-3'
-        : sectionCount === 2
-          ? 'md:grid-cols-2'
-          : '';
+    sectionCount === 3 ? 'md:grid-cols-3' : sectionCount === 2 ? 'md:grid-cols-2' : '';
 
-  return (
-    <div>
-      {uploadedParam ? (
-        <RejectedToast visibleCount={visibleCount} label={rejectedToastLabel} />
-      ) : null}
-      <div className="flex items-start justify-between gap-3">
-        <DashboardHeader title={event.name} />
-        <div className="shrink-0">
-          <EventActionsMenu eventId={id} t={dict.events} />
-        </div>
-      </div>
-      {/* Event details, live AI indexing status, bib-detection status and
-          "Share event" — one equal-height row on desktop (the grid stretches
-          the cards to match), stacked full-width on mobile. AI, bib and Share
-          are conditional. */}
-      <div className={cn('mt-4 grid gap-4', sectionsGridClass)}>
-        {detailsCard}
-        {aiStatusCard}
-        {bibStatusCard}
-        {shareCard}
-      </div>
-      {event.type === 'organizer' && (
-        <div className="mt-4">
-          <TranslationsProvider translations={dict.organizerEvent}>
-            <PhotographersSection eventId={id} initialPhotographers={eventPhotographers} />
-          </TranslationsProvider>
-        </div>
-      )}
+  // Compact indexing indicator for the persistent header — a summarised view of
+  // the live status; the full `AiStatusCard` (with polling/actions) stays in the
+  // Details tab. Shown only when AI matching is on and past idle.
+  const headerDate = new Date(event.date).toDateString().split(' ').slice(1).join(' ');
+  const indexingBadge =
+    aiMatchingEnabled && aiProgress && aiMatchingStatus !== 'idle' ? (
+      <Badge variant={aiMatchingStatus === 'failed' ? 'destructive' : 'secondary'}>
+        {aiMatchingStatus === 'ready'
+          ? dict.rekognition.statusReady
+          : aiMatchingStatus === 'indexing'
+            ? dict.rekognition.statusIndexing
+            : dict.rekognition.statusFailed}
+      </Badge>
+    ) : null;
+
+  // Tab slots — the existing sections, regrouped. Photos: the processing notice
+  // + moderation/album grid (behaviour identical). Details: the info + status
+  // cards + organizer photographers. Share: the share-code card (its own ticket,
+  // T-179, builds this out; a minimal note stands in when there's no code yet).
+  const photosTab = (
+    <TranslationsProvider translations={dict.events}>
       {!showPendingTab ? (
         <PhotosProcessingNotice
           pendingCount={visibleCount - approvedCount}
@@ -363,82 +354,133 @@ export default async function EventDetailPage({
           }}
         />
       ) : null}
-      <div className="mt-4">
-        <TranslationsProvider translations={dict.events}>
-          {showPendingTab ? (
-            <EventModerationTabs
-              approvedLabel={dict.collaborativeEvent.tabAllPhotos}
-              pendingLabelTemplate={dict.collaborativeEvent.tabPending}
-              approvedCount={visibleCount}
-              pendingCount={pendingItems.length}
-              albumProps={{
-                eventId: id,
-                isCollaborative: event.is_collaborative,
-                uploaderLabels: {
-                  tooltip: dict.collaborativeEvent.uploaderTooltip,
-                  popoverHeading: dict.collaborativeEvent.uploaderPopoverHeading,
-                  guestLabel: dict.collaborativeEvent.uploaderGuestLabel,
-                  authenticatedLabel: dict.collaborativeEvent.uploaderAuthenticatedLabel,
-                },
-                iconTooltips: dict.photoIconButtons,
-                items: albumItems,
-                imageUnavailableLabel: dict.eventCard.imageUnavailable,
-                totalCount: visibleCount,
-                initialHasMore: hasMore,
-                loadMoreLabel: dict.events.loadMore,
-                loadMoreErrorLabel: dict.events.loadMoreFailed,
-              }}
-              pendingProps={{
-                eventId: id,
-                photos: pendingItems,
-                labels: {
-                  empty: dict.collaborativeEvent.pendingEmpty,
-                  approveAria: dict.collaborativeEvent.approveAria,
-                  rejectAria: dict.collaborativeEvent.rejectAria,
-                  select: dict.collaborativeEvent.pendingSelect,
-                  exitSelection: dict.collaborativeEvent.pendingExitSelection,
-                  countOne: dict.collaborativeEvent.pendingCountOne,
-                  countMany: dict.collaborativeEvent.pendingCountMany,
-                  approveAll: dict.collaborativeEvent.pendingApproveAll,
-                  approveSelected: dict.collaborativeEvent.pendingApproveSelected,
-                  rejectSelected: dict.collaborativeEvent.pendingRejectSelected,
-                  rejectConfirmTitle: dict.collaborativeEvent.rejectConfirmTitle,
-                  rejectConfirmTitleMany: dict.collaborativeEvent.rejectConfirmTitleMany,
-                  rejectConfirmDescription: dict.collaborativeEvent.rejectConfirmDescription,
-                  rejectConfirmDescriptionMany:
-                    dict.collaborativeEvent.rejectConfirmDescriptionMany,
-                  rejectConfirmAction: dict.collaborativeEvent.rejectConfirmAction,
-                  rejectConfirmCancel: dict.collaborativeEvent.rejectConfirmCancel,
-                  rejectConfirmPending: dict.collaborativeEvent.rejectConfirmPending,
-                  approveSuccessOne: dict.collaborativeEvent.approveSuccessOne,
-                  approveSuccessMany: dict.collaborativeEvent.approveSuccessMany,
-                  rejectSuccessOne: dict.collaborativeEvent.rejectSuccessOne,
-                  rejectSuccessMany: dict.collaborativeEvent.rejectSuccessMany,
-                  actionError: dict.collaborativeEvent.queueActionError,
-                },
-              }}
-            />
-          ) : (
-            <EventPhotoAlbum
-              eventId={id}
-              isCollaborative={event.is_collaborative}
-              uploaderLabels={{
+      <div className={showPendingTab ? undefined : 'mt-4'}>
+        {showPendingTab ? (
+          <EventModerationTabs
+            approvedLabel={dict.collaborativeEvent.tabAllPhotos}
+            pendingLabelTemplate={dict.collaborativeEvent.tabPending}
+            approvedCount={visibleCount}
+            pendingCount={pendingItems.length}
+            albumProps={{
+              eventId: id,
+              isCollaborative: event.is_collaborative,
+              uploaderLabels: {
                 tooltip: dict.collaborativeEvent.uploaderTooltip,
                 popoverHeading: dict.collaborativeEvent.uploaderPopoverHeading,
                 guestLabel: dict.collaborativeEvent.uploaderGuestLabel,
                 authenticatedLabel: dict.collaborativeEvent.uploaderAuthenticatedLabel,
-              }}
-              iconTooltips={dict.photoIconButtons}
-              items={albumItems}
-              imageUnavailableLabel={dict.eventCard.imageUnavailable}
-              totalCount={visibleCount}
-              initialHasMore={hasMore}
-              loadMoreLabel={dict.events.loadMore}
-              loadMoreErrorLabel={dict.events.loadMoreFailed}
-            />
-          )}
-        </TranslationsProvider>
+              },
+              iconTooltips: dict.photoIconButtons,
+              items: albumItems,
+              imageUnavailableLabel: dict.eventCard.imageUnavailable,
+              totalCount: visibleCount,
+              initialHasMore: hasMore,
+              loadMoreLabel: dict.events.loadMore,
+              loadMoreErrorLabel: dict.events.loadMoreFailed,
+            }}
+            pendingProps={{
+              eventId: id,
+              photos: pendingItems,
+              labels: {
+                empty: dict.collaborativeEvent.pendingEmpty,
+                approveAria: dict.collaborativeEvent.approveAria,
+                rejectAria: dict.collaborativeEvent.rejectAria,
+                select: dict.collaborativeEvent.pendingSelect,
+                exitSelection: dict.collaborativeEvent.pendingExitSelection,
+                countOne: dict.collaborativeEvent.pendingCountOne,
+                countMany: dict.collaborativeEvent.pendingCountMany,
+                approveAll: dict.collaborativeEvent.pendingApproveAll,
+                approveSelected: dict.collaborativeEvent.pendingApproveSelected,
+                rejectSelected: dict.collaborativeEvent.pendingRejectSelected,
+                rejectConfirmTitle: dict.collaborativeEvent.rejectConfirmTitle,
+                rejectConfirmTitleMany: dict.collaborativeEvent.rejectConfirmTitleMany,
+                rejectConfirmDescription: dict.collaborativeEvent.rejectConfirmDescription,
+                rejectConfirmDescriptionMany: dict.collaborativeEvent.rejectConfirmDescriptionMany,
+                rejectConfirmAction: dict.collaborativeEvent.rejectConfirmAction,
+                rejectConfirmCancel: dict.collaborativeEvent.rejectConfirmCancel,
+                rejectConfirmPending: dict.collaborativeEvent.rejectConfirmPending,
+                approveSuccessOne: dict.collaborativeEvent.approveSuccessOne,
+                approveSuccessMany: dict.collaborativeEvent.approveSuccessMany,
+                rejectSuccessOne: dict.collaborativeEvent.rejectSuccessOne,
+                rejectSuccessMany: dict.collaborativeEvent.rejectSuccessMany,
+                actionError: dict.collaborativeEvent.queueActionError,
+              },
+            }}
+          />
+        ) : (
+          <EventPhotoAlbum
+            eventId={id}
+            isCollaborative={event.is_collaborative}
+            uploaderLabels={{
+              tooltip: dict.collaborativeEvent.uploaderTooltip,
+              popoverHeading: dict.collaborativeEvent.uploaderPopoverHeading,
+              guestLabel: dict.collaborativeEvent.uploaderGuestLabel,
+              authenticatedLabel: dict.collaborativeEvent.uploaderAuthenticatedLabel,
+            }}
+            iconTooltips={dict.photoIconButtons}
+            items={albumItems}
+            imageUnavailableLabel={dict.eventCard.imageUnavailable}
+            totalCount={visibleCount}
+            initialHasMore={hasMore}
+            loadMoreLabel={dict.events.loadMore}
+            loadMoreErrorLabel={dict.events.loadMoreFailed}
+          />
+        )}
       </div>
+    </TranslationsProvider>
+  );
+
+  const detailsTab = (
+    <>
+      <div className={cn('grid gap-4', sectionsGridClass)}>
+        {detailsCard}
+        {aiStatusCard}
+        {bibStatusCard}
+      </div>
+      {event.type === 'organizer' && (
+        <div className="mt-4">
+          <TranslationsProvider translations={dict.organizerEvent}>
+            <PhotographersSection eventId={id} initialPhotographers={eventPhotographers} />
+          </TranslationsProvider>
+        </div>
+      )}
+    </>
+  );
+
+  const shareTab = shareCard ?? (
+    <p className="text-sm text-muted-foreground">{dict.events.shareTabEmpty}</p>
+  );
+
+  return (
+    <div>
+      {uploadedParam ? (
+        <RejectedToast visibleCount={visibleCount} label={rejectedToastLabel} />
+      ) : null}
+      {/* Persistent event header — visible on every tab so the photographer
+          always knows which event they're in without opening Details. */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <DashboardHeader title={event.name} />
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <span>{headerDate}</span>
+            {indexingBadge}
+          </div>
+        </div>
+        <div className="shrink-0">
+          <EventActionsMenu eventId={id} t={dict.events} />
+        </div>
+      </div>
+      <EventTabs
+        initialTab={initialTab}
+        labels={{
+          photos: dict.events.tabPhotos,
+          details: dict.events.tabDetails,
+          share: dict.events.tabShare,
+        }}
+        photos={photosTab}
+        details={detailsTab}
+        share={shareTab}
+      />
     </div>
   );
 }

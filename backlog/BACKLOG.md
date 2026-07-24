@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-178 | Reestructurar la página de evento del fotógrafo en tabs (Photos/Details/Share, header persistente, `?tab=`) | — · **debe mergear antes** de T-179 | todo |
+| 1 | P2 | T-178 | Reestructurar la página de evento del fotógrafo en tabs (Photos/Details/Share, header persistente, `?tab=`) | — · **debe mergear antes** de T-179 | doing |
 | 2 | P2 | T-179 | Construir el tab Share de la página de evento (URL compartible visible + copiar + native/social; privado incluye share_code) | Dep T-178 (fallback: bloque standalone) | todo |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
