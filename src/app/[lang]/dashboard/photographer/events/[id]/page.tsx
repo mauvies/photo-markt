@@ -1,5 +1,4 @@
 import { DashboardHeader } from '@/components/dashboard-header';
-import { EventShareCode } from '@/components/event-share-code';
 import { Badge } from '@/components/ui/badge';
 import {
   countEventPhotos,
@@ -24,11 +23,13 @@ import { redirectToLogin } from '@/lib/auth/redirect-to-login';
 import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
 import { eventUsesModerationQueue } from '@/lib/event-status';
 import { formatEventLocation } from '@/lib/format-location';
+import { getBaseUrl } from '@/lib/get-base-url';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedPath } from '@/lib/i18n/localized-path';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
+import { getShareableEventPath } from '@/lib/shareable-event-url';
 import { cn } from '@/lib/utils';
 import { getPhotoTags } from './actions';
 import { AiStatusCard } from './ai-status-card';
@@ -37,6 +38,7 @@ import { EventActionsMenu } from './event-actions-menu';
 import { EventDetailsCard } from './event-details-card';
 import { EventModerationTabs } from './event-moderation-tabs';
 import { EventPhotoAlbum } from './event-photo-album';
+import { EventShareTab } from './event-share-tab';
 import { EventTabs, parseEventTab } from './event-tabs';
 import { OrganizerUploadSection } from './organizer-upload-section';
 import { buildOwnerPhotoAlbumItem } from './owner-album-item';
@@ -307,14 +309,26 @@ export default async function EventDetailPage({
       />
     ) : null;
 
-  const shareCard = event.share_code ? (
-    <EventShareCode
-      shareCode={event.share_code}
+  // The event's real shareable URL, resolved to the public route that actually
+  // grants access (public → slug/id, private → share code, T-179) and prefixed
+  // with the current locale. `getBaseUrl` uses the request host so the copied
+  // link opens in the same environment (dev/preview/prod).
+  const shareUrl = `${await getBaseUrl()}${getShareableEventPath(event, lang)}`;
+  const shareTab = (
+    <EventShareTab
       eventName={event.name}
-      t={dict.shareEvent}
-      label={event.is_collaborative ? dict.collaborativeEvent.shareLinkLabel : undefined}
+      shareUrl={shareUrl}
+      isPublic={event.is_public}
+      labels={{
+        heading: dict.events.shareTabHeading,
+        description: dict.events.shareTabDescription,
+        privateNote: dict.events.shareTabPrivateNote,
+        copy: dict.events.shareTabCopy,
+        copied: dict.events.shareTabCopied,
+        shareTooltip: dict.events.shareTabShare,
+      }}
     />
-  ) : null;
+  );
 
   // The Details tab holds 1–3 cards (Event details + optional AI + optional
   // bib) — the grid column count matches so the present cards share one
@@ -340,8 +354,7 @@ export default async function EventDetailPage({
 
   // Tab slots — the existing sections, regrouped. Photos: the processing notice
   // + moderation/album grid (behaviour identical). Details: the info + status
-  // cards + organizer photographers. Share: the share-code card (its own ticket,
-  // T-179, builds this out; a minimal note stands in when there's no code yet).
+  // cards + organizer photographers. Share: the shareable-URL card (T-179).
   const photosTab = (
     <TranslationsProvider translations={dict.events}>
       {!showPendingTab ? (
@@ -445,10 +458,6 @@ export default async function EventDetailPage({
         </div>
       )}
     </>
-  );
-
-  const shareTab = shareCard ?? (
-    <p className="text-sm text-muted-foreground">{dict.events.shareTabEmpty}</p>
   );
 
   return (
