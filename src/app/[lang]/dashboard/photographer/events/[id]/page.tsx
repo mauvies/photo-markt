@@ -1,4 +1,5 @@
 import { DashboardHeader } from '@/components/dashboard-header';
+import { EventMetaLine } from '@/components/event-meta-line';
 import { Badge } from '@/components/ui/badge';
 import {
   countEventPhotos,
@@ -30,7 +31,6 @@ import { localizedPath } from '@/lib/i18n/localized-path';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { getShareableEventPath } from '@/lib/shareable-event-url';
-import { cn } from '@/lib/utils';
 import { getPhotoTags } from './actions';
 import { AiStatusCard } from './ai-status-card';
 import { BibStatusCard } from './bib-status-card';
@@ -331,17 +331,9 @@ export default async function EventDetailPage({
     />
   );
 
-  // The Details tab holds 1–3 cards (Event details + optional AI + optional
-  // bib) — the grid column count matches so the present cards share one
-  // equal-height row on desktop. Share lives in its own tab now (T-178).
-  const sectionCount = 1 + (aiStatusCard ? 1 : 0) + (bibStatusCard ? 1 : 0);
-  const sectionsGridClass =
-    sectionCount === 3 ? 'md:grid-cols-3' : sectionCount === 2 ? 'md:grid-cols-2' : '';
-
   // Compact indexing indicator for the persistent header — a summarised view of
   // the live status; the full `AiStatusCard` (with polling/actions) stays in the
   // Details tab. Shown only when AI matching is on and past idle.
-  const headerDate = new Date(event.date).toDateString().split(' ').slice(1).join(' ');
   const indexingBadge =
     aiMatchingEnabled && aiProgress && aiMatchingStatus !== 'idle' ? (
       <Badge variant={aiMatchingStatus === 'failed' ? 'destructive' : 'secondary'}>
@@ -368,7 +360,7 @@ export default async function EventDetailPage({
           }}
         />
       ) : null}
-      <div className={showPendingTab ? undefined : 'mt-4'}>
+      <div>
         {showPendingTab ? (
           <EventModerationTabs
             approvedLabel={dict.collaborativeEvent.tabAllPhotos}
@@ -444,21 +436,24 @@ export default async function EventDetailPage({
     </TranslationsProvider>
   );
 
+  // Details tab layout: the full-width "Event details" card (its own internal
+  // field grid) on top, then the live AI/bib status cards side by side below,
+  // then the organizer photographers section.
   const detailsTab = (
-    <>
-      <div className={cn('grid gap-4', sectionsGridClass)}>
-        {detailsCard}
-        {aiStatusCard}
-        {bibStatusCard}
-      </div>
-      {event.type === 'organizer' && (
-        <div className="mt-4">
-          <TranslationsProvider translations={dict.organizerEvent}>
-            <PhotographersSection eventId={id} initialPhotographers={eventPhotographers} />
-          </TranslationsProvider>
+    <div className="space-y-4">
+      {detailsCard}
+      {aiStatusCard || bibStatusCard ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          {aiStatusCard}
+          {bibStatusCard}
         </div>
+      ) : null}
+      {event.type === 'organizer' && (
+        <TranslationsProvider translations={dict.organizerEvent}>
+          <PhotographersSection eventId={id} initialPhotographers={eventPhotographers} />
+        </TranslationsProvider>
       )}
-    </>
+    </div>
   );
 
   return (
@@ -471,10 +466,20 @@ export default async function EventDetailPage({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <DashboardHeader title={event.name} />
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <span>{headerDate}</span>
-            {indexingBadge}
-          </div>
+          {/* Event details under the title — same shared meta line the talent
+              event view uses, so the two never diverge in field order/format. */}
+          <EventMetaLine
+            className="mt-1"
+            date={event.date}
+            sessionTime={event.session_time}
+            city={event.city}
+            state={event.state}
+            country={event.country}
+            locale={lang}
+            perPhotoLabel={dict.events.perPhoto}
+            pricePerPhoto={event.price_per_photo}
+          />
+          {indexingBadge ? <div className="mt-1.5">{indexingBadge}</div> : null}
         </div>
         <div className="shrink-0">
           <EventActionsMenu eventId={id} t={dict.events} />
