@@ -1,3 +1,4 @@
+import { ScanFace } from 'lucide-react';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { EventMetaLine } from '@/components/event-meta-line';
 import { Badge } from '@/components/ui/badge';
@@ -332,16 +333,24 @@ export default async function EventDetailPage({
   );
 
   // Compact indexing indicator for the persistent header — a summarised view of
-  // the live status; the full `AiStatusCard` (with polling/actions) stays in the
-  // Details tab. Shown only when AI matching is on and past idle.
+  // the AI face-matching status; the full `AiStatusCard` (with polling/actions)
+  // stays in the Details tab. Shown only when AI matching is on and past idle.
+  // The feature label ("AI face matching") is prefixed onto the bare status
+  // word so "Ready" isn't contextless — it reads "AI face matching: Ready".
+  const indexingStatusLabel =
+    aiMatchingStatus === 'ready'
+      ? dict.rekognition.statusReady
+      : aiMatchingStatus === 'indexing'
+        ? dict.rekognition.statusIndexing
+        : dict.rekognition.statusFailed;
   const indexingBadge =
     aiMatchingEnabled && aiProgress && aiMatchingStatus !== 'idle' ? (
-      <Badge variant={aiMatchingStatus === 'failed' ? 'destructive' : 'secondary'}>
-        {aiMatchingStatus === 'ready'
-          ? dict.rekognition.statusReady
-          : aiMatchingStatus === 'indexing'
-            ? dict.rekognition.statusIndexing
-            : dict.rekognition.statusFailed}
+      <Badge
+        variant={aiMatchingStatus === 'failed' ? 'destructive' : 'secondary'}
+        className="gap-1 font-normal"
+      >
+        <ScanFace className="h-3 w-3" />
+        {dict.rekognition.cardTitle}: {indexingStatusLabel}
       </Badge>
     ) : null;
 
