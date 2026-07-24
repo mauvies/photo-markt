@@ -43,6 +43,20 @@ describe('searchPhotosByBibInEvent (T-032)', () => {
     expect(res.photoIds).toEqual([match.id]);
   });
 
+  it('reveal-gated event (T-177): bib search is refused so it cannot bypass the face-only gate', async () => {
+    // The event opts into BOTH bib detection and the reveal gate. v1 unlocks by
+    // face only, so bib search must NOT hand an unproven visitor signed photos —
+    // even though the action is directly callable (the UI hides the bib entry).
+    const { event, sb } = await seedEvent({ shareCode: 'BIBGATE', enabled: true });
+    await sb.from('events').update({ reveal_gate_enabled: true }).eq('id', event.id);
+    const match = await createTestPhoto(event.id);
+    await persistPhotoBibs(sb, match.id, [{ bibText: '1432', confidence: 99 }]);
+
+    await expect(searchPhotosByBibInEvent('BIBGATE', '1432')).rejects.toThrow(
+      'does not support bib search',
+    );
+  });
+
   it('normalizes the query so "#1432." matches "1432"', async () => {
     const { event, sb } = await seedEvent({ shareCode: 'BIBB', enabled: true });
     const match = await createTestPhoto(event.id);

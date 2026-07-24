@@ -73,6 +73,9 @@ export function EditEventForm({ event, initialPhotos, initialCoverUrl }: EditEve
   const eventBibDetectionEnabled = Boolean(
     (event as unknown as Record<string, unknown>).bib_detection_enabled,
   );
+  const eventRevealGateEnabled = Boolean(
+    (event as unknown as Record<string, unknown>).reveal_gate_enabled,
+  );
 
   const defaultValues: FormValues = {
     name: event.name,
@@ -91,6 +94,7 @@ export function EditEventForm({ event, initialPhotos, initialCoverUrl }: EditEve
     ai_matching_enabled: eventAiEnabled,
     contains_minors: eventContainsMinors,
     bib_detection_enabled: eventBibDetectionEnabled,
+    reveal_gate_enabled: eventRevealGateEnabled,
   };
 
   const handleDeletePhoto = (photoId: string) => {
@@ -206,6 +210,7 @@ export function EditEventForm({ event, initialPhotos, initialCoverUrl }: EditEve
         );
         formData.append('ai_matching_enabled', parsed.ai_matching_enabled ? 'true' : 'false');
         formData.append('bib_detection_enabled', parsed.bib_detection_enabled ? 'true' : 'false');
+        formData.append('reveal_gate_enabled', parsed.reveal_gate_enabled ? 'true' : 'false');
         // `contains_minors` is read-only post-creation. We still send the
         // current value so the server-side guard can compare and reject any
         // tampering. The form input is disabled either way.
@@ -361,11 +366,46 @@ export function EditEventForm({ event, initialPhotos, initialCoverUrl }: EditEve
                         onCheckedChange={(checked) => {
                           field.handleChange(checked);
                           field.handleBlur();
+                          if (!checked) form.setFieldValue('reveal_gate_enabled', false);
                         }}
                       />
                     </div>
                   )}
                 </form.Field>
+                <form.Subscribe selector={(state) => state.values.ai_matching_enabled}>
+                  {(aiEnabled) => (
+                    <form.Field name="reveal_gate_enabled">
+                      {(field) => {
+                        const available = !containsMinors && aiEnabled;
+                        return (
+                          <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
+                            <div className="grid gap-1">
+                              <Label htmlFor="edit_reveal_gate_enabled">
+                                {t('revealGateLabel' as keyof Dictionary['newEvent'])}
+                              </Label>
+                              <p className="text-xs text-muted-foreground">
+                                {containsMinors
+                                  ? t('revealGateDisabledByMinors' as keyof Dictionary['newEvent'])
+                                  : !aiEnabled
+                                    ? t('revealGateRequiresAi' as keyof Dictionary['newEvent'])
+                                    : t('revealGateDesc' as keyof Dictionary['newEvent'])}
+                              </p>
+                            </div>
+                            <Switch
+                              id="edit_reveal_gate_enabled"
+                              checked={available && field.state.value}
+                              disabled={!available}
+                              onCheckedChange={(checked) => {
+                                field.handleChange(checked);
+                                field.handleBlur();
+                              }}
+                            />
+                          </div>
+                        );
+                      }}
+                    </form.Field>
+                  )}
+                </form.Subscribe>
                 <form.Field name="bib_detection_enabled">
                   {(field) => (
                     <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">

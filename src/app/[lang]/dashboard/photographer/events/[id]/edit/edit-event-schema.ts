@@ -39,6 +39,9 @@ export const eventSchema = z.object({
   ai_matching_enabled: z.boolean().default(false),
   contains_minors: z.boolean().default(false),
   bib_detection_enabled: z.boolean().default(false),
+  // Reveal gate (T-177): mutable post-creation. Requires ai_matching_enabled;
+  // the server forces it off otherwise and on minors events.
+  reveal_gate_enabled: z.boolean().default(false),
 });
 
 export type FormValues = z.infer<typeof eventSchema>;

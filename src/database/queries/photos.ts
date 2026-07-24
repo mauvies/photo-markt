@@ -412,6 +412,35 @@ export async function getEventPhotosPublic(
 }
 
 /**
+ * Reveal-gate reload rehydration (T-177): approved public photos for an event
+ * restricted to a proven id set. Intersects with the same approved / non-deleted
+ * / event-scoped filters as {@link getEventPhotosPublic}, so a stale or foreign
+ * id in the proof can never surface a photo outside the public set. Returns `[]`
+ * for an empty id set (fail-closed: a gated event with no proof reveals nothing).
+ */
+export async function getEventPhotosPublicByIds(
+  supabase: SupabaseServerClient,
+  eventId: string,
+  photoIds: string[],
+): Promise<PhotoDetail[]> {
+  if (photoIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('photos')
+    .select(EVENT_PHOTO_PUBLIC_COLUMNS)
+    .eq('event_id', eventId)
+    .eq('upload_status', 'approved')
+    .is('deleted_at', null)
+    .in('id', photoIds)
+    .order('taken_at', { ascending: true });
+
+  if (error) {
+    throw new Error(`Failed to get revealed event photos: ${getErrorMessage(error)}`);
+  }
+
+  return (data ?? []) as PhotoDetail[];
+}
+
+/**
  * Paginated variant of {@link getEventPhotosPublic}. Fetches one gallery page
  * (approved photos only) in the deterministic `(taken_at, id)` order and
  * reports whether more remain. Over-fetches one row (`limit + 1`) so `hasMore`

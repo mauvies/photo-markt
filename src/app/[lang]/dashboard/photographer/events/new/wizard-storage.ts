@@ -155,6 +155,10 @@ export function readStoredState(): StoredWizardState | null {
         typeof candidateValues.bib_detection_enabled === 'boolean'
           ? candidateValues.bib_detection_enabled
           : false,
+      reveal_gate_enabled:
+        typeof candidateValues.reveal_gate_enabled === 'boolean'
+          ? candidateValues.reveal_gate_enabled
+          : false,
     };
 
     const reachedStep: StepNumber =

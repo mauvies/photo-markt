@@ -113,6 +113,42 @@ describe('getEventPhotoDownloadUrlAction', () => {
     expect(url).toMatch(/127\.0\.0\.1:54321/);
   });
 
+  it('reveal-gated free event (T-177): denies a logged-out guest with no proof cookie', async () => {
+    // A gated FREE event must NOT hand originals to an unproven visitor via the
+    // free all-access branch. The cookies() mock returns no reveal proof, so the
+    // guest has not proven a face match → denied even though the event is free.
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(photographer.id, { price_per_photo: null });
+    await createServiceClient()
+      .from('events')
+      .update({ reveal_gate_enabled: true })
+      .eq('id', event.id);
+    const path = `${photographer.id}/${event.id}/gated-free.jpg`;
+    const photo = await createTestPhoto(event.id, { original_url: path });
+    await uploadPlaceholder(path);
+
+    mockSession.userId = null;
+    await expect(getEventPhotoDownloadUrlAction(photo.id, event.id)).rejects.toThrow(
+      'permission to download',
+    );
+  });
+
+  it('reveal-gated free event (T-177): still lets the event owner download', async () => {
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(photographer.id, { price_per_photo: null });
+    await createServiceClient()
+      .from('events')
+      .update({ reveal_gate_enabled: true })
+      .eq('id', event.id);
+    const path = `${photographer.id}/${event.id}/gated-owner.jpg`;
+    const photo = await createTestPhoto(event.id, { original_url: path });
+    await uploadPlaceholder(path);
+
+    mockSession.userId = photographer.id;
+    const url = await getEventPhotoDownloadUrlAction(photo.id, event.id);
+    expect(url).toMatch(/127\.0\.0\.1:54321/);
+  });
+
   it('returns a signed URL for the event owner on a paid event', async () => {
     const photographer = await createTestUser('PHOTOGRAPHER');
     const event = await createTestEvent(photographer.id, { price_per_photo: 5 });

@@ -380,6 +380,7 @@ export default function NewEventForm({
     formData.append('ai_matching_enabled', parsed.ai_matching_enabled ? 'true' : 'false');
     formData.append('contains_minors', parsed.contains_minors ? 'true' : 'false');
     formData.append('bib_detection_enabled', parsed.bib_detection_enabled ? 'true' : 'false');
+    formData.append('reveal_gate_enabled', parsed.reveal_gate_enabled ? 'true' : 'false');
     if (parsed.price_per_photo !== null && parsed.price_per_photo !== undefined) {
       const price =
         typeof parsed.price_per_photo === 'string'

@@ -49,6 +49,8 @@ import { getBaseUrl } from '@/lib/get-base-url';
 import { validatePhotoUpload } from '@/lib/photo-upload';
 import { needsProtectedPreview } from '@/lib/preview-protection';
 import { computeWindow, getClientIp, rateLimit, rateLimitCost } from '@/lib/rate-limit';
+import { getProvenRevealIds, grantReveal } from '@/lib/reveal-gate';
+import { isEventRevealGated } from '@/lib/reveal-token';
 import { safeCall } from '@/lib/safe-call';
 import { BIB_SEARCH_RATE_LIMIT_PREFIX, type SearchPhotosByBibResult } from './bib-search-shared';
 import {
@@ -207,6 +209,12 @@ export async function loadMoreEventPhotos(
 
   // Upcoming events don't render a gallery — return nothing rather than sign.
   if (getEventStatus(event.date) === 'upcoming') {
+    return { items: [], hasMore: false, nextOffset: offset };
+  }
+
+  // Reveal gate (T-177): a gated event has no browsable gallery — photos are
+  // revealed only through face search. Never paginate them out here.
+  if (isEventRevealGated(event)) {
     return { items: [], hasMore: false, nextOffset: offset };
   }
 
@@ -526,6 +534,13 @@ export async function searchFacesInEvent(
   const signedIds = new Set(matchedPhotos.map((p) => p.id));
   const filteredMatches = matches.filter((m) => signedIds.has(m.photoId));
 
+  // Reveal gate (T-177): on a gated event, record proof over exactly the
+  // matched photo ids so a reload re-serves them without a second billable
+  // face search. No-op on non-gated events.
+  if (isEventRevealGated(event) && signedIds.size > 0) {
+    await grantReveal(event.id, Array.from(signedIds));
+  }
+
   return {
     matches: filteredMatches,
     matchedPhotos,
@@ -558,6 +573,13 @@ export async function searchPhotosByBibInEvent(
   // events have no share code), so resolve it the same way the public page does.
   const event = await resolveEventByParam(adminClient, shareCode);
   if (!event) throw new Error('Event not found.');
+
+  // Reveal gate (T-177): a gated event unlocks by FACE ONLY in v1. Bib search
+  // must never reveal its photos, even though this action is directly callable
+  // (the UI hides the bib entry, but that's not enforcement). Fail closed.
+  if (isEventRevealGated(event)) {
+    throw new Error('This event does not support bib search.');
+  }
 
   const state = await getEventBibDetectionState(adminClient, event.id);
   if (!state?.enabled || state.containsMinors) {
@@ -644,6 +666,22 @@ export async function getEventPhotoDownloadUrlAction(
   const isOwner = Boolean(user && user.id === photo.event_owner_id);
   const isFree = photo.price_per_photo === null;
   let allowed = !isRetained && (isOwner || isFree);
+  // Reveal gate (T-177): on a gated event the free/anon all-access branch must
+  // NOT hand out an original to an unproven visitor — even a free gated event.
+  // The owner bypasses; everyone else must have proven a face match covering
+  // this photo (or, below, purchased it). Photo ids are normally withheld from
+  // unproven visitors, but this closes the path if one is obtained.
+  if (allowed && !isOwner) {
+    const { data: ev } = await supabaseAdmin
+      .from('events')
+      .select('reveal_gate_enabled')
+      .eq('id', eventId)
+      .maybeSingle();
+    if (isEventRevealGated(ev)) {
+      const proven = await getProvenRevealIds(eventId);
+      if (!proven.has(photoId)) allowed = false;
+    }
+  }
   if (!allowed && user) {
     const purchased = await getPurchasedPhotoIdsForEvent(adminClient, user.id, eventId);
     allowed = purchased.has(photoId);
