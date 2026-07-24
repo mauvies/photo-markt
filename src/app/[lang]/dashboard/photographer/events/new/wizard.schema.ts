@@ -58,6 +58,9 @@ export const eventSchema = z.object({
   // Bib number detection opt-in. Disabled for events with minors (parity
   // with ai_matching_enabled). Photos are scanned via Rekognition DetectText.
   bib_detection_enabled: z.boolean().default(false),
+  // Reveal gate (T-177): hide photos from browsing; reveal only via face
+  // search. Requires ai_matching_enabled; unavailable on minors events.
+  reveal_gate_enabled: z.boolean().default(false),
 });
 
 export type FormValues = z.infer<typeof eventSchema>;

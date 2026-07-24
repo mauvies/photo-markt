@@ -50,6 +50,11 @@ export const env = createEnv({
     // Recipient of the 50%-of-global-cap alert. Optional: absent ⇒ the alert
     // is a safe no-op (like SENTRY_DSN / HEALTH_CHECK_TOKEN).
     FACE_SEARCH_ALERT_EMAIL: z.email().optional(),
+    // HMAC key for the reveal-gate proof cookie (T-177). Optional: absent ⇒
+    // `src/lib/reveal-token.ts` falls back to SUPABASE_SERVICE_ROLE_KEY, so the
+    // feature works without a dedicated secret and the app still boots. Set a
+    // dedicated value in prod to keep purposes separate.
+    REVEAL_TOKEN_SECRET: z.string().optional(),
   },
   /*
    * Environment variables available on the client (and server).
@@ -101,5 +106,6 @@ export const env = createEnv({
     FACE_SEARCH_GLOBAL_DAILY_CALLS: process.env.FACE_SEARCH_GLOBAL_DAILY_CALLS,
     FACE_SEARCH_EVENT_DAILY_CALLS: process.env.FACE_SEARCH_EVENT_DAILY_CALLS,
     FACE_SEARCH_ALERT_EMAIL: process.env.FACE_SEARCH_ALERT_EMAIL,
+    REVEAL_TOKEN_SECRET: process.env.REVEAL_TOKEN_SECRET,
   },
 });

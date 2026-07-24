@@ -180,6 +180,7 @@ export async function createEvent(
     ai_matching_enabled?: boolean;
     contains_minors?: boolean;
     bib_detection_enabled?: boolean;
+    reveal_gate_enabled?: boolean;
   },
 ): Promise<{ id: string }> {
   // Only include the newer columns when they actually carry a value. Lets
@@ -192,6 +193,7 @@ export async function createEvent(
     ai_matching_enabled,
     contains_minors,
     bib_detection_enabled,
+    reveal_gate_enabled,
     session_time,
     ...rest
   } = eventData;
@@ -210,6 +212,8 @@ export async function createEvent(
   if (contains_minors !== undefined) insertPayload.contains_minors = contains_minors;
   if (bib_detection_enabled !== undefined)
     insertPayload.bib_detection_enabled = bib_detection_enabled;
+  // Reveal gate (T-177) — migration-gated like the AI columns; only include when set.
+  if (reveal_gate_enabled !== undefined) insertPayload.reveal_gate_enabled = reveal_gate_enabled;
 
   const { data, error } = await supabase.from('events').insert(insertPayload).select('id').single();
 
@@ -539,6 +543,7 @@ export async function updateEvent(
     require_upload_approval?: boolean;
     ai_matching_enabled?: boolean;
     bib_detection_enabled?: boolean;
+    reveal_gate_enabled?: boolean;
   },
 ): Promise<void> {
   // Verify event belongs to user and is not deleted

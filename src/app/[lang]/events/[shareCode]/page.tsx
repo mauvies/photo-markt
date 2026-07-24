@@ -13,6 +13,7 @@ import {
   createPhotoUrlMap,
   getEventByShareCode,
   getEventBySlug,
+  getEventPhotosPublicByIds,
   getEventPhotosPublicPage,
   getProfilesByIds,
   type PhotoDetail,
@@ -40,6 +41,8 @@ import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { stringifyJsonLd } from '@/lib/json-ld';
 import { needsProtectedPreview } from '@/lib/preview-protection';
+import { getProvenRevealIds } from '@/lib/reveal-gate';
+import { isEventRevealGated } from '@/lib/reveal-token';
 import { ContributeDialog } from './contribute-dialog';
 import { buildPublicPhotoAlbumItem, type UploaderProfileMap } from './photo-album-item';
 import { PublicEventPhotoViewer } from './public-event-photo-viewer';
@@ -65,6 +68,9 @@ type EventRow = {
   is_collaborative: boolean;
   allow_guest_upload: boolean;
   require_upload_approval: boolean;
+  // Optional: the slug/share-code lookups return a row type that predates this
+  // column; `select('*')` carries it at runtime. Read via `isEventRevealGated`.
+  reveal_gate_enabled?: boolean;
 };
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -137,14 +143,24 @@ async function getCachedEventData(
   // presentation image, not a for-sale photo) so the JSON-LD can prefer it.
   const coverPath = (event as { cover_path?: string | null }).cover_path ?? null;
 
+  // Reveal gate (T-177): a gated event has no browsable gallery — its photos
+  // are revealed only through face search. Skip the page fetch entirely so no
+  // photo record is ever cached/shipped to an unproven visitor. The revealed
+  // set is fetched per-request (uncached, keyed on the proof cookie) in the
+  // page body — a proven and an unproven request must never share a cached
+  // photo list. `totalCount` and the dedicated cover stay (public by design).
+  const gated = isEventRevealGated(event);
+
   // Round 1 — the first gallery page (only the first page is fetched + signed;
   // a 264-photo event used to sign all 264), the true approved count, and the
   // cover signature are mutually independent (each needs only the event).
   const [{ photos, hasMore }, totalCount, coverSignedUrl] = await Promise.all([
-    getEventPhotosPublicPage(adminForPhotos, event.id, {
-      limit: EVENT_GALLERY_PAGE_SIZE,
-      offset: 0,
-    }),
+    gated
+      ? Promise.resolve({ photos: [] as PhotoDetail[], hasMore: false })
+      : getEventPhotosPublicPage(adminForPhotos, event.id, {
+          limit: EVENT_GALLERY_PAGE_SIZE,
+          offset: 0,
+        }),
     countEventPhotosByStatus(adminForPhotos, event.id, ['approved']),
     coverPath
       ? supabaseAdmin.storage
@@ -185,6 +201,28 @@ async function getCachedEventData(
   ]);
 
   return { event, photos, hasMore, totalCount, signed, uploaderProfiles, coverSignedUrl };
+}
+
+/**
+ * Reveal gate (T-177): fetch + sign the photos a visitor has proven a match for.
+ * Intentionally NOT cached — it depends on the per-request proof cookie, so a
+ * proven and an unproven request never share a cached photo list. Reuses the
+ * same protected-preview signing as the cached loader.
+ */
+async function getRevealedEventPhotos(
+  event: EventRow,
+  provenIds: string[],
+  baseUrl: string,
+): Promise<{ photos: PhotoDetail[]; signed: Record<string, string> }> {
+  const admin = supabaseAdmin as unknown as SupabaseServerClient;
+  const photos = await getEventPhotosPublicByIds(admin, event.id, provenIds);
+  const paths = photos.map((p) => p.original_url).filter((url): url is string => url !== null);
+  const signed = await createPhotoUrlMap(admin, 'photos', paths, {
+    expiresIn: 60 * 60,
+    useWatermark: needsProtectedPreview(event),
+    baseUrl,
+  });
+  return { photos, signed };
 }
 
 // ─── Static Params (pre-render top 50 public events) ─────────────────────────
@@ -246,6 +284,7 @@ export async function generateMetadata({
     watermarkEnabled: event.watermark_enabled,
     pricePerPhoto: event.price_per_photo,
     baseUrl,
+    revealGated: isEventRevealGated(event),
   });
   if (ogImageUrl) {
     ogImages.push({ url: ogImageUrl, width: 1200, height: 630, alt: title });
@@ -292,7 +331,12 @@ export default async function EventPage({
 
   const cached = await getCachedEventData(param, baseUrl);
   if (!cached) notFound();
-  const { event, photos, hasMore, totalCount, signed, uploaderProfiles, coverSignedUrl } = cached;
+  const { event, hasMore, totalCount, uploaderProfiles, coverSignedUrl } = cached;
+  // Reveal gate (T-177): the cached loader ships no photos for a gated event.
+  // If this request carries a valid proof cookie, fetch the revealed set
+  // per-request below and substitute it in; otherwise these stay empty.
+  let photos = cached.photos;
+  let signed = cached.signed;
 
   // Permanent redirect: UUID visitors with a slug get sent to the canonical slug URL.
   if (UUID_REGEX.test(param) && event.slug) {
@@ -319,6 +363,20 @@ export default async function EventPage({
   }
 
   const eventStatus = getEventStatus(event.date);
+
+  // Reveal gate (T-177): substitute the proven photo set for a gated event when
+  // this request carries a valid proof cookie. Unproven → photos stays empty →
+  // the gated empty state + search entry render.
+  const gated = isEventRevealGated(event);
+  if (gated && eventStatus !== 'upcoming') {
+    const provenIds = await getProvenRevealIds(event.id);
+    if (provenIds.size > 0) {
+      const revealed = await getRevealedEventPhotos(event, Array.from(provenIds), baseUrl);
+      photos = revealed.photos;
+      signed = revealed.signed;
+    }
+  }
+
   // AI face search eligibility — computed server-side. We hide the banner
   // entirely for events that can't surface useful results: AI disabled,
   // contains_minors, failed indexing, or nothing indexed yet (counter at 0).
@@ -427,8 +485,9 @@ export default async function EventPage({
   const canonicalPath = event.slug ?? event.id;
   const eventUrl = `${siteUrl}/${lang}/events/${canonicalPath}`;
   // Prefer the dedicated cover image (T-055) for structured data; fall back to
-  // the first photo.
-  const coverUrl = coverSignedUrl ?? photoItems[0]?.url ?? null;
+  // the first photo — but NEVER for a gated event (T-177): its photos must not
+  // appear in crawlable structured data, only the dedicated promotional cover.
+  const coverUrl = coverSignedUrl ?? (gated ? null : (photoItems[0]?.url ?? null));
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -530,6 +589,14 @@ export default async function EventPage({
                 pricePerPhoto={event.price_per_photo}
                 photographerName={uploaderProfiles[event.user_id]?.username}
               />
+              {/* Reveal gate (T-177): the total lives here (not above the
+                  gallery) so a gated event advertises it's worth searching,
+                  while the toolbar counter reflects only what's revealed. */}
+              {gated && eventStatus !== 'upcoming' ? (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {dict.events.photosInEvent.replace('{n}', String(totalCount))}
+                </p>
+              ) : null}
             </div>
             <EventShareButton
               eventName={event.name}
@@ -576,9 +643,11 @@ export default async function EventPage({
               aiSearchEligible={aiSearchEligible}
               aiState={aiBannerState}
               modalLabels={dict.aiSearch.modal}
-              bibDetectionEnabled={Boolean(
-                (event as unknown as Record<string, unknown>).bib_detection_enabled,
-              )}
+              bibDetectionEnabled={
+                // Reveal gate (T-177): v1 unlocks by face only — never bib.
+                !gated &&
+                Boolean((event as unknown as Record<string, unknown>).bib_detection_enabled)
+              }
               findLabels={{
                 title: dict.aiSearch.banner.title,
                 titleIndexing: dict.aiSearch.banner.titleIndexing,
@@ -633,7 +702,7 @@ export default async function EventPage({
                     }}
                     iconTooltips={dict.photoIconButtons}
                     showAddToCart={showCartUi}
-                    emptyText={dict.events.galleryEmpty}
+                    emptyText={gated ? dict.events.galleryGatedEmpty : dict.events.galleryEmpty}
                     uploadingLabel={dict.collaborativeEvent.galleryUploadingLabel}
                     uploaderLabels={{
                       tooltip: dict.collaborativeEvent.uploaderTooltip,
@@ -677,7 +746,10 @@ export default async function EventPage({
                     }}
                     resultsLabels={dict.aiSearch.results}
                     imageUnavailableLabel={dict.eventCard.imageUnavailable}
-                    totalCount={totalCount}
+                    // Reveal gate (T-177): the toolbar counter reflects only
+                    // what's revealed (the true total lives near the header),
+                    // so pre-search it resolves to 0 and the label hides itself.
+                    totalCount={gated ? photoItems.length : totalCount}
                     photosCountLabel={dict.events.photosCount}
                     bibSearchEmptyLabel={dict.bibDetection.searchEmpty}
                     initialHasMore={hasMore}

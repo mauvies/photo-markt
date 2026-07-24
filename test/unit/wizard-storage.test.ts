@@ -159,6 +159,7 @@ const PRISTINE_VALUES: FormValues = {
   ai_matching_enabled: false,
   contains_minors: false,
   bib_detection_enabled: false,
+  reveal_gate_enabled: false,
 };
 
 function draft(

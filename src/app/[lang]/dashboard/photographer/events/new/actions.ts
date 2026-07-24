@@ -90,6 +90,10 @@ const eventSchema = z.object({
     .string()
     .default('false')
     .transform((val) => val === 'true'),
+  reveal_gate_enabled: z
+    .string()
+    .default('false')
+    .transform((val) => val === 'true'),
 });
 
 // --- Types ---
@@ -193,6 +197,7 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     ai_matching_enabled: formData.get('ai_matching_enabled')?.toString() ?? 'false',
     contains_minors: formData.get('contains_minors')?.toString() ?? 'false',
     bib_detection_enabled: formData.get('bib_detection_enabled')?.toString() ?? 'false',
+    reveal_gate_enabled: formData.get('reveal_gate_enabled')?.toString() ?? 'false',
   });
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? 'Invalid event data provided.');
@@ -204,8 +209,10 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
   // never set is_collaborative=true; they have their own membership model.
   const isCollaborative = eventType === 'collaborative';
   // Organizer events are always private (membership-gated) and have no public
-  // share code — access is via the event_photographers join table.
-  const isPublic = eventType === 'organizer' ? false : payload.is_public;
+  // share code — access is via the event_photographers join table. Minors
+  // events are always private too (T-177 invariant: contains_minors ⇒ !is_public;
+  // their privacy comes from the share code, not the reveal gate).
+  const isPublic = eventType === 'organizer' || payload.contains_minors ? false : payload.is_public;
 
   // Public solo events use a SEO slug; everything else needs a share code
   // (collaborative) or has no public access at all (organizer).
@@ -222,6 +229,10 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
   const aiMatchingEnabled = payload.contains_minors ? false : payload.ai_matching_enabled;
   const bibDetectionEnabled = payload.contains_minors ? false : payload.bib_detection_enabled;
   const containsMinors = payload.contains_minors;
+  // Reveal gate (T-177): face search is its only key, so it's valid only when
+  // AI matching is on. That also blocks it on minors events (which force AI off
+  // above). Forced off otherwise — defense in depth if the UI is bypassed.
+  const revealGateEnabled = aiMatchingEnabled ? payload.reveal_gate_enabled : false;
 
   const event = await dbCreateEvent(supabase, user.id, {
     name: payload.name,
@@ -244,6 +255,7 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     ai_matching_enabled: aiMatchingEnabled,
     contains_minors: containsMinors,
     bib_detection_enabled: bibDetectionEnabled,
+    reveal_gate_enabled: revealGateEnabled,
   });
 
   if (isPublic) {

@@ -181,11 +181,48 @@ function AiMatchingSwitches({ form }: { form: EventForm }) {
                   onCheckedChange={(checked) => {
                     field.handleChange(checked);
                     field.handleBlur();
+                    // Reveal gate needs AI matching as its key — clear it when
+                    // AI matching is turned off.
+                    if (!checked) form.setFieldValue('reveal_gate_enabled', false);
                   }}
                 />
               </div>
             )}
           </form.Field>
+          <form.Subscribe selector={(state) => state.values.ai_matching_enabled}>
+            {(aiEnabled) => (
+              <form.Field name="reveal_gate_enabled">
+                {(field) => {
+                  const available = !containsMinors && aiEnabled;
+                  return (
+                    <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
+                      <div className="grid gap-1">
+                        <Label htmlFor="reveal_gate_enabled">
+                          {t('revealGateLabel' as keyof NewEventT)}
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          {containsMinors
+                            ? t('revealGateDisabledByMinors' as keyof NewEventT)
+                            : !aiEnabled
+                              ? t('revealGateRequiresAi' as keyof NewEventT)
+                              : t('revealGateDesc' as keyof NewEventT)}
+                        </p>
+                      </div>
+                      <Switch
+                        id="reveal_gate_enabled"
+                        checked={available && field.state.value}
+                        disabled={!available}
+                        onCheckedChange={(checked) => {
+                          field.handleChange(checked);
+                          field.handleBlur();
+                        }}
+                      />
+                    </div>
+                  );
+                }}
+              </form.Field>
+            )}
+          </form.Subscribe>
           <form.Field name="bib_detection_enabled">
             {(field) => (
               <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
@@ -229,9 +266,12 @@ function AiMatchingSwitches({ form }: { form: EventForm }) {
                     field.handleChange(checked);
                     field.handleBlur();
                     if (checked) {
-                      // Hard-pair: enabling minors flag clears AI matching and bib detection.
+                      // Hard-pair: enabling minors clears AI matching, bib
+                      // detection, and the reveal gate (all need AI / are
+                      // unavailable for minors).
                       form.setFieldValue('ai_matching_enabled', false);
                       form.setFieldValue('bib_detection_enabled', false);
+                      form.setFieldValue('reveal_gate_enabled', false);
                     }
                   }}
                 />

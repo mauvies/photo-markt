@@ -16,10 +16,12 @@ import {
   createPhotoUrlMap,
   getEventByShareCode,
   getEventBySlug,
+  getEventPhotosPublicByIds,
   getEventPhotosPublicPage,
   getPhotoIdsInCart,
   getProfilesByIds,
   getUploadedPhotoIdsForUserInEvent,
+  type PhotoDetail,
 } from '@/database/queries';
 import { eventHasAnyBibNumbers } from '@/database/queries/bib-numbers';
 import { getPurchasedPhotoIdsForEvent } from '@/database/queries/orders';
@@ -41,6 +43,8 @@ import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { needsProtectedPreview } from '@/lib/preview-protection';
+import { getProvenRevealIds } from '@/lib/reveal-gate';
+import { isEventRevealGated } from '@/lib/reveal-token';
 import { EventPhotoViewer } from './event-photo-viewer';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -98,14 +102,22 @@ async function getCachedTalentEventData(param: string, baseUrl: string, viewerIs
 
   if (!event) return null;
 
+  // Reveal gate (T-177): a gated event ships no browsable gallery — its photos
+  // are revealed only through face search. Skip the page fetch so no photo
+  // record is cached/shipped to an unproven talent; the revealed set is fetched
+  // per-request (keyed on the proof cookie) in the page body.
+  const gated = isEventRevealGated(event);
+
   // Only the first gallery page is fetched + signed up front; "Load more"
   // fetches the rest via a Server Action. `totalCount` is the true approved
   // total (same count the public page uses), threaded to the toolbar count.
   const [{ photos, hasMore }, totalCount] = await Promise.all([
-    getEventPhotosPublicPage(supabaseAdmin, event.id, {
-      limit: EVENT_GALLERY_PAGE_SIZE,
-      offset: 0,
-    }),
+    gated
+      ? Promise.resolve({ photos: [] as PhotoDetail[], hasMore: false })
+      : getEventPhotosPublicPage(supabaseAdmin, event.id, {
+          limit: EVENT_GALLERY_PAGE_SIZE,
+          offset: 0,
+        }),
     countEventPhotosByStatus(supabaseAdmin, event.id, ['approved']),
   ]);
 
@@ -163,9 +175,35 @@ export default async function ExploreEventDetailPage({
 
   const cached = await getCachedTalentEventData(param, baseUrl, viewerIsTalent);
   if (!cached) notFound();
-  const { event, photos, hasMore, totalCount, signed } = cached;
+  const { event, hasMore, totalCount } = cached;
+  // Reveal gate (T-177): the cached loader ships no photos for a gated event;
+  // substitute the proven set per-request below when a valid proof cookie is present.
+  let photos = cached.photos;
+  let signed = cached.signed;
 
   const eventStatus = getEventStatus(event.date);
+
+  const gated = isEventRevealGated(event);
+  if (gated && eventStatus !== 'upcoming') {
+    const provenIds = await getProvenRevealIds(event.id);
+    if (provenIds.size > 0) {
+      const useWatermark = viewerIsTalent && needsProtectedPreview(event);
+      const revealedPhotos = await getEventPhotosPublicByIds(
+        supabaseAdmin,
+        event.id,
+        Array.from(provenIds),
+      );
+      const paths = revealedPhotos
+        .map((p) => p.original_url)
+        .filter((url): url is string => url !== null);
+      photos = revealedPhotos;
+      signed = await createPhotoUrlMap(supabaseAdmin, 'photos', paths, {
+        expiresIn: 60 * 60,
+        useWatermark,
+        baseUrl,
+      });
+    }
+  }
 
   // Collaborative-upload eligibility — mirrors `/events/[shareCode]/page.tsx`.
   // When a talent reaches a collaborative event via share-code lookup,
@@ -343,6 +381,13 @@ export default async function ExploreEventDetailPage({
           pricePerPhoto={event.price_per_photo}
           photographerName={uploaderProfiles[event.user_id]?.username}
         />
+        {/* Reveal gate (T-177): total near the header (worth searching); the
+            toolbar counter below reflects only what's revealed. */}
+        {gated && eventStatus !== 'upcoming' ? (
+          <p className="mt-1 text-sm text-muted-foreground">
+            {dict.events.photosInEvent.replace('{n}', String(totalCount))}
+          </p>
+        ) : null}
       </div>
 
       {/* Contribute affordance — collaborative events with guest-upload on,
@@ -381,7 +426,12 @@ export default async function ExploreEventDetailPage({
           <p className="text-lg font-semibold">{dict.events.comingSoon}</p>
           <p className="text-sm text-muted-foreground">{dict.events.photosAfterEvent}</p>
         </div>
-      ) : photoItems.length === 0 ? (
+      ) : photoItems.length === 0 && !gated ? (
+        // Reveal gate (T-177): a gated event ALWAYS renders the gallery wrapper
+        // below so the face-search entry mounts — logged-in talents are
+        // redirected here from the public page, so this is their only way to
+        // search. Without this guard an unproven talent hits the empty state
+        // and can never reveal their photos.
         <div className="text-center py-12">
           <p className="text-muted-foreground">{dict.talentDashboard.noPhotosAvailable}</p>
         </div>
@@ -392,9 +442,10 @@ export default async function ExploreEventDetailPage({
             aiSearchEligible={aiSearchEligible}
             aiState={aiBannerState}
             modalLabels={dict.aiSearch.modal}
-            bibDetectionEnabled={Boolean(
-              (event as unknown as Record<string, unknown>).bib_detection_enabled,
-            )}
+            bibDetectionEnabled={
+              // Reveal gate (T-177): v1 unlocks by face only — never bib.
+              !gated && Boolean((event as unknown as Record<string, unknown>).bib_detection_enabled)
+            }
             findLabels={{
               title: dict.aiSearch.banner.title,
               titleIndexing: dict.aiSearch.banner.titleIndexing,
@@ -467,7 +518,9 @@ export default async function ExploreEventDetailPage({
                   photosClaimedToProfile={new Set(photosClaimedToProfile)}
                   iconTooltips={dict.photoIconButtons}
                   imageUnavailableLabel={dict.eventCard.imageUnavailable}
-                  totalCount={totalCount}
+                  // Reveal gate (T-177): toolbar counter reflects only what's
+                  // revealed (true total lives near the header).
+                  totalCount={gated ? photos.length : totalCount}
                   photosCountLabel={dict.events.photosCount}
                   initialHasMore={hasMore}
                   loadMoreLabel={dict.events.loadMore}

@@ -96,8 +96,36 @@ export async function signEventCoverUrls(
   covers: EventCoverInput[],
 ): Promise<Map<string, string>> {
   const out = new Map<string, string>();
+
+  // Reveal gate (T-177): a gated event's first-photo card cover is a listing-
+  // path leak (a photo URL reaching an unproven browser on the explore/saved/
+  // profile grids). Look up which of the non-dedicated covers belong to gated
+  // events in one query, centralized here, and drop them → the card falls back
+  // to a placeholder. A DEDICATED cover is a promotional image (not a gated
+  // photo), so it is always kept.
+  const nonDedicatedIds = covers.filter((c) => !c.isDedicatedCover).map((c) => c.eventId);
+  let gatedIds = new Set<string>();
+  // Fail CLOSED: if the gate lookup errors (transient DB error, or a DB where
+  // the reveal_gate_enabled column isn't present yet), suppress EVERY
+  // non-dedicated cover rather than risk leaking a gated event's photo.
+  let gateLookupFailed = false;
+  if (nonDedicatedIds.length > 0) {
+    const { data, error } = await supabase
+      .from('events')
+      .select('id')
+      .in('id', nonDedicatedIds)
+      .eq('reveal_gate_enabled', true);
+    if (error) {
+      gateLookupFailed = true;
+    } else {
+      gatedIds = new Set((data ?? []).map((r: { id: string }) => r.id));
+    }
+  }
+
   await Promise.all(
     covers.map(async (cover) => {
+      // Gated (or lookup-failed) non-dedicated cover → no card cover at all.
+      if (!cover.isDedicatedCover && (gateLookupFailed || gatedIds.has(cover.eventId))) return;
       if (
         !cover.isDedicatedCover &&
         needsProtectedPreview({
@@ -135,6 +163,10 @@ export async function resolveEventOgImageUrl(
     watermarkEnabled: boolean | null;
     pricePerPhoto: number | null;
     baseUrl: string;
+    /** Reveal gate (T-177): a gated event's photos must never leak into social
+     * previews. The dedicated promotional cover is still allowed; the
+     * first-photo fallback is suppressed. */
+    revealGated?: boolean;
   },
 ): Promise<string | null> {
   // Prefer the dedicated cover — the presentation image the photographer chose,
@@ -142,6 +174,9 @@ export async function resolveEventOgImageUrl(
   if (opts.coverPath) {
     return createSignedUrl(supabase, 'photos', opts.coverPath, OG_SIGN_EXPIRY_SECONDS);
   }
+
+  // Reveal gate: no dedicated cover ⇒ no og:image at all (never a gated photo).
+  if (opts.revealGated) return null;
 
   // Select the event's first APPROVED, non-soft-deleted photo:
   // `upload_status='approved'` mirrors what the public gallery shows, so a

@@ -88,6 +88,10 @@ const eventSchema = z.object({
     .string()
     .default('false')
     .transform((val) => val === 'true'),
+  reveal_gate_enabled: z
+    .string()
+    .default('false')
+    .transform((val) => val === 'true'),
 });
 
 // --- Helpers ---
@@ -169,6 +173,7 @@ export async function updateEventAction(
     ai_matching_enabled: formData.get('ai_matching_enabled')?.toString() ?? 'false',
     bib_detection_enabled: formData.get('bib_detection_enabled')?.toString() ?? 'false',
     contains_minors: formData.get('contains_minors')?.toString() ?? 'false',
+    reveal_gate_enabled: formData.get('reveal_gate_enabled')?.toString() ?? 'false',
   });
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? 'Invalid event data provided.');
@@ -191,6 +196,13 @@ export async function updateEventAction(
   // And: if the event contains minors, AI matching and bib detection cannot be enabled.
   const aiMatchingEnabled = currentContainsMinors ? false : payload.ai_matching_enabled;
   const bibDetectionEnabled = currentContainsMinors ? false : payload.bib_detection_enabled;
+  // Minors invariant (T-177): a minors event can never be public — its privacy
+  // comes from the private event + share code. `contains_minors` is immutable
+  // above, so this only needs to block making an existing minors event public.
+  const isPublic = currentContainsMinors ? false : payload.is_public;
+  // Reveal gate (T-177): valid only with AI matching on (its only key), which
+  // also excludes minors events. Forced off otherwise — defense in depth.
+  const revealGateEnabled = aiMatchingEnabled ? payload.reveal_gate_enabled : false;
   const currentAiEnabled = Boolean(
     (currentEvent as unknown as Record<string, unknown>).ai_matching_enabled,
   );
@@ -201,13 +213,13 @@ export async function updateEventAction(
   // Collaborative events always need a share code (that's the entry point for
   // contributors). Public non-collaborative events don't.
   let shareCode: string | null = currentEvent.share_code;
-  if (payload.is_collaborative || !payload.is_public) {
+  if (payload.is_collaborative || !isPublic) {
     if (!shareCode) shareCode = generateShareCode();
   } else {
     shareCode = null;
   }
 
-  const watermarkEnabled = payload.is_public && payload.watermark_enabled;
+  const watermarkEnabled = isPublic && payload.watermark_enabled;
 
   const updateData: Parameters<typeof updateEvent>[3] = {
     name: payload.name,
@@ -216,7 +228,7 @@ export async function updateEventAction(
     country: payload.country,
     state: payload.state,
     city: payload.city || '',
-    is_public: payload.is_public,
+    is_public: isPublic,
     share_code: shareCode,
     price_per_photo: payload.price_per_photo ?? null,
     watermark_enabled: watermarkEnabled,
@@ -225,6 +237,7 @@ export async function updateEventAction(
     require_upload_approval: payload.require_upload_approval,
     ai_matching_enabled: aiMatchingEnabled,
     bib_detection_enabled: bibDetectionEnabled,
+    reveal_gate_enabled: revealGateEnabled,
   };
   // Only write the migration-gated session_time column when it's actually in
   // play — a value is being set, or an existing one cleared. A plain edit
