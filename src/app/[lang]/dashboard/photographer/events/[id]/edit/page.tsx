@@ -11,13 +11,24 @@ import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { EditEventForm } from './edit-event-form';
 import { getEditEventPhotos } from './photo-data';
+import { ScopedEventEditForm } from './scoped-event-edit-form';
+
+/** Resolve the optional `?section=` param to a scoped edit section, or null. */
+function parseSection(value: string | string[] | undefined): 'info' | 'settings' | null {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw === 'info' || raw === 'settings' ? raw : null;
+}
 
 export default async function EditEventPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ lang: string; id: string }>;
+  searchParams: Promise<{ section?: string | string[] }>;
 }) {
   const { lang, id } = await params;
+  const { section: sectionParam } = await searchParams;
+  const section = parseSection(sectionParam);
   const [supabase, dict] = await Promise.all([createClient(), getDictionary(lang as Locale)]);
   const {
     data: { user },
@@ -33,6 +44,38 @@ export default async function EditEventPage({
 
   if (!event) {
     localizedRedirect(lang, '/dashboard/photographer/events');
+    return null;
+  }
+
+  // Section-scoped edit (T-179): a focused form for just the "info" or
+  // "settings" card — no photos/cover here. Reuses `updateEventAction`, so the
+  // unedited fields ride along unchanged.
+  if (section) {
+    const title =
+      section === 'info' ? dict.eventDetails.editInfoTitle : dict.eventDetails.editSettingsTitle;
+    const subtitle =
+      section === 'info'
+        ? dict.eventDetails.editInfoSubtitle
+        : dict.eventDetails.editSettingsSubtitle;
+    return (
+      <div>
+        <DashboardHeader title={title} />
+        <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+        <div className="mt-6">
+          <TranslationsProvider translations={dict.newEvent}>
+            <ScopedEventEditForm
+              event={event}
+              section={section}
+              labels={{
+                save: dict.eventDetails.saveChanges,
+                saving: dict.eventDetails.saving,
+                cancel: dict.eventDetails.cancel,
+              }}
+            />
+          </TranslationsProvider>
+        </div>
+      </div>
+    );
   }
 
   // Fetch + sign the existing photos with the service-role client. The `photos`

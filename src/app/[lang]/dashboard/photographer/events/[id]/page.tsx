@@ -1,4 +1,6 @@
+import { ScanFace } from 'lucide-react';
 import { DashboardHeader } from '@/components/dashboard-header';
+import { EventMetaLine } from '@/components/event-meta-line';
 import { Badge } from '@/components/ui/badge';
 import {
   countEventPhotos,
@@ -30,14 +32,14 @@ import { localizedPath } from '@/lib/i18n/localized-path';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { getShareableEventPath } from '@/lib/shareable-event-url';
-import { cn } from '@/lib/utils';
 import { getPhotoTags } from './actions';
 import { AiStatusCard } from './ai-status-card';
 import { BibStatusCard } from './bib-status-card';
 import { EventActionsMenu } from './event-actions-menu';
-import { EventDetailsCard } from './event-details-card';
+import { EventInfoCard } from './event-info-card';
 import { EventModerationTabs } from './event-moderation-tabs';
 import { EventPhotoAlbum } from './event-photo-album';
+import { EventSettingsCard } from './event-settings-card';
 import { EventShareTab } from './event-share-tab';
 import { parseEventTab } from './event-tab';
 import { EventTabs } from './event-tabs';
@@ -222,14 +224,15 @@ export default async function EventDetailPage({
   // just the first page), so `RejectedToast` diffs against the real count.
   const rejectedToastLabel = dict.newEvent.uploadRejectedToast;
 
-  // The three sections above the gallery — "Event details", the live AI
-  // indexing status and "Share event". AI and Share are conditional (`null`
-  // when they don't apply); "Event details" is always present.
-  const detailsCard = (
-    <EventDetailsCard
+  // The Details tab splits the event configuration into two cards (T-179):
+  // "Event info" (date/location/activity/type/price/visibility) and "Event
+  // settings" (the on/off toggles). Each has its own Edit button that opens a
+  // scoped edit page (`?section=info` / `?section=settings`) so editing is
+  // localized rather than opening the whole-event form.
+  const infoCard = (
+    <EventInfoCard
       t={dict.eventDetails}
       type={event.type}
-      isCollaborative={event.is_collaborative}
       activityLabel={
         dict.activities[event.activity as keyof typeof dict.activities] ?? event.activity
       }
@@ -241,13 +244,20 @@ export default async function EventDetailPage({
       })}
       pricePerPhoto={event.price_per_photo}
       isPublic={event.is_public}
+      editHref={localizedPath(lang, `/dashboard/photographer/events/${id}/edit?section=info`)}
+    />
+  );
+  const settingsCard = (
+    <EventSettingsCard
+      t={dict.eventDetails}
+      isCollaborative={event.is_collaborative}
       watermarkEnabled={event.watermark_enabled}
       aiMatchingEnabled={aiMatchingEnabled}
       bibDetectionEnabled={bibDetectionEnabled}
       containsMinors={containsMinors}
       requireUploadApproval={event.require_upload_approval}
       allowGuestUpload={event.allow_guest_upload}
-      editHref={localizedPath(lang, `/dashboard/photographer/events/${id}/edit`)}
+      editHref={localizedPath(lang, `/dashboard/photographer/events/${id}/edit?section=settings`)}
     />
   );
 
@@ -331,25 +341,25 @@ export default async function EventDetailPage({
     />
   );
 
-  // The Details tab holds 1–3 cards (Event details + optional AI + optional
-  // bib) — the grid column count matches so the present cards share one
-  // equal-height row on desktop. Share lives in its own tab now (T-178).
-  const sectionCount = 1 + (aiStatusCard ? 1 : 0) + (bibStatusCard ? 1 : 0);
-  const sectionsGridClass =
-    sectionCount === 3 ? 'md:grid-cols-3' : sectionCount === 2 ? 'md:grid-cols-2' : '';
-
   // Compact indexing indicator for the persistent header — a summarised view of
-  // the live status; the full `AiStatusCard` (with polling/actions) stays in the
-  // Details tab. Shown only when AI matching is on and past idle.
-  const headerDate = new Date(event.date).toDateString().split(' ').slice(1).join(' ');
+  // the AI face-matching status; the full `AiStatusCard` (with polling/actions)
+  // stays in the Details tab. Shown only when AI matching is on and past idle.
+  // The feature label ("AI face matching") is prefixed onto the bare status
+  // word so "Ready" isn't contextless — it reads "AI face matching: Ready".
+  const indexingStatusLabel =
+    aiMatchingStatus === 'ready'
+      ? dict.rekognition.statusReady
+      : aiMatchingStatus === 'indexing'
+        ? dict.rekognition.statusIndexing
+        : dict.rekognition.statusFailed;
   const indexingBadge =
     aiMatchingEnabled && aiProgress && aiMatchingStatus !== 'idle' ? (
-      <Badge variant={aiMatchingStatus === 'failed' ? 'destructive' : 'secondary'}>
-        {aiMatchingStatus === 'ready'
-          ? dict.rekognition.statusReady
-          : aiMatchingStatus === 'indexing'
-            ? dict.rekognition.statusIndexing
-            : dict.rekognition.statusFailed}
+      <Badge
+        variant={aiMatchingStatus === 'failed' ? 'destructive' : 'secondary'}
+        className="gap-1 font-normal"
+      >
+        <ScanFace className="h-3 w-3" />
+        {dict.rekognition.cardTitle}: {indexingStatusLabel}
       </Badge>
     ) : null;
 
@@ -368,7 +378,7 @@ export default async function EventDetailPage({
           }}
         />
       ) : null}
-      <div className={showPendingTab ? undefined : 'mt-4'}>
+      <div>
         {showPendingTab ? (
           <EventModerationTabs
             approvedLabel={dict.collaborativeEvent.tabAllPhotos}
@@ -444,21 +454,25 @@ export default async function EventDetailPage({
     </TranslationsProvider>
   );
 
+  // Details tab layout: the full-width "Event details" card (its own internal
+  // field grid) on top, then the live AI/bib status cards side by side below,
+  // then the organizer photographers section.
   const detailsTab = (
-    <>
-      <div className={cn('grid gap-4', sectionsGridClass)}>
-        {detailsCard}
-        {aiStatusCard}
-        {bibStatusCard}
-      </div>
-      {event.type === 'organizer' && (
-        <div className="mt-4">
-          <TranslationsProvider translations={dict.organizerEvent}>
-            <PhotographersSection eventId={id} initialPhotographers={eventPhotographers} />
-          </TranslationsProvider>
+    <div className="space-y-4">
+      {infoCard}
+      {settingsCard}
+      {aiStatusCard || bibStatusCard ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          {aiStatusCard}
+          {bibStatusCard}
         </div>
+      ) : null}
+      {event.type === 'organizer' && (
+        <TranslationsProvider translations={dict.organizerEvent}>
+          <PhotographersSection eventId={id} initialPhotographers={eventPhotographers} />
+        </TranslationsProvider>
       )}
-    </>
+    </div>
   );
 
   return (
@@ -467,14 +481,28 @@ export default async function EventDetailPage({
         <RejectedToast visibleCount={visibleCount} label={rejectedToastLabel} />
       ) : null}
       {/* Persistent event header — visible on every tab so the photographer
-          always knows which event they're in without opening Details. */}
-      <div className="flex items-start justify-between gap-3">
+          always knows which event they're in without opening Details.
+          `md:pr-14` reserves the top-right space the layout's floating account
+          avatar (`absolute top-4 right-4`, desktop-only) occupies, so the event
+          actions menu (⋮) doesn't sit underneath it. On mobile the avatar isn't
+          rendered (bottom nav instead), so no reservation is needed there. */}
+      <div className="flex items-start justify-between gap-3 md:pr-14">
         <div className="min-w-0">
           <DashboardHeader title={event.name} />
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <span>{headerDate}</span>
-            {indexingBadge}
-          </div>
+          {/* Event details under the title — same shared meta line the talent
+              event view uses, so the two never diverge in field order/format. */}
+          <EventMetaLine
+            className="mt-1"
+            date={event.date}
+            sessionTime={event.session_time}
+            city={event.city}
+            state={event.state}
+            country={event.country}
+            locale={lang}
+            perPhotoLabel={dict.events.perPhoto}
+            pricePerPhoto={event.price_per_photo}
+          />
+          {indexingBadge ? <div className="mt-1.5">{indexingBadge}</div> : null}
         </div>
         <div className="shrink-0">
           <EventActionsMenu eventId={id} t={dict.events} />

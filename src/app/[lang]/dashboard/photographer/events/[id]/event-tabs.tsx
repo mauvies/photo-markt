@@ -23,9 +23,9 @@ type EventTabsProps = {
  * round trip (no refetch of the heavy page payload) while still surviving F5,
  * since the server reads `?tab=` on the next request.
  *
- * The top-level tabs use the heavier segmented (`default`) variant so they read
- * as a distinct, higher level than the lighter underline (`line`) inner tabs
- * (`EventModerationTabs`, all/pending) nested inside the Photos tab.
+ * Uses the app-wide underline (`line`) tab style — the same as Sales,
+ * Favorites, and the inner moderation tabs — so the photographer page reads
+ * consistently with the rest of the dashboard.
  */
 export function EventTabs({ initialTab, labels, photos, details, share }: EventTabsProps) {
   const [tab, setTab] = useState<EventTab>(initialTab);
@@ -41,8 +41,8 @@ export function EventTabs({ initialTab, labels, photos, details, share }: EventT
   };
 
   return (
-    <Tabs value={tab} onValueChange={handleChange} className="mt-6">
-      <TabsList variant="default">
+    <Tabs value={tab} onValueChange={handleChange} className="mt-4">
+      <TabsList>
         <TabsTrigger value="photos">{labels.photos}</TabsTrigger>
         <TabsTrigger value="details">{labels.details}</TabsTrigger>
         <TabsTrigger value="share">{labels.share}</TabsTrigger>

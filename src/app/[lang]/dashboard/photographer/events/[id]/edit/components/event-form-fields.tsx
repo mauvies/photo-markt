@@ -34,6 +34,12 @@ type EventFormFieldsProps = {
   submitAttempted: boolean;
   datePopoverOpen: boolean;
   setDatePopoverOpen: (open: boolean) => void;
+  /**
+   * Which field group to render (T-179): `info` = name/activity/location/date/
+   * price/visibility; `settings` = watermark/collaborative + guest/approval;
+   * `all` (default) = both, for the full edit page.
+   */
+  section?: 'all' | 'info' | 'settings';
 };
 
 export function EventFormFields({
@@ -41,401 +47,420 @@ export function EventFormFields({
   submitAttempted,
   datePopoverOpen,
   setDatePopoverOpen,
+  section = 'all',
 }: EventFormFieldsProps) {
   const dateInputId = useId();
   const sessionTimeId = useId();
+  const showInfo = section !== 'settings';
+  const showSettings = section !== 'info';
 
   return (
     <div className="space-y-4" suppressHydrationWarning>
-      {/* Row 1: Name + Activity */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <form.Field
-          name="name"
-          validators={{
-            onChange: ({ value }) => (value.trim().length === 0 ? 'Name is required.' : undefined),
-          }}
-        >
-          {(field) => {
-            const showFeedback = submitAttempted || field.state.meta.isTouched;
-            const error = showFeedback ? field.state.meta.errors?.[0] : null;
-            const isInvalid = showFeedback && !field.state.meta.isValid;
-            return (
-              <div>
-                <Label htmlFor="name">Name or place</Label>
-                <Input
-                  id="name"
-                  className="mt-2"
-                  value={field.state.value}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  onBlur={field.handleBlur}
-                  placeholder="Event name or place"
-                  aria-invalid={isInvalid}
-                  autoComplete="off"
-                  suppressHydrationWarning
-                />
-                {isInvalid && error ? (
-                  <p className="mt-1 text-xs text-destructive">{error}</p>
-                ) : null}
-              </div>
-            );
-          }}
-        </form.Field>
-
-        <form.Field
-          name="activity"
-          validators={{
-            onChange: ({ value }) =>
-              value && activityValues.includes(value as (typeof activityValues)[number])
-                ? undefined
-                : 'Activity is required.',
-          }}
-        >
-          {(field) => {
-            const showFeedback = submitAttempted || field.state.meta.isTouched;
-            const error = showFeedback ? field.state.meta.errors?.[0] : null;
-            const isInvalid = showFeedback && !field.state.meta.isValid;
-            return (
-              <div className="grid gap-2">
-                <Label htmlFor="activity">Activity</Label>
-                <Select
-                  value={field.state.value}
-                  onValueChange={(value) => {
-                    field.handleChange(value as FormValues['activity']);
-                    field.handleBlur();
-                  }}
-                >
-                  <SelectTrigger
-                    id="activity"
-                    className="w-full rounded-md"
-                    aria-invalid={isInvalid}
-                  >
-                    <SelectValue placeholder="Select an activity" />
-                  </SelectTrigger>
-                  <SelectContent className="w-[--radix-select-trigger-width]">
-                    {activityOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {isInvalid && error ? <p className="text-xs text-destructive">{error}</p> : null}
-              </div>
-            );
-          }}
-        </form.Field>
-      </div>
-
-      {/* Row 2: Location */}
-      <form.Field name="city">
-        {(field) => (
-          <div className="grid gap-2">
-            <Label htmlFor="city">Location</Label>
-            <LocationAutocomplete
-              id="city"
-              value={field.state.value || ''}
-              onChange={(val) => field.handleChange(val)}
-              onPlaceSelect={(parts) => {
-                field.handleChange(parts.city);
-                form.setFieldValue('state', parts.state);
-                form.setFieldValue('country', parts.country);
+      {showInfo && (
+        <>
+          {/* Row 1: Name + Activity */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <form.Field
+              name="name"
+              validators={{
+                onChange: ({ value }) =>
+                  value.trim().length === 0 ? 'Name is required.' : undefined,
               }}
-              onBlur={field.handleBlur}
-              placeholder="Search for a location..."
-              noResultsText="No locations found"
-            />
-          </div>
-        )}
-      </form.Field>
+            >
+              {(field) => {
+                const showFeedback = submitAttempted || field.state.meta.isTouched;
+                const error = showFeedback ? field.state.meta.errors?.[0] : null;
+                const isInvalid = showFeedback && !field.state.meta.isValid;
+                return (
+                  <div>
+                    <Label htmlFor="name">Name or place</Label>
+                    <Input
+                      id="name"
+                      className="mt-2"
+                      value={field.state.value}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                      onBlur={field.handleBlur}
+                      placeholder="Event name or place"
+                      aria-invalid={isInvalid}
+                      autoComplete="off"
+                      suppressHydrationWarning
+                    />
+                    {isInvalid && error ? (
+                      <p className="mt-1 text-xs text-destructive">{error}</p>
+                    ) : null}
+                  </div>
+                );
+              }}
+            </form.Field>
 
-      {/* Row 3: Date + Price per Photo. `items-start` keeps the Price cell from
+            <form.Field
+              name="activity"
+              validators={{
+                onChange: ({ value }) =>
+                  value && activityValues.includes(value as (typeof activityValues)[number])
+                    ? undefined
+                    : 'Activity is required.',
+              }}
+            >
+              {(field) => {
+                const showFeedback = submitAttempted || field.state.meta.isTouched;
+                const error = showFeedback ? field.state.meta.errors?.[0] : null;
+                const isInvalid = showFeedback && !field.state.meta.isValid;
+                return (
+                  <div className="grid gap-2">
+                    <Label htmlFor="activity">Activity</Label>
+                    <Select
+                      value={field.state.value}
+                      onValueChange={(value) => {
+                        field.handleChange(value as FormValues['activity']);
+                        field.handleBlur();
+                      }}
+                    >
+                      <SelectTrigger
+                        id="activity"
+                        className="w-full rounded-md"
+                        aria-invalid={isInvalid}
+                      >
+                        <SelectValue placeholder="Select an activity" />
+                      </SelectTrigger>
+                      <SelectContent className="w-[--radix-select-trigger-width]">
+                        {activityOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {isInvalid && error ? (
+                      <p className="text-xs text-destructive">{error}</p>
+                    ) : null}
+                  </div>
+                );
+              }}
+            </form.Field>
+          </div>
+
+          {/* Row 2: Location */}
+          <form.Field name="city">
+            {(field) => (
+              <div className="grid gap-2">
+                <Label htmlFor="city">Location</Label>
+                <LocationAutocomplete
+                  id="city"
+                  value={field.state.value || ''}
+                  onChange={(val) => field.handleChange(val)}
+                  onPlaceSelect={(parts) => {
+                    field.handleChange(parts.city);
+                    form.setFieldValue('state', parts.state);
+                    form.setFieldValue('country', parts.country);
+                  }}
+                  onBlur={field.handleBlur}
+                  placeholder="Search for a location..."
+                  noResultsText="No locations found"
+                />
+              </div>
+            )}
+          </form.Field>
+
+          {/* Row 3: Date + Price per Photo. `items-start` keeps the Price cell from
           stretching to match the taller Date column (Date + Session time) — a
           stretched cell grew the price field's `.relative` box so the
           `top-1/2`-centered `$` floated below the number (T-167). Mirrors the
           create wizard's date+price row. */}
-      <div className="grid items-start gap-4 md:grid-cols-2">
-        <form.Field
-          name="date"
-          validators={{
-            onChange: ({ value }) => (value && value.length > 0 ? undefined : 'Date is required.'),
-          }}
-        >
-          {(field) => {
-            const showFeedback = submitAttempted || field.state.meta.isTouched;
-            const error = showFeedback ? field.state.meta.errors?.[0] : null;
-            const isInvalid = showFeedback && !field.state.meta.isValid;
-            const parsedDate = field.state.value ? new Date(field.state.value) : undefined;
-            return (
-              <div className="grid gap-2">
-                <Label htmlFor={dateInputId}>Date</Label>
-                <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        'w-full justify-between rounded-md border border-input text-left font-normal',
-                        !parsedDate && 'text-muted-foreground',
-                      )}
-                      aria-invalid={isInvalid}
-                    >
-                      {parsedDate ? format(parsedDate, 'PPP') : 'Select date'}
-                      <ChevronDownIcon className="size-4 opacity-60" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto overflow-hidden p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={parsedDate}
-                      captionLayout="dropdown"
-                      onSelect={(date) => {
-                        field.handleChange(date ? format(date, 'yyyy-MM-dd') : '');
-                        field.handleBlur();
-                        setDatePopoverOpen(false);
-                      }}
-                      autoFocus
+          <div className="grid items-start gap-4 md:grid-cols-2">
+            <form.Field
+              name="date"
+              validators={{
+                onChange: ({ value }) =>
+                  value && value.length > 0 ? undefined : 'Date is required.',
+              }}
+            >
+              {(field) => {
+                const showFeedback = submitAttempted || field.state.meta.isTouched;
+                const error = showFeedback ? field.state.meta.errors?.[0] : null;
+                const isInvalid = showFeedback && !field.state.meta.isValid;
+                const parsedDate = field.state.value ? new Date(field.state.value) : undefined;
+                return (
+                  <div className="grid gap-2">
+                    <Label htmlFor={dateInputId}>Date</Label>
+                    <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            'w-full justify-between rounded-md border border-input text-left font-normal',
+                            !parsedDate && 'text-muted-foreground',
+                          )}
+                          aria-invalid={isInvalid}
+                        >
+                          {parsedDate ? format(parsedDate, 'PPP') : 'Select date'}
+                          <ChevronDownIcon className="size-4 opacity-60" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto overflow-hidden p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={parsedDate}
+                          captionLayout="dropdown"
+                          onSelect={(date) => {
+                            field.handleChange(date ? format(date, 'yyyy-MM-dd') : '');
+                            field.handleBlur();
+                            setDatePopoverOpen(false);
+                          }}
+                          autoFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <input
+                      id={dateInputId}
+                      type="hidden"
+                      value={field.state.value}
+                      readOnly
+                      suppressHydrationWarning
                     />
-                  </PopoverContent>
-                </Popover>
-                <input
-                  id={dateInputId}
-                  type="hidden"
-                  value={field.state.value}
-                  readOnly
-                  suppressHydrationWarning
-                />
-                {isInvalid && error ? <p className="text-xs text-destructive">{error}</p> : null}
-                {/* Optional manual session start time (T-106). */}
-                <form.Field name="session_time">
-                  {(timeField) => (
-                    <div className="mt-1 grid gap-1">
-                      <Label htmlFor={sessionTimeId} className="text-xs text-muted-foreground">
-                        Session time (optional)
-                      </Label>
+                    {isInvalid && error ? (
+                      <p className="text-xs text-destructive">{error}</p>
+                    ) : null}
+                    {/* Optional manual session start time (T-106). */}
+                    <form.Field name="session_time">
+                      {(timeField) => (
+                        <div className="mt-1 grid gap-1">
+                          <Label htmlFor={sessionTimeId} className="text-xs text-muted-foreground">
+                            Session time (optional)
+                          </Label>
+                          <Input
+                            id={sessionTimeId}
+                            type="time"
+                            value={timeField.state.value}
+                            onChange={(event) => timeField.handleChange(event.target.value)}
+                            onBlur={timeField.handleBlur}
+                            suppressHydrationWarning
+                          />
+                        </div>
+                      )}
+                    </form.Field>
+                  </div>
+                );
+              }}
+            </form.Field>
+
+            <form.Field
+              name="price_per_photo"
+              validators={{
+                onChange: ({ value }) => {
+                  if (value === undefined || value === null) {
+                    return undefined;
+                  }
+                  const num = typeof value === 'string' ? Number.parseFloat(value) : value;
+                  if (Number.isNaN(num)) {
+                    return 'Price must be a valid number.';
+                  }
+                  if (num < 0) {
+                    return 'Price cannot be negative.';
+                  }
+                  return undefined;
+                },
+              }}
+            >
+              {(field) => {
+                const showFeedback = submitAttempted || field.state.meta.isTouched;
+                const error = showFeedback ? field.state.meta.errors?.[0] : null;
+                const isInvalid = showFeedback && !field.state.meta.isValid;
+                return (
+                  <div className="grid gap-2">
+                    <Label htmlFor="price_per_photo">Price per Photo (Optional)</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                        $
+                      </span>
                       <Input
-                        id={sessionTimeId}
-                        type="time"
-                        value={timeField.state.value}
-                        onChange={(event) => timeField.handleChange(event.target.value)}
-                        onBlur={timeField.handleBlur}
+                        id="price_per_photo"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={
+                          field.state.value === null || field.state.value === undefined
+                            ? ''
+                            : typeof field.state.value === 'string'
+                              ? field.state.value
+                              : field.state.value.toString()
+                        }
+                        onChange={(event) => {
+                          const val = event.target.value;
+                          if (val === '') {
+                            field.handleChange(null);
+                          } else {
+                            const num = Number.parseFloat(val);
+                            if (!Number.isNaN(num)) {
+                              field.handleChange(num);
+                            } else {
+                              field.handleChange(val as unknown as number);
+                            }
+                          }
+                        }}
+                        onBlur={field.handleBlur}
+                        placeholder="0.00"
+                        aria-invalid={isInvalid}
+                        // `text-sm` matches the create wizard's price input so the
+                        // `$` prefix and the value share one line-height (T-167).
+                        className="pl-7 text-sm"
                         suppressHydrationWarning
                       />
                     </div>
-                  )}
-                </form.Field>
-              </div>
-            );
-          }}
-        </form.Field>
+                    {isInvalid && error ? (
+                      <p className="text-xs text-destructive">{error}</p>
+                    ) : null}
+                  </div>
+                );
+              }}
+            </form.Field>
+          </div>
 
-        <form.Field
-          name="price_per_photo"
-          validators={{
-            onChange: ({ value }) => {
-              if (value === undefined || value === null) {
-                return undefined;
-              }
-              const num = typeof value === 'string' ? Number.parseFloat(value) : value;
-              if (Number.isNaN(num)) {
-                return 'Price must be a valid number.';
-              }
-              if (num < 0) {
-                return 'Price cannot be negative.';
-              }
-              return undefined;
-            },
-          }}
-        >
-          {(field) => {
-            const showFeedback = submitAttempted || field.state.meta.isTouched;
-            const error = showFeedback ? field.state.meta.errors?.[0] : null;
-            const isInvalid = showFeedback && !field.state.meta.isValid;
-            return (
-              <div className="grid gap-2">
-                <Label htmlFor="price_per_photo">Price per Photo (Optional)</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                    $
+          {/* Visibility Toggle */}
+          <form.Field name="is_public">
+            {(field) => (
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
+                <div className="grid gap-1">
+                  <Label htmlFor="is_public">Event Visibility</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {field.state.value
+                      ? 'Anyone can access this event'
+                      : 'Only people with the share code can access'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {field.state.value ? 'Public' : 'Private'}
                   </span>
-                  <Input
-                    id="price_per_photo"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={
-                      field.state.value === null || field.state.value === undefined
-                        ? ''
-                        : typeof field.state.value === 'string'
-                          ? field.state.value
-                          : field.state.value.toString()
-                    }
-                    onChange={(event) => {
-                      const val = event.target.value;
-                      if (val === '') {
-                        field.handleChange(null);
-                      } else {
-                        const num = Number.parseFloat(val);
-                        if (!Number.isNaN(num)) {
-                          field.handleChange(num);
-                        } else {
-                          field.handleChange(val as unknown as number);
-                        }
-                      }
+                  <Switch
+                    id="is_public"
+                    checked={field.state.value}
+                    onCheckedChange={(checked) => {
+                      field.handleChange(checked);
+                      field.handleBlur();
+                      form.setFieldValue('watermark_enabled', !!checked);
                     }}
-                    onBlur={field.handleBlur}
-                    placeholder="0.00"
-                    aria-invalid={isInvalid}
-                    // `text-sm` matches the create wizard's price input so the
-                    // `$` prefix and the value share one line-height (T-167).
-                    className="pl-7 text-sm"
-                    suppressHydrationWarning
                   />
                 </div>
-                {isInvalid && error ? <p className="text-xs text-destructive">{error}</p> : null}
               </div>
-            );
-          }}
-        </form.Field>
-      </div>
+            )}
+          </form.Field>
+        </>
+      )}
 
-      {/* Visibility Toggle */}
-      <form.Field name="is_public">
-        {(field) => (
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
-            <div className="grid gap-1">
-              <Label htmlFor="is_public">Event Visibility</Label>
-              <p className="text-xs text-muted-foreground">
-                {field.state.value
-                  ? 'Anyone can access this event'
-                  : 'Only people with the share code can access'}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">
-                {field.state.value ? 'Public' : 'Private'}
-              </span>
-              <Switch
-                id="is_public"
-                checked={field.state.value}
-                onCheckedChange={(checked) => {
-                  field.handleChange(checked);
-                  field.handleBlur();
-                  form.setFieldValue('watermark_enabled', !!checked);
-                }}
-              />
-            </div>
-          </div>
-        )}
-      </form.Field>
+      {showSettings && (
+        <>
+          {/* Watermark Toggle */}
+          <form.Field name="watermark_enabled">
+            {(field) => (
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
+                <div className="grid gap-1">
+                  <Label htmlFor="watermark_enabled">Watermark on Photos</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Add watermark for talent users (photographers see originals)
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {field.state.value ? 'Enabled' : 'Disabled'}
+                  </span>
+                  <Switch
+                    id="watermark_enabled"
+                    checked={field.state.value}
+                    onCheckedChange={(checked) => {
+                      field.handleChange(checked);
+                      field.handleBlur();
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </form.Field>
 
-      {/* Watermark Toggle */}
-      <form.Field name="watermark_enabled">
-        {(field) => (
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
-            <div className="grid gap-1">
-              <Label htmlFor="watermark_enabled">Watermark on Photos</Label>
-              <p className="text-xs text-muted-foreground">
-                Add watermark for talent users (photographers see originals)
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">
-                {field.state.value ? 'Enabled' : 'Disabled'}
-              </span>
-              <Switch
-                id="watermark_enabled"
-                checked={field.state.value}
-                onCheckedChange={(checked) => {
-                  field.handleChange(checked);
-                  field.handleBlur();
-                }}
-              />
-            </div>
-          </div>
-        )}
-      </form.Field>
+          {/* Collaborative Toggle */}
+          <form.Field name="is_collaborative">
+            {(field) => (
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
+                <div className="grid gap-1">
+                  <Label htmlFor="is_collaborative">Collaborative Event</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Let anyone with the share link contribute photos
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {field.state.value ? 'Enabled' : 'Disabled'}
+                  </span>
+                  <Switch
+                    id="is_collaborative"
+                    checked={field.state.value}
+                    onCheckedChange={(checked) => {
+                      const wasOff = !field.state.value;
+                      field.handleChange(checked);
+                      field.handleBlur();
+                      if (checked && wasOff) {
+                        form.setFieldValue('is_public', false);
+                        form.setFieldValue('watermark_enabled', false);
+                        form.setFieldValue('price_per_photo', null);
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </form.Field>
 
-      {/* Collaborative Toggle */}
-      <form.Field name="is_collaborative">
-        {(field) => (
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
-            <div className="grid gap-1">
-              <Label htmlFor="is_collaborative">Collaborative Event</Label>
-              <p className="text-xs text-muted-foreground">
-                Let anyone with the share link contribute photos
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">
-                {field.state.value ? 'Enabled' : 'Disabled'}
-              </span>
-              <Switch
-                id="is_collaborative"
-                checked={field.state.value}
-                onCheckedChange={(checked) => {
-                  const wasOff = !field.state.value;
-                  field.handleChange(checked);
-                  field.handleBlur();
-                  if (checked && wasOff) {
-                    form.setFieldValue('is_public', false);
-                    form.setFieldValue('watermark_enabled', false);
-                    form.setFieldValue('price_per_photo', null);
-                  }
-                }}
-              />
-            </div>
-          </div>
-        )}
-      </form.Field>
-
-      <form.Subscribe selector={(state) => state.values.is_collaborative}>
-        {(isCollaborative) =>
-          isCollaborative ? (
-            <div className="grid gap-3 rounded-lg border border-dashed border-input p-3">
-              <form.Field name="allow_guest_upload">
-                {(field) => (
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="grid gap-1">
-                      <Label htmlFor="allow_guest_upload">Allow guest uploads</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Visitors without an account can contribute photos
-                      </p>
-                    </div>
-                    <Switch
-                      id="allow_guest_upload"
-                      checked={field.state.value}
-                      onCheckedChange={(checked) => {
-                        field.handleChange(checked);
-                        field.handleBlur();
-                      }}
-                    />
-                  </div>
-                )}
-              </form.Field>
-              <form.Field name="require_upload_approval">
-                {(field) => (
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="grid gap-1">
-                      <Label htmlFor="require_upload_approval">Require approval</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Hold uploads as pending until you approve them
-                      </p>
-                    </div>
-                    <Switch
-                      id="require_upload_approval"
-                      checked={field.state.value}
-                      onCheckedChange={(checked) => {
-                        field.handleChange(checked);
-                        field.handleBlur();
-                      }}
-                    />
-                  </div>
-                )}
-              </form.Field>
-            </div>
-          ) : null
-        }
-      </form.Subscribe>
+          <form.Subscribe selector={(state) => state.values.is_collaborative}>
+            {(isCollaborative) =>
+              isCollaborative ? (
+                <div className="grid gap-3 rounded-lg border border-dashed border-input p-3">
+                  <form.Field name="allow_guest_upload">
+                    {(field) => (
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="grid gap-1">
+                          <Label htmlFor="allow_guest_upload">Allow guest uploads</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Visitors without an account can contribute photos
+                          </p>
+                        </div>
+                        <Switch
+                          id="allow_guest_upload"
+                          checked={field.state.value}
+                          onCheckedChange={(checked) => {
+                            field.handleChange(checked);
+                            field.handleBlur();
+                          }}
+                        />
+                      </div>
+                    )}
+                  </form.Field>
+                  <form.Field name="require_upload_approval">
+                    {(field) => (
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="grid gap-1">
+                          <Label htmlFor="require_upload_approval">Require approval</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Hold uploads as pending until you approve them
+                          </p>
+                        </div>
+                        <Switch
+                          id="require_upload_approval"
+                          checked={field.state.value}
+                          onCheckedChange={(checked) => {
+                            field.handleChange(checked);
+                            field.handleBlur();
+                          }}
+                        />
+                      </div>
+                    )}
+                  </form.Field>
+                </div>
+              ) : null
+            }
+          </form.Subscribe>
+        </>
+      )}
     </div>
   );
 }

@@ -43,7 +43,7 @@ export function EventShareTab({ eventName, shareUrl, isPublic, labels }: EventSh
   };
 
   return (
-    <div className="max-w-2xl rounded-lg border bg-card p-4">
+    <div className="rounded-lg border bg-card p-4">
       <div className="mb-4">
         <h3 className="text-sm font-semibold">{labels.heading}</h3>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -51,27 +51,32 @@ export function EventShareTab({ eventName, shareUrl, isPublic, labels }: EventSh
         </p>
       </div>
 
-      <div className="flex items-center gap-2">
+      {/* Mobile: the URL sits on its own row above the actions so it isn't
+          squished; the Copy button fills the width with the share icon beside
+          it. Desktop (sm+): everything on one inline row. */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="min-w-0 flex-1 select-all break-all rounded-md border border-input bg-background px-3 py-2 font-mono text-sm">
           {shareUrl}
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={copy}
-          className="shrink-0"
-          aria-label={copied ? labels.copied : labels.copy}
-        >
-          {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-          {copied ? labels.copied : labels.copy}
-        </Button>
-        <EventShareButton
-          eventName={eventName}
-          eventUrl={shareUrl}
-          tooltip={labels.shareTooltip}
-          className="shrink-0"
-        />
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={copy}
+            className="h-9 flex-1 sm:h-8 sm:flex-none"
+            aria-label={copied ? labels.copied : labels.copy}
+          >
+            {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+            {copied ? labels.copied : labels.copy}
+          </Button>
+          <EventShareButton
+            eventName={eventName}
+            eventUrl={shareUrl}
+            tooltip={labels.shareTooltip}
+            className="size-9 shrink-0 sm:size-8"
+          />
+        </div>
       </div>
 
       {!isPublic ? (
