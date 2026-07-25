@@ -1,7 +1,7 @@
 # T-183 · Fotos propias del fotógrafo atascadas en `pending` (dice 69, muestra 14)
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `fix/owner-uploads-stuck-pending`  (tipo = fix)
 - **OpenSpec change:** —  (bug de reliability del worker + reconciliación; decidir al ejecutar)

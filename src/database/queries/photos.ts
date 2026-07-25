@@ -777,6 +777,70 @@ export async function listPhotosWithStuckThumbnails(
     }));
 }
 
+/**
+ * Service-role only. List OWNER uploads wedged in `upload_status='pending'`
+ * past `staleBeforeIso` (T-183). An owner upload never needs moderation, so the
+ * worker's `promote-upload-status` step always promotes it to `approved` — but a
+ * lost `photo.uploaded` (or a worker run that died before step 3) leaves the row
+ * `pending` forever: invisible on the public/talent galleries (approved-only)
+ * AND absent from the owner's Pending moderation tab (which excludes owner
+ * uploads), so the dashboard count says N but only the approved subset renders.
+ *
+ * The reconciliation cron re-emits `photo.uploaded` for these so the worker
+ * re-drives download → byte-validation → promotion. Re-driving the real pipeline
+ * (rather than promoting the row directly here) keeps the byte-validation gate
+ * intact — a `pending` row whose bytes were never validated must not be approved
+ * blind.
+ *
+ * Owner-upload predicate mirrors the worker's `isOwnerUpload` check plus the
+ * distinguishing `uploaded_by IS NULL`: `photos.user_id = events.user_id`
+ * (owner-owned) AND `guest_name IS NULL` (not an anonymous guest) AND
+ * `uploaded_by IS NULL` (not an authenticated contributor). The column-to-column
+ * `user_id = events.user_id` comparison can't be expressed in PostgREST, so it's
+ * applied in JS after an inner-join fetch.
+ *
+ * Events currently wedged in `ai_matching_status='indexing'` are excluded — the
+ * cron's stuck-indexing branch already re-drives their in-flight photos, so this
+ * branch owns the `idle`/`ready`/disabled cases (the exact gap that left the
+ * reported `idle` event's owner uploads stranded).
+ */
+export async function listStuckPendingOwnerUploads(
+  supabase: SupabaseServerClient,
+  staleBeforeIso: string,
+  limit: number,
+): Promise<Array<{ id: string; eventId: string; storagePath: string }>> {
+  const { data, error } = await supabase
+    .from('photos')
+    .select('id, user_id, event_id, original_url, events!inner(user_id, ai_matching_status)')
+    .eq('upload_status', 'pending')
+    .is('deleted_at', null)
+    .is('guest_name', null)
+    .is('uploaded_by', null)
+    .is('events.deleted_at', null)
+    .lt('created_at', staleBeforeIso)
+    .not('original_url', 'is', null)
+    .limit(limit);
+  if (error) {
+    throw new Error(`Failed to list stuck pending owner uploads: ${getErrorMessage(error)}`);
+  }
+  return (data ?? [])
+    .filter((row) => {
+      // Inner-join returns events as a related object (or array); handle both.
+      const eventsField = (row as { events: unknown }).events;
+      const event = (Array.isArray(eventsField) ? eventsField[0] : eventsField) as
+        | { user_id?: string; ai_matching_status?: string | null }
+        | undefined;
+      if (!event?.user_id) return false;
+      if (event.ai_matching_status === 'indexing') return false;
+      return row.user_id === event.user_id && Boolean(row.original_url);
+    })
+    .map((row) => ({
+      id: row.id as string,
+      eventId: row.event_id as string,
+      storagePath: row.original_url as string,
+    }));
+}
+
 export async function updatePhotoThumbnailStatus(
   supabase: SupabaseServerClient,
   photoId: string,
