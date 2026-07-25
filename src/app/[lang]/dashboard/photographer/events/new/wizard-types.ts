@@ -8,6 +8,7 @@ const EMPTY_DEFAULTS: FormValues = {
   activity: 'OTHER',
   date: '',
   session_time: '',
+  session_end_time: '',
   country: '',
   state: '',
   city: '',

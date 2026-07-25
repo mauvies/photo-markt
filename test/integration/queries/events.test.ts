@@ -175,6 +175,45 @@ describe('database/queries/events', () => {
       expect(cleared_row?.session_time).toBeNull();
     });
 
+    it('persists and clears the optional session_end_time (T-180)', async () => {
+      const owner = await createTestUser('PHOTOGRAPHER');
+      const created = await createEvent(createServiceClient(), owner.id, {
+        name: 'Ranged Session',
+        date: '2026-09-01',
+        session_time: '09:30',
+        session_end_time: '12:00',
+        city: 'Madrid',
+        country: 'ES',
+        state: 'Madrid',
+        activity: 'SURF',
+        is_public: true,
+        share_code: 'RANGE26',
+        price_per_photo: null,
+        watermark_enabled: false,
+      });
+
+      const { data: created_row } = await createServiceClient()
+        .from('events')
+        .select('session_time, session_end_time')
+        .eq('id', created.id)
+        .single();
+      // Postgres `time` serializes as "HH:MM:SS".
+      expect(created_row?.session_time).toBe('09:30:00');
+      expect((created_row as { session_end_time?: string | null })?.session_end_time).toBe(
+        '12:00:00',
+      );
+
+      // Clearing only the end (null) persists and leaves the start intact.
+      await updateEvent(createServiceClient(), created.id, owner.id, { session_end_time: null });
+      const { data: cleared_row } = await createServiceClient()
+        .from('events')
+        .select('session_time, session_end_time')
+        .eq('id', created.id)
+        .single();
+      expect((cleared_row as { session_end_time?: string | null })?.session_end_time).toBeNull();
+      expect(cleared_row?.session_time).toBe('09:30:00');
+    });
+
     it('updates only the supplied columns', async () => {
       const owner = await createTestUser('PHOTOGRAPHER');
       const event = await createTestEvent(owner.id, { name: 'Old Name' });

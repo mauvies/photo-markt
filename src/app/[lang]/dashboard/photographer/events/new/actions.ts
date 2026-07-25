@@ -8,7 +8,7 @@ import { deleteStorageFiles, uploadFile } from '@/database/queries/storage';
 import type { SupabaseServerClient } from '@/database/queries/types';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
-import { normalizeSessionTime } from '@/lib/format-date';
+import { isValidSessionRange, normalizeSessionTime, SESSION_RANGE_ERROR } from '@/lib/format-date';
 import { inngest } from '@/lib/inngest/client';
 import { validatePhotoUpload } from '@/lib/photo-upload';
 import { assertCanCreateEvent } from '@/lib/plan-limits';
@@ -29,72 +29,90 @@ const dollarsToCents = (val: string | undefined): number | null => {
   return Math.round(num * 100);
 };
 
-const eventSchema = z.object({
-  name: z.string().trim().min(1, 'Name is required.'),
-  activity: z
-    .string()
-    .min(1, 'Activity is required.')
-    .refine(
-      (value): value is (typeof activityValues)[number] =>
-        activityValues.includes(value as (typeof activityValues)[number]),
-      'Activity is required.',
-    ),
-  date: z.string().min(1, 'Date is required.'),
-  // Optional manual session time — normalized to "HH:mm" or null (T-106).
-  session_time: z
-    .string()
-    .optional()
-    .transform((val) => normalizeSessionTime(val)),
-  country: z.string().trim().optional().default(''),
-  state: z.string().trim().optional().default(''),
-  city: z.string().trim().optional(),
-  event_type: z.enum(['solo', 'collaborative', 'organizer']).default('solo'),
-  is_public: z
-    .string()
-    .default('true')
-    .transform((val) => val === 'true'),
-  watermark_enabled: z
-    .string()
-    .default('true')
-    .transform((val) => val === 'true'),
-  is_collaborative: z
-    .string()
-    .default('false')
-    .transform((val) => val === 'true'),
-  allow_guest_upload: z
-    .string()
-    .default('true')
-    .transform((val) => val === 'true'),
-  require_upload_approval: z
-    .string()
-    .default('false')
-    .transform((val) => val === 'true'),
-  price_per_photo: z
-    .string()
-    .optional()
-    .transform((val) => {
-      if (!val || val.trim() === '') return null;
-      const num = Number.parseFloat(val);
-      return Number.isNaN(num) || num < 0 ? null : num;
-    }),
-  organizer_fee_per_photo: z.string().optional(),
-  ai_matching_enabled: z
-    .string()
-    .default('false')
-    .transform((val) => val === 'true'),
-  contains_minors: z
-    .string()
-    .default('false')
-    .transform((val) => val === 'true'),
-  bib_detection_enabled: z
-    .string()
-    .default('false')
-    .transform((val) => val === 'true'),
-  reveal_gate_enabled: z
-    .string()
-    .default('false')
-    .transform((val) => val === 'true'),
-});
+const eventSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Name is required.'),
+    activity: z
+      .string()
+      .min(1, 'Activity is required.')
+      .refine(
+        (value): value is (typeof activityValues)[number] =>
+          activityValues.includes(value as (typeof activityValues)[number]),
+        'Activity is required.',
+      ),
+    date: z.string().min(1, 'Date is required.'),
+    // Optional manual session time — normalized to "HH:mm" or null (T-106).
+    session_time: z
+      .string()
+      .optional()
+      .transform((val) => normalizeSessionTime(val)),
+    // Optional manual session end time — mirror of session_time (T-180). The
+    // cross-field "end requires start / end > start" rule is enforced by the
+    // superRefine below (after both are normalized).
+    session_end_time: z
+      .string()
+      .optional()
+      .transform((val) => normalizeSessionTime(val)),
+    country: z.string().trim().optional().default(''),
+    state: z.string().trim().optional().default(''),
+    city: z.string().trim().optional(),
+    event_type: z.enum(['solo', 'collaborative', 'organizer']).default('solo'),
+    is_public: z
+      .string()
+      .default('true')
+      .transform((val) => val === 'true'),
+    watermark_enabled: z
+      .string()
+      .default('true')
+      .transform((val) => val === 'true'),
+    is_collaborative: z
+      .string()
+      .default('false')
+      .transform((val) => val === 'true'),
+    allow_guest_upload: z
+      .string()
+      .default('true')
+      .transform((val) => val === 'true'),
+    require_upload_approval: z
+      .string()
+      .default('false')
+      .transform((val) => val === 'true'),
+    price_per_photo: z
+      .string()
+      .optional()
+      .transform((val) => {
+        if (!val || val.trim() === '') return null;
+        const num = Number.parseFloat(val);
+        return Number.isNaN(num) || num < 0 ? null : num;
+      }),
+    organizer_fee_per_photo: z.string().optional(),
+    ai_matching_enabled: z
+      .string()
+      .default('false')
+      .transform((val) => val === 'true'),
+    contains_minors: z
+      .string()
+      .default('false')
+      .transform((val) => val === 'true'),
+    bib_detection_enabled: z
+      .string()
+      .default('false')
+      .transform((val) => val === 'true'),
+    reveal_gate_enabled: z
+      .string()
+      .default('false')
+      .transform((val) => val === 'true'),
+  })
+  .superRefine((data, ctx) => {
+    // T-180: an end time requires a start and must be after it.
+    if (!isValidSessionRange(data.session_time, data.session_end_time)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: SESSION_RANGE_ERROR,
+        path: ['session_end_time'],
+      });
+    }
+  });
 
 // --- Types ---
 
@@ -181,6 +199,7 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     activity: formData.get('activity')?.toString() ?? '',
     date: formData.get('date')?.toString() ?? '',
     session_time: formData.get('session_time')?.toString(),
+    session_end_time: formData.get('session_end_time')?.toString(),
     country: formData.get('country')?.toString() ?? '',
     state: formData.get('state')?.toString(),
     city: formData.get('city')?.toString(),
@@ -239,6 +258,7 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     activity: payload.activity,
     date: payload.date,
     session_time: payload.session_time,
+    session_end_time: payload.session_end_time,
     country: payload.country,
     state: payload.state,
     city: payload.city || '',

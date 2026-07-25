@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { isValidSessionRange } from '@/lib/format-date';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
@@ -46,6 +47,7 @@ export function Step3Details({
   const { t } = useTranslations<NewEventT>();
   const dateInputId = useId();
   const sessionTimeId = useId();
+  const sessionEndTimeId = useId();
   const [datePopoverOpen, setDatePopoverOpen] = useState(false);
 
   return (
@@ -241,26 +243,66 @@ export function Step3Details({
                   {isInvalid && error && (
                     <p className="min-h-4 text-xs text-destructive">{error}</p>
                   )}
-                  {/* Optional manual session start time — separate from the
-                      camera time-sync feature (T-106). */}
-                  <form.Field name="session_time">
-                    {(timeField) => (
-                      <div className="mt-1 grid gap-1">
-                        <Label htmlFor={sessionTimeId} className="text-xs text-muted-foreground">
-                          {t('sessionTimeLabel')}
-                        </Label>
-                        <Input
-                          id={sessionTimeId}
-                          type="time"
-                          className="text-sm"
-                          value={timeField.state.value}
-                          onChange={(event) => timeField.handleChange(event.target.value)}
-                          onBlur={timeField.handleBlur}
-                          suppressHydrationWarning
-                        />
-                      </div>
-                    )}
-                  </form.Field>
+                  {/* Optional manual session start + end time — separate from
+                      the camera time-sync feature (T-106 start, T-180 end). */}
+                  <div className="mt-1 grid grid-cols-2 gap-3">
+                    <form.Field name="session_time">
+                      {(timeField) => (
+                        <div className="grid gap-1">
+                          <Label htmlFor={sessionTimeId} className="text-xs text-muted-foreground">
+                            {t('sessionTimeLabel')}
+                          </Label>
+                          <Input
+                            id={sessionTimeId}
+                            type="time"
+                            className="text-sm"
+                            value={timeField.state.value}
+                            onChange={(event) => timeField.handleChange(event.target.value)}
+                            onBlur={timeField.handleBlur}
+                            suppressHydrationWarning
+                          />
+                        </div>
+                      )}
+                    </form.Field>
+                    <form.Field
+                      name="session_end_time"
+                      validators={{
+                        onChangeListenTo: ['session_time'],
+                        onChange: ({ value, fieldApi }) =>
+                          isValidSessionRange(fieldApi.form.getFieldValue('session_time'), value)
+                            ? undefined
+                            : t('sessionEndTimeError'),
+                      }}
+                    >
+                      {(endField) => {
+                        const endError = endField.state.meta.isTouched
+                          ? endField.state.meta.errors[0]
+                          : undefined;
+                        return (
+                          <div className="grid gap-1">
+                            <Label
+                              htmlFor={sessionEndTimeId}
+                              className="text-xs text-muted-foreground"
+                            >
+                              {t('sessionEndTimeLabel')}
+                            </Label>
+                            <Input
+                              id={sessionEndTimeId}
+                              type="time"
+                              className="text-sm"
+                              value={endField.state.value}
+                              onChange={(event) => endField.handleChange(event.target.value)}
+                              onBlur={endField.handleBlur}
+                              suppressHydrationWarning
+                            />
+                            {endError ? (
+                              <p className="text-xs text-destructive">{endError}</p>
+                            ) : null}
+                          </div>
+                        );
+                      }}
+                    </form.Field>
+                  </div>
                 </div>
               );
             }}

@@ -368,6 +368,8 @@ export default function NewEventForm({
     formData.append('activity', parsed.activity);
     formData.append('date', parsed.date);
     if (parsed.session_time?.trim()) formData.append('session_time', parsed.session_time.trim());
+    if (parsed.session_end_time?.trim())
+      formData.append('session_end_time', parsed.session_end_time.trim());
     if (parsed.city?.trim()) formData.append('city', parsed.city.trim());
     if (parsed.state?.trim()) formData.append('state', parsed.state.trim());
     if (parsed.country?.trim()) formData.append('country', parsed.country.trim());

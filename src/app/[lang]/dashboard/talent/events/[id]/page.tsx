@@ -392,6 +392,7 @@ export default async function ExploreEventDetailPage({
           className="mt-1"
           date={event.date}
           sessionTime={event.session_time}
+          sessionEndTime={event.session_end_time}
           city={event.city}
           state={event.state}
           country={event.country}

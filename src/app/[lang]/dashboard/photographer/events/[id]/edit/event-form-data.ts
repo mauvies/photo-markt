@@ -14,8 +14,10 @@ export function buildEventUpdateFormData(parsed: FormValues): FormData {
   formData.append('name', parsed.name.trim());
   formData.append('activity', parsed.activity);
   formData.append('date', parsed.date);
-  // Always send session_time (even empty) so clearing it persists as null.
+  // Always send session_time/session_end_time (even empty) so clearing persists
+  // as null (T-106/T-180).
   formData.append('session_time', parsed.session_time?.trim() ?? '');
+  formData.append('session_end_time', parsed.session_end_time?.trim() ?? '');
   if (parsed.city?.trim()) {
     formData.append('city', parsed.city.trim());
   }

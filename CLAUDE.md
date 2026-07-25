@@ -154,11 +154,11 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
 ### Key Tables
 
 **events**
-`id, user_id, name, date, session_time, start_date, end_date, city, country, state, activity, is_public, share_code, price_per_photo, watermark_enabled, slug, lat, lng, time_offset, time_sync_enabled, deleted_at, created_at, updated_at`
+`id, user_id, name, date, session_time, session_end_time, start_date, end_date, city, country, state, activity, is_public, share_code, price_per_photo, watermark_enabled, slug, lat, lng, time_offset, time_sync_enabled, deleted_at, created_at, updated_at`
 - Soft delete via `deleted_at`
 - `state` field tracks event status (`upcoming` / `completed`) based on date
 - `time_sync_enabled` + `time_offset` support the camera time sync feature (when each *photo* was taken)
-- `session_time` (nullable `time`) is a **separate** concept — the manual session start time the photographer types, for display only; naive local time-of-day, not tied to `time_offset`/`time_sync_enabled` (T-106)
+- `session_time` (nullable `time`) is a **separate** concept — the manual session start time the photographer types, for display only; naive local time-of-day, not tied to `time_offset`/`time_sync_enabled` (T-106). `session_end_time` (nullable `time`, T-180) is its mirror — the manual session end; when both are set the UI shows a range ("09:30 – 12:00") via `formatSessionTimeRange`. App-level rule: an end requires a start and must be after it (`isValidSessionRange`); the column carries no constraint
 - `share_code` allows access to private events
 
 **photos** (via `/src/database/queries/photos.ts`)

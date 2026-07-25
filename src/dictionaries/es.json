@@ -915,6 +915,8 @@
     "dateLabel": "Fecha",
     "dateSelectPlaceholder": "Seleccionar fecha",
     "sessionTimeLabel": "Hora de la sesión (opcional)",
+    "sessionEndTimeLabel": "Hora de fin de la sesión (opcional)",
+    "sessionEndTimeError": "La hora de fin debe ser posterior a la de inicio.",
     "dateRequired": "La fecha es obligatoria.",
     "priceLabel": "Precio por foto (opcional)",
     "priceInvalidNumber": "El precio debe ser un número válido.",

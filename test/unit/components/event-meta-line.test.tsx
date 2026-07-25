@@ -98,6 +98,36 @@ describe('EventMetaLine', () => {
     expect(text.search(/9:30/)).toBeLessThan(text.indexOf('Lisbon'));
   });
 
+  it('shows the session as a start–end range when both times are provided (T-180)', () => {
+    const { container } = render(
+      <EventMetaLine
+        date={JUNE_6}
+        sessionTime="09:30"
+        sessionEndTime="12:00"
+        city="lisbon"
+        locale="es"
+        perPhotoLabel="por foto"
+      />,
+    );
+    // es locale → 24-hour; the range joins the two ends with an en dash.
+    expect(container.textContent).toContain('9:30 – 12:00');
+  });
+
+  it('shows only the start when the end is absent (T-180 falls back to T-106)', () => {
+    const { container } = render(
+      <EventMetaLine
+        date={JUNE_6}
+        sessionTime="09:30"
+        city="lisbon"
+        locale="es"
+        perPhotoLabel="por foto"
+      />,
+    );
+    const text = container.textContent ?? '';
+    expect(text).toContain('9:30');
+    expect(text).not.toContain('–');
+  });
+
   it('omits the session time segment when absent (T-106)', () => {
     const { container } = render(
       <EventMetaLine date={JUNE_6} city="lisbon" locale="en" perPhotoLabel="per photo" />,
