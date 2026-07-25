@@ -481,8 +481,12 @@ export default async function EventDetailPage({
         <RejectedToast visibleCount={visibleCount} label={rejectedToastLabel} />
       ) : null}
       {/* Persistent event header — visible on every tab so the photographer
-          always knows which event they're in without opening Details. */}
-      <div className="flex items-start justify-between gap-3">
+          always knows which event they're in without opening Details.
+          `md:pr-14` reserves the top-right space the layout's floating account
+          avatar (`absolute top-4 right-4`, desktop-only) occupies, so the event
+          actions menu (⋮) doesn't sit underneath it. On mobile the avatar isn't
+          rendered (bottom nav instead), so no reservation is needed there. */}
+      <div className="flex items-start justify-between gap-3 md:pr-14">
         <div className="min-w-0">
           <DashboardHeader title={event.name} />
           {/* Event details under the title — same shared meta line the talent
