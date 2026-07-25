@@ -131,7 +131,7 @@ export function DashboardUserMenu({
         <button
           type="button"
           aria-label="User menu"
-          className="rounded-full ring-offset-background transition-shadow hover:ring-2 hover:ring-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="inline-flex items-center justify-center rounded-full ring-offset-background transition-shadow hover:ring-2 hover:ring-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <Avatar className="h-10 w-10">
             <AvatarImage src={user.avatar ?? undefined} alt={user.name} />
