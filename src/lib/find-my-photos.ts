@@ -33,6 +33,51 @@ export function resolveFindMyPhotos(params: {
   return { visible: showFace || showBib, showFace, showBib };
 }
 
+/**
+ * Reveal gate (T-177) dead-end guard (T-184).
+ *
+ * A gated event reveals its photos ONLY to a visitor who proves a face-search
+ * match — nothing is browsable up front. So if the face-search entry can't
+ * render (the event isn't searchable yet: nothing indexed, indexing in flight,
+ * or indexing failed), the visitor is stuck with no photos AND no way to find
+ * them — a silent dead-end. This resolves which explanatory notice to show in
+ * that case, so the gallery shows a clear state instead of a mute empty grid.
+ *
+ * Non-gated events are never at risk: their photos browse normally, so hiding
+ * the (useless) face-search entry when nothing is indexed is correct there —
+ * hence `'none'` whenever `!gated`.
+ */
+export type GatedFaceSearchNotice = 'none' | 'processing' | 'unavailable';
+
+export function resolveGatedFaceSearchNotice(params: {
+  /** Event has the reveal gate on. */
+  gated: boolean;
+  /** Face search is usable right now (server-computed: enabled + collection +
+   * not-failed + at least one indexed photo). When true, the banner renders and
+   * there is no dead-end. */
+  aiSearchEligible: boolean;
+  /** AI face matching is set up and could still produce results — enabled, not
+   * a minors event, collection exists, and indexing hasn't terminally failed. */
+  aiUsable: boolean;
+  /** Rekognition indexing status for the event. */
+  aiStatus: 'idle' | 'indexing' | 'ready' | 'failed' | null;
+}): GatedFaceSearchNotice {
+  if (!params.gated) return 'none';
+  // The face-search entry renders → the visitor can search → no dead-end.
+  if (params.aiSearchEligible) return 'none';
+  // Gated + not eligible: distinguish "results are still coming" from "face
+  // search will never help here".
+  //   - idle: AI enabled but the backfill hasn't indexed yet (the reported
+  //     case — shares the worker-reliability root with T-183/T-099).
+  //   - indexing: in flight.
+  // Both are "processing". Anything else (failed / ready-but-nothing-indexed /
+  // AI not usable) is a terminal "unavailable".
+  if (params.aiUsable && (params.aiStatus === 'idle' || params.aiStatus === 'indexing')) {
+    return 'processing';
+  }
+  return 'unavailable';
+}
+
 /** Header copy for the "Find my photos" banner, keyed by which methods apply. */
 export interface FindMyPhotosCopyLabels {
   /** Method-neutral title used for the ready state (face, bib, or both). */

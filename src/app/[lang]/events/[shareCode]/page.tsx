@@ -8,6 +8,7 @@ import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/
 import { EventGalleryWithFaceSearch } from '@/components/event-gallery-with-face-search';
 import { EventMetaLine } from '@/components/event-meta-line';
 import { EventShareButton } from '@/components/event-share-button';
+import { GatedFaceSearchNotice } from '@/components/gated-face-search-notice';
 import {
   countEventPhotosByStatus,
   createPhotoUrlMap,
@@ -31,6 +32,7 @@ import { eventDetailCacheTags } from '@/lib/event-cache-tags';
 import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
 import { getEventStatus, isCollaborativeUploadOpen } from '@/lib/event-status';
 import { isFeatureEnabled } from '@/lib/feature-flags';
+import { resolveGatedFaceSearchNotice } from '@/lib/find-my-photos';
 import { formatEventLocation } from '@/lib/format-location';
 import { getBaseUrl } from '@/lib/get-base-url';
 import { getSiteUrl } from '@/lib/get-site-url';
@@ -383,16 +385,21 @@ export default async function EventPage({
   // The wrapper component handles the matches-view state purely client-side.
   let aiSearchEligible = false;
   let aiBannerState: 'ready' | 'indexing' = 'ready';
+  // `aiUsable` / `aiStatus` feed the reveal-gate dead-end guard (T-184).
+  let aiUsable = false;
+  let aiStatus: 'idle' | 'indexing' | 'ready' | 'failed' | null = null;
   if (isFeatureEnabled('AI_MATCHING')) {
     try {
       const adminClientForAi = supabaseAdmin as unknown as SupabaseServerClient;
       const aiState = await getEventRekognitionState(adminClientForAi, event.id);
+      aiStatus = aiState?.status ?? null;
       if (
         aiState?.enabled &&
         !aiState.containsMinors &&
         aiState.collectionId &&
         aiState.status !== 'failed'
       ) {
+        aiUsable = true;
         const aiProgress = await getEventAiIndexingProgress(adminClientForAi, event.id);
         if (aiProgress.indexed > 0) {
           aiSearchEligible = true;
@@ -403,6 +410,15 @@ export default async function EventPage({
       // Best-effort — if AI state lookup fails the banner just won't render.
     }
   }
+
+  // Reveal gate (T-177) dead-end guard (T-184): a gated event with no searchable
+  // face index yet must show a clear state, not a mute empty gallery.
+  const gatedFaceSearchNotice = resolveGatedFaceSearchNotice({
+    gated,
+    aiSearchEligible,
+    aiUsable,
+    aiStatus,
+  });
   // Free collaborative events skip the cart entirely — no purchase flow.
   const isForSale = event.price_per_photo !== null;
   const showCartUi = isForSale;
@@ -637,6 +653,14 @@ export default async function EventPage({
               <p className="text-lg font-semibold">{dict.events.comingSoon}</p>
               <p className="text-sm text-muted-foreground">{dict.events.photosAfterEvent}</p>
             </div>
+          ) : gatedFaceSearchNotice !== 'none' ? (
+            // Reveal gate (T-177) dead-end guard (T-184): gated event with no
+            // searchable face index yet — show a clear state, not a mute empty
+            // gallery the visitor can't escape.
+            <GatedFaceSearchNotice
+              state={gatedFaceSearchNotice}
+              labels={dict.aiSearch.gatedNotice}
+            />
           ) : (
             <EventGalleryWithFaceSearch
               shareCode={event.share_code ?? event.id}

@@ -10,6 +10,7 @@ import { EventGalleryWithFaceSearch } from '@/components/event-gallery-with-face
 import { EventMetaLine } from '@/components/event-meta-line';
 import { EventSaveButton } from '@/components/event-save-button';
 import { EventShareButton } from '@/components/event-share-button';
+import { GatedFaceSearchNotice } from '@/components/gated-face-search-notice';
 import { MarkEventSeen } from '@/components/mark-event-seen';
 import {
   countEventPhotosByStatus,
@@ -37,6 +38,7 @@ import { eventDetailCacheTags } from '@/lib/event-cache-tags';
 import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
 import { getEventStatus, isCollaborativeUploadOpen } from '@/lib/event-status';
 import { isFeatureEnabled } from '@/lib/feature-flags';
+import { resolveGatedFaceSearchNotice } from '@/lib/find-my-photos';
 import { getBaseUrl } from '@/lib/get-base-url';
 import { getSiteUrl } from '@/lib/get-site-url';
 import type { Locale } from '@/lib/i18n/config';
@@ -222,16 +224,23 @@ export default async function ExploreEventDetailPage({
   // failed, and at least one photo has been processed.
   let aiSearchEligible = false;
   let aiBannerState: 'ready' | 'indexing' = 'ready';
+  // `aiUsable` / `aiStatus` feed the reveal-gate dead-end guard (T-184): a
+  // gated event with no searchable face index yet must show a clear state, not
+  // a mute empty gallery.
+  let aiUsable = false;
+  let aiStatus: 'idle' | 'indexing' | 'ready' | 'failed' | null = null;
   if (isFeatureEnabled('AI_MATCHING')) {
     try {
       const adminClientForAi = supabaseAdmin as unknown as SupabaseServerClient;
       const aiState = await getEventRekognitionState(adminClientForAi, event.id);
+      aiStatus = aiState?.status ?? null;
       if (
         aiState?.enabled &&
         !aiState.containsMinors &&
         aiState.collectionId &&
         aiState.status !== 'failed'
       ) {
+        aiUsable = true;
         const aiProgress = await getEventAiIndexingProgress(adminClientForAi, event.id);
         if (aiProgress.indexed > 0) {
           aiSearchEligible = true;
@@ -242,6 +251,16 @@ export default async function ExploreEventDetailPage({
       // Best-effort; banner just won't render on failure.
     }
   }
+
+  // Reveal gate (T-177) dead-end guard (T-184): when the event is gated but face
+  // search can't render yet, show a clear "processing / unavailable" state
+  // instead of stranding the visitor with no photos and no way to search.
+  const gatedFaceSearchNotice = resolveGatedFaceSearchNotice({
+    gated,
+    aiSearchEligible,
+    aiUsable,
+    aiStatus,
+  });
 
   // Whether the event has any detected bib numbers yet — drives the bib search
   // empty state ("still processing" vs "no match"). Only relevant when bib
@@ -426,6 +445,11 @@ export default async function ExploreEventDetailPage({
           <p className="text-lg font-semibold">{dict.events.comingSoon}</p>
           <p className="text-sm text-muted-foreground">{dict.events.photosAfterEvent}</p>
         </div>
+      ) : gatedFaceSearchNotice !== 'none' ? (
+        // Reveal gate (T-177) dead-end guard (T-184): the event is gated but has
+        // no searchable face index yet, so the face-search entry can't render.
+        // Show a clear state instead of a mute empty gallery with no way out.
+        <GatedFaceSearchNotice state={gatedFaceSearchNotice} labels={dict.aiSearch.gatedNotice} />
       ) : photoItems.length === 0 && !gated ? (
         // Reveal gate (T-177): a gated event ALWAYS renders the gallery wrapper
         // below so the face-search entry mounts — logged-in talents are
