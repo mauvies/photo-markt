@@ -22,6 +22,11 @@ function AvatarImage({ className, ...props }: React.ComponentProps<typeof Avatar
   return (
     <AvatarPrimitive.Image
       data-slot="avatar-image"
+      // Google profile images (lh3.googleusercontent.com) intermittently 403/429
+      // when a referrer is sent, which drops the <img> and falls back to the
+      // muted initial circle — looking like an off-centre "second circle" behind
+      // the border. `no-referrer` makes them load reliably.
+      referrerPolicy="no-referrer"
       className={cn('aspect-square size-full object-cover', className)}
       {...props}
     />
