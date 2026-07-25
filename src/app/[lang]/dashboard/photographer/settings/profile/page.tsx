@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { AvatarUpload } from '@/components/avatar-upload';
 import { ProfileForm } from '@/components/profile-form';
 import { getProfile } from '@/database/queries/profiles';
 import { createClient } from '@/database/server';
@@ -41,6 +42,17 @@ export default async function PhotographerSettingsProfilePage({
         </p>
       </div>
       <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-6">
+        <div className="mb-6">
+          <h3 className="text-sm font-medium">{dict.avatarUpload.sectionTitle}</h3>
+          <p className="mb-3 text-sm text-muted-foreground">
+            {dict.avatarUpload.sectionDescription}
+          </p>
+          <AvatarUpload
+            currentAvatarUrl={profile.avatar_url ?? null}
+            fallbackText={(profile.display_name || profile.username || '?').charAt(0).toUpperCase()}
+            labels={dict.avatarUpload}
+          />
+        </div>
         <TranslationsProvider translations={dict.profileForm}>
           <ProfileForm
             initialValues={{

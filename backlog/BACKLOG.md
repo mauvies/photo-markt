@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-182 | Permitir cambiar la foto de perfil (fotógrafo y talento; upload validado + resize + delete-on-replace) | — | todo |
+| 1 | P2 | T-182 | Permitir cambiar la foto de perfil (fotógrafo y talento; upload validado + resize + delete-on-replace) | — | doing |
 | 2 | P3 | T-181 | Probar la font family Bricolage Grotesque (reemplaza Inter Tight/Inter, preloads neto-cero) | — | todo |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |

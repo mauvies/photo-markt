@@ -80,6 +80,19 @@ export async function ensurePhotosBucket(client?: SupabaseClient): Promise<void>
 }
 
 /**
+ * Idempotently ensure the PUBLIC `avatars` bucket exists (T-182). Codified as a
+ * migration (`create_avatars_bucket`), so this is a redundant safety net for
+ * avatar-action tests that don't run a full `db reset`.
+ */
+export async function ensureAvatarsBucket(client?: SupabaseClient): Promise<void> {
+  const sb = client ?? createServiceClient();
+  const { error } = await sb.storage.createBucket('avatars', { public: true });
+  if (error && !error.message.toLowerCase().includes('already exists')) {
+    throw new Error(`ensureAvatarsBucket: ${error.message}`);
+  }
+}
+
+/**
  * Memoized pre-flight: confirm the local stack granted the API roles DML on
  * `public` tables before any integration test touches the DB. A Supabase CLI
  * bump once stripped these grants, turning a single provisioning gap into ~135

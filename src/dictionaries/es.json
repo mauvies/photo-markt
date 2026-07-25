@@ -739,6 +739,18 @@
     "saveChanges": "Guardar cambios",
     "saving": "Guardando..."
   },
+  "avatarUpload": {
+    "sectionTitle": "Foto de perfil",
+    "sectionDescription": "Se muestra en tu perfil, en las tarjetas de eventos y en el menú.",
+    "changeButton": "Cambiar foto",
+    "removeButton": "Quitar",
+    "updated": "Foto de perfil actualizada",
+    "removed": "Foto de perfil eliminada",
+    "errorInvalidType": "Elige un archivo de imagen (JPG, PNG o WebP).",
+    "errorTooLarge": "La imagen es muy grande. El tamaño máximo es 8 MB.",
+    "errorRateLimit": "Demasiadas subidas. Inténtalo de nuevo en un momento.",
+    "errorGeneric": "No se pudo actualizar tu foto. Inténtalo de nuevo."
+  },
   "earnings": {
     "cancel": "Cancelar",
     "totalEarnings": "Ganancias totales",

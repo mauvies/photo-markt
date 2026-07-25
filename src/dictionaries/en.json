@@ -739,6 +739,18 @@
     "saveChanges": "Save Changes",
     "saving": "Saving..."
   },
+  "avatarUpload": {
+    "sectionTitle": "Profile photo",
+    "sectionDescription": "Shown on your profile, event cards and the menu.",
+    "changeButton": "Change photo",
+    "removeButton": "Remove",
+    "updated": "Profile photo updated",
+    "removed": "Profile photo removed",
+    "errorInvalidType": "Please choose an image file (JPG, PNG or WebP).",
+    "errorTooLarge": "Image is too large. Maximum size is 8 MB.",
+    "errorRateLimit": "Too many uploads. Please try again in a bit.",
+    "errorGeneric": "Couldn't update your photo. Please try again."
+  },
   "earnings": {
     "cancel": "Cancel",
     "totalEarnings": "Total Earnings",

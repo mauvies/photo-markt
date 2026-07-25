@@ -1,7 +1,7 @@
 # T-182 · Permitir cambiar la foto de perfil (fotógrafo y talento)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno (requiere migración nueva — ver Notas; no bloquea la captura)
 - **Rama:** `feat/change-profile-picture`  (tipo = feat)
 - **OpenSpec change:** —  (probable **sí**: toca upload/storage/migración + 2 settings + propagación → >1 archivo y superficie sensible; decidir al ejecutar)

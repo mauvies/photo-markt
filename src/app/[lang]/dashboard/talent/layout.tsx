@@ -17,7 +17,7 @@ export default async function TalentLayout({ children }: { children: React.React
   // single auth round-trip via getRoleContext() (see T-095) instead of the
   // former getActiveRoleOrNull + userHasRole pair that re-authenticated twice.
   const [profile, { activeRole: currentRole, heldRoles }] = await Promise.all([
-    getProfileFields(supabase, user?.id ?? '', ['display_name']),
+    getProfileFields(supabase, user?.id ?? '', ['display_name', 'avatar_url']),
     getRoleContext(),
   ]);
 
@@ -38,7 +38,9 @@ export default async function TalentLayout({ children }: { children: React.React
   const sidebarUser = {
     name: profile?.display_name ?? user?.user_metadata?.full_name ?? user?.email ?? 'Member',
     email: user?.email ?? '',
-    avatar: user?.user_metadata?.avatar_url ?? null,
+    // Prefer the durable `profiles.avatar_url` (T-182) — auth metadata is
+    // re-synced from Google on each OAuth sign-in and would revert an upload.
+    avatar: profile?.avatar_url ?? user?.user_metadata?.avatar_url ?? null,
   };
 
   return (

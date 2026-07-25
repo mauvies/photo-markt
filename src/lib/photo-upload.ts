@@ -22,6 +22,21 @@ export const MAX_PHOTO_BYTES = 50 * 1024 * 1024; // 50 MB
 
 const ALLOWED_FORMATS = new Set(['jpeg', 'png', 'webp', 'heif', 'avif', 'gif']);
 
+/**
+ * Per-call overrides so non-photo upload paths (e.g. avatars, T-182) can reuse
+ * the exact magic-byte detection with a tighter cap / format allow-list without
+ * touching the photo call-site. Defaults preserve the photo behavior.
+ */
+export type ValidateUploadOptions = {
+  /** Max byte size. Defaults to {@link MAX_PHOTO_BYTES} (50 MB). */
+  maxBytes?: number;
+  /** Sharp format names to accept (e.g. `['jpeg','png','webp']`). Defaults to
+   * the full photo set. Must be a subset of the formats Sharp can decode. */
+  allowedFormats?: readonly string[];
+  /** Message thrown when the buffer exceeds `maxBytes`. */
+  tooLargeMessage?: string;
+};
+
 const FORMAT_TO_CONTENT_TYPE: Record<string, string> = {
   jpeg: 'image/jpeg',
   png: 'image/png',
@@ -58,9 +73,19 @@ export type ValidatedUpload = {
  *   - Sharp can't parse the buffer (not an image)
  *   - detected format is not in `ALLOWED_FORMATS`
  */
-export async function validatePhotoBuffer(buffer: Buffer): Promise<ValidatedUpload> {
-  if (buffer.byteLength > MAX_PHOTO_BYTES) {
-    throw new Error('File is too large. Maximum size is 50 MB per photo.');
+export async function validatePhotoBuffer(
+  buffer: Buffer,
+  options?: ValidateUploadOptions,
+): Promise<ValidatedUpload> {
+  const maxBytes = options?.maxBytes ?? MAX_PHOTO_BYTES;
+  const allowedFormats = options?.allowedFormats
+    ? new Set(options.allowedFormats)
+    : ALLOWED_FORMATS;
+
+  if (buffer.byteLength > maxBytes) {
+    throw new Error(
+      options?.tooLargeMessage ?? 'File is too large. Maximum size is 50 MB per photo.',
+    );
   }
 
   let metadata: sharp.Metadata;
@@ -71,7 +96,7 @@ export async function validatePhotoBuffer(buffer: Buffer): Promise<ValidatedUplo
   }
 
   const format = metadata.format;
-  if (!format || !ALLOWED_FORMATS.has(format)) {
+  if (!format || !allowedFormats.has(format)) {
     throw new Error('Unsupported image format.');
   }
 
@@ -95,10 +120,16 @@ export async function validatePhotoBuffer(buffer: Buffer): Promise<ValidatedUplo
  * File-based wrapper. Kept for tests and any legacy caller still passing
  * `File`. New code should call `validatePhotoBuffer` directly.
  */
-export async function validatePhotoUpload(file: File): Promise<ValidatedUpload> {
-  if (file.size > MAX_PHOTO_BYTES) {
-    throw new Error('File is too large. Maximum size is 50 MB per photo.');
+export async function validatePhotoUpload(
+  file: File,
+  options?: ValidateUploadOptions,
+): Promise<ValidatedUpload> {
+  const maxBytes = options?.maxBytes ?? MAX_PHOTO_BYTES;
+  if (file.size > maxBytes) {
+    throw new Error(
+      options?.tooLargeMessage ?? 'File is too large. Maximum size is 50 MB per photo.',
+    );
   }
   const buffer = Buffer.from(await file.arrayBuffer());
-  return validatePhotoBuffer(buffer);
+  return validatePhotoBuffer(buffer, options);
 }
