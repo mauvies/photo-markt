@@ -1,7 +1,7 @@
 # T-185 · Aplicar la migración del reveal gate (T-177) a producción — drift de schema
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** —  (op de infra; probablemente sin rama de código — aplicar la migración pendiente)
 - **OpenSpec change:** —
@@ -38,3 +38,22 @@ T-177 ya está mergeado a `main` (PR #237) → el código en prod lee `event.rev
 3. **Con OK del usuario**, aplicar la migración pendiente a prod vía MCP `apply_migration`.
 4. Verificar la columna y un read de `isEventRevealGated` en prod.
 5. Marcar ticket `done`, mover a Archivo, y mover el archivo a `backlog/tickets/done/`. (Sin PR de código si no hubo cambio de repo; anotar la acción de infra.)
+
+---
+
+## Resolución (2026-07-25 — op de infra, sin cambio de código de app)
+
+**Diagnóstico (read-only vía MCP):**
+- Prod (`yzdlueeeizdqwuicydbr`): `events.reveal_gate_enabled` **ausente**; `list_migrations` confirma que la única pendiente era `20260724000000` (la anterior, `20260717000000_add_deleted_at_to_photos`, ya estaba aplicada — sin otras pendientes).
+- **Causa del fallo confirmada:** `migrate.yml` del merge de PR #237 (run `30081714377`) **no arrancó** (2s). Anotación de GitHub: *"The job was not started because recent account payments have failed or your spending limit needs to be increased."* Es un bloqueo de **billing/spending-limit** de GitHub Actions (mismo patrón que tumbó T-142), no un bug del workflow ni de la BD.
+
+**Aplicación (con OK explícito del usuario):**
+- `apply_migration` a prod con el SQL exacto de `20260724000000_add_reveal_gate_to_events.sql` (idempotente: `add column if not exists … boolean not null default false` + comment).
+- **Verificado:** la columna existe en prod con `boolean / NOT NULL / default false` y el comment correcto; smoke `select count(*) … from events` lee la columna sin error → 5 eventos, todos `false` (defaults OFF, cero cambio de comportamiento). `isEventRevealGated` ya opera en prod.
+- **Alineación del tracking:** MCP registró la fila con versión fresca `20260725112810` (name `add_reveal_gate_to_events`), NO el basename del archivo. `migrate.yml` keyea por basename, así que la re-alineé: `update supabase_migrations.schema_migrations set version='20260724000000_add_reveal_gate_to_events'` → un futuro run la ve como aplicada y no la re-corre.
+
+**Seguimiento pendiente (fuera de alcance de este ticket):**
+- **Resolver el billing/spending-limit de GitHub Actions** — hasta entonces cada merge con migración seguirá requiriendo aplicación manual (bitten ya en T-142 y T-185). Endurecer el proceso (alerta cuando `migrate.yml` falla) sería ticket aparte.
+- **T-184** (dead-end del reveal gate con `indexed=0`): ahora que el gate es activable en prod, conviene resolverlo antes de que algún fotógrafo lo active en un evento real.
+
+Memoria relacionada actualizada: `migrations-applied-by-github-action-not-vercel` (incidente 2026-07-25 + gotcha del versionado de MCP).
