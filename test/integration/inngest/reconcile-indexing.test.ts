@@ -75,6 +75,48 @@ async function setThumbStatus(photoId: string, status: string): Promise<void> {
   if (error) throw new Error(`setThumbStatus: ${error.message}`);
 }
 
+async function setUploadStatus(photoId: string, status: string): Promise<void> {
+  const { error } = await createServiceClient()
+    .from('photos')
+    .update({ upload_status: status })
+    .eq('id', photoId);
+  if (error) throw new Error(`setUploadStatus: ${error.message}`);
+}
+
+/** Insert a photo attributed to a non-owner (authenticated contributor). */
+async function createContributorPhoto(
+  eventId: string,
+  contributorId: string,
+): Promise<{ id: string }> {
+  const sb = createServiceClient();
+  const suffix = crypto.randomUUID();
+  const { data, error } = await sb
+    .from('photos')
+    .insert({
+      user_id: contributorId,
+      event_id: eventId,
+      original_url: `${contributorId}/${eventId}/${suffix}.jpg`,
+      taken_at: new Date().toISOString(),
+      city: 'Barcelona',
+      country: 'ES',
+      uploaded_by: contributorId,
+      upload_status: 'pending',
+    })
+    .select('id')
+    .single();
+  if (error || !data) throw new Error(`createContributorPhoto: ${error?.message ?? 'no data'}`);
+  return { id: data.id as string };
+}
+
+async function readUploadStatus(photoId: string): Promise<string | null> {
+  const { data } = await createServiceClient()
+    .from('photos')
+    .select('upload_status')
+    .eq('id', photoId)
+    .single();
+  return (data?.upload_status as string | null) ?? null;
+}
+
 async function readAiStatus(eventId: string): Promise<string | null> {
   const { data } = await createServiceClient()
     .from('events')
@@ -190,10 +232,83 @@ describe('runReconcileIndexingFlow', () => {
       eventsMarkedReady: 0,
       photosRequeued: 0,
       thumbnailsRequeued: 0,
+      ownerUploadsRequeued: 0,
     });
     expect(rec.sent).toHaveLength(0);
     expect(await readAiStatus(event.id)).toBe('indexing');
     // Sanity: the rows exist and would have qualified but for the age gate.
     expect(inFlight.id).toBeTruthy();
+  });
+
+  // ── T-183: owner uploads stranded in upload_status='pending' ──────────
+  it('re-emits photo.uploaded for an owner upload stuck pending in an idle event (T-183)', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    await setAiStatus(event.id, 'idle'); // never entered indexing — the reported gap
+    const stuck = await createTestPhoto(event.id); // owner-owned, guest_name/uploaded_by null
+    await setUploadStatus(stuck.id, 'pending');
+
+    const rec = recordingSender();
+    const result = await runReconcileIndexingFlow(passthroughStep, FUTURE_NOW, rec.send);
+
+    expect(result.ownerUploadsRequeued).toBe(1);
+    // Not the stuck-indexing branch (event is idle, not indexing).
+    expect(result.photosRequeued).toBe(0);
+    expect(result.eventsMarkedReady).toBe(0);
+    const uploads = rec.sent.filter((e) => e.name === 'photo.uploaded');
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0].data.photoId).toBe(stuck.id);
+    // Re-drive, not blind-promote: the worker (not the cron) flips the status,
+    // preserving the byte-validation gate. The row is still pending post-flow.
+    expect(await readUploadStatus(stuck.id)).toBe('pending');
+  });
+
+  it('does NOT re-drive a contributor pending upload — only owner uploads (T-183 scoping)', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const contributor = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    await setAiStatus(event.id, 'idle');
+    // Contributor upload: user_id != owner, uploaded_by set → legitimately
+    // pending for the moderation queue; the cron must leave it alone.
+    await createContributorPhoto(event.id, contributor.id);
+
+    const rec = recordingSender();
+    const result = await runReconcileIndexingFlow(passthroughStep, FUTURE_NOW, rec.send);
+
+    expect(result.ownerUploadsRequeued).toBe(0);
+    expect(rec.sent).toHaveLength(0);
+  });
+
+  it('does NOT re-drive a fresh owner pending upload (age guard) — T-183', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    await setAiStatus(event.id, 'idle');
+    const fresh = await createTestPhoto(event.id);
+    await setUploadStatus(fresh.id, 'pending');
+
+    const rec = recordingSender();
+    // Real now: the row was created moments ago → inside the 1h window.
+    const result = await runReconcileIndexingFlow(passthroughStep, Date.now(), rec.send);
+
+    expect(result.ownerUploadsRequeued).toBe(0);
+    expect(rec.sent).toHaveLength(0);
+  });
+
+  it('lets the stuck-indexing branch own owner uploads in an indexing event — no double re-emit (T-183)', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    await setAiStatus(event.id, 'indexing');
+    const stuck = await createTestPhoto(event.id); // face_index_status defaults to 'pending'
+    await setUploadStatus(stuck.id, 'pending');
+
+    const rec = recordingSender();
+    const result = await runReconcileIndexingFlow(passthroughStep, FUTURE_NOW, rec.send);
+
+    // Branch (a) re-drives it; branch (d) excludes indexing events → no dup.
+    expect(result.photosRequeued).toBe(1);
+    expect(result.ownerUploadsRequeued).toBe(0);
+    const uploads = rec.sent.filter((e) => e.name === 'photo.uploaded');
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0].data.photoId).toBe(stuck.id);
   });
 });

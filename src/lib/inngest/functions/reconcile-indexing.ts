@@ -17,13 +17,27 @@
  *      runs, so `thumbnail_status` stays `pending` and the gallery serves the
  *      per-view `/api/watermark` fallback (paying its cost) indefinitely.
  *
- * This cron closes both:
+ *   3. An OWNER upload stays `upload_status='pending'` forever (T-183). Owner
+ *      uploads never need moderation, so the worker's `promote-upload-status`
+ *      step always approves them — but a lost `photo.uploaded` (or a run that
+ *      died before step 3) strands the row `pending`: invisible on the
+ *      approved-only public/talent galleries AND absent from the owner's Pending
+ *      tab (which excludes owner uploads), so the dashboard count says N while
+ *      only the approved subset renders. The T-099 stuck-`indexing` branch never
+ *      covered this — the reported event sat in `ai_matching_status='idle'`.
+ *
+ * This cron closes all three:
  *   (a) For events wedged in `indexing` past the staleness window with photos
  *       still in-flight → re-emit `photo.uploaded` to re-drive them.
  *   (b) For events wedged in `indexing` whose in-flight count is already 0 →
  *       flip to `ready` (the missed `maybe-mark`).
  *   (c) For terminally-indexed photos whose thumbnail is still `pending` past
  *       the window → re-emit `photo.processed` to re-drive the bake.
+ *   (d) For owner uploads stuck `upload_status='pending'` past the window (in
+ *       events NOT wedged in `indexing`, which (a) already covers) → re-emit
+ *       `photo.uploaded` to re-drive download → byte-validation → promotion. We
+ *       re-drive the real pipeline rather than flipping the row to `approved`
+ *       here, so the byte-validation gate is never skipped.
  *
  * Idempotent + conservative: a 1-hour staleness gate keeps the sweep from
  * fighting live work (a normal index/re-index drains in seconds, and the T-092
@@ -37,7 +51,10 @@
  * the stack with cron triggers on its free plan. No new infra.
  */
 
-import { listPhotosWithStuckThumbnails } from '@/database/queries/photos';
+import {
+  listPhotosWithStuckThumbnails,
+  listStuckPendingOwnerUploads,
+} from '@/database/queries/photos';
 import {
   countEventPhotosInFlight,
   listEventPhotosByStatuses,
@@ -82,6 +99,8 @@ export interface ReconcileResult {
   eventsMarkedReady: number;
   photosRequeued: number;
   thumbnailsRequeued: number;
+  /** Owner uploads stuck in `upload_status='pending'` that were re-driven (T-183). */
+  ownerUploadsRequeued: number;
 }
 
 export const reconcileIndexingState = inngest.createFunction(
@@ -180,5 +199,35 @@ export async function runReconcileIndexingFlow(
     return stuck.length;
   });
 
-  return { eventsMarkedReady: markedReady, photosRequeued, thumbnailsRequeued };
+  // ── 4. Re-drive owner uploads stuck `pending` (d) ─────────────────────
+  // Owner uploads never need moderation; a lost `photo.uploaded`/dropped step 3
+  // leaves them `pending` and invisible everywhere. Re-emit `photo.uploaded` so
+  // the worker re-validates the bytes and promotes to `approved` — the promote
+  // step also busts the event photo cache, so newly-approved photos surface on
+  // the public/talent galleries without waiting out the TTL.
+  const ownerUploadsRequeued = await step.run('requeue-stuck-owner-uploads', async () => {
+    const stuck = await listStuckPendingOwnerUploads(
+      adminClient,
+      staleBeforeIso,
+      MAX_REQUEUE_PHOTOS_PER_TICK,
+    );
+    if (stuck.length === 0) return 0;
+    await send(
+      stuck.map((p) => ({
+        name: 'photo.uploaded' as const,
+        data: { photoId: p.id, eventId: p.eventId, storagePath: p.storagePath },
+      })),
+    );
+    console.log(
+      `[reconcile-indexing] re-emitted photo.uploaded for ${stuck.length} stuck owner upload(s)`,
+    );
+    return stuck.length;
+  });
+
+  return {
+    eventsMarkedReady: markedReady,
+    photosRequeued,
+    thumbnailsRequeued,
+    ownerUploadsRequeued,
+  };
 }

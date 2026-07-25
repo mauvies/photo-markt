@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-183 | Bug: fotos propias del fotógrafo atascadas en `pending` (dice 69, muestra 14) — auto-aprobación del owner no confiable | — | todo |
+| 1 | P1 | T-183 | Bug: fotos propias del fotógrafo atascadas en `pending` (dice 69, muestra 14) — auto-aprobación del owner no confiable | — | doing |
 | 2 | P1 | T-185 | Aplicar la migración del reveal gate (T-177, `reveal_gate_enabled`) a prod — drift de schema | — | todo |
 | 3 | P2 | T-184 | Bug: reveal gate deja el evento sin salida cuando `indexed=0` (búsqueda facial no aparece) — follow-up T-177 | — | todo |
 | 4 | P2 | T-180 | Añadir hora de finalización de la sesión del evento (espejo de `session_time`/T-106) | — | todo |
