@@ -43,12 +43,14 @@ export function ScopedEventEditForm({ event, section, labels }: ScopedEventEditF
   const eventDate = event.date ? format(new Date(event.date), 'yyyy-MM-dd') : '';
   const eventSessionTime = event.session_time?.slice(0, 5);
   const record = event as unknown as Record<string, unknown>;
+  const eventSessionEndTime = (record.session_end_time as string | null | undefined)?.slice(0, 5);
 
   const defaultValues: FormValues = {
     name: event.name,
     activity: event.activity as FormValues['activity'],
     date: eventDate,
     session_time: eventSessionTime ?? '',
+    session_end_time: eventSessionEndTime ?? '',
     city: event.city,
     state: event.state ?? '',
     country: event.country ?? '',

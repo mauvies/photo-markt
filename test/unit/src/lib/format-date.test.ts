@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { formatEventDate, formatSessionTime, normalizeSessionTime } from '@/lib/format-date';
+import {
+  formatEventDate,
+  formatSessionTime,
+  formatSessionTimeRange,
+  isValidSessionRange,
+  normalizeSessionTime,
+} from '@/lib/format-date';
 
 // Noon UTC keeps the calendar day stable across the runner's timezone (the
 // suite doesn't pin TZ), so these assertions test the locale field ORDER, not
@@ -73,5 +79,49 @@ describe('formatSessionTime (T-106)', () => {
     expect(formatSessionTime('', 'en')).toBeUndefined();
     expect(formatSessionTime('25:00', 'en')).toBeUndefined();
     expect(formatSessionTime('nope', 'en')).toBeUndefined();
+  });
+});
+
+describe('formatSessionTimeRange (T-180)', () => {
+  it('renders a start–end range when both are present', () => {
+    const range = formatSessionTimeRange('09:30', '12:00', 'es');
+    expect(range).toBe('9:30 – 12:00');
+  });
+
+  it('falls back to just the start when there is no end (T-106 behavior intact)', () => {
+    expect(formatSessionTimeRange('09:30', null, 'es')).toBe('9:30');
+    expect(formatSessionTimeRange('09:30', '', 'es')).toBe('9:30');
+  });
+
+  it('returns undefined when there is no valid start (whole segment omitted)', () => {
+    expect(formatSessionTimeRange(null, null, 'en')).toBeUndefined();
+    // A stray end with no start never renders a lone end.
+    expect(formatSessionTimeRange(null, '12:00', 'en')).toBeUndefined();
+    expect(formatSessionTimeRange('', '12:00', 'en')).toBeUndefined();
+  });
+
+  it('formats each end of the range in the locale clock convention', () => {
+    expect(formatSessionTimeRange('09:30', '12:00', 'en')).toMatch(/9:30\s?AM\s–\s12:00\s?PM/i);
+  });
+});
+
+describe('isValidSessionRange (T-180)', () => {
+  it('accepts when both are empty (pair stays optional)', () => {
+    expect(isValidSessionRange('', '')).toBe(true);
+    expect(isValidSessionRange(null, undefined)).toBe(true);
+  });
+
+  it('accepts a start with no end', () => {
+    expect(isValidSessionRange('09:30', '')).toBe(true);
+  });
+
+  it('rejects an end with no start', () => {
+    expect(isValidSessionRange('', '12:00')).toBe(false);
+  });
+
+  it('accepts end strictly after start, rejects equal or earlier', () => {
+    expect(isValidSessionRange('09:30', '12:00')).toBe(true);
+    expect(isValidSessionRange('09:30', '09:30')).toBe(false);
+    expect(isValidSessionRange('12:00', '09:30')).toBe(false);
   });
 });

@@ -90,6 +90,7 @@ export function EventGrid({
             name={event.name}
             date={event.date}
             sessionTime={event.session_time}
+            sessionEndTime={event.session_end_time}
             city={event.city}
             country={event.country}
             activity={event.activity}

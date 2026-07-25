@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { formatEventDate, formatSessionTime } from '@/lib/format-date';
+import { formatEventDate, formatSessionTimeRange } from '@/lib/format-date';
 import { formatEventLocation } from '@/lib/format-location';
 import { cn } from '@/lib/utils';
 
@@ -9,6 +9,9 @@ interface EventMetaLineProps {
   /** Manual session start time ("HH:MM"/"HH:MM:SS"); shown right after the
    * date when present, omitted otherwise (T-106). */
   sessionTime?: string | null;
+  /** Manual session end time ("HH:MM"/"HH:MM:SS"); shown as a range with the
+   * start ("09:30 – 12:00") when both are present (T-180). */
+  sessionEndTime?: string | null;
   /** Event city. */
   city: string;
   /** State/province + country, joined with the city into the location segment
@@ -35,6 +38,7 @@ interface EventMetaLineProps {
 export function EventMetaLine({
   date,
   sessionTime,
+  sessionEndTime,
   city,
   state,
   country,
@@ -45,7 +49,7 @@ export function EventMetaLine({
   className,
 }: EventMetaLineProps) {
   const formattedDate = formatEventDate(date, locale);
-  const formattedTime = formatSessionTime(sessionTime, locale);
+  const formattedTime = formatSessionTimeRange(sessionTime, sessionEndTime, locale);
   const location = formatEventLocation({ city, state, country });
   const formattedCity = location ? location[0]?.toUpperCase() + location.slice(1) : '';
 

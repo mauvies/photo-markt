@@ -64,6 +64,9 @@ export function EditEventForm({ event, initialPhotos, initialCoverUrl }: EditEve
   const eventDate = event.date ? format(new Date(event.date), 'yyyy-MM-dd') : '';
   // DB stores a `time` ("HH:MM:SS"); the <input type="time"> wants "HH:mm".
   const eventSessionTime = event.session_time?.slice(0, 5);
+  const eventSessionEndTime = (
+    event as unknown as { session_end_time?: string | null }
+  ).session_end_time?.slice(0, 5);
 
   // `Event` is typed broadly enough that the AI columns may be optional
   // depending on whether the migration has been applied — read defensively.
@@ -83,6 +86,7 @@ export function EditEventForm({ event, initialPhotos, initialCoverUrl }: EditEve
     activity: event.activity as FormValues['activity'],
     date: eventDate,
     session_time: eventSessionTime ?? '',
+    session_end_time: eventSessionEndTime ?? '',
     city: event.city,
     state: event.state ?? '',
     country: event.country ?? '',

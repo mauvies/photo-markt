@@ -7,6 +7,7 @@ const base: FormValues = {
   activity: 'running' as FormValues['activity'],
   date: '2026-06-12',
   session_time: '08:30',
+  session_end_time: '11:00',
   city: 'Madrid',
   state: 'Madrid',
   country: 'Spain',
@@ -33,6 +34,7 @@ describe('buildEventUpdateFormData', () => {
     expect(fd.get('activity')).toBe('running');
     expect(fd.get('date')).toBe('2026-06-12');
     expect(fd.get('session_time')).toBe('08:30');
+    expect(fd.get('session_end_time')).toBe('11:00');
     expect(fd.get('city')).toBe('Madrid');
     expect(fd.get('state')).toBe('Madrid');
     expect(fd.get('country')).toBe('Spain');
@@ -48,10 +50,17 @@ describe('buildEventUpdateFormData', () => {
     expect(fd.get('price_per_photo')).toBe('5');
   });
 
-  it('omits price when null and always sends session_time (even empty)', () => {
-    const fd = buildEventUpdateFormData({ ...base, price_per_photo: null, session_time: '' });
+  it('omits price when null and always sends session_time/session_end_time (even empty)', () => {
+    const fd = buildEventUpdateFormData({
+      ...base,
+      price_per_photo: null,
+      session_time: '',
+      session_end_time: '',
+    });
     expect(fd.get('price_per_photo')).toBeNull();
-    // session_time is always present so clearing it persists as null server-side.
+    // session_time/session_end_time are always present so clearing persists as
+    // null server-side (T-106/T-180).
     expect(fd.get('session_time')).toBe('');
+    expect(fd.get('session_end_time')).toBe('');
   });
 });

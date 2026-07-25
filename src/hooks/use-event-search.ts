@@ -29,6 +29,8 @@ export type EventWithStats = {
   photographerAvatarUrl?: string | null;
   /** Manual session time (T-106/T-119) — null when unset. */
   session_time?: string | null;
+  /** Manual session end time (T-180) — null when unset. */
+  session_end_time?: string | null;
   status: EventStatus;
 };
 

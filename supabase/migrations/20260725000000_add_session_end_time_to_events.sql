@@ -1,0 +1,16 @@
+-- Manual event session END time (T-180) — the mirror of session_time (T-106).
+--
+-- The photographer optionally enters this by hand (e.g. "12:00") so the event
+-- can show the full session RANGE ("09:30 – 12:00"), not just when it started.
+-- Like session_time it is DISTINCT from the camera time-sync fields
+-- (`time_offset` / `time_sync_enabled`), which capture when each PHOTO was taken.
+--
+-- Stored as a naive local time-of-day (`time without time zone`): no timezone,
+-- matching how the photographer thinks about "the session ran 9:30 to 12:00" in
+-- the event's own locale.
+--
+-- Nullable: not every event has one. When null, behavior is unchanged (only a
+-- start time, or neither, is shown), so existing events are unaffected and
+-- rollback is inert. The app enforces "end requires start" and "end > start";
+-- the column itself carries no constraint (mirrors session_time).
+alter table events add column if not exists session_end_time time;

@@ -13,7 +13,7 @@ import { useCoarsePointer } from '@/hooks/use-coarse-pointer';
 import { getActivityIcon } from '@/lib/activity-icon';
 import { countryFlagEmoji } from '@/lib/country-flag';
 import { type EventStatus, isEventSoon } from '@/lib/event-status';
-import { formatEventDate, formatSessionTime } from '@/lib/format-date';
+import { formatEventDate, formatSessionTimeRange } from '@/lib/format-date';
 import { formatEventLocation } from '@/lib/format-location';
 import { shouldSkipImageOptimization } from '@/lib/image-source';
 import { cn } from '@/lib/utils';
@@ -44,6 +44,9 @@ type EventCardProps = {
   date: string;
   /** Manual session time ("HH:mm", nullable — T-106). Shown next to the date. */
   sessionTime?: string | null;
+  /** Manual session end time ("HH:mm", nullable — T-180). Rendered as a range
+   * with the start ("09:30 – 12:00") when both are present. */
+  sessionEndTime?: string | null;
   city: string;
   country: string;
   /** State/province, shown in the location line when present (T-107). */
@@ -239,6 +242,7 @@ export function EventCard({
   name,
   date,
   sessionTime,
+  sessionEndTime,
   city,
   country,
   state,
@@ -261,7 +265,7 @@ export function EventCard({
 
   const eventHref = `${linkPrefix}/${hrefParam ?? id}`;
   const formattedDate = formatEventDate(date, locale) ?? '';
-  const formattedTime = formatSessionTime(sessionTime, locale);
+  const formattedTime = formatSessionTimeRange(sessionTime, sessionEndTime, locale);
   const location = formatEventLocation({ city, state, country });
   const flag = countryFlagEmoji(country);
   const isOwner = ownerStats !== undefined;

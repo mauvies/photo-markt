@@ -12,6 +12,8 @@ export interface Event {
   date: string;
   /** Manual session start time (naive local "HH:MM:SS"), or null (T-106). */
   session_time?: string | null;
+  /** Manual session end time (naive local "HH:MM:SS"), or null (T-180). */
+  session_end_time?: string | null;
   city: string;
   country: string;
   state: string;
@@ -52,6 +54,8 @@ export interface EventSummary {
   ai_matching_enabled?: boolean;
   /** Manual session time (T-106/T-119). Not selected by every producer — optional. */
   session_time?: string | null;
+  /** Manual session end time (T-180). Not selected by every producer — optional. */
+  session_end_time?: string | null;
 }
 
 /**
@@ -64,7 +68,7 @@ export async function getUserEvents(
   const { data, error } = await supabase
     .from('events')
     .select(
-      'id, name, date, session_time, city, country, activity, is_public, share_code, slug, price_per_photo, watermark_enabled, is_collaborative, allow_guest_upload, require_upload_approval',
+      'id, name, date, session_time, session_end_time, city, country, activity, is_public, share_code, slug, price_per_photo, watermark_enabled, is_collaborative, allow_guest_upload, require_upload_approval',
     )
     .eq('user_id', userId)
     .is('deleted_at', null)
@@ -163,6 +167,7 @@ export async function createEvent(
     name: string;
     date: string;
     session_time?: string | null;
+    session_end_time?: string | null;
     city: string;
     country: string;
     state: string;
@@ -195,12 +200,15 @@ export async function createEvent(
     bib_detection_enabled,
     reveal_gate_enabled,
     session_time,
+    session_end_time,
     ...rest
   } = eventData;
   const insertPayload: Record<string, unknown> = { user_id: userId, ...rest };
   // Optional, migration-gated (like the AI columns) — only include when set so
   // the insert still works against a DB without the session_time migration.
   if (session_time) insertPayload.session_time = session_time;
+  // Same migration-gating for the T-180 end time.
+  if (session_end_time) insertPayload.session_end_time = session_end_time;
   if (type && type !== 'solo') insertPayload.type = type;
   if (organizer_fee_per_photo_cents !== null && organizer_fee_per_photo_cents !== undefined) {
     insertPayload.organizer_fee_per_photo_cents = organizer_fee_per_photo_cents;
@@ -359,7 +367,7 @@ export async function searchPublicEvents(
   let query = supabase
     .from('events')
     .select(
-      'id, user_id, name, date, session_time, city, country, state, activity, is_public, share_code, slug, price_per_photo, watermark_enabled, is_collaborative, allow_guest_upload, require_upload_approval, ai_matching_enabled',
+      'id, user_id, name, date, session_time, session_end_time, city, country, state, activity, is_public, share_code, slug, price_per_photo, watermark_enabled, is_collaborative, allow_guest_upload, require_upload_approval, ai_matching_enabled',
       { count: 'exact' },
     )
     .eq('is_public', true)
@@ -530,6 +538,7 @@ export async function updateEvent(
     name?: string;
     date?: string;
     session_time?: string | null;
+    session_end_time?: string | null;
     city?: string;
     country?: string;
     state?: string | null;

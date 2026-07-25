@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { isValidSessionRange, SESSION_RANGE_ERROR } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
 import type { FormValues } from '../edit-event-schema';
 
@@ -51,6 +52,7 @@ export function EventFormFields({
 }: EventFormFieldsProps) {
   const dateInputId = useId();
   const sessionTimeId = useId();
+  const sessionEndTimeId = useId();
   const showInfo = section !== 'settings';
   const showSettings = section !== 'info';
 
@@ -222,24 +224,67 @@ export function EventFormFields({
                     {isInvalid && error ? (
                       <p className="text-xs text-destructive">{error}</p>
                     ) : null}
-                    {/* Optional manual session start time (T-106). */}
-                    <form.Field name="session_time">
-                      {(timeField) => (
-                        <div className="mt-1 grid gap-1">
-                          <Label htmlFor={sessionTimeId} className="text-xs text-muted-foreground">
-                            Session time (optional)
-                          </Label>
-                          <Input
-                            id={sessionTimeId}
-                            type="time"
-                            value={timeField.state.value}
-                            onChange={(event) => timeField.handleChange(event.target.value)}
-                            onBlur={timeField.handleBlur}
-                            suppressHydrationWarning
-                          />
-                        </div>
-                      )}
-                    </form.Field>
+                    {/* Optional manual session start + end time (T-106 start,
+                        T-180 end). */}
+                    <div className="mt-1 grid grid-cols-2 gap-3">
+                      <form.Field name="session_time">
+                        {(timeField) => (
+                          <div className="grid gap-1">
+                            <Label
+                              htmlFor={sessionTimeId}
+                              className="text-xs text-muted-foreground"
+                            >
+                              Session time (optional)
+                            </Label>
+                            <Input
+                              id={sessionTimeId}
+                              type="time"
+                              value={timeField.state.value}
+                              onChange={(event) => timeField.handleChange(event.target.value)}
+                              onBlur={timeField.handleBlur}
+                              suppressHydrationWarning
+                            />
+                          </div>
+                        )}
+                      </form.Field>
+                      <form.Field
+                        name="session_end_time"
+                        validators={{
+                          onChangeListenTo: ['session_time'],
+                          onChange: ({ value, fieldApi }) =>
+                            isValidSessionRange(fieldApi.form.getFieldValue('session_time'), value)
+                              ? undefined
+                              : SESSION_RANGE_ERROR,
+                        }}
+                      >
+                        {(endField) => {
+                          const endError = endField.state.meta.isTouched
+                            ? endField.state.meta.errors[0]
+                            : undefined;
+                          return (
+                            <div className="grid gap-1">
+                              <Label
+                                htmlFor={sessionEndTimeId}
+                                className="text-xs text-muted-foreground"
+                              >
+                                Session end time (optional)
+                              </Label>
+                              <Input
+                                id={sessionEndTimeId}
+                                type="time"
+                                value={endField.state.value}
+                                onChange={(event) => endField.handleChange(event.target.value)}
+                                onBlur={endField.handleBlur}
+                                suppressHydrationWarning
+                              />
+                              {endError ? (
+                                <p className="text-xs text-destructive">{endError}</p>
+                              ) : null}
+                            </div>
+                          );
+                        }}
+                      </form.Field>
+                    </div>
                   </div>
                 );
               }}
