@@ -1,7 +1,7 @@
 # T-180 · Añadir hora de finalización de la sesión del evento
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/event-session-end-time`  (tipo = feat)
 - **OpenSpec change:** —  (probable: toca >1 archivo — migración + wizard + edit + display; decidir al ejecutar)
