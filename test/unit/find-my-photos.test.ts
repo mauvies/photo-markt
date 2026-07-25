@@ -9,7 +9,11 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { resolveFindMyPhotos, resolveFindMyPhotosCopy } from '@/lib/find-my-photos';
+import {
+  resolveFindMyPhotos,
+  resolveFindMyPhotosCopy,
+  resolveGatedFaceSearchNotice,
+} from '@/lib/find-my-photos';
 
 describe('resolveFindMyPhotos', () => {
   it('shows both buttons when face and bib are enabled', () => {
@@ -100,5 +104,90 @@ describe('resolveFindMyPhotosCopy', () => {
     expect(
       resolveFindMyPhotosCopy(labels, { hasFace: true, hasBib: true, indexing: true }),
     ).toEqual({ title: 'Processing photos…', description: 'INDEXING' });
+  });
+});
+
+/**
+ * Reveal gate dead-end guard (T-184). A gated event reveals photos only via face
+ * search, so when the search entry can't render (nothing indexed / indexing /
+ * failed) the visitor is stranded — these pin which explanatory notice shows so
+ * a gallery renders a clear state instead of a mute empty grid.
+ */
+describe('resolveGatedFaceSearchNotice', () => {
+  it('shows no notice for a non-gated event (browses normally, even with nothing indexed)', () => {
+    expect(
+      resolveGatedFaceSearchNotice({
+        gated: false,
+        aiSearchEligible: false,
+        aiUsable: true,
+        aiStatus: 'idle',
+      }),
+    ).toBe('none');
+  });
+
+  it('shows no notice when the gated event is searchable (indexed>0) — the banner renders', () => {
+    expect(
+      resolveGatedFaceSearchNotice({
+        gated: true,
+        aiSearchEligible: true,
+        aiUsable: true,
+        aiStatus: 'ready',
+      }),
+    ).toBe('none');
+  });
+
+  it('shows "processing" for a gated event with AI enabled but nothing indexed yet (idle — the reported bug)', () => {
+    expect(
+      resolveGatedFaceSearchNotice({
+        gated: true,
+        aiSearchEligible: false,
+        aiUsable: true,
+        aiStatus: 'idle',
+      }),
+    ).toBe('processing');
+  });
+
+  it('shows "processing" for a gated event still indexing with nothing indexed yet', () => {
+    expect(
+      resolveGatedFaceSearchNotice({
+        gated: true,
+        aiSearchEligible: false,
+        aiUsable: true,
+        aiStatus: 'indexing',
+      }),
+    ).toBe('processing');
+  });
+
+  it('shows "unavailable" for a gated event whose indexing failed', () => {
+    expect(
+      resolveGatedFaceSearchNotice({
+        gated: true,
+        aiSearchEligible: false,
+        aiUsable: false,
+        aiStatus: 'failed',
+      }),
+    ).toBe('unavailable');
+  });
+
+  it('shows "unavailable" for a gated event that finished indexing but has nothing searchable (ready + 0 indexed)', () => {
+    expect(
+      resolveGatedFaceSearchNotice({
+        gated: true,
+        aiSearchEligible: false,
+        aiUsable: true,
+        aiStatus: 'ready',
+      }),
+    ).toBe('unavailable');
+  });
+
+  it('shows "unavailable" for a gated event with AI not usable (disabled / no collection)', () => {
+    expect(
+      resolveGatedFaceSearchNotice({
+        gated: true,
+        aiSearchEligible: false,
+        aiUsable: false,
+        aiStatus: null,
+      }),
+    ).toBe('unavailable');
   });
 });

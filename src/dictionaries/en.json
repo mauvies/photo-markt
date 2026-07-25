@@ -1464,6 +1464,12 @@
       "partialIndexingNotice": "Some photos are still being processed. Try again later if you don't find yourself here.",
       "foundCountOne": "We found 1 photo of you",
       "foundCountMany": "We found {n} photos of you"
+    },
+    "gatedNotice": {
+      "processingTitle": "Photos are being processed",
+      "processingDescription": "This event reveals your photos through face search. It's still preparing — check back in a little while and you'll be able to search for yourself.",
+      "unavailableTitle": "Face search isn't available",
+      "unavailableDescription": "This event reveals photos through face search, but search isn't available right now. Please check back later or contact the photographer."
     }
   },
   "privacy": {

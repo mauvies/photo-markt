@@ -1,7 +1,7 @@
 # T-184 · Reveal gate deja el evento sin salida cuando no hay fotos indexadas (búsqueda facial no aparece)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/reveal-gate-dead-end`  (tipo = fix)
 - **OpenSpec change:** —  (follow-up de robustez de T-177; decidir al ejecutar)
