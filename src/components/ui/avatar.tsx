@@ -22,7 +22,11 @@ function AvatarImage({ className, ...props }: React.ComponentProps<typeof Avatar
   return (
     <AvatarPrimitive.Image
       data-slot="avatar-image"
-      className={cn('aspect-square size-full', className)}
+      // `absolute inset-0` pins the image to all four edges of the (bordered)
+      // circle so it stays perfectly concentric — as a flex item it could pick
+      // up a sub-pixel offset and look shifted against the border. `object-cover`
+      // centre-crops non-square sources instead of stretching/offsetting them.
+      className={cn('absolute inset-0 size-full object-cover', className)}
       {...props}
     />
   );
