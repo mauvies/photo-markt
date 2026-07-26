@@ -1,11 +1,11 @@
 # T-181 · Probar la font family Bricolage Grotesque
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/bricolage-grotesque-font`  (tipo = feat)
 - **OpenSpec change:** —  (cambio acotado: `layout.tsx` + `globals.css`; innecesario)
-- **PR:** —
+- **PR:** #247
 
 ## Requerimiento
 Probar la tipografía **Bricolage Grotesque** en la app. Es un experimento de diseño ("me gustaría probar") — evaluar cómo se ve antes de decidir adoptarla de forma permanente.
