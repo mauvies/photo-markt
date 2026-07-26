@@ -18,7 +18,7 @@
   /* `font-mono` falls back to Tailwind's default system mono stack — the
      Geist Mono webfont was dropped (T-123): it was preloaded on every page
      but only styled the share-code display, an order id, and chart tooltips. */
-  --font-heading: var(--font-inter-tight);
+  --font-heading: var(--font-bricolage);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -178,7 +178,7 @@
   }
 }
 
-/* Apply Inter Tight font to all headings and titles */
+/* Apply Bricolage Grotesque font to all headings and titles (T-181) */
 /* Placed outside @layer base to ensure it overrides Tailwind utilities */
 h1,
 h2,
@@ -186,7 +186,7 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: var(--font-inter-tight), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-bricolage), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   color: var(--foreground);
 }
 
@@ -209,9 +209,9 @@ h6 {
   background-color: color-mix(in srgb, var(--chart-2) 85%, white);
 }
 
-/* Utility class for applying Inter Tight to titles that aren't headings */
+/* Utility class for applying Bricolage Grotesque to titles that aren't headings */
 .font-heading {
-  font-family: var(--font-inter-tight), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-bricolage), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
 /*

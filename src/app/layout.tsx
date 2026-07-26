@@ -1,21 +1,23 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, Inter_Tight } from 'next/font/google';
+import { Bricolage_Grotesque, Inter } from 'next/font/google';
 import './globals.css';
 import { env } from '@/env.mjs';
 import { getSiteUrl } from '@/lib/get-site-url';
 import { defaultLocale } from '@/lib/i18n/config';
 
-// Only the two families the UI actually renders (T-123): Inter (body) and
-// Inter Tight (headings). Syne was mapped to --font-wordmark but nothing used
-// it; Geist Mono styled three incidental spots now covered by the system mono
-// stack. Each extra family here is a render-critical preload on every page.
+// Only the two families the UI actually renders: Inter (body) and Bricolage
+// Grotesque (headings — a design experiment, T-181, replacing Inter Tight).
+// Net-zero preloads (T-123): Bricolage *replaces* Inter Tight, it is not added
+// as a third family — each extra family here is a render-critical preload on
+// every page. Syne was mapped to --font-wordmark but nothing used it; Geist
+// Mono styled three incidental spots now covered by the system mono stack.
 const inter = Inter({
   variable: '--font-inter',
   subsets: ['latin'],
 });
 
-const interTight = Inter_Tight({
-  variable: '--font-inter-tight',
+const bricolage = Bricolage_Grotesque({
+  variable: '--font-bricolage',
   subsets: ['latin'],
 });
 
@@ -74,7 +76,7 @@ export default function RootLayout({
   // would opt every page in the app into dynamic rendering; instead the
   // [lang] layout applies the correct value client-side via <HtmlLangSync>.
   return (
-    <html lang={defaultLocale} className={`${inter.variable} ${interTight.variable}`}>
+    <html lang={defaultLocale} className={`${inter.variable} ${bricolage.variable}`}>
       <body className="antialiased">
         {/* Event covers and purchased photos load from Supabase Storage signed
             URLs (a different origin in production). React hoists this <link>
