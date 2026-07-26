@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 // the heavy/runtime-only bits so we can assert the static `viewport` export.
 vi.mock('next/font/google', () => {
   const font = () => ({ variable: '--font-stub', className: 'stub' });
-  return { Inter: font, Inter_Tight: font, Geist_Mono: font, Syne: font };
+  return { Inter: font, Bricolage_Grotesque: font, Geist_Mono: font, Syne: font };
 });
 vi.mock('@/lib/get-site-url', () => ({ getSiteUrl: () => 'https://example.com' }));
 
