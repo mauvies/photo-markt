@@ -1,3 +1,4 @@
+import { AvatarUpload } from '@/components/avatar-upload';
 import { ProfileForm } from '@/components/profile-form';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
@@ -27,6 +28,15 @@ export default async function TalentSettingsProfilePage({
       <h2 className="mb-4 text-lg font-semibold sm:text-xl">
         {dict.talentDashboard.profileDetails}
       </h2>
+      <div className="mb-6">
+        <h3 className="text-sm font-medium">{dict.avatarUpload.sectionTitle}</h3>
+        <p className="mb-3 text-sm text-muted-foreground">{dict.avatarUpload.sectionDescription}</p>
+        <AvatarUpload
+          currentAvatarUrl={profile.avatar_url ?? null}
+          fallbackText={(profile.display_name || profile.username || '?').charAt(0).toUpperCase()}
+          labels={dict.avatarUpload}
+        />
+      </div>
       <TranslationsProvider translations={dict.profileForm}>
         <ProfileForm
           initialValues={{

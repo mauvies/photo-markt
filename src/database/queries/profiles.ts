@@ -34,6 +34,8 @@ export interface Profile {
 export interface ProfileSelect {
   display_name?: string | null;
   username: string;
+  slug?: string | null;
+  avatar_url?: string | null;
   active_role?: UserRole | null;
   bio?: string | null;
   full_name?: string | null;
