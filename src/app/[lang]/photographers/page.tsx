@@ -85,7 +85,7 @@ export default async function PhotographersPage({ params }: { params: Promise<{ 
               <span className="block text-primary">{p.heroHeadline2}</span>
             </h1>
 
-            <p className="mx-auto mt-5 max-w-2xl text-lg leading-normal text-muted-foreground sm:text-xl">
+            <p className="mx-auto mt-5 max-w-2xl text-lg leading-normal text-muted-foreground">
               {p.heroSubtitle}
             </p>
 
