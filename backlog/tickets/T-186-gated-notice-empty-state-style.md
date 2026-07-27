@@ -1,7 +1,7 @@
 # T-186 · Reestilizar el aviso "búsqueda facial no disponible" al estilo del estado vacío del carrito
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `fix/gated-notice-empty-state-style`  (tipo = fix)
 - **OpenSpec change:** —  (UI/estilo de un componente, no lo amerita)
