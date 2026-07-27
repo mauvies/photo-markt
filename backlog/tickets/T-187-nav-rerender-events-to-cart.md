@@ -1,7 +1,7 @@
 # T-187 · Investigar por qué el nav re-renderiza al navegar de la página de evento al carrito
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `fix/nav-rerender-events-to-cart`  (tipo = fix)
 - **OpenSpec change:** —  (investigación de perf/render de un componente; decidir al ejecutar)

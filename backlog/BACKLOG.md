@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P3 | T-187 | Investigar por qué el nav re-renderiza al navegar de la página de evento al carrito | — | todo |
+| 1 | P3 | T-187 | Investigar por qué el nav re-renderiza al navegar de la página de evento al carrito | — | doing |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |

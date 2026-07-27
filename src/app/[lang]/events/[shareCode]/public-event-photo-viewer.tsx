@@ -298,11 +298,13 @@ export function PublicEventPhotoViewer({
   }, [isAuthenticated, authCartPhotos, displayablePhotos, guestCart]);
 
   // Where the "View cart" toast action navigates — the authenticated cart for
-  // signed-in viewers, the guest cart route for everyone else. Prefix with the
-  // active locale (T-168): this is a full-page `window.location.href` nav, so a
-  // bare path would let the middleware re-detect the locale from accept-language
-  // and flip the language. The sweep of T-161 missed this because the target is
-  // held in a variable, not an inline href/router.push the grep matched.
+  // signed-in viewers, the guest cart route for everyone else. Navigated with a
+  // SOFT `router.push` (T-187): a hard `window.location.href` reload remounted
+  // the shared `[lang]/layout.tsx` Nav, resetting `useAuthUser()` to `undefined`
+  // (flashing the auth skeleton) and re-hydrating the guest cart, for no gain —
+  // the dynamic cart page re-renders on soft nav and the guest cart provider
+  // stays mounted with its already-updated count. Still locale-prefixed (T-168)
+  // so the path is unambiguous.
   const cartHref = localizedPath(locale, isAuthenticated ? '/dashboard/talent/cart' : '/cart');
 
   // Adds one photo to the active cart (optimistic auth cart or guest cart)
@@ -350,11 +352,11 @@ export function PublicEventPhotoViewer({
         message: bulkDownload.addedToCartOne,
         viewCartLabel: bulkDownload.viewCart,
         onViewCart: () => {
-          window.location.href = cartHref;
+          router.push(cartHref);
         },
       });
     },
-    [addPhotoToCart, cartHref, bulkDownload],
+    [addPhotoToCart, cartHref, bulkDownload, router],
   );
 
   // Bulk "Add to cart" — adds every selected photo that isn't already in the
@@ -378,11 +380,11 @@ export function PublicEventPhotoViewer({
             : bulkDownload.addedToCartMany.replace('{n}', String(added)),
         viewCartLabel: bulkDownload.viewCart,
         onViewCart: () => {
-          window.location.href = cartHref;
+          router.push(cartHref);
         },
       });
     },
-    [photosInCart, purchasedPhotoIds, addPhotoToCart, bulkDownload, cartHref],
+    [photosInCart, purchasedPhotoIds, addPhotoToCart, bulkDownload, cartHref, router],
   );
 
   const handleRemoveFromCart = useCallback(
