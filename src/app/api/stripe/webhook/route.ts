@@ -15,7 +15,16 @@
  * Stripe Dashboard setup required:
  * - Enable Stripe Connect with Express accounts (Connect > Get started)
  * - Set payout schedule to Weekly, minimum $25 (Connect > Settings > Payouts)
- * - Subscribe this endpoint to: account.updated, charge.refunded
+ * - Subscribe this endpoint to ALL events this handler processes:
+ *   checkout.session.completed, payment_intent.succeeded,
+ *   payment_intent.payment_failed, customer.subscription.created,
+ *   customer.subscription.updated, customer.subscription.deleted,
+ *   account.updated, charge.refunded
+ *   (T-192: an earlier version of this list named only account.updated +
+ *   charge.refunded; a prod endpoint configured from it silently dropped every
+ *   sale and subscription — orders/subscriptions are only ever written here.
+ *   test/unit/api/stripe-webhook-setup-doc.test.ts keeps this list in sync
+ *   with the switch below.)
  * - In production: https://photomarkt.com/api/stripe/webhook
  *
  * NOTE: Transfer reversal on refund is NOT automatic. Reverse manually via Stripe Dashboard

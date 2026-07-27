@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-192 | [DIAGNÓSTICO] Venta de prueba (@vzla_surf) invisible en el dashboard de fotógrafo — sospecha: gate de Connect (T-191/T-189) o webhook de prod | — | todo |
+| 1 | P1 | T-192 | [DIAGNÓSTICO] Venta de prueba (@vzla_surf) invisible en el dashboard de fotógrafo — sospecha: gate de Connect (T-191/T-189) o webhook de prod | — | doing |
 | 2 | P1 | T-191 | Connect: la cuenta Express de un fotógrafo **US** falla al crearse — Stripe exige `card_payments` junto con `transfers` (onboarding de payouts bloqueado en livemode) | — | todo |
 | 3 | P2 | T-189 | Deshabilitar "añadir al carrito" + tooltip cuando el fotógrafo no tiene pagos (Connect) configurados; + código de error tipado en checkout | **reevaluar tras T-190** (diseño en PR #251; si el usuario lo aprueba, el modelo de saldo lo supersede en gran parte — sobrevive el error tipado) | todo |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |

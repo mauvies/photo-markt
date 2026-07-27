@@ -1,7 +1,7 @@
 # T-192 · [DIAGNÓSTICO] Venta de prueba (@vzla_surf) invisible en el dashboard de fotógrafo
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `fix/test-sale-not-visible-dashboard`  (si el diagnóstico revela bug de código; si es config/infra, cerrar sin rama como T-172/T-185)
 - **OpenSpec change:** —  (decidir tras el diagnóstico; solo si el fix toca pagos multi-archivo)
@@ -51,6 +51,32 @@ No tocar código hasta identificar la causa. Hipótesis ordenadas por probabilid
 - [ ] La venta de prueba (o una repetida) termina visible en Ventas y Ganancias del dashboard de
       @vzla_surf, o queda explicado y aceptado por qué no debía verse.
 - [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde (si hubo cambio de código).
+
+## Diagnóstico (2026-07-27, MCP prod read-only)
+
+- **@vzla_surf existe en prod** (`f4b0784f-…`), Connect **`active`** (`acct_1Txt5fEwaVkfNxhM` — NO es la
+  cuenta US bloqueada de T-191, `acct_1TR6ZS…`) → **H1 descartada** (el gate no bloqueó esta venta).
+- Su evento "3ra Valida Los Caracas Open" existe en prod (hoy, 35 fotos, €0.99, público) → la compra
+  pasó por el sitio de prod, livemode.
+- **`orders` = 0, `guest_orders` = 0, `payouts` = 0 en prod ALL-TIME** (no solo 72 h) — y staging
+  tampoco tiene la venta. El webhook de prod **jamás** escribió una orden. → **H2 confirmada** al nivel
+  alcanzable sin el dashboard de Stripe. H3/H4 descartadas (no hay fila en ninguna BD que malatribuir).
+- **Causa raíz identificada en el propio código** (`webhook/route.ts:18`, versión previa): la doc de
+  setup decía suscribir el endpoint **solo** a `account.updated, charge.refunded` — 2 de los 8 eventos
+  que procesa el handler. Un endpoint configurado siguiéndola produce EXACTAMENTE el estado observado:
+  Connect status sincroniza ✓, **0 ventas** ✗, **0 suscripciones** ✗ (¡el hallazgo de T-172, ahora
+  explicado!), 0 transfers ✗.
+- **Fix de código en este PR:** la doc de setup ahora lista los 8 eventos + test source-level
+  (`stripe-webhook-setup-doc.test.ts`) que obliga a que la sección de setup cubra cada `case` del
+  switch (rojo antes / verde después, verificado con stash).
+- **Pendiente del usuario (yo no tengo acceso al dashboard de Stripe):**
+  1. Stripe Dashboard (livemode) → Developers → Webhooks: confirmar el endpoint
+     `https://photomarkt.com/api/stripe/webhook` y **añadir los eventos faltantes** (los 8 de la doc);
+     verificar que `STRIPE_WEBHOOK_SECRET` en Vercel = signing secret del endpoint.
+  2. Revisar la entrega fallida/ausente de la venta de prueba y **re-enviar** (`Resend`) los eventos
+     `checkout.session.completed` + `payment_intent.succeeded` de esa sesión — el handler es idempotente
+     y creará la orden retroactivamente (la venta aparecerá en el dashboard). Si no, reembolsar a mano.
+  3. Verificación end-to-end: nueva venta de prueba → visible en Ventas/Ganancias.
 
 ## Notas
 - **Prod refs Supabase:** producción = `yzdlueeeizdqwuicydbr` (staging `rozglsxdolgouslaojtm` — no
