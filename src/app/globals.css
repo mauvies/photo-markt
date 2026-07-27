@@ -190,6 +190,10 @@ h6 {
   color: var(--foreground);
 }
 
+h1 {
+  font-weight: 800;
+}
+
 /* Photographer role badge background */
 .bg-role-photographer {
   background-color: var(--sidebar-primary);

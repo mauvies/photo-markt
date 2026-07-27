@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
  */
 export function EventCardSkeleton() {
   return (
-    <div className="overflow-hidden rounded-2xl border bg-card">
+    <div className="overflow-hidden rounded-2xl bg-card">
       <Skeleton className="aspect-[4/3] w-full rounded-none" />
       <div className="p-3">
         <div className="min-h-[3.1rem] space-y-1.5 pt-0.5">
@@ -18,10 +18,10 @@ export function EventCardSkeleton() {
         </div>
         <Skeleton className="mt-1.5 h-3.5 w-2/3" />
         <Skeleton className="mt-1.5 h-3.5 w-1/3" />
-        <div className="mt-2.5 flex items-center gap-2 border-t pt-2.5">
+        {/* <div className="mt-2.5 flex items-center gap-2 border-t pt-2.5">
           <Skeleton className="h-5 w-5 shrink-0 rounded-full" />
           <Skeleton className="h-3.5 w-24" />
-        </div>
+        </div> */}
       </div>
     </div>
   );
@@ -34,7 +34,7 @@ export function EventCardSkeleton() {
  * loaded (the in-app search/filter loading state lives in `EventGrid`
  * itself, which renders the same `EventCardSkeleton`).
  */
-export function EventGridSkeleton({ count = 8 }: { count?: number }) {
+export function EventGridSkeleton({ count = 4 }: { count?: number }) {
   return (
     <div className="grid gap-5 sm:gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
       {Array.from({ length: count }).map((_, i) => (

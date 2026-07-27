@@ -12,16 +12,16 @@ import { Skeleton } from '@/components/ui/skeleton';
  */
 export function EventsExploreViewSkeleton() {
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-12">
       <div>
         {/* Hero — title + subtitle */}
-        <div className="flex flex-col items-center gap-3 pb-2 pt-4 sm:pt-0">
-          <Skeleton className="h-9 w-2/3 max-w-md sm:h-12 sm:w-96" />
-          <Skeleton className="h-5 w-1/2 max-w-sm sm:h-6 sm:w-80" />
+        <div className="flex flex-col items-center gap-3 py-4 sm:pt-0">
+          <Skeleton className="h-9 w-2/3 max-w-2xl sm:h-12" />
+          <Skeleton className="h-5 w-1/2 max-w-xl sm:h-6" />
         </div>
         {/* Search bar */}
         <div className="flex justify-center">
-          <Skeleton className="h-12 w-full max-w-2xl rounded-full" />
+          <Skeleton className="h-14 w-full max-w-[576px] rounded-full" />
         </div>
       </div>
       <div className="space-y-4">

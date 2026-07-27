@@ -1,7 +1,7 @@
 'use client';
 
 import { format } from 'date-fns';
-import { Calendar, Image as ImageIcon, Loader2, Trash2, User } from 'lucide-react';
+import { Calendar, Camera, Image as ImageIcon, Loader2, Trash2 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -67,7 +67,7 @@ export function CartItemRow({
           type="button"
           onClick={onViewPhoto}
           aria-label={labels.viewPhoto}
-          className="relative h-24 w-24 shrink-0 cursor-zoom-in overflow-hidden rounded-lg bg-muted"
+          className="relative w-28 shrink-0 cursor-zoom-in overflow-hidden rounded-lg bg-muted"
         >
           <Image
             src={previewUrl}
@@ -110,12 +110,12 @@ export function CartItemRow({
                   title={labels.viewPhotographer}
                   className="flex items-center gap-1.5 hover:underline"
                 >
-                  <User className="h-3.5 w-3.5" />
+                  <Camera className="h-3.5 w-3.5" />
                   <span className="line-clamp-1">{photographerName}</span>
                 </Link>
               ) : (
                 <div className="flex items-center gap-1.5">
-                  <User className="h-3.5 w-3.5" />
+                  <Camera className="h-3.5 w-3.5" />
                   <span className="line-clamp-1">{photographerName}</span>
                 </div>
               ))}
