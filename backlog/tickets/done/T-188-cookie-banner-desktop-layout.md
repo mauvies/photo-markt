@@ -1,11 +1,11 @@
 # T-188 · Arreglar el layout desktop del banner de cookies
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/cookie-banner-desktop-layout`  (tipo = fix)
 - **OpenSpec change:** —  (UI/CSS de un componente; innecesario)
-- **PR:** —
+- **PR:** #250
 
 ## Requerimiento
 "Pensaba que habíamos mejorado el layout UI del banner de cookies, pero en **desktop** aún se ve muy raro." (T-169 ya arregló el apilado y la posición en mobile; el problema restante es la fila de desktop.)
