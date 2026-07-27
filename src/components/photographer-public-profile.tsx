@@ -125,10 +125,15 @@ export async function PhotographerPublicProfile({
         )}
       </div>
 
-      <section>
+      <section className={photographerEvents.length === 0 ? 'flex flex-1 flex-col' : undefined}>
         <h2 className="mb-4 text-xl font-semibold tracking-tight sm:text-2xl">{p.events}</h2>
         {photographerEvents.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed py-20 text-center sm:py-24">
+          // `flex-1` grows the empty state to fill the leftover viewport height
+          // (the dashboard preview wraps this in a full-height flex column), so
+          // it never demands scroll on its own regardless of the bio length.
+          // `min-h` is the floor for contexts without a height chain to fill
+          // (the public profile route, whose <main> isn't a flex column).
+          <div className="flex min-h-[18rem] flex-1 flex-col items-center justify-center rounded-2xl border border-dashed px-6 py-12 text-center">
             <Camera className="mb-4 h-12 w-12 text-muted-foreground/40" aria-hidden />
             <p className="font-medium">{p.noEvents}</p>
             <p className="mt-1 max-w-sm text-sm text-muted-foreground">{p.noEventsBody}</p>

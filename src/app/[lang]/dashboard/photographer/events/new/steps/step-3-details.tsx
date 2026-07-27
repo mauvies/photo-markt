@@ -74,7 +74,7 @@ export function Step3Details({
       />
 
       {/* Right column — event details. */}
-      <div className="grid gap-4">
+      <div className="grid gap-2">
         <div className="grid items-start gap-2 md:grid-cols-2 md:gap-4">
           <form.Field
             name="name"
@@ -226,7 +226,10 @@ export function Step3Details({
                         <ChevronDownIcon className="size-4 opacity-60" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto overflow-hidden p-0" align="start">
+                    <PopoverContent
+                      className="max-h-[var(--radix-popover-content-available-height)] w-auto overflow-y-auto p-0"
+                      align="start"
+                    >
                       <Calendar
                         mode="single"
                         selected={parsedDate}

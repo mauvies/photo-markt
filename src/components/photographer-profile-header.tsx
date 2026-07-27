@@ -1,5 +1,6 @@
 import { Camera, MapPin } from 'lucide-react';
 import Image from 'next/image';
+import { cn } from '@/lib/utils';
 
 type Labels = {
   locationFormat: string;
@@ -79,7 +80,12 @@ export function PhotographerProfileHeader({
             with the avatar. On desktop `md:contents` dissolves this wrapper so
             the avatar sits directly beside the name column and the tiles hide. */}
         <div className="flex items-center gap-4 md:contents">
-          <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full bg-muted ring-2 ring-border sm:h-24 sm:w-24 md:h-40 md:w-40">
+          <div
+            className={cn(
+              'relative h-24 w-24 shrink-0 overflow-hidden rounded-full bg-muted sm:h-24 sm:w-24 md:h-40 md:w-40',
+              !avatarUrl && 'ring-2 ring-border',
+            )}
+          >
             {avatarUrl ? (
               <Image
                 src={avatarUrl}

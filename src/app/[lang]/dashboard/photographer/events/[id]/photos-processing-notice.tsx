@@ -37,7 +37,7 @@ export function PhotosProcessingNotice({
 
   return (
     <div
-      className="mt-4 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/40 dark:text-amber-200"
+      className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/40 dark:text-amber-200"
       role="status"
     >
       <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />

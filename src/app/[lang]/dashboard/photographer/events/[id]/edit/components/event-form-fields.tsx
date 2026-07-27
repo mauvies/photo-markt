@@ -200,7 +200,10 @@ export function EventFormFields({
                           <ChevronDownIcon className="size-4 opacity-60" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto overflow-hidden p-0" align="start">
+                      <PopoverContent
+                        className="max-h-[var(--radix-popover-content-available-height)] w-auto overflow-y-auto p-0"
+                        align="start"
+                      >
                         <Calendar
                           mode="single"
                           selected={parsedDate}

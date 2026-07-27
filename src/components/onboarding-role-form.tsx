@@ -63,7 +63,7 @@ export default function OnboardingRoleForm({
   }, [username, isUsernameValid]);
 
   return (
-    <form action={saveRole} className="grid gap-6">
+    <form action={saveRole} className="grid gap-6 mx-auto max-w-3xl">
       <input type="hidden" name="role" value={selectedRole ?? ''} />
       <input type="hidden" name="username" value={username} />
 
