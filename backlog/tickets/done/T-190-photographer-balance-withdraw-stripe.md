@@ -1,11 +1,11 @@
 # T-190 · [DISEÑO] Saldo del fotógrafo + retiro, dentro de Stripe Connect (vender sin bloquear por payouts)
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done (fase diseño — PR #251; OK del usuario pendiente antes de abrir tickets hijos)
 - **Blockers:** ninguno (el diseño es ejecutable ya; la implementación resultante saldrá como tickets hijos)
 - **Rama:** `feat/photographer-balance-withdraw` (para la fase de implementación; el diseño no necesita rama)
-- **OpenSpec change:** sí — obligatorio (pagos, multi-archivo, cambio de modelo). `/opsx:propose` al ejecutar.
-- **PR:** —
+- **OpenSpec change:** `photographer-balance-withdraw` (creado; queda ACTIVO para los tickets hijos — no archivar hasta completar la implementación)
+- **PR:** #251
 
 ## Requerimiento
 (en palabras del usuario) Poder aceptar ventas **aunque el fotógrafo no haya configurado su cuenta de
