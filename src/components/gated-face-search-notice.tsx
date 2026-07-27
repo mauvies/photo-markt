@@ -32,10 +32,10 @@ export function GatedFaceSearchNotice({
   const description = isProcessing ? labels.processingDescription : labels.unavailableDescription;
 
   return (
-    <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-input bg-muted/30 py-16 text-center">
-      <Icon className="h-12 w-12 text-muted-foreground opacity-40" aria-hidden />
-      <p className="text-lg font-semibold">{title}</p>
-      <p className="max-w-md text-sm text-muted-foreground">{description}</p>
+    <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+      <Icon className="mb-6 h-16 w-16 text-muted-foreground/50" aria-hidden />
+      <h3 className="text-2xl font-semibold mb-2">{title}</h3>
+      <p className="text-sm text-muted-foreground mb-6 max-w-md">{description}</p>
     </div>
   );
 }
