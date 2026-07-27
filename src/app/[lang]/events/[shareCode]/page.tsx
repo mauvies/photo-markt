@@ -30,6 +30,7 @@ import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { eventDetailCacheTags } from '@/lib/event-cache-tags';
 import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
+import { overrideEventTotalPhotoCount } from '@/lib/event-photo-count-overrides';
 import { getEventStatus, isCollaborativeUploadOpen } from '@/lib/event-status';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { resolveGatedFaceSearchNotice } from '@/lib/find-my-photos';
@@ -157,7 +158,7 @@ async function getCachedEventData(
   // Round 1 — the first gallery page (only the first page is fetched + signed;
   // a 264-photo event used to sign all 264), the true approved count, and the
   // cover signature are mutually independent (each needs only the event).
-  const [{ photos, hasMore }, totalCount, coverSignedUrl] = await Promise.all([
+  const [{ photos, hasMore }, approvedCount, coverSignedUrl] = await Promise.all([
     gated
       ? Promise.resolve({ photos: [] as PhotoDetail[], hasMore: false })
       : getEventPhotosPublicPage(adminForPhotos, event.id, {
@@ -202,6 +203,11 @@ async function getCachedEventData(
       : Promise.resolve<Record<string, string>>({}),
     getProfilesByIds(adminForPhotos, uploaderUserIds),
   ]);
+
+  // TEMP test override (see event-photo-count-overrides.ts): force a fixed
+  // large total for a few prod events that have no real photos yet. Non-listed
+  // events fall through to the real approved count.
+  const totalCount = overrideEventTotalPhotoCount(event.id, approvedCount);
 
   return { event, photos, hasMore, totalCount, signed, uploaderProfiles, coverSignedUrl };
 }
