@@ -1,11 +1,11 @@
 # T-191 · Connect: cuenta Express de US falla — `transfers` requiere `card_payments`
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/connect-us-card-payments-capability`  (tipo = feat | fix | chore | refactor)
 - **OpenSpec change:** —  (se crea al ejecutar, si el cambio toca >1 archivo o es ambiguo)
-- **PR:** —
+- **PR:** #253
 
 ## Requerimiento
 En **producción (livemode)**, un fotógrafo con cuenta en **US** no puede conectar su cuenta de pagos (Stripe Connect). `stripe.accounts.create` revienta con:
