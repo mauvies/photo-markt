@@ -8,10 +8,9 @@ import {
 } from '@/database/queries/photos';
 import { getPhotographerConnectStatuses, getProfilesByIds } from '@/database/queries/profiles';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import type { CheckoutResult } from '@/lib/checkout-error';
 import { getBaseUrl } from '@/lib/get-base-url';
 import type { GuestCartItem } from '@/lib/guest-cart';
-import type { Locale } from '@/lib/i18n/config';
-import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { getClientIp, rateLimit } from '@/lib/rate-limit';
 import { stripe } from '@/lib/stripe/config';
 
@@ -101,14 +100,12 @@ export async function loadGuestCartStateAction(
  */
 export async function createGuestCheckoutSessionAction(
   items: GuestCartItem[],
-): Promise<{ url: string }> {
+): Promise<CheckoutResult> {
   if (items.length === 0) {
-    throw new Error('Cart is empty');
+    return { ok: false, error: 'cart_empty' };
   }
 
   const h = await headers();
-  const referer = h.get('referer') ?? '';
-  const lang = (referer.match(/\/(es|en)\//)?.[1] ?? 'en') as Locale;
 
   // Unauthenticated + hits the Stripe API (real $$$ side effect) on every
   // call, plus a DB read of all photoIds — the most serious abuse gap in the
@@ -118,8 +115,7 @@ export async function createGuestCheckoutSessionAction(
   const ip = getClientIp(h);
   const rl = await rateLimit({ key: `guest-checkout:${ip}`, limit: 10, windowSec: 3600 });
   if (!rl.ok) {
-    const dict = await getDictionary(lang);
-    throw new Error(dict.stripeConnect.checkout.rateLimited);
+    return { ok: false, error: 'rate_limited' };
   }
 
   // Re-validate photos and prices from DB (never trust client-side prices)
@@ -148,8 +144,7 @@ export async function createGuestCheckoutSessionAction(
     getAccessiblePhotoIds(supabaseAdmin, photoIds, shareCodes),
   ]);
   if (photoIds.some((id) => !purchasableIds.has(id) || !accessibleIds.has(id))) {
-    const dict = await getDictionary(lang);
-    throw new Error(dict.cart.itemsUnavailableRemoved);
+    return { ok: false, error: 'items_unavailable' };
   }
 
   const validatedItems = items.map((item) => {
@@ -172,8 +167,7 @@ export async function createGuestCheckoutSessionAction(
   const connectStatuses = await getPhotographerConnectStatuses(supabaseAdmin, photographerIds);
   const notConnected = connectStatuses.filter((p) => p.stripe_connect_status !== 'active');
   if (notConnected.length > 0) {
-    const dict = await getDictionary(lang);
-    throw new Error(dict.stripeConnect.checkout.photographerNotConnected);
+    return { ok: false, error: 'photographer_not_connected' };
   }
 
   // Encode cart items in Stripe metadata (one key per item, no DB needed)
@@ -214,5 +208,5 @@ export async function createGuestCheckoutSessionAction(
     throw new Error('No checkout URL returned from Stripe');
   }
 
-  return { url: session.url };
+  return { ok: true, url: session.url };
 }

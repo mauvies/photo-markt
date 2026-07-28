@@ -119,6 +119,7 @@ afterEach(() => {
   createGuestCheckoutSessionAction.mockReset();
   removeItemMock.mockReset();
   toastMock.mockClear();
+  toastMock.error.mockClear();
   // Restore the default hydrated-with-one-item state for the next test.
   guestCartValue.items = [CART_ITEM];
   guestCartValue.itemCount = 1;
@@ -184,13 +185,16 @@ describe('GuestCartContent — unavailable item cleanup (T-117)', () => {
   });
 });
 
-describe('GuestCartContent — checkout failure re-validates the cart (T-117)', () => {
-  it('re-validates after a rejected checkout, instead of letting the user retry the same failing item indefinitely', async () => {
+describe('GuestCartContent — typed checkout failure (T-189 / T-117)', () => {
+  it('shows the localized reason and re-validates the cart on items_unavailable', async () => {
     loadGuestCartStateAction.mockResolvedValue({
       removedPhotoIds: [],
       previews: { 'photo-1': LIVE_PREVIEW_URL },
     });
-    createGuestCheckoutSessionAction.mockRejectedValue(new Error('itemsUnavailableRemoved'));
+    // T-189: the action now RETURNS a typed code instead of throwing (Next
+    // redacts thrown Server Action messages in prod) — exercise the `!res.ok`
+    // branch, not the surviving catch path.
+    createGuestCheckoutSessionAction.mockResolvedValue({ ok: false, error: 'items_unavailable' });
 
     renderCart();
     await waitFor(() => screen.getByAltText('Surf Cup'));
@@ -199,12 +203,34 @@ describe('GuestCartContent — checkout failure re-validates the cart (T-117)', 
     // Two checkout buttons render (desktop summary + mobile sticky footer).
     fireEvent.click(screen.getAllByText('proceedToCheckout')[0]);
 
-    // Before the fix, a rejected checkout never invalidated the
-    // ['guest-cart-state', photoIds] query, so the same unpurchasable item
-    // stayed in the cart forever, letting the user retry the same failing
-    // (rate-limited) checkout indefinitely. After the fix, the failure
-    // triggers a fresh validation call.
+    // The mapped localized key is toasted so the buyer learns the reason.
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('itemsUnavailableRemoved'));
+    // items_unavailable re-validates ['guest-cart-state'] so the self-heal
+    // effect can drop the now-unpurchasable item.
     await waitFor(() => expect(loadGuestCartStateAction).toHaveBeenCalled());
+  });
+
+  it('shows the localized reason and does NOT re-validate on photographer_not_connected', async () => {
+    loadGuestCartStateAction.mockResolvedValue({
+      removedPhotoIds: [],
+      previews: { 'photo-1': LIVE_PREVIEW_URL },
+    });
+    createGuestCheckoutSessionAction.mockResolvedValue({
+      ok: false,
+      error: 'photographer_not_connected',
+    });
+
+    renderCart();
+    await waitFor(() => screen.getByAltText('Surf Cup'));
+    loadGuestCartStateAction.mockClear();
+
+    fireEvent.click(screen.getAllByText('proceedToCheckout')[0]);
+
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith('checkoutPhotographerNotConnected'),
+    );
+    // The cart is still valid → no needless re-validation round-trip.
+    expect(loadGuestCartStateAction).not.toHaveBeenCalled();
   });
 });
 

@@ -155,11 +155,12 @@ describe('T-130 — authenticated cart preview resolution', () => {
   it('checkout sees the foreign item instead of rejecting the cart as empty', async () => {
     await seedCartWithForeignPhoto();
 
-    const { url } = await createCheckoutSessionAction();
+    const result = await createCheckoutSessionAction();
 
     // Before T-130, the user-scoped details read came back empty and checkout
     // threw 'Cart is empty' for a cart with a real purchasable item in it.
-    expect(url).toContain('checkout.stripe.test');
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.url).toContain('checkout.stripe.test');
     expect(createSessionMock).toHaveBeenCalledTimes(1);
     const args = createSessionMock.mock.calls[0][0] as { line_items: unknown[] };
     expect(args.line_items).toHaveLength(1);

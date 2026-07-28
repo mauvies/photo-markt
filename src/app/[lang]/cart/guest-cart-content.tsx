@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { useLoginHref, useSignupHref } from '@/hooks/use-login-href';
+import { checkoutErrorMessageKey } from '@/lib/checkout-error';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 
@@ -98,6 +99,8 @@ export function GuestCartContent() {
     viewEvent: string;
     viewPhotographer: string;
     itemsUnavailableRemoved: string;
+    checkoutPhotographerNotConnected: string;
+    checkoutRateLimited: string;
   }>();
 
   // Drop unpurchasable entries and notify (T-117) — naturally one-shot: once
@@ -115,15 +118,26 @@ export function GuestCartContent() {
     setIsCheckingOut(true);
     startTransition(async () => {
       try {
-        const { url } = await createGuestCheckoutSessionAction(items);
-        window.location.href = url;
+        const res = await createGuestCheckoutSessionAction(items);
+        // T-189: expected, user-facing failures come back as a typed code
+        // (Next redacts thrown Server Action messages in prod), so the buyer
+        // sees the localized reason — e.g. a photographer not payout-ready.
+        if (!res.ok) {
+          toast.error(t(checkoutErrorMessageKey(res.error)));
+          setIsCheckingOut(false);
+          // T-117: only `items_unavailable` means an item just became
+          // unpurchasable — re-validate so the self-heal effect above drops it
+          // and notifies, instead of the user retrying the same failing
+          // checkout. The other codes leave the cart valid, so no refetch.
+          if (res.error === 'items_unavailable') {
+            queryClient.invalidateQueries({ queryKey: ['guest-cart-state'] });
+          }
+          return;
+        }
+        window.location.href = res.url;
       } catch (err) {
         toast.error(err instanceof Error ? err.message : t('checkoutFailed'));
         setIsCheckingOut(false);
-        // T-117: a rejection here may mean an item just became unpurchasable
-        // — re-validate so the self-heal effect above drops it and notifies,
-        // instead of the user retrying the same failing checkout and burning
-        // guest-checkout rate-limit attempts on an item that'll never clear.
         queryClient.invalidateQueries({ queryKey: ['guest-cart-state'] });
       }
     });

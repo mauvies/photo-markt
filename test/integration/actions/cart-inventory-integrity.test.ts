@@ -258,7 +258,10 @@ describe('T-117 — cart inventory integrity', () => {
       const sb = createServiceClient();
       await sb.from('events').update({ deleted_at: new Date().toISOString() }).eq('id', event.id);
 
-      await expect(createCheckoutSessionAction()).rejects.toThrow(/no longer available/i);
+      expect(await createCheckoutSessionAction()).toEqual({
+        ok: false,
+        error: 'items_unavailable',
+      });
       expect(createSessionMock).not.toHaveBeenCalled();
     });
 
@@ -273,8 +276,30 @@ describe('T-117 — cart inventory integrity', () => {
 
       const result = await createCheckoutSessionAction();
 
-      expect(result.url).toBe('https://checkout.stripe.test/session/cs_test_123');
+      expect(result).toEqual({
+        ok: true,
+        url: 'https://checkout.stripe.test/session/cs_test_123',
+      });
       expect(createSessionMock).toHaveBeenCalledTimes(1);
+    });
+
+    // T-189: mirror of the guest case — the authed buyer must learn *why*
+    // checkout is blocked when a photographer isn't payout-ready, so the action
+    // returns a typed code instead of a thrown (prod-redacted) Error.
+    it('returns photographer_not_connected when the photographer is not active on Connect', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      // Deliberately NOT marked connected → stripe_connect_status stays non-active.
+      const event = await createTestEvent(photographer.id, { price_per_photo: 5 });
+      const photo = await createTestPhoto(event.id, { user_id: photographer.id });
+      const talent = await createTestUser('TALENT');
+      mockSession.userId = talent.id;
+      await addPhotoToCartAction(photo.id);
+
+      expect(await createCheckoutSessionAction()).toEqual({
+        ok: false,
+        error: 'photographer_not_connected',
+      });
+      expect(createSessionMock).not.toHaveBeenCalled();
     });
 
     // `getCartItemsWithDetails` (used to build Stripe line items) already
@@ -300,7 +325,10 @@ describe('T-117 — cart inventory integrity', () => {
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', deadEvent.id);
 
-      await expect(createCheckoutSessionAction()).rejects.toThrow(/no longer available/i);
+      expect(await createCheckoutSessionAction()).toEqual({
+        ok: false,
+        error: 'items_unavailable',
+      });
       expect(createSessionMock).not.toHaveBeenCalled();
     });
   });
@@ -314,9 +342,10 @@ describe('T-117 — cart inventory integrity', () => {
       const sb = createServiceClient();
       await sb.from('events').update({ deleted_at: new Date().toISOString() }).eq('id', event.id);
 
-      await expect(createGuestCheckoutSessionAction([guestItem(photo.id)])).rejects.toThrow(
-        /no longer available/i,
-      );
+      expect(await createGuestCheckoutSessionAction([guestItem(photo.id)])).toEqual({
+        ok: false,
+        error: 'items_unavailable',
+      });
       expect(createSessionMock).not.toHaveBeenCalled();
     });
 
@@ -328,7 +357,10 @@ describe('T-117 — cart inventory integrity', () => {
 
       const result = await createGuestCheckoutSessionAction([guestItem(photo.id)]);
 
-      expect(result.url).toBe('https://checkout.stripe.test/session/cs_test_123');
+      expect(result).toEqual({
+        ok: true,
+        url: 'https://checkout.stripe.test/session/cs_test_123',
+      });
       expect(createSessionMock).toHaveBeenCalledTimes(1);
     });
   });
@@ -416,7 +448,10 @@ describe('T-117 — cart inventory integrity', () => {
       // Photographer flips the event private after it's in the cart.
       await createServiceClient().from('events').update({ is_public: false }).eq('id', event.id);
 
-      await expect(createCheckoutSessionAction()).rejects.toThrow(/no longer available/i);
+      expect(await createCheckoutSessionAction()).toEqual({
+        ok: false,
+        error: 'items_unavailable',
+      });
       expect(createSessionMock).not.toHaveBeenCalled();
     });
 
@@ -435,7 +470,10 @@ describe('T-117 — cart inventory integrity', () => {
 
       const result = await createCheckoutSessionAction();
 
-      expect(result.url).toBe('https://checkout.stripe.test/session/cs_test_123');
+      expect(result).toEqual({
+        ok: true,
+        url: 'https://checkout.stripe.test/session/cs_test_123',
+      });
       expect(createSessionMock).toHaveBeenCalledTimes(1);
     });
 
@@ -457,7 +495,10 @@ describe('T-117 — cart inventory integrity', () => {
 
       const result = await createCheckoutSessionAction();
 
-      expect(result.url).toBe('https://checkout.stripe.test/session/cs_test_123');
+      expect(result).toEqual({
+        ok: true,
+        url: 'https://checkout.stripe.test/session/cs_test_123',
+      });
       expect(createSessionMock).toHaveBeenCalledTimes(1);
     });
 
@@ -483,7 +524,10 @@ describe('T-117 — cart inventory integrity', () => {
 
       expect(await readAccessShareCode(talent.id)).toBe('ROT_B');
       const result = await createCheckoutSessionAction();
-      expect(result.url).toBe('https://checkout.stripe.test/session/cs_test_123');
+      expect(result).toEqual({
+        ok: true,
+        url: 'https://checkout.stripe.test/session/cs_test_123',
+      });
       expect(createSessionMock).toHaveBeenCalledTimes(1);
     });
 
@@ -503,7 +547,10 @@ describe('T-117 — cart inventory integrity', () => {
       // Rotation revokes the old link; buyer never re-presents the new code.
       await createServiceClient().from('events').update({ share_code: 'ROT_C' }).eq('id', event.id);
 
-      await expect(createCheckoutSessionAction()).rejects.toThrow(/no longer available/i);
+      expect(await createCheckoutSessionAction()).toEqual({
+        ok: false,
+        error: 'items_unavailable',
+      });
       expect(createSessionMock).not.toHaveBeenCalled();
     });
 
@@ -535,7 +582,10 @@ describe('T-117 — cart inventory integrity', () => {
         .eq('photo_id', photo.id)
         .eq('talent_user_id', talent.id);
 
-      await expect(createCheckoutSessionAction()).rejects.toThrow(/no longer available/i);
+      expect(await createCheckoutSessionAction()).toEqual({
+        ok: false,
+        error: 'items_unavailable',
+      });
       expect(createSessionMock).not.toHaveBeenCalled();
     });
   });

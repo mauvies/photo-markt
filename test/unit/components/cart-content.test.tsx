@@ -173,22 +173,40 @@ describe('CartContent — removal notice (T-117)', () => {
   });
 });
 
-describe('CartContent — checkout failure refetches the cart (T-117)', () => {
-  it('re-fetches cart-data after a rejected checkout, instead of leaving the stale (already self-healed) cart on screen', async () => {
-    createCheckoutSessionActionMock.mockRejectedValue(new Error('itemsUnavailableRemoved'));
+describe('CartContent — typed checkout failure (T-189 / T-117)', () => {
+  it('shows the localized reason and re-fetches cart-data on items_unavailable (self-heal)', async () => {
+    // T-189: the action now RETURNS a typed code instead of throwing (Next
+    // redacts thrown Server Action messages in prod), so exercise the
+    // `!res.ok` branch — not the surviving catch path.
+    createCheckoutSessionActionMock.mockResolvedValue({ ok: false, error: 'items_unavailable' });
     getCurrentCartMock.mockResolvedValue({ ...initialCartData, items: [], itemCount: 0 });
 
     renderCart();
     // Two checkout buttons render (desktop summary + mobile sticky footer).
     fireEvent.click(screen.getAllByText('proceedToCheckout')[0]);
 
-    // Before the fix, a rejected checkout never invalidated ['cart-data'],
-    // so getCurrentCart (called once for the initial query registration,
-    // matched by TanStack Query against `initialData` and never re-run) was
-    // never called again — the stale, already-server-side-deleted item kept
-    // rendering. After the fix, the failure invalidates the query and
-    // getCurrentCart is called to refresh it.
+    // The mapped localized key is toasted so the buyer learns the reason.
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('itemsUnavailableRemoved'));
+    // items_unavailable self-heals the cart server-side, so the client refetches
+    // (getCurrentCart, otherwise pinned to initialData and never re-run).
     await waitFor(() => expect(getCurrentCartMock).toHaveBeenCalled());
+  });
+
+  it('shows the localized reason and does NOT refetch on photographer_not_connected', async () => {
+    createCheckoutSessionActionMock.mockResolvedValue({
+      ok: false,
+      error: 'photographer_not_connected',
+    });
+
+    renderCart();
+    fireEvent.click(screen.getAllByText('proceedToCheckout')[0]);
+
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith('checkoutPhotographerNotConnected'),
+    );
+    // No server-side cart mutation → no needless refetch (getCurrentCart stays
+    // pinned to initialData, never invoked).
+    expect(getCurrentCartMock).not.toHaveBeenCalled();
   });
 });
 
