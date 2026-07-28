@@ -5,7 +5,7 @@
 - **Blockers:** ninguno (gate de diseño de T-194 aprobado por el usuario el 2026-07-28)
 - **Rama:** `feat/buyer-service-fee-config`
 - **OpenSpec change:** `billing-model-v2` (activo, NO archivar — lo consumen A, B y C). Ejecutar con `/opsx:apply` sobre el grupo **1** de `tasks.md`
-- **PR:** (draft)
+- **PR:** #258 (draft)
 
 ## Requerimiento
 Primer hijo de **T-194** (rediseño del modelo económico). Sienta la base **sin cambio visible para el comprador**:
