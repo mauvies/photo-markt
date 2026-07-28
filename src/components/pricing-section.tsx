@@ -7,6 +7,7 @@ import { BillingPeriodToggle } from '@/components/billing-period-toggle';
 import { PricingPlanButton } from '@/components/pricing-plan-button';
 import { Badge } from '@/components/ui/badge';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { getPlanFeatures } from '@/lib/plan-features';
 import { type BillingPeriod, getPlanById } from '@/lib/plans';
@@ -114,7 +115,7 @@ export function PricingSection({ isAuthenticated, t }: { isAuthenticated: boolea
                   <h3 className="text-xl font-semibold">{plan.name}</h3>
 
                   <div className="mt-3 flex items-baseline gap-2">
-                    <span className="text-3xl font-semibold">{`$${price}`}</span>
+                    <span className="text-3xl font-semibold">{`${PLATFORM_CURRENCY_SYMBOL}${price}`}</span>
                     <span className="text-xs text-muted-foreground">{t.perMonth}</span>
                   </div>
 

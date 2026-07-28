@@ -72,16 +72,16 @@ describe('formatPlanPrice', () => {
     expect(formatPlanPrice(getPlanById('free')!)).toBe('Free');
   });
 
-  it('formats a monthly plan as $X/mo', () => {
-    expect(formatPlanPrice(getPlanById('starter')!)).toBe('$14.99/mo');
-    expect(formatPlanPrice(getPlanById('starter')!, 'monthly')).toBe('$14.99/mo');
+  it('formats a monthly plan as €X/mo (T-193)', () => {
+    expect(formatPlanPrice(getPlanById('starter')!)).toBe('€14.99/mo');
+    expect(formatPlanPrice(getPlanById('starter')!, 'monthly')).toBe('€14.99/mo');
   });
 
-  it('formats a yearly plan as the per-month equivalent ($X/mo)', () => {
+  it('formats a yearly plan as the per-month equivalent (€X/mo)', () => {
     // Yearly billing shows the per-month-equivalent on cards. The full
     // "billed yearly" lump-sum is rendered as a subtitle by the UI, not
     // by this helper.
-    expect(formatPlanPrice(getPlanById('starter')!, 'yearly')).toBe('$11.99/mo');
-    expect(formatPlanPrice(getPlanById('pro')!, 'yearly')).toBe('$23.99/mo');
+    expect(formatPlanPrice(getPlanById('starter')!, 'yearly')).toBe('€11.99/mo');
+    expect(formatPlanPrice(getPlanById('pro')!, 'yearly')).toBe('€23.99/mo');
   });
 });

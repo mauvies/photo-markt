@@ -60,7 +60,7 @@ describe('EventInfoCard', () => {
     expect(screen.getByText('Madrid, Spain')).toBeTruthy();
     expect(screen.getByText('Running')).toBeTruthy();
     expect(screen.getByText('Solo')).toBeTruthy();
-    expect(screen.getByText('$5.00')).toBeTruthy();
+    expect(screen.getByText('€5.00')).toBeTruthy();
     expect(screen.getByText('Public')).toBeTruthy();
   });
 

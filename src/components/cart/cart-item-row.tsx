@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 
 export interface CartItemRowLabels {
   photoAlt: string;
@@ -58,7 +59,7 @@ export function CartItemRow({
   labels,
 }: CartItemRowProps) {
   const lp = useLocalizedPath();
-  const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+  const formatPrice = (cents: number) => `${PLATFORM_CURRENCY_SYMBOL}${(cents / 100).toFixed(2)}`;
 
   return (
     <div className="group flex gap-4 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/50 hover:shadow-md">

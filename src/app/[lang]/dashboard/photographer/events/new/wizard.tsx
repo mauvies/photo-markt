@@ -8,6 +8,7 @@ import { DashboardHeader } from '@/components/dashboard-header';
 import { Button } from '@/components/ui/button';
 import { UploadProgressDialog } from '@/components/upload-progress-dialog';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { getPlanLimitType, isPlanLimitError } from '@/lib/plan-limits';
@@ -514,9 +515,9 @@ export default function NewEventForm({
 
   const reviewSections: ReviewSection[] = useMemo(() => {
     const v = form.state.values;
-    const formatDollar = (val: string | number | null | undefined) =>
+    const formatPrice = (val: string | number | null | undefined) =>
       val !== null && val !== undefined
-        ? `$${(typeof val === 'string' ? Number.parseFloat(val) : val).toFixed(2)}`
+        ? `${PLATFORM_CURRENCY_SYMBOL}${(typeof val === 'string' ? Number.parseFloat(val) : val).toFixed(2)}`
         : t('summaryFree');
 
     const eventTypeLabel =
@@ -588,10 +589,10 @@ export default function NewEventForm({
     if (v.event_type === 'organizer') {
       detailsRows.push({
         label: t('organizerFeeLabel'),
-        value: formatDollar(v.organizer_fee_per_photo),
+        value: formatPrice(v.organizer_fee_per_photo),
       });
     } else {
-      detailsRows.push({ label: t('summaryPrice'), value: formatDollar(v.price_per_photo) });
+      detailsRows.push({ label: t('summaryPrice'), value: formatPrice(v.price_per_photo) });
     }
 
     return [

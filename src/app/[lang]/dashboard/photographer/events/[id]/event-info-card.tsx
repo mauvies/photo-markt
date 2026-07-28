@@ -3,6 +3,7 @@
 import { Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { buttonVariants } from '@/components/ui/button';
+import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { cn } from '@/lib/utils';
 
@@ -52,7 +53,8 @@ export function EventInfoCard({
     { label: t.eventType, value: typeLabel },
     {
       label: t.pricePerPhoto,
-      value: pricePerPhoto !== null ? `$${pricePerPhoto.toFixed(2)}` : t.free,
+      value:
+        pricePerPhoto !== null ? `${PLATFORM_CURRENCY_SYMBOL}${pricePerPhoto.toFixed(2)}` : t.free,
     },
     { label: t.visibility, value: isPublic ? t.public : t.private },
   ];

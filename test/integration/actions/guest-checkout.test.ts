@@ -87,10 +87,13 @@ describe('createGuestCheckoutSessionAction', () => {
     });
     expect(createSessionMock).toHaveBeenCalledTimes(1);
     const sessionArgs = createSessionMock.mock.calls[0]?.[0] as {
-      line_items: Array<{ price_data: { unit_amount: number } }>;
+      line_items: Array<{ price_data: { unit_amount: number; currency: string } }>;
     };
     // Price re-validated server-side from the event's price_per_photo (10.00 → 1000 cents).
     expect(sessionArgs.line_items[0]?.price_data.unit_amount).toBe(1000);
+    // T-193: the platform settles in EUR — charging USD forced a ~2% conversion
+    // fee on every sale. The checkout session must be created in EUR.
+    expect(sessionArgs.line_items[0]?.price_data.currency).toBe('eur');
   });
 
   // T-189: the buyer must learn *why* checkout is blocked. When a photo's

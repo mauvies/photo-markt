@@ -28,6 +28,7 @@ import {
 } from '@/database/queries/rekognition';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { PLATFORM_CURRENCY_CODE } from '@/lib/currency';
 import { eventDetailCacheTags } from '@/lib/event-cache-tags';
 import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
 import { overrideEventTotalPhotoCount } from '@/lib/event-photo-count-overrides';
@@ -543,7 +544,7 @@ export default async function EventPage({
               offers: {
                 '@type': 'Offer',
                 price: event.price_per_photo,
-                priceCurrency: 'USD',
+                priceCurrency: PLATFORM_CURRENCY_CODE,
                 availability: 'https://schema.org/InStock',
                 url: eventUrl,
               },

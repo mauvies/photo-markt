@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Sale, TopSellingEvent } from '@/database/queries/sales';
+import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
@@ -20,7 +21,7 @@ import { getSalesDataAction } from './actions';
 type PhotographerDashboardT = Dictionary['photographerDashboard'];
 
 function formatPrice(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
+  return `${PLATFORM_CURRENCY_SYMBOL}${(cents / 100).toFixed(2)}`;
 }
 
 function formatDateTime(dateString: string, locale: string): string {

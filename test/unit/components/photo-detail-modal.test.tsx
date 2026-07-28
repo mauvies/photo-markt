@@ -70,7 +70,7 @@ describe('PhotoDetailModal', () => {
     expect(screen.getByText('July 5, 2026')).toBeTruthy();
     expect(screen.getByText('7008 × 4672px')).toBeTruthy();
     expect(screen.getByText('Price per Photo')).toBeTruthy();
-    expect(screen.getByText('10.00 USD')).toBeTruthy();
+    expect(screen.getByText('€10.00')).toBeTruthy();
     expect(screen.getByText('Add to Cart')).toBeTruthy();
     // Counter reflects the position.
     expect(screen.getByText('1 / 2')).toBeTruthy();

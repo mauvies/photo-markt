@@ -2,13 +2,14 @@ import { format } from 'date-fns';
 import { ArrowRight, ImageOff } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { PLATFORM_CURRENCY_CODE } from '@/lib/currency';
 import type { RecentSale } from '../actions';
 import { NoSalesEmpty } from './empty-states';
 
 function formatCurrency(cents: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: PLATFORM_CURRENCY_CODE,
   }).format(cents / 100);
 }
 

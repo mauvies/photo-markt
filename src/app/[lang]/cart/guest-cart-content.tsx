@@ -29,6 +29,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { useLoginHref, useSignupHref } from '@/hooks/use-login-href';
 import { checkoutErrorMessageKey } from '@/lib/checkout-error';
+import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 
@@ -143,7 +144,8 @@ export function GuestCartContent() {
     });
   };
 
-  const formatPrice = (cents: number) => (cents === 0 ? t('free') : `$${(cents / 100).toFixed(2)}`);
+  const formatPrice = (cents: number) =>
+    cents === 0 ? t('free') : `${PLATFORM_CURRENCY_SYMBOL}${(cents / 100).toFixed(2)}`;
 
   // The guest cart lives in localStorage and is read on mount, so `items` is
   // empty on the first client render regardless of whether the cart truly is.

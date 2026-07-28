@@ -3,6 +3,7 @@
  * For tracking completed purchases integrated with Stripe
  */
 
+import { PLATFORM_CURRENCY } from '@/lib/currency';
 import type { SupabaseServerClient } from './types';
 import { getErrorMessage } from './types';
 
@@ -72,7 +73,7 @@ export async function createOrder(
       stripe_checkout_session_id: orderData.stripe_checkout_session_id ?? null,
       status: orderData.status ?? 'pending',
       total_amount_cents: orderData.total_amount_cents,
-      currency: orderData.currency ?? 'usd',
+      currency: orderData.currency ?? PLATFORM_CURRENCY,
       metadata: orderData.metadata ?? {},
     })
     .select()

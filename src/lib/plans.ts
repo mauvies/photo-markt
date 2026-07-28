@@ -2,6 +2,8 @@
  * Photographer subscription plans configuration
  */
 
+import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
+
 export type PlanId = 'free' | 'starter' | 'pro';
 
 /**
@@ -15,9 +17,9 @@ export const MAX_PHOTOS_PER_EVENT = 5000;
 export type BillingPeriod = 'monthly' | 'yearly';
 
 export interface PlanPricing {
-  /** Monthly recurring price (USD), shown when the user picks "monthly". */
+  /** Monthly recurring price (EUR), shown when the user picks "monthly". */
   monthly: number;
-  /** Lump-sum yearly recurring price (USD), what Stripe actually charges. */
+  /** Lump-sum yearly recurring price (EUR), what Stripe actually charges. */
   yearlyTotal: number;
   /**
    * Display-only: `yearlyTotal / 12`. We show this on the pricing cards
@@ -116,5 +118,5 @@ export function formatPlanPrice(plan: Plan, period: BillingPeriod = 'monthly'): 
     return 'Free';
   }
   const amount = period === 'yearly' ? plan.pricing.yearlyMonthlyEquivalent : plan.pricing.monthly;
-  return `$${amount}/mo`;
+  return `${PLATFORM_CURRENCY_SYMBOL}${amount}/mo`;
 }

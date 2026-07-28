@@ -9,6 +9,7 @@ import {
 import { getPhotographerConnectStatuses, getProfilesByIds } from '@/database/queries/profiles';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import type { CheckoutResult } from '@/lib/checkout-error';
+import { PLATFORM_CURRENCY } from '@/lib/currency';
 import { getBaseUrl } from '@/lib/get-base-url';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import { getClientIp, rateLimit } from '@/lib/rate-limit';
@@ -191,7 +192,7 @@ export async function createGuestCheckoutSessionAction(
     billing_address_collection: 'auto',
     line_items: validatedItems.map((item) => ({
       price_data: {
-        currency: 'usd',
+        currency: PLATFORM_CURRENCY,
         product_data: {
           name: item.eventName ? `Photo from ${item.eventName}` : 'Photo',
         },

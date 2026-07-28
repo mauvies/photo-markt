@@ -162,7 +162,12 @@ describe('T-130 — authenticated cart preview resolution', () => {
     expect(result.ok).toBe(true);
     expect(result.ok && result.url).toContain('checkout.stripe.test');
     expect(createSessionMock).toHaveBeenCalledTimes(1);
-    const args = createSessionMock.mock.calls[0][0] as { line_items: unknown[] };
+    const args = createSessionMock.mock.calls[0][0] as {
+      line_items: Array<{ price_data: { currency: string } }>;
+    };
     expect(args.line_items).toHaveLength(1);
+    // T-193: the authenticated checkout must charge in EUR (platform settlement
+    // currency), not USD — otherwise every sale eats a ~2% conversion fee.
+    expect(args.line_items[0]?.price_data.currency).toBe('eur');
   });
 });
