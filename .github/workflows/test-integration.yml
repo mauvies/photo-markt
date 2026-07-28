@@ -1,28 +1,19 @@
 name: test-integration
 
-# Slow gate: boots local Supabase (Docker) and runs the integration suite. Only
-# triggered when code that integration tests actually exercise changes — DB
-# queries, server actions, API routes, shared lib, the Supabase schema/seed, or
-# the tests/helpers themselves. Pure UI/i18n/component PRs skip this entirely and
-# only pay the fast `test` workflow. The full suite still runs locally before
-# every push, so a path this list misses is caught pre-push, not in prod.
+# The integration suite boots local Supabase (Docker image pull) — the expensive
+# part of CI. It is deliberately NOT run per-PR: the /work-next flow runs the
+# full suite (with Supabase) locally before every push, so that is the real gate.
+# CI runs it nightly against main (catches anything that slipped the local net or
+# a flake) and on demand before a risky merge. This is why there is no per-path
+# allowlist to keep in sync — moving it off PRs removes that maintenance burden
+# and its silent-under-test failure mode. Run manually with:
+#   gh workflow run test-integration.yml --ref <branch>
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - 'src/database/**'
-      - 'src/app/api/**'
-      - 'src/app/**/actions.ts'
-      - 'src/lib/**'
-      - 'supabase/**'
-      - 'test/integration/**'
-      - 'test/helpers/**'
-      - 'test/setup.ts'
-      - 'env.mjs'
-      - 'vitest.config.ts'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/test-integration.yml'
+  schedule:
+    # 04:17 UTC daily. Scheduled runs always execute against the default branch
+    # (main). Odd minute to dodge the top-of-hour scheduler surge.
+    - cron: '17 4 * * *'
 
 concurrency:
   group: test-integration-${{ github.ref }}
@@ -59,8 +50,8 @@ jobs:
         run: pnpm exec supabase start --exclude studio,meta,imgproxy,analytics,vector,realtime,edge-runtime,functions,inbucket
 
       - name: Integration tests
-        # Only the integration dir — unit tests already ran in the `test`
-        # workflow, and the Supabase stack is already up from the step above.
+        # Only the integration dir — unit tests run per-PR in the `test` workflow,
+        # and the Supabase stack is already up from the step above.
         run: pnpm exec vitest run test/integration
 
       - name: Stop local Supabase
