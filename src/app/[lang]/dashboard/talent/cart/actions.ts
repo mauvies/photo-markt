@@ -1,7 +1,6 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { headers } from 'next/headers';
 import { userHasRole } from '@/app/[lang]/actions/roles';
 import {
   addPhotoToCart as dbAddPhotoToCart,
@@ -22,11 +21,10 @@ import {
 } from '@/database/queries';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import type { CheckoutResult } from '@/lib/checkout-error';
 import { getBaseUrl } from '@/lib/get-base-url';
 import { getSiteUrl } from '@/lib/get-site-url';
 import type { GuestCartItem } from '@/lib/guest-cart';
-import type { Locale } from '@/lib/i18n/config';
-import { getDictionary } from '@/lib/i18n/get-dictionary';
 
 export interface CartItemDetail {
   photoId: string;
@@ -345,7 +343,7 @@ export async function checkPhotoInCartAction(photoId: string): Promise<boolean> 
 /**
  * Create Stripe checkout session for cart
  */
-export async function createCheckoutSessionAction(): Promise<{ url: string }> {
+export async function createCheckoutSessionAction(): Promise<CheckoutResult> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -376,7 +374,7 @@ export async function createCheckoutSessionAction(): Promise<{ url: string }> {
   const accessInfo = await getCartItemAccessInfo(supabase, cart.id);
   const rawPhotoIds = accessInfo.map((i) => i.photoId);
   if (rawPhotoIds.length === 0) {
-    throw new Error('Cart is empty');
+    return { ok: false, error: 'cart_empty' };
   }
 
   const [purchasableIds, accessibleIds] = await Promise.all([
@@ -386,11 +384,7 @@ export async function createCheckoutSessionAction(): Promise<{ url: string }> {
   const badPhotoIds = rawPhotoIds.filter((id) => !purchasableIds.has(id) || !accessibleIds.has(id));
   if (badPhotoIds.length > 0) {
     await deleteCartItemsByPhotoIds(supabaseAdmin, cart.id, badPhotoIds);
-    const h = await headers();
-    const referer = h.get('referer') ?? '';
-    const lang = (referer.match(/\/(es|en)\//)?.[1] ?? 'en') as Locale;
-    const dict = await getDictionary(lang);
-    throw new Error(dict.cart.itemsUnavailableRemoved);
+    return { ok: false, error: 'items_unavailable' };
   }
 
   // Get cart items — admin client for the same reason as `getCurrentCart`
@@ -407,7 +401,7 @@ export async function createCheckoutSessionAction(): Promise<{ url: string }> {
   );
 
   if (cartItems.length === 0) {
-    throw new Error('Cart is empty');
+    return { ok: false, error: 'cart_empty' };
   }
 
   // Block checkout if any photographer has not connected their Stripe account
@@ -415,11 +409,7 @@ export async function createCheckoutSessionAction(): Promise<{ url: string }> {
   const connectStatuses = await getPhotographerConnectStatuses(supabaseAdmin, photographerIds);
   const notConnected = connectStatuses.filter((p) => p.stripe_connect_status !== 'active');
   if (notConnected.length > 0) {
-    const h = await headers();
-    const referer = h.get('referer') ?? '';
-    const lang = (referer.match(/\/(es|en)\//)?.[1] ?? 'en') as Locale;
-    const dict = await getDictionary(lang);
-    throw new Error(dict.stripeConnect.checkout.photographerNotConnected);
+    return { ok: false, error: 'photographer_not_connected' };
   }
 
   const { stripe } = await import('@/lib/stripe/config');
@@ -454,7 +444,7 @@ export async function createCheckoutSessionAction(): Promise<{ url: string }> {
     throw new Error('No checkout URL returned');
   }
 
-  return { url: session.url };
+  return { ok: true, url: session.url };
 }
 
 /**

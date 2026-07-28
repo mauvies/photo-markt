@@ -283,7 +283,9 @@
     "viewFavorites": "View Favorites",
     "allItemsFree": "All items in your cart are free",
     "cartRestored": "Your cart has been restored",
-    "itemsUnavailableRemoved": "One or more items in your cart are no longer available and were removed."
+    "itemsUnavailableRemoved": "One or more items in your cart are no longer available and were removed.",
+    "checkoutPhotographerNotConnected": "One or more photographers in your cart have not set up payouts yet, so their photos can't be purchased right now. Please try again later.",
+    "checkoutRateLimited": "Too many checkout attempts. Please wait a bit and try again."
   },
   "signup": {
     "title": "Create an account",
@@ -1293,10 +1295,6 @@
       "pendingReview": "Your Stripe account is under review. Payouts will be enabled once approved.",
       "actionRequired": "Action required on your Stripe account. Update your payout settings to continue selling.",
       "goToPayoutProfile": "Go to payout settings"
-    },
-    "checkout": {
-      "photographerNotConnected": "One or more photographers in your cart have not set up payouts yet. Please try again later.",
-      "rateLimited": "Too many checkout attempts. Please wait a bit and try again."
     },
     "sales": {
       "commission": "Commission",

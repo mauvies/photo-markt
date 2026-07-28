@@ -283,7 +283,9 @@
     "viewFavorites": "Ver favoritos",
     "allItemsFree": "Todos los artículos en tu carrito son gratuitos",
     "cartRestored": "Tu carrito ha sido recuperado",
-    "itemsUnavailableRemoved": "Uno o más artículos de tu carrito ya no están disponibles y fueron eliminados."
+    "itemsUnavailableRemoved": "Uno o más artículos de tu carrito ya no están disponibles y fueron eliminados.",
+    "checkoutPhotographerNotConnected": "Uno o más fotógrafos en tu carrito aún no han configurado sus pagos, así que sus fotos no se pueden comprar por ahora. Por favor intenta más tarde.",
+    "checkoutRateLimited": "Demasiados intentos de pago. Espera un momento e inténtalo de nuevo."
   },
   "signup": {
     "title": "Crear una cuenta",
@@ -1293,10 +1295,6 @@
       "pendingReview": "Tu cuenta de Stripe está en revisión. Los pagos se habilitarán cuando sea aprobada.",
       "actionRequired": "Se requiere acción en tu cuenta de Stripe. Actualiza tu configuración de pagos para continuar vendiendo.",
       "goToPayoutProfile": "Ir a configuración de pagos"
-    },
-    "checkout": {
-      "photographerNotConnected": "Uno o más fotógrafos en tu carrito aún no han configurado sus pagos. Por favor intenta más tarde.",
-      "rateLimited": "Demasiados intentos de pago. Espera un momento e inténtalo de nuevo."
     },
     "sales": {
       "commission": "Comisión",

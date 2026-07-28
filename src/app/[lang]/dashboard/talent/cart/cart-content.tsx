@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { cartView } from '@/lib/cart-view';
+import { checkoutErrorMessageKey } from '@/lib/checkout-error';
 import { GUEST_CART_KEY } from '@/lib/guest-cart';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
@@ -153,6 +154,8 @@ export function CartContent({ initialCartData }: CartContentProps) {
     failedClearCart: string;
     failedStartCheckout: string;
     itemsUnavailableRemoved: string;
+    checkoutPhotographerNotConnected: string;
+    checkoutRateLimited: string;
   }>();
 
   // T-117: getCurrentCart() self-heals cart_items whose photo has gone
@@ -302,16 +305,27 @@ export function CartContent({ initialCartData }: CartContentProps) {
     setIsCheckingOut(true);
     startTransition(async () => {
       try {
-        const { url } = await createCheckoutSessionAction();
-        window.location.href = url;
+        const res = await createCheckoutSessionAction();
+        // T-189: expected, user-facing failures come back as a typed code
+        // (Next redacts thrown Server Action messages in prod), so the buyer
+        // sees the localized reason — e.g. a photographer not payout-ready.
+        if (!res.ok) {
+          toast.error(t(checkoutErrorMessageKey(res.error)));
+          setIsCheckingOut(false);
+          // T-117: only `items_unavailable` means the action mutated the cart
+          // (it self-heals by deleting the now-unpurchasable row) — refetch so
+          // the on-screen items/subtotal match the DB. The other codes leave
+          // the cart untouched, so a refetch would be a needless round-trip.
+          if (res.error === 'items_unavailable') {
+            queryClient.invalidateQueries({ queryKey: ['cart-data'] });
+          }
+          return;
+        }
+        window.location.href = res.url;
       } catch (error) {
         const message = error instanceof Error ? error.message : t('failedStartCheckout');
         toast.error(message);
         setIsCheckingOut(false);
-        // T-117: a rejection here may mean createCheckoutSessionAction just
-        // self-healed the cart (deleted an unpurchasable row) — refetch so
-        // the on-screen items/subtotal match what's actually in the DB,
-        // instead of still showing the now-deleted item.
         queryClient.invalidateQueries({ queryKey: ['cart-data'] });
       }
     });

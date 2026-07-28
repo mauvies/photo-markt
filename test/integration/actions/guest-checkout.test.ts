@@ -67,8 +67,13 @@ describe('createGuestCheckoutSessionAction', () => {
     createSessionMock.mockClear();
   });
 
-  it('rejects an empty cart', async () => {
-    await expect(createGuestCheckoutSessionAction([])).rejects.toThrow(/cart is empty/i);
+  it('returns cart_empty for an empty cart', async () => {
+    // T-189: expected failures now come back as a typed code instead of a
+    // thrown Error (Next redacts thrown Server Action messages in prod).
+    expect(await createGuestCheckoutSessionAction([])).toEqual({
+      ok: false,
+      error: 'cart_empty',
+    });
   });
 
   it('creates a Stripe checkout session for a valid guest cart item', async () => {
@@ -76,13 +81,34 @@ describe('createGuestCheckoutSessionAction', () => {
 
     const result = await createGuestCheckoutSessionAction([item]);
 
-    expect(result.url).toBe('https://checkout.stripe.test/session/cs_test_123');
+    expect(result).toEqual({
+      ok: true,
+      url: 'https://checkout.stripe.test/session/cs_test_123',
+    });
     expect(createSessionMock).toHaveBeenCalledTimes(1);
     const sessionArgs = createSessionMock.mock.calls[0]?.[0] as {
       line_items: Array<{ price_data: { unit_amount: number } }>;
     };
     // Price re-validated server-side from the event's price_per_photo (10.00 → 1000 cents).
     expect(sessionArgs.line_items[0]?.price_data.unit_amount).toBe(1000);
+  });
+
+  // T-189: the buyer must learn *why* checkout is blocked. When a photo's
+  // photographer isn't payout-ready (Stripe Connect not `active`), the action
+  // returns a typed `photographer_not_connected` code (mapped client-side to
+  // localized copy) instead of a thrown Error that Next redacts in prod.
+  it('returns photographer_not_connected when a photographer is not active on Connect', async () => {
+    const item = await seedPurchasablePhoto();
+    const sb = createServiceClient();
+    await sb
+      .from('profiles')
+      .update({ stripe_connect_status: 'pending' })
+      .eq('id', item.photographerId);
+
+    const result = await createGuestCheckoutSessionAction([item]);
+
+    expect(result).toEqual({ ok: false, error: 'photographer_not_connected' });
+    expect(createSessionMock).not.toHaveBeenCalled();
   });
 
   // T-132: a private event is reachable only via its share code. A guest
@@ -92,16 +118,20 @@ describe('createGuestCheckoutSessionAction', () => {
   it('refuses to check out a private-event item with no share code (T-132)', async () => {
     const item = await seedPurchasablePhoto({ is_public: false, share_code: 'PRIVCHK' });
 
-    await expect(createGuestCheckoutSessionAction([item])).rejects.toThrow();
+    expect(await createGuestCheckoutSessionAction([item])).toEqual({
+      ok: false,
+      error: 'items_unavailable',
+    });
     expect(createSessionMock).not.toHaveBeenCalled();
   });
 
   it('refuses a private-event item with the wrong share code (T-132)', async () => {
     const item = await seedPurchasablePhoto({ is_public: false, share_code: 'PRIVCHK' });
 
-    await expect(
-      createGuestCheckoutSessionAction([{ ...item, eventShareCode: 'NOPE' }]),
-    ).rejects.toThrow();
+    expect(await createGuestCheckoutSessionAction([{ ...item, eventShareCode: 'NOPE' }])).toEqual({
+      ok: false,
+      error: 'items_unavailable',
+    });
     expect(createSessionMock).not.toHaveBeenCalled();
   });
 
@@ -110,7 +140,10 @@ describe('createGuestCheckoutSessionAction', () => {
 
     const result = await createGuestCheckoutSessionAction([{ ...item, eventShareCode: 'PRIVCHK' }]);
 
-    expect(result.url).toBe('https://checkout.stripe.test/session/cs_test_123');
+    expect(result).toEqual({
+      ok: true,
+      url: 'https://checkout.stripe.test/session/cs_test_123',
+    });
     expect(createSessionMock).toHaveBeenCalledTimes(1);
   });
 
@@ -121,19 +154,23 @@ describe('createGuestCheckoutSessionAction', () => {
   // unbounded checkout sessions. 11 calls in the same window (limit = 10)
   // must reject the 11th.
 
-  it('rejects once the guest checkout rate limit is exceeded', async () => {
+  it('returns rate_limited once the guest checkout rate limit is exceeded', async () => {
     const item = await seedPurchasablePhoto();
 
     // First 10 calls (the configured limit) succeed.
     for (let i = 0; i < 10; i++) {
       await expect(createGuestCheckoutSessionAction([item])).resolves.toMatchObject({
+        ok: true,
         url: expect.any(String),
       });
     }
 
-    // The 11th call in the same window must be rejected — not forwarded to Stripe.
+    // The 11th call in the same window is refused with a typed code — not forwarded to Stripe.
     createSessionMock.mockClear();
-    await expect(createGuestCheckoutSessionAction([item])).rejects.toThrow();
+    expect(await createGuestCheckoutSessionAction([item])).toEqual({
+      ok: false,
+      error: 'rate_limited',
+    });
     expect(createSessionMock).not.toHaveBeenCalled();
   });
 });
