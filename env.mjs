@@ -55,6 +55,22 @@ export const env = createEnv({
     // feature works without a dedicated secret and the app still boots. Set a
     // dedicated value in prod to keep purposes separate.
     REVEAL_TOKEN_SECRET: z.string().optional(),
+    // Buyer service fee + minimum photo price (billing model v2, T-194/T-195).
+    // The fee is `FIXED + subtotal × BPS / 10000`, charged to the BUYER on top
+    // of the cart subtotal; its fixed part is what structurally covers Stripe's
+    // own fixed per-charge cost (a percent-only commission cannot).
+    //
+    // Defaults are 0 on purpose: 0 reproduces the pre-v2 behaviour exactly (no
+    // fee line item, no fee shown, no price floor), so the feature ships dark
+    // and the real numbers are set — after measuring the actual Stripe fee
+    // distribution — by flipping env vars, with rollback = set them back to 0.
+    // Provisional target values: 30 + 150 bps, floor 150.
+    BUYER_SERVICE_FEE_FIXED_CENTS: z.coerce.number().int().nonnegative().default(0),
+    BUYER_SERVICE_FEE_BPS: z.coerce.number().int().nonnegative().default(0),
+    // Floor on a priced event's `price_per_photo`, in cents. Keeps the fixed
+    // part of the service fee from being disproportionate to the item. Free
+    // events (null/0) are exempt; 0 disables the floor.
+    MIN_PHOTO_PRICE_CENTS: z.coerce.number().int().nonnegative().default(0),
   },
   /*
    * Environment variables available on the client (and server).
@@ -107,5 +123,8 @@ export const env = createEnv({
     FACE_SEARCH_EVENT_DAILY_CALLS: process.env.FACE_SEARCH_EVENT_DAILY_CALLS,
     FACE_SEARCH_ALERT_EMAIL: process.env.FACE_SEARCH_ALERT_EMAIL,
     REVEAL_TOKEN_SECRET: process.env.REVEAL_TOKEN_SECRET,
+    BUYER_SERVICE_FEE_FIXED_CENTS: process.env.BUYER_SERVICE_FEE_FIXED_CENTS,
+    BUYER_SERVICE_FEE_BPS: process.env.BUYER_SERVICE_FEE_BPS,
+    MIN_PHOTO_PRICE_CENTS: process.env.MIN_PHOTO_PRICE_CENTS,
   },
 });

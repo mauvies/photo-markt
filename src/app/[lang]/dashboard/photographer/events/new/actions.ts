@@ -10,8 +10,10 @@ import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { isValidSessionRange, normalizeSessionTime, SESSION_RANGE_ERROR } from '@/lib/format-date';
 import { inngest } from '@/lib/inngest/client';
+import { minPhotoPriceErrorMessage } from '@/lib/min-photo-price';
 import { validatePhotoUpload } from '@/lib/photo-upload';
 import { assertCanCreateEvent } from '@/lib/plan-limits';
+import { getMinPhotoPriceCents, isPhotoPriceAboveFloor } from '@/lib/plans';
 import { generateEventSlug } from '@/lib/slugify';
 import { activityValues } from './activity-options';
 
@@ -110,6 +112,19 @@ const eventSchema = z
         code: z.ZodIssueCode.custom,
         message: SESSION_RANGE_ERROR,
         path: ['session_end_time'],
+      });
+    }
+    // T-195: a priced event must clear the configured floor. `price_per_photo`
+    // is in euros here (the DB column is numeric(10,2)); the floor is in cents.
+    // Free events (null / 0) are exempt and a floor of 0 disables the rule.
+    const minCents = getMinPhotoPriceCents();
+    const priceCents =
+      data.price_per_photo === null ? null : Math.round(data.price_per_photo * 100);
+    if (!isPhotoPriceAboveFloor(priceCents, minCents)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: minPhotoPriceErrorMessage(minCents),
+        path: ['price_per_photo'],
       });
     }
   });

@@ -65,9 +65,12 @@ describe('platform fee single source of truth', () => {
     }
   });
 
-  it('keeps the historical fee rates exactly (no behavior change)', () => {
-    expect(PLATFORM_FEE_RATES.free).toBeCloseTo(0.12, 10);
-    expect(PLATFORM_FEE_RATES.starter).toBeCloseTo(0.08, 10);
-    expect(PLATFORM_FEE_RATES.pro).toBeCloseTo(0.05, 10);
+  it('pins the billing v2 commission rates (T-194: 12/8/5 → 8/4/0)', () => {
+    // Lowered because the buyer service fee now covers Stripe's per-charge
+    // cost. Changing these changes what every photographer is paid, so they
+    // are pinned here as well as derived from `salesFeePercent` above.
+    expect(PLATFORM_FEE_RATES.free).toBeCloseTo(0.08, 10);
+    expect(PLATFORM_FEE_RATES.starter).toBeCloseTo(0.04, 10);
+    expect(PLATFORM_FEE_RATES.pro).toBeCloseTo(0, 10);
   });
 });

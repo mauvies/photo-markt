@@ -9,15 +9,15 @@ and the final rollout are OWNER gates, not code.
 
 - [ ] 0.1 Measure the real Stripe fee distribution from the dashboard for the actual card/currency mix — average AND worst case (domestic EU vs cross-border vs non-EEA card vs Link), including the ~0.5% Connect transfer fee
 - [ ] 0.2 Set the worst-case-safe values for `BUYER_SERVICE_FEE_FIXED_CENTS`, `BUYER_SERVICE_FEE_BPS`, `MIN_PHOTO_PRICE_CENTS` — validate against the tightest case (Pro 0% commission, €1.50 photo, expensive card) staying ≥ €0
-- [ ] 0.3 Owner approves this design before any child ticket below is opened
+- [x] 0.3 Owner approves this design before any child ticket below is opened — approved 2026-07-28; children opened as T-195 (A) / T-196 (B) / T-197 (C)
 
 ## 1. Ticket A — config, calc point, min price, commission rates (dark: fee defaults 0)
 
-- [ ] 1.1 Add `BUYER_SERVICE_FEE_FIXED_CENTS`, `BUYER_SERVICE_FEE_BPS`, `MIN_PHOTO_PRICE_CENTS` to `env.mjs` (Zod, safe defaults = 0)
-- [ ] 1.2 Add `getBuyerServiceFeeCents(subtotalCents)` to `src/lib/plans.ts` with the single fixed+percent+round rule; unit tests for combine/round/zero-disable
-- [ ] 1.3 Lower `PLATFORM_FEE_RATES` to Free 8 / Starter 4 / Pro 0; update any advertised-percent copy that derives from it; unit test asserts `getPhotographerNetCents` per tier
-- [ ] 1.4 Enforce `MIN_PHOTO_PRICE_CENTS` in the event create + edit actions/schemas (free events exempt; floor=0 disables); regression tests (reject below, accept at/above, exempt free, existing rows untouched)
-- [ ] 1.5 Reprice Starter — update `plans.ts` display to €9.99/€95.88 (⚠️ recreate the `STRIPE_PRICE_AMATEUR*` Price objects at €9.99 EUR in the Stripe dashboard — deploy prerequisite, not code)
+- [x] 1.1 Add `BUYER_SERVICE_FEE_FIXED_CENTS`, `BUYER_SERVICE_FEE_BPS`, `MIN_PHOTO_PRICE_CENTS` to `env.mjs` (Zod, safe defaults = 0)
+- [x] 1.2 Add `getBuyerServiceFeeCents(subtotalCents)` to `src/lib/plans.ts` with the single fixed+percent+round rule; unit tests for combine/round/zero-disable
+- [x] 1.3 Lower `PLATFORM_FEE_RATES` to Free 8 / Starter 4 / Pro 0; update any advertised-percent copy that derives from it; unit test asserts `getPhotographerNetCents` per tier
+- [x] 1.4 Enforce `MIN_PHOTO_PRICE_CENTS` in the event create + edit actions/schemas (free events exempt; floor=0 disables); regression tests (reject below, accept at/above, exempt free, existing rows untouched)
+- [x] 1.5 Reprice Starter — update `plans.ts` display to €9.99/€95.88 (⚠️ recreate the `STRIPE_PRICE_AMATEUR*` Price objects at €9.99 EUR in the Stripe dashboard — deploy prerequisite, not code)
 
 ## 2. Ticket B — checkout line item + cart/checkout display (both flows)
 

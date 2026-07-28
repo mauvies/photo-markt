@@ -35,16 +35,19 @@ describe('getPlatformFeeRate', () => {
 });
 
 describe('getPhotographerNetCents', () => {
-  it('subtracts the platform fee for a known plan', () => {
-    // free plan: 12% fee. 1000 cents → 880 cents net.
-    expect(getPhotographerNetCents(1000, 'free')).toBe(880);
-    // pro plan: 5% fee. 1000 cents → 950 cents net.
-    expect(getPhotographerNetCents(1000, 'pro')).toBe(950);
+  it('subtracts the platform fee for a known plan (billing v2 rates)', () => {
+    // free plan: 8% fee. 1000 cents → 920 cents net.
+    expect(getPhotographerNetCents(1000, 'free')).toBe(920);
+    // starter plan: 4% fee. 1000 cents → 960 cents net.
+    expect(getPhotographerNetCents(1000, 'starter')).toBe(960);
+    // pro plan: 0% fee (T-194) — the photographer keeps the whole price and
+    // the buyer service fee is what covers Stripe on that sale.
+    expect(getPhotographerNetCents(1000, 'pro')).toBe(1000);
   });
 
   it('floors fractional cents (no rounding-up favours the platform)', () => {
-    // 999 * 0.88 = 879.12 → 879 cents.
-    expect(getPhotographerNetCents(999, 'free')).toBe(879);
+    // 999 * 0.92 = 919.08 → 919 cents.
+    expect(getPhotographerNetCents(999, 'free')).toBe(919);
   });
 
   it('uses the free-plan fee on unknown plan id', () => {
@@ -72,16 +75,27 @@ describe('formatPlanPrice', () => {
     expect(formatPlanPrice(getPlanById('free')!)).toBe('Free');
   });
 
-  it('formats a monthly plan as €X/mo (T-193)', () => {
-    expect(formatPlanPrice(getPlanById('starter')!)).toBe('€14.99/mo');
-    expect(formatPlanPrice(getPlanById('starter')!, 'monthly')).toBe('€14.99/mo');
+  it('formats a monthly plan as €X/mo (T-193; Starter repriced in T-195)', () => {
+    expect(formatPlanPrice(getPlanById('starter')!)).toBe('€9.99/mo');
+    expect(formatPlanPrice(getPlanById('starter')!, 'monthly')).toBe('€9.99/mo');
   });
 
   it('formats a yearly plan as the per-month equivalent (€X/mo)', () => {
     // Yearly billing shows the per-month-equivalent on cards. The full
     // "billed yearly" lump-sum is rendered as a subtitle by the UI, not
     // by this helper.
-    expect(formatPlanPrice(getPlanById('starter')!, 'yearly')).toBe('€11.99/mo');
+    expect(formatPlanPrice(getPlanById('starter')!, 'yearly')).toBe('€7.99/mo');
     expect(formatPlanPrice(getPlanById('pro')!, 'yearly')).toBe('€23.99/mo');
+  });
+
+  it('keeps the Starter yearly lump sum consistent with its per-month figure', () => {
+    // 95.88 / 12 = 7.99 — the card would otherwise advertise a discount that
+    // Stripe does not actually charge.
+    const starter = getPlanById('starter')!;
+    expect(starter.pricing?.yearlyTotal).toBe(95.88);
+    expect(starter.pricing?.yearlyMonthlyEquivalent).toBeCloseTo(
+      (starter.pricing?.yearlyTotal ?? 0) / 12,
+      2,
+    );
   });
 });

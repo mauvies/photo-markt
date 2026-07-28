@@ -15,6 +15,7 @@ import type { Event } from '@/database/queries/events';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
+import { minPhotoPriceMessage } from '@/lib/min-photo-price';
 import { getPlanLimitType, isPlanLimitError } from '@/lib/plan-limits';
 import { usePhotoUpload } from '@/lib/use-photo-upload';
 import { removeEventCoverAction, uploadEventCoverAction } from '../../new/actions';
@@ -235,6 +236,13 @@ export function EditEventForm({ event, initialPhotos, initialCoverUrl }: EditEve
               setSubmitError(
                 limitType === 'storage' ? t('storageLimitReached') : t('eventLimitReachedShort'),
               );
+              return;
+            }
+            // T-195: localize the price-floor rejection (server sends the
+            // amount as a sentinel; it has no dictionary).
+            const minPrice = minPhotoPriceMessage(error, t('priceBelowMinimum'));
+            if (minPrice !== null) {
+              setSubmitError(minPrice);
               return;
             }
             setSubmitError(

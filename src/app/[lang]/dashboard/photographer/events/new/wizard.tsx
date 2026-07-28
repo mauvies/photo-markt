@@ -11,6 +11,7 @@ import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
+import { minPhotoPriceMessage } from '@/lib/min-photo-price';
 import { getPlanLimitType, isPlanLimitError } from '@/lib/plan-limits';
 import { usePhotoUpload } from '@/lib/use-photo-upload';
 import { deleteEventAction } from '../actions';
@@ -506,6 +507,13 @@ export default function NewEventForm({
           toast.error(
             limitType === 'maxEvents' ? t('eventLimitReachedShort') : t('storageLimitReached'),
           );
+          return;
+        }
+        // T-195: the server reports the price floor as a parseable sentinel
+        // (it can't localize), so the amount is rendered here.
+        const minPrice = minPhotoPriceMessage(error, t('priceBelowMinimum'));
+        if (minPrice !== null) {
+          toast.error(minPrice);
           return;
         }
         toast.error(error instanceof Error ? error.message : t('submitError'));

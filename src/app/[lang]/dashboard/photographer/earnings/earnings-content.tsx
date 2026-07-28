@@ -268,7 +268,12 @@ export function EarningsContent() {
               value={formatPrice(summary.platformFeeCents)}
               icon={<TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />}
               description={
-                feePercent !== null ? `${feePercent}% ${t('platformFeeDesc')}` : t('tenPercentFee')
+                // T-195: the fallback used to hardcode a percentage ("10%" in
+                // en, "12%" in es) that drifted from PLATFORM_FEE_RATES. When
+                // the rate is unknown, state no number at all.
+                feePercent !== null
+                  ? `${feePercent}% ${t('platformFeeDesc')}`
+                  : t('platformFeeDesc')
               }
             />
             <SummaryCard

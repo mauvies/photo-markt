@@ -212,9 +212,33 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
 ## Payments
 
 ### Photographer Subscriptions
-Three plans: **Free** (12% commission), **Starter** ($14.99/mo, 8% commission), **Pro** ($29.99/mo, 5% commission).
+Three plans: **Free** (8% commission), **Starter** (€9.99/mo, 4% commission), **Pro** (€29.99/mo, 0% commission).
 Price IDs in env: `STRIPE_PRICE_AMATEUR`, `STRIPE_PRICE_PRO`.
 Billing management in `/dashboard/photographer/settings/`.
+Rates were lowered from 12/8/5 in **billing v2** (T-194/T-195) — see below. `PLANS[].salesFeePercent`
+in `src/lib/plans.ts` is the single source of truth: `PLATFORM_FEE_RATES` derives from it, and
+`test/unit/lib/pricing-consistency.test.ts` fails if the advertised copy drifts from it.
+
+### Buyer service fee (billing v2 — T-194/T-195)
+The buyer pays a **fixed + percent** fee on top of the cart subtotal, as its own visible Stripe line
+item. The fixed part is what structurally covers Stripe's own fixed per-charge cost — a percent-only
+commission cannot, which is why small sales used to sell at a loss.
+- **Single calc point:** `getBuyerServiceFeeCents(subtotalCents)` in `src/lib/plans.ts`
+  (`FIXED + round(subtotal × BPS / 10000)`; non-positive subtotal ⇒ 0). No checkout, cart, or earnings
+  path may re-derive the fee inline — the charged and the displayed amount must come from here or a
+  receipt can disagree with the cart (the PSD2 risk is surprise pricing, not the flat fee itself).
+- **Env-configured, defaults 0:** `BUYER_SERVICE_FEE_FIXED_CENTS`, `BUYER_SERVICE_FEE_BPS`,
+  `MIN_PHOTO_PRICE_CENTS`. **0 reproduces pre-v2 behaviour exactly** — the feature ships dark and
+  rollback is setting the env back to 0, never a code revert.
+- **Server only:** these read env *inside* the function body (like `getFaceSearchLimits`) so
+  `plans.ts` stays importable from the client components that render the pricing cards. Client
+  surfaces receive a **server-computed** fee as a prop; never call these in the browser.
+- **Minimum photo price:** `MIN_PHOTO_PRICE_CENTS` is a floor on a *priced* event, enforced at write
+  time in both event actions via `isPhotoPriceAboveFloor` (create + edit `superRefine`), **not** as a
+  DB constraint — so an event priced below a later-raised floor keeps working until its price is next
+  written. Free events (`null`/0) are exempt; a floor of 0 disables the rule. The rejection travels to
+  the client as the parseable sentinel `MIN_PHOTO_PRICE:<cents>` (`src/lib/min-photo-price.ts`,
+  same scheme as `plan-limits.ts`) because server actions have no dictionary.
 
 ### Photo Purchases (Talent)
 One-time Stripe payments. Webhook handler at `/src/app/api/stripe/webhook/route.ts`.
@@ -407,6 +431,11 @@ STRIPE_PRICE_PRO=            # Pro plan monthly price ID
 STRIPE_PRICE_AMATEUR_YEARLY= # Starter yearly price ID (optional; required only once yearly checkout is enabled)
 STRIPE_PRICE_PRO_YEARLY=     # Pro yearly price ID (optional; same as above)
 PLATFORM_FEE_BPS=            # Platform fee in basis points
+
+# Billing v2 (T-194/T-195) — all optional, defaults 0 = pre-v2 behaviour (dark launch)
+BUYER_SERVICE_FEE_FIXED_CENTS=  # fixed part of the buyer service fee; provisional 30
+BUYER_SERVICE_FEE_BPS=          # percent part, in basis points; provisional 150 (1.5%)
+MIN_PHOTO_PRICE_CENTS=          # floor on a priced event's price_per_photo; provisional 150
 
 # Google
 NEXT_PUBLIC_GOOGLE_PLACES_API_KEY=   # Places API — event location forms only
