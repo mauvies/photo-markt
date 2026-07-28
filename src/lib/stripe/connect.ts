@@ -109,9 +109,20 @@ export async function createExpressAccount(params: {
     type: 'express',
     email: params.email,
     country: params.country,
-    capabilities: {
-      transfers: { requested: true },
-    },
+    // Our payout model is destination transfers: charges settle on the
+    // platform account and the connected account only ever *receives*
+    // transfers, so `transfers` is the only capability we functionally need.
+    // Stripe, however, forbids requesting `transfers` for a US connected
+    // account without also requesting `card_payments` — the request 400s
+    // otherwise (T-191). We therefore add `card_payments` only for US, keeping
+    // non-US onboarding minimal (a `transfers`-only recipient carries lighter
+    // onboarding requirements). This is a Stripe capability requirement only;
+    // charges still stay on the platform account and the transfer/payout path
+    // is unchanged.
+    capabilities:
+      params.country === 'US'
+        ? { transfers: { requested: true }, card_payments: { requested: true } }
+        : { transfers: { requested: true } },
     business_type: 'individual',
   });
   return account.id;
