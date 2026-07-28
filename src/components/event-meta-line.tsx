@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import { formatEventDate, formatSessionTimeRange } from '@/lib/format-date';
 import { formatEventLocation } from '@/lib/format-location';
 import { cn } from '@/lib/utils';
@@ -73,7 +74,8 @@ export function EventMetaLine({
       {pricePerPhoto != null ? (
         <>
           {' '}
-          • ${pricePerPhoto.toFixed(2)} {perPhotoLabel}
+          • {PLATFORM_CURRENCY_SYMBOL}
+          {pricePerPhoto.toFixed(2)} {perPhotoLabel}
         </>
       ) : null}
     </div>

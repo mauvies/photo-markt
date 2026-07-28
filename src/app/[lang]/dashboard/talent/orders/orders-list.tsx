@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { PLATFORM_CURRENCY } from '@/lib/currency';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
@@ -16,7 +17,7 @@ import type { OrderWithItemCount } from './actions';
 
 type OrdersListT = Dictionary['ordersList'];
 
-function formatCurrency(cents: number, currency = 'usd'): string {
+function formatCurrency(cents: number, currency = PLATFORM_CURRENCY): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: currency.toUpperCase(),

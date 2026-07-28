@@ -1,13 +1,14 @@
 import { Camera, DollarSign, ShoppingBag } from 'lucide-react';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { Card, CardContent } from '@/components/ui/card';
+import { PLATFORM_CURRENCY } from '@/lib/currency';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { getTalentOrderStats, getTalentOrders } from './actions';
 import { OrdersList } from './orders-list';
 
-function formatCurrency(cents: number, currency = 'usd'): string {
+function formatCurrency(cents: number, currency = PLATFORM_CURRENCY): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: currency.toUpperCase(),

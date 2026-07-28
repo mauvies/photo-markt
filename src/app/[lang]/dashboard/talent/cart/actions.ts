@@ -22,6 +22,7 @@ import {
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import type { CheckoutResult } from '@/lib/checkout-error';
+import { PLATFORM_CURRENCY } from '@/lib/currency';
 import { getBaseUrl } from '@/lib/get-base-url';
 import { getSiteUrl } from '@/lib/get-site-url';
 import type { GuestCartItem } from '@/lib/guest-cart';
@@ -423,7 +424,7 @@ export async function createCheckoutSessionAction(): Promise<CheckoutResult> {
     client_reference_id: cart.id,
     line_items: cartItems.map((item) => ({
       price_data: {
-        currency: 'usd',
+        currency: PLATFORM_CURRENCY,
         product_data: {
           name: item.event_name ? `Photo from ${item.event_name}` : 'Photo',
           description: item.event_name ? `Photo from ${item.event_name}` : undefined,

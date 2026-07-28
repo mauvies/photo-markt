@@ -1,11 +1,12 @@
 import { Calendar, DollarSign, Image as ImageIcon, ShoppingBag } from 'lucide-react';
+import { PLATFORM_CURRENCY_CODE } from '@/lib/currency';
 import type { DashboardData } from '../actions';
 import { StatCard } from './stat-card';
 
 function formatCurrency(cents: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: PLATFORM_CURRENCY_CODE,
     minimumFractionDigits: 0,
     maximumFractionDigits: cents % 100 === 0 ? 0 : 2,
   }).format(cents / 100);

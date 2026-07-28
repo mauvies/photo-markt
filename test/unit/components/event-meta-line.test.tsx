@@ -46,7 +46,7 @@ describe('EventMetaLine', () => {
     const text = container.textContent ?? '';
     expect(text.indexOf('@janedoe')).toBeGreaterThanOrEqual(0);
     expect(text.indexOf('@janedoe')).toBeLessThan(text.indexOf('per photo'));
-    expect(text).toContain('$10.00 per photo');
+    expect(text).toContain('€10.00 per photo');
   });
 
   it('formats the date per locale (English month-day-year)', () => {

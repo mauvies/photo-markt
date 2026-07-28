@@ -3,6 +3,7 @@
  * Used for unauthenticated purchases — no auth.users dependency
  */
 
+import { PLATFORM_CURRENCY } from '@/lib/currency';
 import type { SupabaseServerClient } from './types';
 import { getErrorMessage } from './types';
 
@@ -121,7 +122,7 @@ export async function createGuestOrder(
       stripe_payment_intent_id: data.stripe_payment_intent_id ?? null,
       stripe_customer_id: data.stripe_customer_id ?? null,
       total_amount_cents: data.total_amount_cents,
-      currency: data.currency ?? 'usd',
+      currency: data.currency ?? PLATFORM_CURRENCY,
       status: 'completed',
       completed_at: new Date().toISOString(),
       metadata: data.metadata ?? {},

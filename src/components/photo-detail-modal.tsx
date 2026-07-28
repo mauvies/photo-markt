@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { useCarouselNavigation } from '@/hooks/use-carousel-navigation';
 import { useImageLoad } from '@/hooks/use-image-load';
 import { useKeyboardNav } from '@/hooks/use-keyboard-nav';
+import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import { formatEventDate } from '@/lib/format-date';
 import { resolvePhotoCta } from '@/lib/photo-detail-cta';
 import { shareUrl } from '@/lib/share-url';
@@ -163,7 +164,9 @@ export function PhotoDetailModal({
     current.width && current.height ? `${current.width} × ${current.height}px` : undefined;
   const dateLabel = formatEventDate(current.takenAt, locale);
   const priceLabel =
-    pricePerPhoto != null && pricePerPhoto > 0 ? `${pricePerPhoto.toFixed(2)} USD` : undefined;
+    pricePerPhoto != null && pricePerPhoto > 0
+      ? `${PLATFORM_CURRENCY_SYMBOL}${pricePerPhoto.toFixed(2)}`
+      : undefined;
 
   const renderCta = () => {
     switch (cta) {

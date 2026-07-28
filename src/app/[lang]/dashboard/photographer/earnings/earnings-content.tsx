@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { PhotographerEarning } from '@/database/queries/earnings';
 import type { Payout } from '@/database/queries/payouts';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { PLATFORM_CURRENCY_CODE } from '@/lib/currency';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
@@ -24,7 +25,7 @@ type EarningsT = Dictionary['earnings'];
 function formatPrice(cents: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: PLATFORM_CURRENCY_CODE,
     minimumFractionDigits: 2,
   }).format(cents / 100);
 }

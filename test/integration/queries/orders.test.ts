@@ -38,14 +38,14 @@ describe('database/queries/orders', () => {
   });
 
   describe('createOrder', () => {
-    it('defaults status to "pending" and currency to "usd"', async () => {
+    it('defaults status to "pending" and currency to "eur" (T-193)', async () => {
       const talent = await createTestUser('TALENT');
       const order = await createOrder(createServiceClient(), talent.id, {
         total_amount_cents: 500,
       });
       expect(order.user_id).toBe(talent.id);
       expect(order.status).toBe('pending');
-      expect(order.currency).toBe('usd');
+      expect(order.currency).toBe('eur');
       expect(order.total_amount_cents).toBe(500);
     });
 

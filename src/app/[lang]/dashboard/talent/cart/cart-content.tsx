@@ -24,6 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { cartView } from '@/lib/cart-view';
 import { checkoutErrorMessageKey } from '@/lib/checkout-error';
+import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import { GUEST_CART_KEY } from '@/lib/guest-cart';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
@@ -331,7 +332,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
     });
   };
 
-  const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+  const formatPrice = (cents: number) => `${PLATFORM_CURRENCY_SYMBOL}${(cents / 100).toFixed(2)}`;
 
   const view = cartView(isMerging, cartData.items.length);
 

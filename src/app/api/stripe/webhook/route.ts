@@ -62,6 +62,7 @@ import {
 import { getPhotographerPlanIds } from '@/database/queries/subscriptions';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { env } from '@/env.mjs';
+import { PLATFORM_CURRENCY } from '@/lib/currency';
 import { sendGuestPurchaseEmail } from '@/lib/email/send-guest-purchase-email';
 import { getPhotographerNetCents } from '@/lib/plans';
 import { stripe } from '@/lib/stripe/config';
@@ -80,6 +81,10 @@ async function createTransfersForOrderItems(
   items: Array<{ photographer_id: string; total_price_cents: number }>,
   chargeId: string,
   orderId: string,
+  // The order's stored currency == the charge currency. The transfer must match
+  // it (Stripe rejects a currency mismatch against `source_transaction`), so a
+  // pre-T-193 USD charge's transfer stays USD instead of being forced to EUR.
+  currency: string,
 ): Promise<void> {
   if (items.length === 0) return;
 
@@ -136,6 +141,7 @@ async function createTransfersForOrderItems(
     try {
       const transfer = await createTransfer({
         amountCents: netCents,
+        currency,
         destination: status.stripe_connect_account_id,
         sourceTransaction: chargeId,
         transferGroup: orderId,
@@ -262,7 +268,7 @@ export async function POST(request: Request) {
               typeof session.payment_intent === 'string' ? session.payment_intent : undefined,
             stripe_customer_id: typeof session.customer === 'string' ? session.customer : undefined,
             total_amount_cents: totalAmountCents,
-            currency: session.currency ?? 'usd',
+            currency: session.currency ?? PLATFORM_CURRENCY,
             metadata: { stripe_session_id: session.id },
           });
 
@@ -327,7 +333,12 @@ export async function POST(request: Request) {
                   photographer_id: i.photographerId,
                   total_price_cents: i.unitPriceCents,
                 }));
-                await createTransfersForOrderItems(orderItems, chargeId, guestOrder.id);
+                await createTransfersForOrderItems(
+                  orderItems,
+                  chargeId,
+                  guestOrder.id,
+                  guestOrder.currency,
+                );
               }
             } catch (transferErr) {
               console.error('Failed to create transfers for guest order:', transferErr);
@@ -511,7 +522,7 @@ export async function POST(request: Request) {
             .select('photographer_id, total_price_cents')
             .eq('order_id', order.id);
 
-          await createTransfersForOrderItems(orderItems ?? [], chargeId, order.id);
+          await createTransfersForOrderItems(orderItems ?? [], chargeId, order.id, order.currency);
         }
         break;
       }

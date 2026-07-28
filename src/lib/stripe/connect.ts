@@ -150,17 +150,28 @@ export async function retrieveConnectBalance(accountId: string): Promise<{
   // connected-account header (`stripeAccount`) is a RequestOption (2nd arg),
   // no longer accepted inside the params object.
   const balance = await stripe.balance.retrieve(undefined, { stripeAccount: accountId });
-  const available = balance.available
-    .filter((b) => b.currency === 'usd')
-    .reduce((sum, b) => sum + b.amount, 0);
-  const pending = balance.pending
-    .filter((b) => b.currency === 'usd')
-    .reduce((sum, b) => sum + b.amount, 0);
+  // Sum the account's balance across whatever currency it holds rather than
+  // filtering to a single hardcoded currency. An Express account settles in one
+  // currency (its country default — EUR for EU photographers, but a legacy
+  // non-EU account may hold USD from pre-T-193 sales), so a hardcoded filter
+  // would zero out the widget and hide real funds when the account's currency
+  // differs from the platform's. The earnings UI labels the total in EUR; the
+  // rare non-EUR account is a minor label imprecision, never hidden money.
+  const available = balance.available.reduce((sum, b) => sum + b.amount, 0);
+  const pending = balance.pending.reduce((sum, b) => sum + b.amount, 0);
   return { available, pending };
 }
 
 export async function createTransfer(params: {
   amountCents: number;
+  /**
+   * Must equal the currency of the `sourceTransaction` charge — Stripe rejects
+   * a transfer whose currency differs from its source charge. Pass the ORDER's
+   * stored currency (which was set from the charge), NOT a global platform
+   * constant: a charge made before the USD→EUR switch (T-193) settles in USD,
+   * and its post-deploy transfer must still be USD or the payout is stranded.
+   */
+  currency: string;
   destination: string;
   sourceTransaction: string;
   transferGroup?: string;
@@ -169,7 +180,7 @@ export async function createTransfer(params: {
   return stripe.transfers.create(
     {
       amount: params.amountCents,
-      currency: 'usd',
+      currency: params.currency,
       destination: params.destination,
       source_transaction: params.sourceTransaction,
       transfer_group: params.transferGroup,

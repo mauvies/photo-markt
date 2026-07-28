@@ -175,7 +175,7 @@ describe('app/api/stripe/webhook — checkout.session.completed (payment mode)',
           customer: null,
           payment_intent: 'pi_test_1',
           amount_total: 500,
-          currency: 'usd',
+          currency: 'eur',
           metadata: { user_id: talent.id, cart_id: cart.id },
         },
       },
@@ -241,7 +241,7 @@ describe('app/api/stripe/webhook — checkout.session.completed (payment mode)',
             client_reference_id: cart.id,
             payment_intent: 'pi_test_dup',
             amount_total: 500,
-            currency: 'usd',
+            currency: 'eur',
             metadata: { user_id: talent.id, cart_id: cart.id },
           },
         },
@@ -284,6 +284,7 @@ describe('app/api/stripe/webhook — payment_intent.succeeded', () => {
         user_id: talent.id,
         status: 'pending',
         total_amount_cents: 500,
+        currency: 'eur',
         stripe_payment_intent_id: 'pi_test_pi',
       })
       .select('id')
@@ -319,6 +320,12 @@ describe('app/api/stripe/webhook — payment_intent.succeeded', () => {
     // Transfer mock was called for the single photographer.
     const { createTransfer } = await import('@/lib/stripe/connect');
     expect(vi.mocked(createTransfer)).toHaveBeenCalledTimes(1);
+    // T-193: the transfer currency must match the ORDER's charge currency
+    // (source_transaction requires it) — a pre-EUR USD order's transfer stays
+    // USD instead of being forced to EUR and rejected.
+    expect(vi.mocked(createTransfer)).toHaveBeenCalledWith(
+      expect.objectContaining({ currency: 'eur' }),
+    );
   });
 
   it('reconciles a stale non-active stored status against the live account so the transfer is NOT held', async () => {
@@ -524,7 +531,7 @@ describe('app/api/stripe/webhook — checkout.session.completed (guest mode)', (
           customer_details: { email: 'guest@photomarkt.test' },
           payment_intent: 'pi_guest_1',
           amount_total: 500,
-          currency: 'usd',
+          currency: 'eur',
           metadata: {
             is_guest: 'true',
             cart_count: '1',
@@ -596,7 +603,7 @@ describe('app/api/stripe/webhook — checkout.session.completed (guest mode)', (
             customer_details: { email: 'dup@photomarkt.test' },
             payment_intent: 'pi_guest_dup',
             amount_total: 500,
-            currency: 'usd',
+            currency: 'eur',
             metadata: {
               is_guest: 'true',
               cart_count: '1',

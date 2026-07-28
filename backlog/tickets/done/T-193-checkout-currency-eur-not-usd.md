@@ -1,11 +1,11 @@
 # T-193 · Checkout cobra en USD en vez de EUR — fee de conversión en cada venta
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/checkout-currency-eur`
 - **OpenSpec change:** —  (bug de config/moneda; implementar directo, es riesgo de pagos → `/code-review`)
-- **PR:** —
+- **PR:** #255
 
 ## Requerimiento
 La venta de prueba (comprador y vendedor en **España**) se cobró en **USD**, no en EUR. Evento de Stripe

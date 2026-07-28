@@ -8,8 +8,8 @@
  * `stripe.balance.retrieve({ stripeAccount })` — a single-arg form that v22's
  * types reject and that would send the header in the wrong position. These
  * assertions pin the corrected 2-arg call shape (params `undefined`, options
- * `{ stripeAccount }`) so the fix can't silently regress, plus the USD-only
- * summation the balance helper performs.
+ * `{ stripeAccount }`) so the fix can't silently regress, plus the
+ * platform-currency-only (EUR, T-193) summation the balance helper performs.
  *
  * Stripe is mocked at the config boundary so this runs with no network/DB.
  */
@@ -42,20 +42,27 @@ describe('retrieveConnectBalance', () => {
     });
   });
 
-  it('sums only USD available/pending balances', async () => {
+  it('sums the EUR balance of a EUR-settling account (T-193)', async () => {
     stripeMock.balance.retrieve.mockResolvedValueOnce({
-      available: [
-        { currency: 'usd', amount: 1500 },
-        { currency: 'eur', amount: 9999 },
-        { currency: 'usd', amount: 500 },
-      ],
-      pending: [
-        { currency: 'usd', amount: 300 },
-        { currency: 'eur', amount: 8888 },
-      ],
+      available: [{ currency: 'eur', amount: 2000 }],
+      pending: [{ currency: 'eur', amount: 300 }],
     });
 
     const result = await retrieveConnectBalance('acct_123');
+
+    expect(result).toEqual({ available: 2000, pending: 300 });
+  });
+
+  it('still surfaces a legacy USD account balance instead of hiding it (T-193 review)', async () => {
+    // A photographer whose funds settled in USD (pre-EUR sale, non-EU account)
+    // must not see €0 while real money sits in the account — the balance is
+    // summed regardless of currency rather than filtered to a hardcoded one.
+    stripeMock.balance.retrieve.mockResolvedValueOnce({
+      available: [{ currency: 'usd', amount: 2000 }],
+      pending: [{ currency: 'usd', amount: 300 }],
+    });
+
+    const result = await retrieveConnectBalance('acct_legacy');
 
     expect(result).toEqual({ available: 2000, pending: 300 });
   });

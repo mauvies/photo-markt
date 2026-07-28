@@ -10,6 +10,7 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { PLATFORM_CURRENCY_CODE } from '@/lib/currency';
 import { cn } from '@/lib/utils';
 import type { ChartPoint, DashboardRange } from '../actions';
 import { getEarningsSeries } from '../actions';
@@ -33,7 +34,7 @@ interface PerformanceChartProps {
 function formatCurrency(cents: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: PLATFORM_CURRENCY_CODE,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(cents / 100);
