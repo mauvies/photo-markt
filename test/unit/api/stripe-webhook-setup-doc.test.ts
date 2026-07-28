@@ -65,4 +65,14 @@ describe('stripe webhook setup doc (T-192)', () => {
       expect(doc, `setup doc must tell the operator to subscribe to ${event}`).toContain(event);
     }
   });
+
+  it('the documented production endpoint URL is the www host (apex 307-redirects)', () => {
+    // T-192 actual root cause: the endpoint was registered on the apex domain,
+    // which 307-redirects to www; Stripe does not follow webhook redirects, so
+    // EVERY delivery failed. The setup doc must name the www URL and never
+    // reintroduce the bare apex as the endpoint.
+    const doc = setupDoc();
+    expect(doc).toContain('https://www.photomarkt.com/api/stripe/webhook');
+    expect(doc).not.toMatch(/In production: https:\/\/photomarkt\.com/);
+  });
 });

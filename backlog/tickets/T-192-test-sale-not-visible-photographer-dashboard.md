@@ -61,22 +61,33 @@ No tocar código hasta identificar la causa. Hipótesis ordenadas por probabilid
 - **`orders` = 0, `guest_orders` = 0, `payouts` = 0 en prod ALL-TIME** (no solo 72 h) — y staging
   tampoco tiene la venta. El webhook de prod **jamás** escribió una orden. → **H2 confirmada** al nivel
   alcanzable sin el dashboard de Stripe. H3/H4 descartadas (no hay fila en ninguna BD que malatribuir).
-- **Causa raíz identificada en el propio código** (`webhook/route.ts:18`, versión previa): la doc de
-  setup decía suscribir el endpoint **solo** a `account.updated, charge.refunded` — 2 de los 8 eventos
-  que procesa el handler. Un endpoint configurado siguiéndola produce EXACTAMENTE el estado observado:
-  Connect status sincroniza ✓, **0 ventas** ✗, **0 suscripciones** ✗ (¡el hallazgo de T-172, ahora
-  explicado!), 0 transfers ✗.
+- ~~Primera hipótesis: doc de setup con solo 2 de 8 eventos~~ — **superseded** por la evidencia de las
+  entregas (abajo), aunque el fix de la doc queda (era un gap real de la doc).
+- **CAUSA RAÍZ CONFIRMADA (2026-07-28, entregas del dashboard de Stripe aportadas por el usuario):**
+  cada delivery — incluidos los `account.updated` — termina en
+  `{"redirect": "https://www.photomarkt.com/api/stripe/webhook", "status": "307"}`. El endpoint estaba
+  registrado en el dominio **apex** (`photomarkt.com`), prod 307-redirige apex → `www`, y **Stripe no
+  sigue redirects en webhooks** → **TODAS las entregas fallan** desde siempre. Explica el 0-todo
+  all-time (ventas, suscripciones/T-172, transfers). El `active` de @vzla_surf no vino del webhook:
+  lo curó `reconcileAndPersistConnectStatus` (live-check de T-074) al visitar el dashboard. La URL
+  apex estaba documentada en el propio header del handler ("In production: https://photomarkt.com/...").
+- **Evidencia adicional de la venta:** `checkout.session.completed` livemode `cs_live_a107pz…`,
+  `payment_status: paid`, 99¢ (USD por adaptive pricing), guest checkout
+  (comprador mauricio.viera6@gmail.com), foto `1a725f54-…` de @vzla_surf, PI `pi_3TxtC1IXonFCVhXo…` —
+  **pago cobrado, orden nunca creada** (el sub-caso grave de H2: comprador pagó sin entrega; se
+  recupera con el resend post-fix, handler idempotente).
 - **Fix de código en este PR:** la doc de setup ahora lista los 8 eventos + test source-level
   (`stripe-webhook-setup-doc.test.ts`) que obliga a que la sección de setup cubra cada `case` del
   switch (rojo antes / verde después, verificado con stash).
 - **Pendiente del usuario (yo no tengo acceso al dashboard de Stripe):**
-  1. Stripe Dashboard (livemode) → Developers → Webhooks: confirmar el endpoint
-     `https://photomarkt.com/api/stripe/webhook` y **añadir los eventos faltantes** (los 8 de la doc);
-     verificar que `STRIPE_WEBHOOK_SECRET` en Vercel = signing secret del endpoint.
-  2. Revisar la entrega fallida/ausente de la venta de prueba y **re-enviar** (`Resend`) los eventos
-     `checkout.session.completed` + `payment_intent.succeeded` de esa sesión — el handler es idempotente
-     y creará la orden retroactivamente (la venta aparecerá en el dashboard). Si no, reembolsar a mano.
-  3. Verificación end-to-end: nueva venta de prueba → visible en Ventas/Ganancias.
+  1. ~~Eventos + secret~~ ✅ verificado por el usuario (8 eventos, secret coincide).
+  2. **Corregir la URL del endpoint** (livemode) a `https://www.photomarkt.com/api/stripe/webhook`
+     (con `www` — editar la URL conserva el signing secret).
+  3. **Re-enviar** (`Resend`) los eventos de la venta: `checkout.session.completed`
+     (`evt_1TxtC7IXonFCVhXos3j5QN5F`) y luego `payment_intent.succeeded`
+     (`evt_3TxtC1IXonFCVhXo1EKbpWEp`) — deben responder **200**; el handler creará la orden
+     retroactivamente y disparará el transfer a @vzla_surf.
+  4. Verificación end-to-end: la venta visible en Ventas/Ganancias (query de confirmación en prod + UI).
 
 ## Notas
 - **Prod refs Supabase:** producción = `yzdlueeeizdqwuicydbr` (staging `rozglsxdolgouslaojtm` — no

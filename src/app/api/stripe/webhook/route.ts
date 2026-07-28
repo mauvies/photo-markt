@@ -25,7 +25,12 @@
  *   sale and subscription — orders/subscriptions are only ever written here.
  *   test/unit/api/stripe-webhook-setup-doc.test.ts keeps this list in sync
  *   with the switch below.)
- * - In production: https://photomarkt.com/api/stripe/webhook
+ * - In production: https://www.photomarkt.com/api/stripe/webhook
+ *   ⚠️ MUST be the www host. The apex (photomarkt.com) 307-redirects to www,
+ *   and Stripe does NOT follow redirects on webhook deliveries — an endpoint
+ *   registered on the apex fails EVERY delivery with a 307 (the actual T-192
+ *   root cause in prod: 0 orders/subscriptions all-time while a completed
+ *   livemode sale sat undelivered).
  *
  * NOTE: Transfer reversal on refund is NOT automatic. Reverse manually via Stripe Dashboard
  * for refunded orders — Stripe does not auto-reverse transfers to connected accounts.
