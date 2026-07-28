@@ -1,11 +1,11 @@
 # T-194 · [DISEÑO] Billing model v2 — fee con componente fijo, casi break-even sin pérdidas
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno para el diseño; la implementación depende de T-193 (moneda EUR) y T-190 (ledger)
 - **Rama:** `feat/billing-model-v2` (fase implementación; el diseño produce el doc + OpenSpec)
 - **OpenSpec change:** sí — obligatorio (pagos, cambia el modelo de ingresos). `/opsx:propose` al ejecutar.
-- **PR:** —
+- **PR:** #257  (OpenSpec change `billing-model-v2` activo — NO archivar; gates: medir fees Stripe + aprobar antes de abrir hijos A–C)
 
 ## Requerimiento
 (en palabras del usuario) Rediseñar el modelo económico de la plataforma. Hoy: suscripción (Free/
