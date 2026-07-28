@@ -1,11 +1,11 @@
 # T-192 · [DIAGNÓSTICO] Venta de prueba (@vzla_surf) invisible en el dashboard de fotógrafo
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
-- **Rama:** `fix/test-sale-not-visible-dashboard`  (si el diagnóstico revela bug de código; si es config/infra, cerrar sin rama como T-172/T-185)
-- **OpenSpec change:** —  (decidir tras el diagnóstico; solo si el fix toca pagos multi-archivo)
-- **PR:** —
+- **Rama:** `fix/test-sale-not-visible-dashboard`
+- **OpenSpec change:** —
+- **PR:** #252
 
 ## Requerimiento
 (en palabras del usuario) "Acabo de hacer una venta de prueba desde la cuenta **@vzla_surf** y no la
@@ -51,6 +51,60 @@ No tocar código hasta identificar la causa. Hipótesis ordenadas por probabilid
 - [ ] La venta de prueba (o una repetida) termina visible en Ventas y Ganancias del dashboard de
       @vzla_surf, o queda explicado y aceptado por qué no debía verse.
 - [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde (si hubo cambio de código).
+
+## Diagnóstico (2026-07-27, MCP prod read-only)
+
+- **@vzla_surf existe en prod** (`f4b0784f-…`), Connect **`active`** (`acct_1Txt5fEwaVkfNxhM` — NO es la
+  cuenta US bloqueada de T-191, `acct_1TR6ZS…`) → **H1 descartada** (el gate no bloqueó esta venta).
+- Su evento "3ra Valida Los Caracas Open" existe en prod (hoy, 35 fotos, €0.99, público) → la compra
+  pasó por el sitio de prod, livemode.
+- **`orders` = 0, `guest_orders` = 0, `payouts` = 0 en prod ALL-TIME** (no solo 72 h) — y staging
+  tampoco tiene la venta. El webhook de prod **jamás** escribió una orden. → **H2 confirmada** al nivel
+  alcanzable sin el dashboard de Stripe. H3/H4 descartadas (no hay fila en ninguna BD que malatribuir).
+- ~~Primera hipótesis: doc de setup con solo 2 de 8 eventos~~ — **superseded** por la evidencia de las
+  entregas (abajo), aunque el fix de la doc queda (era un gap real de la doc).
+- **CAUSA RAÍZ CONFIRMADA (2026-07-28, entregas del dashboard de Stripe aportadas por el usuario):**
+  cada delivery — incluidos los `account.updated` — termina en
+  `{"redirect": "https://www.photomarkt.com/api/stripe/webhook", "status": "307"}`. El endpoint estaba
+  registrado en el dominio **apex** (`photomarkt.com`), prod 307-redirige apex → `www`, y **Stripe no
+  sigue redirects en webhooks** → **TODAS las entregas fallan** desde siempre. Explica el 0-todo
+  all-time (ventas, suscripciones/T-172, transfers). El `active` de @vzla_surf no vino del webhook:
+  lo curó `reconcileAndPersistConnectStatus` (live-check de T-074) al visitar el dashboard. La URL
+  apex estaba documentada en el propio header del handler ("In production: https://photomarkt.com/...").
+- **Evidencia adicional de la venta:** `checkout.session.completed` livemode `cs_live_a107pz…`,
+  `payment_status: paid`, 99¢ (USD por adaptive pricing), guest checkout
+  (comprador mauricio.viera6@gmail.com), foto `1a725f54-…` de @vzla_surf, PI `pi_3TxtC1IXonFCVhXo…` —
+  **pago cobrado, orden nunca creada** (el sub-caso grave de H2: comprador pagó sin entrega; se
+  recupera con el resend post-fix, handler idempotente).
+- **Fix de código en este PR:** la doc de setup ahora lista los 8 eventos + test source-level
+  (`stripe-webhook-setup-doc.test.ts`) que obliga a que la sección de setup cubra cada `case` del
+  switch (rojo antes / verde después, verificado con stash).
+- **Pendiente del usuario (yo no tengo acceso al dashboard de Stripe):**
+  1. ~~Eventos + secret~~ ✅ verificado por el usuario (8 eventos, secret coincide).
+  2. **Corregir la URL del endpoint** (livemode) a `https://www.photomarkt.com/api/stripe/webhook`
+     (con `www` — editar la URL conserva el signing secret).
+  3. **Re-enviar** (`Resend`) los eventos de la venta: `checkout.session.completed`
+     (`evt_1TxtC7IXonFCVhXos3j5QN5F`) y luego `payment_intent.succeeded`
+     (`evt_3TxtC1IXonFCVhXo1EKbpWEp`) — deben responder **200**; el handler creará la orden
+     retroactivamente y disparará el transfer a @vzla_surf.
+  4. Verificación end-to-end: la venta visible en Ventas/Ganancias (query de confirmación en prod + UI).
+
+## Cierre (2026-07-28) — venta recuperada, ticket done
+
+Tras corregir la URL del endpoint a `www` y reenviar los eventos, verificado read-only en prod
+(`yzdlueeeizdqwuicydbr`):
+- **La venta aterrizó:** prod pasó de **0 órdenes all-time** a **1 `guest_order` + 1 `guest_order_item`**
+  (`1b6c1c86-…`, `status='completed'`, 99¢, fotógrafo @vzla_surf `active`) → **visible en Ventas/Ganancias**.
+  Confirma la causa raíz (webhook 307 apex→www) y que el resend recuperó el pago cobrado-sin-orden.
+- Fix de código (doc de setup del webhook cubriendo los 8 eventos + test source-level) mergeable en **PR #252**.
+
+**⚠️ Pendiente que sobrevive al cierre (transfer al fotógrafo):** `payouts = 0` en prod — el transfer a
+@vzla_surf **aún no se disparó**. El transfer vive en el handler de `payment_intent.succeeded`; lo más
+probable es que solo se reenviara `checkout.session.completed` (crea la orden) y no
+`payment_intent.succeeded` (`evt_3TxtC1IXonFCVhXo1EKbpWEp`, dispara transfer + escribe `payouts`).
+**Acción:** reenviar ese evento (handler idempotente, 200 esperado) y confirmar que aparece una fila en
+`payouts`. Si tras el resend sigue en 0, abrir follow-up (posible skip/fallo del transfer) — no re-abrir
+este ticket, cuyo objetivo (venta visible) ya se cumplió.
 
 ## Notas
 - **Prod refs Supabase:** producción = `yzdlueeeizdqwuicydbr` (staging `rozglsxdolgouslaojtm` — no
