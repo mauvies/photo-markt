@@ -1,13 +1,13 @@
 # T-189 · Deshabilitar "añadir al carrito" + tooltip cuando el fotógrafo no tiene pagos configurados
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno técnico, pero **reevaluar tras T-190** (diseño de saldo+retiro dentro de Stripe):
   si T-190 se aprueba, el checkout se desbloquea y de este ticket solo sobrevive el sub-ítem de error
   tipado; si T-190 se aplaza, este ticket sigue valiendo como mitigación barata del modelo actual
 - **Rama:** `feat/cart-gate-photographer-payouts`
 - **OpenSpec change:** —  (probable: toca >1 archivo — varios entry points de add-to-cart + query + i18n)
-- **PR:** —
+- **PR:** #254
 
 ## Requerimiento
 (en palabras del usuario) Si un fotógrafo no ha configurado correctamente su cuenta bancaria (Stripe
