@@ -1,11 +1,11 @@
 # T-192 · [DIAGNÓSTICO] Venta de prueba (@vzla_surf) invisible en el dashboard de fotógrafo
 
 - **Prioridad:** P1
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
-- **Rama:** `fix/test-sale-not-visible-dashboard`  (si el diagnóstico revela bug de código; si es config/infra, cerrar sin rama como T-172/T-185)
-- **OpenSpec change:** —  (decidir tras el diagnóstico; solo si el fix toca pagos multi-archivo)
-- **PR:** —
+- **Rama:** `fix/test-sale-not-visible-dashboard`
+- **OpenSpec change:** —
+- **PR:** #252
 
 ## Requerimiento
 (en palabras del usuario) "Acabo de hacer una venta de prueba desde la cuenta **@vzla_surf** y no la
@@ -88,6 +88,23 @@ No tocar código hasta identificar la causa. Hipótesis ordenadas por probabilid
      (`evt_3TxtC1IXonFCVhXo1EKbpWEp`) — deben responder **200**; el handler creará la orden
      retroactivamente y disparará el transfer a @vzla_surf.
   4. Verificación end-to-end: la venta visible en Ventas/Ganancias (query de confirmación en prod + UI).
+
+## Cierre (2026-07-28) — venta recuperada, ticket done
+
+Tras corregir la URL del endpoint a `www` y reenviar los eventos, verificado read-only en prod
+(`yzdlueeeizdqwuicydbr`):
+- **La venta aterrizó:** prod pasó de **0 órdenes all-time** a **1 `guest_order` + 1 `guest_order_item`**
+  (`1b6c1c86-…`, `status='completed'`, 99¢, fotógrafo @vzla_surf `active`) → **visible en Ventas/Ganancias**.
+  Confirma la causa raíz (webhook 307 apex→www) y que el resend recuperó el pago cobrado-sin-orden.
+- Fix de código (doc de setup del webhook cubriendo los 8 eventos + test source-level) mergeable en **PR #252**.
+
+**⚠️ Pendiente que sobrevive al cierre (transfer al fotógrafo):** `payouts = 0` en prod — el transfer a
+@vzla_surf **aún no se disparó**. El transfer vive en el handler de `payment_intent.succeeded`; lo más
+probable es que solo se reenviara `checkout.session.completed` (crea la orden) y no
+`payment_intent.succeeded` (`evt_3TxtC1IXonFCVhXo1EKbpWEp`, dispara transfer + escribe `payouts`).
+**Acción:** reenviar ese evento (handler idempotente, 200 esperado) y confirmar que aparece una fila en
+`payouts`. Si tras el resend sigue en 0, abrir follow-up (posible skip/fallo del transfer) — no re-abrir
+este ticket, cuyo objetivo (venta visible) ya se cumplió.
 
 ## Notas
 - **Prod refs Supabase:** producción = `yzdlueeeizdqwuicydbr` (staging `rozglsxdolgouslaojtm` — no
