@@ -1,0 +1,59 @@
+name: test-integration
+
+# The integration suite boots local Supabase (Docker image pull) — the expensive
+# part of CI. It is deliberately NOT run per-PR: the /work-next flow runs the
+# full suite (with Supabase) locally before every push, so that is the real gate.
+# CI runs it nightly against main (catches anything that slipped the local net or
+# a flake) and on demand before a risky merge. This is why there is no per-path
+# allowlist to keep in sync — moving it off PRs removes that maintenance burden
+# and its silent-under-test failure mode. Run manually with:
+#   gh workflow run test-integration.yml --ref <branch>
+on:
+  workflow_dispatch:
+  schedule:
+    # 04:17 UTC daily. Scheduled runs always execute against the default branch
+    # (main). Odd minute to dodge the top-of-hour scheduler surge.
+    - cron: '17 4 * * *'
+
+concurrency:
+  group: test-integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    # The Supabase image pull dominates a cold run but stays well under this.
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start local Supabase
+        # `--exclude` trims every service the tests never touch (Studio, meta,
+        # imgproxy, analytics, vector, realtime, edge functions, inbucket) — the
+        # tests only hit db, rest, auth, storage and kong. Fewer images to pull.
+        run: pnpm exec supabase start --exclude studio,meta,imgproxy,analytics,vector,realtime,edge-runtime,functions,inbucket
+
+      - name: Integration tests
+        # Only the integration dir — unit tests run per-PR in the `test` workflow,
+        # and the Supabase stack is already up from the step above.
+        run: pnpm exec vitest run test/integration
+
+      - name: Stop local Supabase
+        if: always()
+        run: pnpm exec supabase stop --no-backup || true
