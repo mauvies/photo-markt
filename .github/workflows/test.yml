@@ -1,23 +1,29 @@
 name: test
 
+# Fast, Docker-free gate: typecheck + lint + unit tests. Runs on every code PR.
+# Integration tests (which boot local Supabase) live in test-integration.yml and
+# only run when DB/query/API/lib code changes — most PRs (UI, i18n, components)
+# never pay the Supabase image pull. The full suite still runs locally before
+# every push (the /work-next flow), so CI is a secondary net, not the gate.
 on:
   pull_request:
-  push:
-    branches: [main]
+    # Skip PRs that only touch docs/backlog/specs — no code to test.
+    paths-ignore:
+      - 'backlog/**'
+      - 'docs/**'
+      - 'openspec/**'
+      - '**.md'
 
-# Cancel superseded runs on the same branch — saves CI minutes when pushing
-# rapid fixes to an open PR.
+# Cancel superseded runs on the same branch — saves minutes on rapid PR pushes.
 concurrency:
-  group: test-${{ github.workflow }}-${{ github.ref }}
+  group: test-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  test:
+  static:
     runs-on: ubuntu-latest
-
-    # Reasonable upper bound; the local Supabase image pull dominates first-time
-    # runs but stays under 10 min cached.
-    timeout-minutes: 20
+    # No Docker here, so this is fast; the cap only guards a hung install.
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -31,50 +37,18 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          # No .nvmrc / engines.node in package.json — pin to the current LTS.
-          # Bump when the codebase opts into a newer minimum.
           node-version: '22'
           cache: pnpm
 
       - name: Install dependencies
-        # --frozen-lockfile is the pnpm default in CI; explicit for clarity.
-        # supabase + sharp postinstalls are allowlisted in package.json's
-        # `pnpm.onlyBuiltDependencies`, so they download their binaries.
         run: pnpm install --frozen-lockfile
-
-      - name: Start local Supabase
-        # The dev-dependency supabase CLI is on $PATH via `pnpm exec`. This
-        # boots Postgres + Auth + Storage and applies every migration in
-        # supabase/migrations/ + supabase/seed.sql.
-        # `--exclude` trims every service the tests never touch: Studio, meta,
-        # imgproxy, analytics, vector, realtime, edge functions and inbucket.
-        # Tests only hit db, rest, auth, storage and kong (the gateway) — fewer
-        # images to pull is the win here.
-        run: pnpm exec supabase start --exclude studio,meta,imgproxy,analytics,vector,realtime,edge-runtime,functions,inbucket
 
       - name: Typecheck
         run: pnpm typecheck
 
+      # Biome — ~0.5s, negligible cost on top of an already-running job.
       - name: Lint
         run: pnpm lint
 
-      - name: Test (with coverage)
-        # Coverage thresholds are not enforced yet — the report is purely
-        # informational. We still run the coverage variant in CI so the
-        # artifact is produced on every run.
-        run: pnpm test:coverage
-
-      - name: Upload coverage report
-        # `if: always()` so the artifact still uploads when tests failed —
-        # the report is exactly what we'd want to look at in that case.
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: coverage-${{ github.run_id }}
-          path: coverage/
-          retention-days: 14
-
-      - name: Stop local Supabase
-        # Best-effort cleanup; doesn't fail the job if it errors.
-        if: always()
-        run: pnpm exec supabase stop --no-backup || true
+      - name: Unit tests
+        run: pnpm test:unit
