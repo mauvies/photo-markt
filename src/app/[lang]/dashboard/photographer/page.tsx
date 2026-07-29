@@ -1,6 +1,7 @@
 import { DashboardHeader } from '@/components/dashboard-header';
 import { getProfile } from '@/database/queries/profiles';
 import { createClient } from '@/database/server';
+import { requireUser } from '@/lib/auth/require-user';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { reconcileAndPersistConnectStatus } from '@/lib/stripe/connect';
@@ -20,17 +21,18 @@ export default async function PhotographerDashboardPage({
   params: Promise<{ lang: string }>;
   searchParams: Promise<{ checkout?: string }>;
 }) {
+  // Guard first — this page renders in parallel with the layouts above it, so
+  // their login redirects don't stop it. Without this, a signed-out render
+  // reached `getDashboardData()`, which throws `User not authenticated`, and
+  // that error raced the redirects into the error boundary (same defect as
+  // T-198's talent layout).
+  const user = await requireUser();
+
   const { lang } = await params;
   const { checkout } = await searchParams;
   const [supabase, dict] = await Promise.all([createClient(), getDictionary(lang as Locale)]);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
-  const [data, profile] = await Promise.all([
-    getDashboardData(),
-    user ? getProfile(supabase, user.id) : null,
-  ]);
+  const [data, profile] = await Promise.all([getDashboardData(), getProfile(supabase, user.id)]);
 
   const storedStatus = (profile?.stripe_connect_status ?? 'not_connected') as StripeConnectStatus;
   // Reconcile a stale cached status (e.g. a `pending` left behind by a
@@ -38,14 +40,12 @@ export default async function PhotographerDashboardPage({
   // the "under review" banner doesn't show for an already-active account. The
   // helper only checks Stripe when the cached value is non-active, so the
   // common active case adds no Stripe call to this hot page.
-  const connectStatus = user
-    ? await reconcileAndPersistConnectStatus({
-        client: supabase,
-        userId: user.id,
-        accountId: profile?.stripe_connect_account_id,
-        storedStatus,
-      })
-    : storedStatus;
+  const connectStatus = await reconcileAndPersistConnectStatus({
+    client: supabase,
+    userId: user.id,
+    accountId: profile?.stripe_connect_account_id,
+    storedStatus,
+  });
   const t = dict.photographerDashboard;
   const isBrandNew =
     data.metrics.eventsCreated === 0 &&

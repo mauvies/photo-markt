@@ -4,23 +4,28 @@ import { DashboardTopHeader } from '@/components/dashboard-top-header';
 import { PhotographerBottomNav } from '@/components/photographer-bottom-nav';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { getProfileFields } from '@/database/queries';
-import { createClient, getUser } from '@/database/server';
+import { createClient } from '@/database/server';
+import { requireUser } from '@/lib/auth/require-user';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { getLangFromHeaders } from '@/lib/i18n/get-lang-from-headers';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 
 export default async function PhotographerLayout({ children }: { children: React.ReactNode }) {
+  // Guard BEFORE any other work — this layout renders in parallel with
+  // `dashboard/layout.tsx`, so its login redirect does not stop this one from
+  // running (T-198).
+  const user = await requireUser();
+
   const lang = await getLangFromHeaders();
   const dict = await getDictionary(lang as Locale);
   const supabase = await createClient();
-  const user = await getUser();
 
   // Both the active-role preference and the set of held roles come from a
   // single auth round-trip via getRoleContext() (see T-095) instead of the
   // former getActiveRoleOrNull + userHasRole pair that re-authenticated twice.
   const [profile, { activeRole: currentRole, heldRoles }] = await Promise.all([
-    getProfileFields(supabase, user?.id ?? '', ['display_name', 'avatar_url']),
+    getProfileFields(supabase, user.id, ['display_name', 'avatar_url']),
     getRoleContext(),
   ]);
 
@@ -39,11 +44,11 @@ export default async function PhotographerLayout({ children }: { children: React
   const activeRole = 'photographer';
 
   const sidebarUser = {
-    name: profile?.display_name ?? user?.user_metadata?.full_name ?? user?.email ?? 'Member',
-    email: user?.email ?? '',
+    name: profile?.display_name ?? user.user_metadata?.full_name ?? user.email ?? 'Member',
+    email: user.email ?? '',
     // Prefer the durable `profiles.avatar_url` (T-182) — auth metadata is
     // re-synced from Google on each OAuth sign-in and would revert an upload.
-    avatar: profile?.avatar_url ?? user?.user_metadata?.avatar_url ?? null,
+    avatar: profile?.avatar_url ?? user.user_metadata?.avatar_url ?? null,
   };
 
   return (
