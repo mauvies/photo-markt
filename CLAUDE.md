@@ -212,16 +212,16 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
 ## Payments
 
 ### Photographer Subscriptions
-Three plans: **Free** (12% commission), **Starter** (€14.99/mo, 8% commission), **Pro** (€29.99/mo, 5% commission).
+Three plans: **Free** (8% commission), **Starter** (€9.99/mo, 4% commission), **Pro** (€29.99/mo, 0% commission).
 Price IDs in env: `STRIPE_PRICE_AMATEUR`, `STRIPE_PRICE_PRO`.
 Billing management in `/dashboard/photographer/settings/`.
 `PLANS[].salesFeePercent` in `src/lib/plans.ts` is the single source of truth: `PLATFORM_FEE_RATES`
 derives from it, and `test/unit/lib/pricing-consistency.test.ts` fails if the advertised copy drifts
-from it. **Billing v2 lowers these to 8/4/0 and reprices Starter to €9.99, but that ships with T-196,
-not before** — the webhook transfers `getPhotographerNetCents(gross)` and the platform absorbs
-Stripe's cost, so Pro at 0% without the buyer fee live would make every Pro sale a loss.
+from it. Rates were lowered from 12/8/5 in **billing v2** (T-194), deliberately in the *same* PR as
+the buyer fee line item (T-196): Pro at 0% is only solvent while that fee is live, because the webhook
+transfers `getPhotographerNetCents(gross)` and the platform absorbs Stripe's cost.
 
-### Buyer service fee (billing v2 — T-194/T-195)
+### Buyer service fee (billing v2 — T-194/T-195/T-196)
 The buyer pays a **fixed + percent** fee on top of the cart subtotal, as its own visible Stripe line
 item. The fixed part is what structurally covers Stripe's own fixed per-charge cost — a percent-only
 commission cannot, which is why small sales used to sell at a loss.
@@ -237,6 +237,21 @@ commission cannot, which is why small sales used to sell at a loss.
   charging everyone. **0 reproduces pre-v2 behaviour exactly** — the feature ships dark, turning it on
   is a one-line PR, rollback is reverting it. `computeBuyerServiceFeeCents` is the pure kernel tests
   use to exercise values that aren't shipped yet.
+- **Charged as its own Stripe line item**, never folded into a photo's price, via the shared
+  `buildServiceFeeLineItem` (`src/lib/stripe/service-fee-line-item.ts`) in **both** checkouts (guest
+  `cart/actions.ts`, authed `dashboard/talent/cart/actions.ts`). It rides on the **server-validated**
+  subtotal — what survived the purchasability + accessibility gates — never a client figure, and
+  returns `null` at fee 0 so the session stays identical to v1.
+- **Displayed before Stripe** by the shared `CartTotals` (`src/components/cart-totals.tsx`), used by
+  all four render sites (guest + authed cart, each desktop and mobile). It calls the same
+  `getBuyerServiceFeeCents`, so displayed and charged cannot diverge. At fee 0 it renders exactly the
+  single subtotal row it replaced.
+- **The webhook is deliberately untouched.** Orders/`order_items` and the photographer transfer are
+  rebuilt from cart metadata (guest) and `cart_items` rows (authed) — never from `session.line_items`
+  — so the fee never inflates a photographer's gross or payout. Consequence to know:
+  `orders.total_amount_cents` stays photo-only while `orders.metadata.amount_total` (raw Stripe) is
+  photos + fee; they legitimately differ. Anything counting photos must use `metadata.cart_count`,
+  **not** the line-item count (that bug bit the guest success page — see T-196).
 - **Minimum photo price:** `MIN_PHOTO_PRICE_CENTS` is a floor on a *priced* event, enforced at write
   time in both event actions via `isPhotoPriceAboveFloor` (create + edit `superRefine`), **not** as a
   DB constraint — so an event priced below a later-raised floor keeps working until its price is next

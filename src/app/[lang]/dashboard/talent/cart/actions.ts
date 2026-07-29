@@ -26,6 +26,7 @@ import { PLATFORM_CURRENCY } from '@/lib/currency';
 import { getBaseUrl } from '@/lib/get-base-url';
 import { getSiteUrl } from '@/lib/get-site-url';
 import type { GuestCartItem } from '@/lib/guest-cart';
+import { buildServiceFeeLineItem } from '@/lib/stripe/service-fee-line-item';
 
 export interface CartItemDetail {
   photoId: string;
@@ -417,22 +418,32 @@ export async function createCheckoutSessionAction(): Promise<CheckoutResult> {
 
   const siteUrl = getSiteUrl();
 
+  // T-196: mirror of the guest flow — the fee rides on the SERVER-validated
+  // subtotal (`cartItems`, already filtered by the purchasability +
+  // accessibility sets), never on a client-supplied figure. Returns null while
+  // the fee is configured at 0, leaving the session identical to v1.
+  const subtotalCents = cartItems.reduce((sum, item) => sum + item.unit_price_cents, 0);
+  const serviceFeeLineItem = buildServiceFeeLineItem(subtotalCents);
+
   // Create Stripe Checkout Session
   const session = await stripe.checkout.sessions.create({
     mode: 'payment',
     // client_reference_id is read by the webhook to identify the cart
     client_reference_id: cart.id,
-    line_items: cartItems.map((item) => ({
-      price_data: {
-        currency: PLATFORM_CURRENCY,
-        product_data: {
-          name: item.event_name ? `Photo from ${item.event_name}` : 'Photo',
-          description: item.event_name ? `Photo from ${item.event_name}` : undefined,
+    line_items: [
+      ...cartItems.map((item) => ({
+        price_data: {
+          currency: PLATFORM_CURRENCY,
+          product_data: {
+            name: item.event_name ? `Photo from ${item.event_name}` : 'Photo',
+            description: item.event_name ? `Photo from ${item.event_name}` : undefined,
+          },
+          unit_amount: item.unit_price_cents,
         },
-        unit_amount: item.unit_price_cents,
-      },
-      quantity: 1,
-    })),
+        quantity: 1,
+      })),
+      ...(serviceFeeLineItem ? [serviceFeeLineItem] : []),
+    ],
     success_url: `${siteUrl}/dashboard/talent/cart?status=success`,
     cancel_url: `${siteUrl}/dashboard/talent/cart?status=cancelled`,
     metadata: {

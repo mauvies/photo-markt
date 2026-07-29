@@ -49,7 +49,7 @@ export const PLANS: Plan[] = [
     description: 'Perfect for getting started and testing Photo Markt',
     storageGB: 20,
     maxEvents: 5,
-    salesFeePercent: 12,
+    salesFeePercent: 8,
     allowCustomBundles: false,
   },
   {
@@ -67,7 +67,7 @@ export const PLANS: Plan[] = [
     storageGB: 50,
     // Marketing copy advertises "Unlimited events" on Starter; null = no cap.
     maxEvents: null,
-    salesFeePercent: 8,
+    salesFeePercent: 4,
     allowCustomBundles: true,
     popular: true,
   },
@@ -80,7 +80,7 @@ export const PLANS: Plan[] = [
     description: 'For professional photographers and studios',
     storageGB: 250,
     maxEvents: null, // Unlimited
-    salesFeePercent: 5,
+    salesFeePercent: 0,
     allowCustomBundles: true,
   },
 ];
@@ -90,10 +90,15 @@ export const PLANS: Plan[] = [
  * derived from each plan's `salesFeePercent` so the advertised "% sales fee" and
  * the fee actually applied in the Stripe webhook / earnings can never diverge.
  *
- * Billing v2 (T-194) lowers these to 8/4/0, but that change ships with T-196,
- * NOT here: the webhook transfers `getPhotographerNetCents(gross)` and the
- * platform absorbs Stripe's cost, so dropping Pro to 0% before the buyer fee is
- * live would make every Pro sale a loss. The two must deploy together.
+ * Billing v2 (T-194/T-196) lowered these from 12/8/5: with the buyer service
+ * fee covering Stripe's per-charge cost, the commission is clean margin instead
+ * of a percent that had to (and on small sales could not) absorb a fixed cost.
+ *
+ * Pro at 0% means the buyer fee is the ONLY thing covering Stripe on a Pro sale
+ * — the webhook transfers `getPhotographerNetCents(gross)` and the platform
+ * absorbs Stripe's cost, so these rates and a live buyer fee must ship
+ * together. That is why this change lands with the fee line item (T-196) and
+ * not with the configuration (T-195).
  */
 export const PLATFORM_FEE_RATES: Record<PlanId, number> = Object.fromEntries(
   PLANS.map((plan) => [plan.id, plan.salesFeePercent / 100]),

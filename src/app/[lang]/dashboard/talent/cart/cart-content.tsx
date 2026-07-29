@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useLayoutEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { CartItemRow } from '@/components/cart/cart-item-row';
+import { CartTotals } from '@/components/cart-totals';
 import { CART_MERGE_STATE_KEY } from '@/components/guest-cart-merge';
 import { PhotoLightbox } from '@/components/photo-lightbox';
 import {
@@ -24,7 +25,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { cartView } from '@/lib/cart-view';
 import { checkoutErrorMessageKey } from '@/lib/checkout-error';
-import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import { GUEST_CART_KEY } from '@/lib/guest-cart';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
@@ -145,6 +145,8 @@ export function CartContent({ initialCartData }: CartContentProps) {
     free: string;
     remove: string;
     subtotal: string;
+    serviceFee: string;
+    total: string;
     allItemsFree: string;
     proceedToCheckout: string;
     processing: string;
@@ -332,7 +334,12 @@ export function CartContent({ initialCartData }: CartContentProps) {
     });
   };
 
-  const formatPrice = (cents: number) => `${PLATFORM_CURRENCY_SYMBOL}${(cents / 100).toFixed(2)}`;
+  const totalsLabels = {
+    subtotal: t('subtotal'),
+    serviceFee: t('serviceFee'),
+    total: t('total'),
+    free: t('free'),
+  };
 
   const view = cartView(isMerging, cartData.items.length);
 
@@ -452,12 +459,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
           <div className="sticky top-[calc(var(--header-height)+1rem)] self-start rounded-lg border border-border bg-card p-6 shadow-lg">
             <div className="space-y-4">
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-muted-foreground">{t('subtotal')}</span>
-                  <span className="text-xl font-bold text-foreground">
-                    {formatPrice(cartData.subtotalCents)}
-                  </span>
-                </div>
+                <CartTotals subtotalCents={cartData.subtotalCents} labels={totalsLabels} />
                 {cartData.subtotalCents === 0 && (
                   <p className="text-xs text-muted-foreground text-center">{t('allItemsFree')}</p>
                 )}
@@ -491,11 +493,12 @@ export function CartContent({ initialCartData }: CartContentProps) {
       {/* Mobile summary - sticky footer (stacked above BottomNav) */}
       <div className="md:hidden fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 z-50 border-t border-border bg-card shadow-lg">
         <div className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium text-muted-foreground">{t('subtotal')}</span>
-            <span className="text-lg font-bold text-foreground">
-              {formatPrice(cartData.subtotalCents)}
-            </span>
+          <div className="mb-3">
+            <CartTotals
+              subtotalCents={cartData.subtotalCents}
+              labels={totalsLabels}
+              variant="mobile"
+            />
           </div>
           <Button
             className="w-full"
