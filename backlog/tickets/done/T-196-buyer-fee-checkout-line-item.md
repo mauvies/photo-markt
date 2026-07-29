@@ -5,7 +5,7 @@
 - **Blockers:** ninguno — T-195 mergeado en `main` (PR #258)
 - **Rama:** `feat/buyer-service-fee-checkout`
 - **OpenSpec change:** `billing-model-v2` (activo, NO archivar). Grupo **2** de `tasks.md`
-- **PR:** (draft)
+- **PR:** #259 (draft)
 
 ## Requerimiento
 Segundo hijo de **T-194**. Cobra y **muestra** el service fee del comprador: un `line_item` de Stripe propio y visible
