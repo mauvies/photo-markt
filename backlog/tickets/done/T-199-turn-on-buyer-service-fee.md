@@ -5,7 +5,7 @@
 - **Blockers:** ninguno — valores acordados con el usuario el 2026-07-29: **€0.25 fijo + 3%**, piso **€1.50**
 - **Rama:** `feat/enable-buyer-service-fee`
 - **OpenSpec change:** `billing-model-v2` — **archivado** en `openspec/changes/archive/2026-07-29-billing-model-v2/` (cierra 0.2 y 4.2; solo queda 5.1, bundles, capturado como T-200)
-- **PR:** (draft)
+- **PR:** #261 (draft, apilado sobre #260)
 
 ## Requerimiento
 Toda la maquinaria de billing v2 está construida y desplegada, pero **apagada**: las tres constantes de
