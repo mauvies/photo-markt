@@ -74,9 +74,9 @@ describe('the buyer service fee is not the photographer’s money', () => {
   });
 
   it('the earnings figures are neither raised nor reduced by a buyer fee', () => {
-    // The spec scenario uses a €0.45 buyer fee. It is written as a literal
-    // rather than read from config because the shipped fee is still 0 — at 0
-    // the property would hold vacuously and prove nothing.
+    // The spec scenario's €0.45 buyer fee, written as a literal rather than
+    // read from config: the property must hold for ANY fee, not just the one
+    // configured today.
     const grossCents = 1000;
     const buyerFeeCents = 45;
 
@@ -90,8 +90,16 @@ describe('the buyer service fee is not the photographer’s money', () => {
     expect(commission + net).toBe(grossCents);
   });
 
-  it('is dark today: no buyer fee is charged yet, so nothing is being withheld', () => {
-    expect(getBuyerServiceFeeCents(1000)).toBe(0);
+  it('the live buyer fee is charged on top and stays out of these figures', () => {
+    // T-199 switched the fee on: a €10 sale now bills the buyer €10.55. The
+    // photographer's side is unchanged by that — which is the whole point of
+    // this file.
+    const grossCents = 1000;
+    expect(getBuyerServiceFeeCents(grossCents)).toBe(55);
+
+    expect(calculateNetEarnings(grossCents, 'pro')).toBe(1000);
+    expect(calculateNetEarnings(grossCents, 'free')).toBe(920);
+    expect(calculatePlatformFee(grossCents, 'free')).toBe(80);
   });
 
   it('commission scales only with the price, never with a buyer fee', () => {

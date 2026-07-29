@@ -129,27 +129,52 @@ export function getPhotographerNetCents(
  * server-only — which it is not, so the cart can compute the fee it displays
  * from the same function the checkout charges from.
  *
- * Shipping at 0 is the dark launch: 0 reproduces the pre-v2 behaviour exactly
- * (no fee charged, no fee line item, no price floor). Turning v2 on is a
- * one-line change to these values; rolling back is reverting that commit.
+ * Setting all three to 0 reproduces the pre-v2 behaviour exactly (no fee
+ * charged, no fee line item, no price floor). That is the rollback: revert the
+ * commit that raised them. There is no migration and no data to undo.
  *
- * Set them only after measuring the real Stripe fee distribution, sized to the
- * WORST realistic case — at Pro 0% commission the buyer fee is the only thing
- * covering Stripe on that sale. Provisional targets from the design: 30 cents +
- * 150 bps, floor 150.
+ * ── Why these values (T-199, owner decision 2026-07-29) ──
+ *
+ * The shape mirrors Stripe's: a fixed part covering their fixed per-charge
+ * cost, and a percent part covering their percent. Get either component wrong
+ * and one end of the price range bleeds — a percent-only fee cannot cover the
+ * fixed cost on a cheap photo, and a percent below Stripe's own loses MORE the
+ * larger the sale.
+ *
+ * The binding constraint is a **Pro sale**: Pro is 0% commission, so the buyer
+ * fee is the ONLY thing covering Stripe there — the platform's margin on those
+ * comes from the subscription, not the sale, and the fee must merely not go
+ * negative. Sized against that:
+ *
+ *   €1 photo   → fee €0.28, Stripe ≈ €0.27  → ≈ break-even
+ *   €10 photo  → fee €0.55, Stripe ≈ €0.41  → positive
+ *   €50 photo  → fee €1.75, Stripe ≈ €1.03  → positive
+ *
+ * The 3% was chosen over the design's provisional 1.5% precisely because 1.5%
+ * sits below what an expensive (non-EEA / converted) card costs, so large sales
+ * lost money. 3% covers the common cases; a card charging above 3% still leaves
+ * a thin negative tail on large sales, which is accepted for now given the
+ * traffic mix. Raise the bps if that tail grows.
+ *
+ * Stripe's own rates are not pinned here — they change, and the numbers above
+ * are approximations from the owner's measurement, not a contract.
  */
 
 /** Fixed component of the buyer service fee, in cents. 0 = disabled. */
-export const BUYER_SERVICE_FEE_FIXED_CENTS = 0;
+export const BUYER_SERVICE_FEE_FIXED_CENTS = 25;
 
 /** Percent component of the buyer service fee, in basis points. 0 = disabled. */
-export const BUYER_SERVICE_FEE_BPS = 0;
+export const BUYER_SERVICE_FEE_BPS = 300;
 
 /**
  * Floor on a PRICED event's `price_per_photo`, in cents, so the fixed part of
  * the fee is never disproportionate to the item. 0 = no floor.
+ *
+ * €1.50 is a presentation limit, not a cost one: at €0.25 + 3% a €1 photo
+ * already covers its own Stripe cost. But on a €0.50 photo the fee would be
+ * over half the price, which reads badly in the cart.
  */
-export const MIN_PHOTO_PRICE_CENTS = 0;
+export const MIN_PHOTO_PRICE_CENTS = 150;
 
 /**
  * The pure fee kernel. Exported so the arithmetic can be exercised at values we

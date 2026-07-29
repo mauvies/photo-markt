@@ -231,12 +231,19 @@ commission cannot, which is why small sales used to sell at a loss.
   receipt can disagree with the cart (the PSD2 risk is surprise pricing, not the flat fee itself).
   Safe to call from the browser too, so the cart displays exactly what checkout charges.
 - **Plain constants, deliberately NOT env vars:** `BUYER_SERVICE_FEE_FIXED_CENTS`,
-  `BUYER_SERVICE_FEE_BPS`, `MIN_PHOTO_PRICE_CENTS` in `plans.ts`, all shipping at **0**. These decide
-  what every buyer is charged, so the review trail beats deploy-free tweaking: a constant gives a
-  diff, a reviewer and a revertible commit, and a typo gets caught by a human rather than silently
-  charging everyone. **0 reproduces pre-v2 behaviour exactly** — the feature ships dark, turning it on
-  is a one-line PR, rollback is reverting it. `computeBuyerServiceFeeCents` is the pure kernel tests
-  use to exercise values that aren't shipped yet.
+  `BUYER_SERVICE_FEE_BPS`, `MIN_PHOTO_PRICE_CENTS` in `plans.ts`. These decide what every buyer is
+  charged, so the review trail beats deploy-free tweaking: a constant gives a diff, a reviewer and a
+  revertible commit, and a typo gets caught by a human rather than silently charging everyone.
+  **Live since T-199: €0.25 + 3%, floor €1.50.** Setting all three back to **0** reproduces the pre-v2
+  behaviour exactly — that is the rollback, and it needs no code change beyond the constants.
+  `computeBuyerServiceFeeCents` is the pure kernel tests use to exercise other values.
+- **Why €0.25 + 3%:** the fixed part covers Stripe's fixed per-charge cost and the percent part covers
+  their percent — get either wrong and one end of the price range bleeds (a percent-only fee can't
+  cover the fixed cost on a cheap photo; a percent below Stripe's own loses *more* the larger the
+  sale). The binding case is a **Pro** sale: Pro is 0% commission, so the fee is the only thing
+  covering Stripe there and the platform's margin on Pro comes from the subscription, not the sale.
+  A card charging above 3% still leaves a thin negative tail on large sales — accepted for now; raise
+  the bps if it grows.
 - **Charged as its own Stripe line item**, never folded into a photo's price, via the shared
   `buildServiceFeeLineItem` (`src/lib/stripe/service-fee-line-item.ts`) in **both** checkouts (guest
   `cart/actions.ts`, authed `dashboard/talent/cart/actions.ts`). It rides on the **server-validated**
