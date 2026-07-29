@@ -1,11 +1,11 @@
 # T-198 · Error de Next intermitente en `/[lang]/dashboard/talent` mientras redirige
 
 - **Prioridad:** P1
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/talent-dashboard-redirect-error`
 - **OpenSpec change:** —  (se crea al ejecutar, si el cambio toca >1 archivo o es ambiguo)
-- **PR:** —
+- **PR:** #262
 
 ## Requerimiento
 "A veces cuando la página navega a la ruta `https://www.photomarkt.com/en/dashboard/talent`, mientras
@@ -39,15 +39,42 @@ Antes de tocar código: reproducir y **capturar el error real** (mensaje + diges
 Vercel y/o Sentry (`SENTRY_DSN` ya cableado) para el path `/en/dashboard/talent`.
 
 ## Criterio de aceptación (Definition of Done)
-- [ ] Diagnóstico escrito: causa raíz confirmada con evidencia (log/digest de Vercel o Sentry), no supuesta
-- [ ] Navegar a `/[lang]/dashboard/talent` (hard load y navegación soft, `en` y `es`) **nunca** muestra la
+- [x] Diagnóstico escrito: causa raíz confirmada con evidencia (digests del payload RSC + log del servidor), no supuesta
+- [x] Navegar a `/[lang]/dashboard/talent` (hard load y navegación soft, `en` y `es`) **nunca** muestra la
       pantalla de error de Next: siempre aterriza en `/[lang]/dashboard/talent/events`
-- [ ] El redirect no queda atrapado por ningún error boundary ni `try/catch` (`NEXT_REDIRECT` se re-lanza)
-- [ ] Los otros redirects del layout siguen funcionando: sin rol → `/onboarding/role`; sin rol talent →
+- [x] El redirect no queda atrapado por ningún error boundary ni `try/catch` (`NEXT_REDIRECT` se re-lanza)
+- [x] Los otros redirects del layout siguen funcionando: sin rol → `/onboarding/role`; sin rol talent →
       `/dashboard` (no se rompen al arreglar este)
-- [ ] strings nuevos en `en.json` y `es.json` (si hay UI — probablemente no hay)
-- [ ] test de regresión que falla antes y pasa después
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] strings nuevos en `en.json` y `es.json` — no hay UI nueva, es solo guard: diccionarios intactos
+- [x] test de regresión que falla antes y pasa después
+- [x] `pnpm typecheck && pnpm lint` en verde (+ `pnpm build`); unit verde salvo los **2 fallos
+      pre-existentes ajenos** de `main` (`event-card-skeleton`, `route-loading-skeletons`)
+
+## Resultado
+
+**Causa raíz:** Next renderiza los segmentos de una ruta (layout padre → layout hijo → page) **en
+paralelo**, así que el guard de login de `dashboard/layout.tsx` **no impide** que sus hijos se ejecuten.
+Sin sesión, el layout de talento llegaba a `getRoleContext()`, que **lanza** un `Error` plano, y ese
+error corría contra el `NEXT_REDIRECT` del padre hacia el error boundary de `[lang]/error.tsx`. Gana el
+que resuelva primero → intermitente. Ninguna de las 4 hipótesis del ticket era exacta: el error boundary
+**no** atrapa `NEXT_REDIRECT` (hipótesis 1), y no hacía falta ninguna condición de carrera de sesión
+(hipótesis 2) — basta con no tener sesión.
+
+**Evidencia:** una sola petición deslogueada a `/en/dashboard/talent` devolvió **HTTP 200** con los tres
+desenlaces a la vez en el payload:
+```
+NEXT_REDIRECT;replace;/en/dashboard/talent/events;307        ← la page
+NEXT_REDIRECT;replace;/en/login?next=%2Fdashboard%2Ftalent;307 ← el guard del padre
+digest 632070002 + "You must be signed in to manage roles."  ← el layout de talento LANZA
+```
+y el servidor logueó `⨯ Error: You must be signed in to manage roles.`
+
+**Arreglo:** `requireUser()` (`src/lib/auth/require-user.ts`) — resuelve el usuario por el `getUser()`
+cacheado por request (un único snapshot de auth para todos los segmentos) y redirige a login si no hay.
+Se llama primero en cada segmento del dashboard que lee datos dependientes de auth, así **todos** los
+desenlaces en carrera son redirects. El barrido de todas las rutas del dashboard deslogueado encontró el
+mismo defecto en `/dashboard/photographer`, `/dashboard/talent/orders` y `/dashboard/talent/profile`,
+arreglados también.
 
 ## Notas
 - **Es intermitente** → un test de regresión determinista tiene que atacar la causa raíz confirmada
