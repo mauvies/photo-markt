@@ -1,8 +1,8 @@
 # T-199 · Billing v2 · Encender el service fee (subir las constantes de 0 a los valores medidos)
 
 - **Prioridad:** P1
-- **Estado:** blocked
-- **Blockers:** **falta un dato del usuario** — los tres números concretos (fijo en céntimos, porcentaje en bps, precio mínimo). La medición de fees de Stripe ya está hecha (2026-07-29); falta decidir los valores
+- **Estado:** doing
+- **Blockers:** ninguno — valores acordados con el usuario el 2026-07-29: **€0.25 fijo + 3%**, piso **€1.50**
 - **Rama:** `feat/enable-buyer-service-fee`
 - **OpenSpec change:** `billing-model-v2` (activo — este ticket cierra la tarea 4.2 y es el que lo archiva)
 - **PR:** —

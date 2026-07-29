@@ -13,7 +13,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 |---|-----|------|--------|-----|--------|
 | 1 | P1 | T-198 | Error de Next intermitente en `/[lang]/dashboard/talent` mientras redirige a `/events` | — | todo |
 | 2 | P2 | T-200 | [DISEÑO] Bundles / "compra todas mis fotos" — precio por volumen (el usuario lo quiere pronto) | — | todo |
-| — | P1 | T-199 | Billing v2 — encender el service fee: subir las 3 constantes de 0 a los valores medidos | **blocked:** faltan los 3 números del usuario (medición ya hecha) | blocked |
+| 1 | P1 | T-199 | Billing v2 — encender el service fee: €0.25 + 3%, piso €1.50 | T-197 (PR #260, sin mergear) | doing |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |
