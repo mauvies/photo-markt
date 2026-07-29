@@ -183,15 +183,25 @@ discovers the pack while browsing rather than only at the cart. A price shown wi
 price: it quotes €5 for a photo on an event where six cost €12.
 
 Wide surfaces (the event meta line under a title, event cards) MUST use a compact form such as
-"€5/photo · packs from €12"; the event pages, the photo detail modal and the photographer's event page MUST be
-able to show the full ladder. The public event page's schema.org `offers` MUST describe the ladder rather than
-a single unit price. The photographer's own surfaces — the create wizard's price step, its review step, the
-edit form, and the event detail page — MUST show the ladder they are configuring, so nobody confirms a price
-they were never shown.
+"€5/photo · packs from €12". The public event page and the talent-dashboard event view — neither of which is
+tabbed — MUST show the full ladder in a dedicated pricing section mounted at the same position on both (directly
+under the meta line, above the gallery), so the two surfaces cannot quietly disagree about the same event's
+price. The public event page's schema.org `offers` MUST describe the ladder rather than a single unit price.
+
+The photographer's create wizard (price step and review step) MUST show the ladder being configured, so nobody
+confirms a price they were never shown. The photographer's event detail page MUST expose the ladder through a
+**top-level `Pricing` tab**, positioned immediately to the left of the existing `Share` tab (tab order:
+`Photos · Details · Pricing · Share`), showing the unit price and the ladder read-only with a link to edit —
+mirroring how the existing `Details` tab links to a scoped edit section rather than editing in place.
 
 #### Scenario: The public event page quotes the pack, not just the unit price
 - **WHEN** a visitor opens an event priced at €5/photo with a "3+ for €12" rung
-- **THEN** the page states both the unit price and the ladder before any photo is added to the cart
+- **THEN** the page states both the unit price and the ladder, in the dedicated pricing section, before any
+  photo is added to the cart
+
+#### Scenario: The talent-dashboard view agrees with the public page
+- **WHEN** a signed-in talent user views the same event from `/dashboard/talent/events/[id]`
+- **THEN** the pricing section in the same position shows the identical ladder
 
 #### Scenario: An event card does not quote a price the ladder contradicts
 - **WHEN** an event with a ladder appears in a listing that shows its price
@@ -200,6 +210,11 @@ they were never shown.
 #### Scenario: The photographer reviews the ladder before saving
 - **WHEN** an owner reaches the create wizard's review step having configured a ladder
 - **THEN** the review shows every rung and its effective per-photo price at that threshold
+
+#### Scenario: The photographer inspects and edits pricing from its own tab
+- **WHEN** an owner opens their event's detail page
+- **THEN** a `Pricing` tab sits between `Details` and `Share`, shows the current ladder read-only, and its edit
+  link opens the scoped pricing editor — not the whole-event edit form
 
 ### Requirement: Taking every matched photo is a single action
 

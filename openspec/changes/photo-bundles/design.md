@@ -201,18 +201,50 @@ the whole point is that they decide to take more photos *while browsing*. Every 
 - `src/app/[lang]/dashboard/photographer/events/new/steps/step-5-review.tsx` — the review step must show the
   ladder, or the photographer confirms a price they were never shown.
 - `.../events/[id]/edit/` — `event-form-fields.tsx`, `edit-event-form.tsx`, `edit-event-schema.ts`,
-  `event-form-data.ts`: the edit path, which must accept and clear a ladder.
-- `src/app/[lang]/dashboard/photographer/events/[id]/event-info-card.tsx` — renders a "Price per photo" row in
-  the event's info grid; it becomes the read-only summary of the ladder.
-- `src/app/[lang]/dashboard/photographer/events/[id]/page.tsx` — the event detail page. **A dedicated pricing
-  section belongs here**, showing the ladder and linking to edit, so pricing is inspectable without entering
-  the edit form.
+  `event-form-data.ts`: the wizard/whole-event edit path, which must accept and clear a ladder.
+- `src/app/[lang]/dashboard/photographer/events/[id]/page.tsx` and its **`Pricing` top-level tab** (D17).
 
-**Do not add a top-level "Pricing" tab to that page in this change.** Its tabs today
-(`event-moderation-tabs.tsx`) are a photo-moderation switcher (`all` / `pending`), so a pricing tab would mix
-two unrelated axes — and **T-178 already restructures that page into top-level tabs** and would collide head-on.
-Ship pricing as a section inside the info card's area now; if T-178 lands first, it becomes a tab there for
-free.
+⚠️ **Correction to an earlier draft of this decision**, which said "do not add a top-level Pricing tab" on the
+premise that the page's top-level tabs did not exist yet and that **T-178** (which introduces them) was a future
+ticket to coordinate with. That premise was wrong on inspection of the current source: **T-178 already
+shipped** (PR #238, merged) — `dashboard/photographer/events/[id]/page.tsx` already has three top-level tabs,
+**Photos / Details / Share**, via `EventTabs` (`event-tabs.tsx`) and `EventTab` (`event-tab.ts`). What I had
+mis-cited as "the page's tabs" (`event-moderation-tabs.tsx`, `all`/`pending`) is a *different*, narrower thing:
+an inner tab switcher nested **inside** the Photos tab, for moderation queues on collaborative/organizer events.
+The two are unrelated axes and neither blocks the other. D17 corrects the plan on this basis.
+
+**D17 — A `Pricing` top-level tab on the photographer's event page, positioned left of `Share`; a matching
+dedicated section on the buyer-facing event views.**
+
+*Photographer side.* `EventTab` (`event-tab.ts`) extends from `'photos' | 'details' | 'share'` to
+`'photos' | 'details' | 'pricing' | 'share'`; `parseEventTab` and `EventTabs` (`event-tabs.tsx`) add the fourth
+trigger/content pair in that order — `Photos · Details · Pricing · Share`. The tab renders a read-only summary
+(unit price, and the ladder as a small table: threshold → total → effective per-photo price) plus an **Edit
+pricing** button.
+
+That button follows the exact pattern `Details` already established for `info`/`settings` (T-179): the edit
+route gains a third scoped section, `ScopedSection` in `scoped-event-edit-form.tsx` becomes
+`'info' | 'settings' | 'pricing'`, `parseSection` (`edit/page.tsx`) accepts it, and `?section=pricing` renders
+just the ladder editor — not the whole event form, and not bundled into `info` (which is date/location/activity
+and does not belong in a change this order of complexity). This keeps T-178's decision intact: **`/edit` stays
+the only place a field is actually written**; the tab is display plus a link, exactly like `Details` is today.
+
+Rejected alternative: making the Pricing tab itself editable in place. Every other top-level tab is read-only
+with a link out — introducing the one exception here would be inconsistent for no benefit, since the scoped-edit
+pattern already gives a focused single-purpose form without the whole-event page's photo/cover UI.
+
+*Buyer side.* Neither buyer-facing event view is tabbed — the public page (`events/[shareCode]/page.tsx`) and
+the talent-dashboard view (`dashboard/talent/events/[id]/page.tsx`) are both a single scroll: header → meta line
+→ (contribute affordance) → gallery. A ladder is more information than the compact meta line can carry (D15
+already scopes the meta line to a compact hint), so it needs its own place, not a wider meta line.
+
+New shared component `src/components/event-pricing-section.tsx`: a `Card`-based panel (reusing the existing
+shadcn `Card`, matching the visual language of other event-page cards rather than introducing a new UI
+pattern) showing the unit price and the ladder table, or nothing beyond the unit price when there is no ladder
+— so an unbundled event's page looks exactly as it does today. Mounted at one shared position on both surfaces:
+directly under `EventMetaLine`, above the gallery/contribute affordances — the same slot on both, so the two
+views don't drift (the repeated pattern from T-103/T-082/T-186: one component, mounted at the same place on
+both surfaces, so neither can quietly diverge from the other).
 
 **D16 — "Buy all my photos" needs one button, and the plumbing already exists.** A ladder alone does not deliver
 the Sportograf promise: the buyer must be able to act on "all of mine" without ticking twenty checkboxes. Both

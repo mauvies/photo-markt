@@ -32,28 +32,40 @@ Groups 0 and 4 are OWNER gates, not code.
 - [ ] 1.6 Event create + edit actions: `superRefine` on the schedule; reject on `organizer` events; reject when
       the event is free (`price_per_photo` null/0); rejection travels as a parseable sentinel like
       `MIN_PHOTO_PRICE:<cents>` and is localized client-side
-- [ ] 1.7 Ladder editor in the **create wizard** (`events/new/steps/step-3-details.tsx`, beside the price field)
-      and the **edit form** (`events/[id]/edit/`: `event-form-fields.tsx`, `edit-event-form.tsx`,
-      `edit-event-schema.ts`, `event-form-data.ts`, wizard `wizard-storage.ts` / `wizard-types.ts` /
-      `wizard.schema.ts`) — add, reorder and remove rungs; hidden for organizer and free events; shows the
-      effective per-photo price at each threshold as the photographer types; strings in `en.json` + `es.json`
+- [ ] 1.7 Ladder editor in the **create wizard** (`events/new/steps/step-3-details.tsx`, beside the price field,
+      plus `wizard-storage.ts` / `wizard-types.ts` / `wizard.schema.ts`) — add, reorder and remove rungs; hidden
+      for organizer and free events; shows the effective per-photo price at each threshold as the photographer
+      types; strings in `en.json` + `es.json`
 - [ ] 1.8 Wizard **review step** (`step-5-review.tsx`) shows every rung — nobody confirms a price they were
       never shown
-- [ ] 1.9 Photographer **event detail page**: the ladder as a read-only pricing summary in
-      `events/[id]/event-info-card.tsx` (which today renders a single "Price per photo" row) plus a pricing
-      section on `events/[id]/page.tsx` linking to edit. **Do not add a top-level Pricing tab** — that page's
-      tabs are the photo-moderation switcher (`event-moderation-tabs.tsx`, `all`/`pending`), and **T-178**
-      restructures the page into top-level tabs; coordinate with it rather than colliding
-- [ ] 1.10 Unit tests: kernel (three-rung ladder charges each rung and the 8+ rung is not shadowed by a cheaper
+- [ ] 1.9 **New `Pricing` top-level tab** on the photographer's event detail page
+      (`dashboard/photographer/events/[id]/page.tsx`), positioned between `Details` and `Share`:
+      - `EventTab` (`event-tab.ts`) extends to `'photos' | 'details' | 'pricing' | 'share'`; `parseEventTab` and
+        `EventTabs` (`event-tabs.tsx`) add the fourth trigger + content pair in that order
+      - the tab shows the unit price and the ladder read-only (threshold → total → effective per-photo price),
+        plus an **Edit pricing** link
+      - **new scoped edit section**, mirroring the existing `info`/`settings` pattern (T-179): `ScopedSection`
+        (`edit/scoped-event-edit-form.tsx`) becomes `'info' | 'settings' | 'pricing'`; `parseSection`
+        (`edit/page.tsx`) accepts `'pricing'`; `?section=pricing` renders just the ladder editor — `/edit`
+        remains the only surface that writes a field, same as `info`/`settings` today
+      - strings in `en.json` + `es.json` (`tabPricing`, edit-section title/subtitle)
+- [ ] 1.10 **New shared `src/components/event-pricing-section.tsx`** (a `Card`-based panel, matching the visual
+      language of other event cards): shows the unit price and, when the event has a ladder, the ladder table;
+      renders exactly the unit price alone when there is no ladder. Mounted at the same position — directly
+      under `EventMetaLine`, above the gallery/contribute affordances — on **both**
+      `events/[shareCode]/page.tsx` (public) and `dashboard/talent/events/[id]/page.tsx` (talent dashboard), so
+      the two views cannot disagree about the same event's price
+- [ ] 1.11 Unit tests: kernel (three-rung ladder charges each rung and the 8+ rung is not shadowed by a cheaper
       3+ rung; below-threshold undiscounted; price non-decreasing in quantity across every valid schedule;
       misconfigured rung can never exceed singles; disable constant), allocation (sums exactly, indivisible
       totals, determinism), `parseBundleTiers` fail-closed, validation (each rule, the non-increasing-totals
-      rejection, and the floor applied to the rung total not per photo)
-- [ ] 1.11 Integration tests against local Supabase: both event actions persist and clear a schedule, reject
+      rejection, and the floor applied to the rung total not per photo), `parseEventTab`/`parseSection` accept
+      the new values
+- [ ] 1.12 Integration tests against local Supabase: both event actions persist and clear a schedule, reject
       below-floor / non-increasing / non-discount / organizer / free-event schedules without creating or
       mutating a row, and leave existing rows untouched
-- [ ] 1.12 Verify dark: with a ladder configured, no cart, checkout session, order row or payout differs from
-      today (the photographer-facing surfaces above are the only visible change)
+- [ ] 1.13 Verify dark: with a ladder configured, no cart, checkout session, order row or payout differs from
+      today (the four surfaces above are the only visible change, and they are read-only until ticket B)
 
 ## 2. Ticket B — buyer-facing pricing, both checkouts, webhook (the deploy where money changes)
 
@@ -74,11 +86,11 @@ Groups 0 and 4 are OWNER gates, not code.
 - [ ] 2.7 Next-rung prompt in the cart, computed from the same kernel, stating the resulting total and hidden
       when no further rung exists
 - [ ] 2.8 Confirm already-owned photos stay excluded from the cart and do not count toward a threshold
-- [ ] 2.9 **Buyer-facing ladder display**, every surface that renders `price_per_photo` today:
-      `src/components/event-meta-line.tsx` (compact form — it feeds event cards and both event pages);
-      `events/[shareCode]/page.tsx` (price block **and** the schema.org `offers` JSON-LD, which currently emits
-      a single unit-price offer); `dashboard/talent/events/[id]/page.tsx` (must match the public page or one
-      event quotes two prices); `src/components/photo-detail-modal.tsx` and
+- [ ] 2.9 **Remaining buyer-facing ladder display** (the dedicated pricing section on both event views already
+      shipped dark in 1.10): `src/components/event-meta-line.tsx` in compact form (it feeds event cards and both
+      event pages' header line — separate from the section in 1.10, which carries the full table);
+      `events/[shareCode]/page.tsx`'s schema.org `offers` JSON-LD, which currently emits a single unit-price
+      offer and must describe the ladder; `src/components/photo-detail-modal.tsx` and
       `src/components/photo-album-viewer.tsx` (the price sits right above add-to-cart — highest-intent moment);
       strings in `en.json` + `es.json`
 - [ ] 2.10 `src/components/photo-selection-toolbar.tsx`: with N photos selected, show the running bundle price

@@ -80,14 +80,17 @@ costs; bundle pricing is computed over exactly the set that survives its predica
   checkouts (`src/app/[lang]/cart/actions.ts`, `src/app/[lang]/dashboard/talent/cart/actions.ts`);
   `src/app/api/stripe/webhook/route.ts` (read the committed allocation); photographer earnings/sales; i18n
   (`en.json` + `es.json`).
-- **UI surfaces** (the full inventory is design D15 — it is the `price_per_photo` grep filtered to render
+- **UI surfaces** (the full inventory is design D15/D17 — it is the `price_per_photo` grep filtered to render
   paths): event create wizard `step-3-details.tsx` + `step-5-review.tsx` and the wizard storage/schema; the
-  edit form (`events/[id]/edit/`); `events/[id]/event-info-card.tsx` + `events/[id]/page.tsx` (a pricing
-  section, **not** a top-level tab — that page's tabs are the moderation switcher and **T-178** restructures
-  it); `src/components/event-meta-line.tsx`; `events/[shareCode]/page.tsx` (price block + schema.org `offers`);
-  `dashboard/talent/events/[id]/page.tsx`; `src/components/photo-detail-modal.tsx`;
-  `src/components/photo-album-viewer.tsx`; `src/components/photo-selection-toolbar.tsx`;
-  `src/components/cart-totals.tsx` and both carts; both gallery viewers for the "add all my photos" action.
+  wizard/whole-event edit form (`events/[id]/edit/`) plus a **new scoped `?section=pricing` edit route**
+  mirroring the existing `info`/`settings` sections; a **new top-level `Pricing` tab** on
+  `events/[id]/page.tsx` (`event-tab.ts` + `event-tabs.tsx`), positioned between the existing `Details` and
+  `Share` tabs; a **new shared `src/components/event-pricing-section.tsx`**, mounted at the same position on
+  both `events/[shareCode]/page.tsx` (public) and `dashboard/talent/events/[id]/page.tsx` (talent dashboard);
+  `src/components/event-meta-line.tsx` (compact hint); `events/[shareCode]/page.tsx`'s schema.org `offers`;
+  `src/components/photo-detail-modal.tsx`; `src/components/photo-album-viewer.tsx`;
+  `src/components/photo-selection-toolbar.tsx`; `src/components/cart-totals.tsx` and both carts; both gallery
+  viewers for the "add all my photos" action.
 - **Money:** changes what buyers are charged and what photographers net on a discounted sale. Every
   implementation PR requires **`/code-review ultra`**.
 - **Owner gate:** approve this design before any child ticket is opened.
