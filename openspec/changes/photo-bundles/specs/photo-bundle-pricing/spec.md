@@ -28,29 +28,39 @@ The discounted price of a set MUST be computed by exactly one function,
 `getBundlePriceCents(quantity, unitPriceCents, tiers)` in `src/lib/bundle-pricing.ts`, defined as:
 
 ```
-getBundlePriceCents = min( quantity × unitPriceCents,
-                           min over tiers where minQuantity ≤ quantity of tier.totalPriceCents )
+rung  = the tier with the GREATEST minQuantity ≤ quantity, if any
+price = rung ? min(quantity × unitPriceCents, rung.totalPriceCents)
+             : quantity × unitPriceCents
 ```
 
-Taking the minimum against `quantity × unitPriceCents` makes it structurally impossible for a tier to charge
+The schedule is a **ladder** and MUST support any number of rungs, so a photographer can express
+"1 photo €5 · 3+ photos €12 · 8+ photos €20" as one schedule. The applicable rung MUST be the highest threshold
+reached — **not** the cheapest rung whose threshold is met, which would make every rung above the cheapest one
+unreachable and let a 20-photo buyer pay the 3-photo price.
+
+Taking the minimum against `quantity × unitPriceCents` makes it structurally impossible for a rung to charge
 *more* than buying the same photos singly, whatever the configured values. The module MUST be client-safe (no
 `env.mjs`, no server-only import) so the cart displays the price from the same function the checkout charges
 from — the disclosure property billing v2 established for the service fee. No cart, checkout, webhook or
 earnings path MAY re-derive a discount inline.
 
-#### Scenario: The applicable tier replaces the per-unit total
-- **WHEN** the schedule is `[{ minQuantity: 5, totalPriceCents: 1200 }, { minQuantity: 8, totalPriceCents: 1990 }]`,
-  the unit price is €3.00, and the cart holds 8 photos
-- **THEN** `getBundlePriceCents` returns 1200 — the cheapest total among tiers whose threshold is met, not
-  merely the highest tier reached
+#### Scenario: A three-rung ladder charges each rung
+- **WHEN** the unit price is €5.00 and the schedule is
+  `[{ minQuantity: 3, totalPriceCents: 1200 }, { minQuantity: 8, totalPriceCents: 2000 }]`
+- **THEN** 1 photo costs 500, 2 cost 1000, 3 cost 1200, 7 cost 1200, 8 cost 2000 and 20 cost 2000 — each rung is
+  reachable, and the 8+ rung is not shadowed by the cheaper 3+ rung
 
 #### Scenario: Below the first threshold nothing is discounted
-- **WHEN** the same schedule applies and the cart holds 3 photos
-- **THEN** the price is 900 (3 × €3.00), no discount line is shown, and the checkout session is identical to
+- **WHEN** the same schedule applies and the cart holds 2 photos
+- **THEN** the price is 1000 (2 × €5.00), no discount line is shown, and the checkout session is identical to
   one built without any schedule
 
-#### Scenario: A misconfigured tier can never overcharge
-- **WHEN** a tier's total exceeds `quantity × unitPriceCents` for the quantity in the cart
+#### Scenario: Price never decreases as photos are added
+- **WHEN** any valid schedule is priced across every quantity from 1 upward
+- **THEN** the price is non-decreasing, so adding a photo can never make the cart cheaper
+
+#### Scenario: A misconfigured rung can never overcharge
+- **WHEN** a rung's total exceeds `quantity × unitPriceCents` for the quantity in the cart
 - **THEN** the function returns `quantity × unitPriceCents`, so the buyer never pays more than the sum of
   singles
 
@@ -79,6 +89,9 @@ an older rule keeps working until its schedule is next written.
 A schedule is valid only when all of the following hold:
 - every `minQuantity` is an integer ≥ 2, and thresholds are strictly increasing with no duplicates;
 - every `totalPriceCents` is a positive integer;
+- `totalPriceCents` **strictly increases** with `minQuantity` — a higher rung must cost more than a lower one.
+  This is not cosmetic: without it a ladder collapses, because a cheap high rung would price every quantity
+  above its threshold below the rung the photographer intended;
 - every `totalPriceCents` is **at least `MIN_PHOTO_PRICE_CENTS`** — the same constant the per-photo floor uses,
   applied to the bundle *total*, because the floor exists so the fixed part of the service fee is never
   disproportionate to what is being bought, and for a bundle the thing being bought is the set;
@@ -95,6 +108,11 @@ A schedule is valid only when all of the following hold:
 - **WHEN** the unit price is €3.00 and the owner saves `{ minQuantity: 5, totalPriceCents: 1500 }`
 - **THEN** the action rejects it, because 5 × €3.00 = €15.00 is not more than the tier total and the tier would
   never apply
+
+#### Scenario: A ladder whose totals do not increase is rejected
+- **WHEN** the owner saves `[{ minQuantity: 3, totalPriceCents: 2000 }, { minQuantity: 8, totalPriceCents: 1200 }]`
+- **THEN** the action rejects it, because the 8+ rung is cheaper than the 3+ rung and every quantity from 3
+  upward would be priced by a rung the owner did not intend
 
 #### Scenario: Existing events are not retroactively invalidated
 - **WHEN** the floor or the validation rules are later tightened
@@ -157,6 +175,51 @@ exists.
 - **WHEN** the cart holds 6 photos and the 8-photo tier would cost less than the current 6
 - **THEN** the cart may invite the buyer to add 2 more photos and states the resulting total, computed by
   `getBundlePriceCents(8, …)`
+
+### Requirement: The ladder is shown wherever the unit price is shown
+
+Every surface that renders `price_per_photo` today MUST render the ladder when the event has one, so a buyer
+discovers the pack while browsing rather than only at the cart. A price shown without its ladder is a wrong
+price: it quotes €5 for a photo on an event where six cost €12.
+
+Wide surfaces (the event meta line under a title, event cards) MUST use a compact form such as
+"€5/photo · packs from €12"; the event pages, the photo detail modal and the photographer's event page MUST be
+able to show the full ladder. The public event page's schema.org `offers` MUST describe the ladder rather than
+a single unit price. The photographer's own surfaces — the create wizard's price step, its review step, the
+edit form, and the event detail page — MUST show the ladder they are configuring, so nobody confirms a price
+they were never shown.
+
+#### Scenario: The public event page quotes the pack, not just the unit price
+- **WHEN** a visitor opens an event priced at €5/photo with a "3+ for €12" rung
+- **THEN** the page states both the unit price and the ladder before any photo is added to the cart
+
+#### Scenario: An event card does not quote a price the ladder contradicts
+- **WHEN** an event with a ladder appears in a listing that shows its price
+- **THEN** the card indicates that packs exist rather than showing the unit price alone
+
+#### Scenario: The photographer reviews the ladder before saving
+- **WHEN** an owner reaches the create wizard's review step having configured a ladder
+- **THEN** the review shows every rung and its effective per-photo price at that threshold
+
+### Requirement: Taking every matched photo is a single action
+
+After a face search, the buyer MUST be able to add all of their matched photos to the cart in one action, on
+both the public event page and the talent-dashboard event view. Without it, "buy all my photos" is a price the
+interface never lets anyone reach; the existing multi-select toolbar and bulk add-to-cart are the mechanism.
+
+The ids for that action MUST come from what the buyer already legitimately holds: on a non-gated event, the
+match set the search just returned to the client; on a reveal-gated event, the server's proven set
+(`getProvenRevealIds`). A fresh server-side query for "this event's photos" MUST NOT be used. The action adds
+individual photos — it MUST NOT create a bundle entitlement.
+
+#### Scenario: One action takes the whole match set
+- **WHEN** a buyer's face search returns 14 matches on an event with an "8+ for €20" rung
+- **THEN** a single action adds all 14 photos to the cart, and the cart prices them at €20
+
+#### Scenario: The action cannot widen a gated event's exposure
+- **WHEN** the same action runs on a reveal-gated event
+- **THEN** it adds only photos in the server's proven reveal set for that visitor, never any other photo of the
+  event
 
 ### Requirement: Bundles never expose a photo the buyer has not been shown
 

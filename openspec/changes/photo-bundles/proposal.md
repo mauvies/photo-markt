@@ -16,14 +16,23 @@ eight, and the 3% component scales with that. Worth doing; not for the stated re
 
 ## What Changes
 
-- **Volume pricing is a price schedule on the event, not a new purchasable SKU.** An event gains an optional
-  ordered list of tiers `{ minQuantity, totalPriceCents }` — "8 or more photos: €19.90 total". The purchasable
-  unit stays the individual photo; only the *price of the set* changes.
+- **Volume pricing is a price ladder on the event, not a new purchasable SKU.** An event gains an optional
+  ordered list of rungs `{ minQuantity, totalPriceCents }`, **any number of them**, so
+  "1 photo €5 · 3+ photos €12 · 8+ photos €20" is one schedule. The purchasable unit stays the individual
+  photo; only the *price of the set* changes.
 - **One calc point.** `getBundlePriceCents(quantity, unitPriceCents, tiers)` in a new client-safe
-  `src/lib/bundle-pricing.ts`, defined as `min(quantity × unit, cheapest applicable tier total)`. Cart display
-  and both checkouts call it; nothing re-derives a discount inline (the `getBuyerServiceFeeCents` discipline).
-- **The photographer sets the tiers**, per event, in the event create/edit form. There is no
+  `src/lib/bundle-pricing.ts`: pick the rung with the **greatest** `minQuantity ≤ quantity`, then take
+  `min(quantity × unit, rungTotal)`. Cart display and both checkouts call it; nothing re-derives a discount
+  inline (the `getBuyerServiceFeeCents` discipline).
+- **The photographer sets the rungs**, per event, in the event create/edit form. There is no
   platform-imposed discount schedule.
+- **The ladder is shown wherever the unit price is shown today** — event meta line and cards, both event pages,
+  the photo detail modal, the selection toolbar, the create wizard's price and review steps, the edit form and
+  the photographer's event detail page — plus the public page's schema.org `offers`. A pack the buyer only
+  meets in the cart does not convert.
+- **"Add all my photos" is one action** after a face search, on both viewers, reusing the multi-select and bulk
+  add-to-cart that already exist. Ids come from the buyer's own match set, or from the reveal-gate proven set
+  on a gated event — never from a fresh query.
 - **Both checkouts price the validated set from the kernel**, and the discounted total is **allocated back to
   per-photo amounts** (largest-remainder, summing to the total exactly) which are what the Stripe line items,
   `order_items`/`guest_order_items` rows, photographer transfers and earnings are all built from. No downstream
@@ -38,8 +47,7 @@ eight, and the 3% component scales with that. Worth doing; not for the stated re
   by any money path).
 - **Kill switch:** an event with no tiers behaves byte-identically to today, and a single constant disables the
   kernel globally. Rollback is a revert, with no data migration.
-- **Out of scope (named, not forgotten):** an "add all my face matches to cart" button (must consume the
-  reveal-gate proven id set — own ticket); retroactive credit for photos already bought; cross-event or
+- **Out of scope (named, not forgotten):** retroactive credit for photos already bought; cross-event or
   all-events passes; organizer-event bundles.
 
 ## Capabilities
@@ -68,11 +76,18 @@ costs; bundle pricing is computed over exactly the set that survives its predica
   `cart_items.allocated_price_cents`. ⚠️ Prod migrations are applied by hand via MCP while `migrate.yml` is
   blocked on GitHub Actions billing (same step as T-142/T-180/T-182).
 - **Code:** new `src/lib/bundle-pricing.ts` (kernel + allocation + validation); `src/database/queries/events.ts`
-  (read/write tiers, migration-gated like `session_end_time`); event create + edit actions/schemas and the
-  wizard/edit forms; both checkouts (`src/app/[lang]/cart/actions.ts`,
-  `src/app/[lang]/dashboard/talent/cart/actions.ts`); `src/database/queries/carts.ts`;
-  `src/app/api/stripe/webhook/route.ts` (read the committed allocation); `src/components/cart-totals.tsx`;
-  photographer earnings/sales; i18n (`en.json` + `es.json`).
+  (read/write the ladder, migration-gated like `session_end_time`); `src/database/queries/carts.ts`; both
+  checkouts (`src/app/[lang]/cart/actions.ts`, `src/app/[lang]/dashboard/talent/cart/actions.ts`);
+  `src/app/api/stripe/webhook/route.ts` (read the committed allocation); photographer earnings/sales; i18n
+  (`en.json` + `es.json`).
+- **UI surfaces** (the full inventory is design D15 — it is the `price_per_photo` grep filtered to render
+  paths): event create wizard `step-3-details.tsx` + `step-5-review.tsx` and the wizard storage/schema; the
+  edit form (`events/[id]/edit/`); `events/[id]/event-info-card.tsx` + `events/[id]/page.tsx` (a pricing
+  section, **not** a top-level tab — that page's tabs are the moderation switcher and **T-178** restructures
+  it); `src/components/event-meta-line.tsx`; `events/[shareCode]/page.tsx` (price block + schema.org `offers`);
+  `dashboard/talent/events/[id]/page.tsx`; `src/components/photo-detail-modal.tsx`;
+  `src/components/photo-album-viewer.tsx`; `src/components/photo-selection-toolbar.tsx`;
+  `src/components/cart-totals.tsx` and both carts; both gallery viewers for the "add all my photos" action.
 - **Money:** changes what buyers are charged and what photographers net on a discounted sale. Every
   implementation PR requires **`/code-review ultra`**.
 - **Owner gate:** approve this design before any child ticket is opened.

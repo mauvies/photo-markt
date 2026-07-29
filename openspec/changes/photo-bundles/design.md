@@ -39,7 +39,6 @@ What exists today, and what constrains this design:
 
 **Non-Goals:**
 - Organizer-event bundles (needs revenue sharing that does not exist).
-- An "add all my face matches to cart" control (must consume the reveal-gate proven set — own ticket).
 - Retroactive credit for photos already bought.
 - Cross-event bundles, all-event passes, subscription-style buyer plans.
 - Coupons or promotion codes (a different Stripe object model, and not what was asked for).
@@ -54,24 +53,48 @@ added or deleted after purchase — and the buyer cannot perceive any of it. Wor
 of this event" is definitionally the reveal-gate hole (D7): it would have to be defined over photos the buyer
 was never shown. Pricing the cart keeps the blast radius inside pricing.
 
-**D2 — The schedule is a list of `{ minQuantity, totalPriceCents }`, and the price is a `min`.**
-`getBundlePriceCents = min(quantity × unit, cheapest tier total whose threshold is met)`. Alternatives
-considered: percent-off tiers (`{minQty, percentOff}`) — harder for the buyer to reason about, and it makes the
-floor rule awkward because the resulting total is derived rather than stated; and an explicit price-per-count
-table — verbose and unbounded. Flat totals give the Sportograf headline ("all your photos: €19.90"), and taking
-the `min` against the singles price means no configuration, however wrong, can charge more than buying one at a
-time. It also makes the next-tier nudge (D9) trivially derivable.
+**D2 — The schedule is a LADDER of `{ minQuantity, totalPriceCents }` rungs, and the applicable rung is the
+HIGHEST threshold reached.**
+
+```
+rung  = the tier with the greatest minQuantity ≤ quantity, if any
+price = rung ? min(quantity × unitPriceCents, rung.totalPriceCents)
+             : quantity × unitPriceCents
+```
+
+Any number of rungs is supported, which is what makes "1 photo €5 · 3+ photos €12 · 8+ photos €20" expressible
+as one schedule.
+
+⚠️ **This corrects an earlier draft of this decision**, which took the `min` across *every* tier whose threshold
+was met. That is right for two rungs and wrong for three: the cheapest rung then dominates every rung above it,
+so in the ladder above **nobody would ever pay €20** — a buyer taking 20 photos would be charged €12, because
+the 3+ rung is also "applicable" and cheaper. Selecting the highest threshold reached fixes it, paired with a
+validation rule (D4) that totals **strictly increase** with threshold so every rung is reachable.
+
+The resulting price is **non-decreasing in quantity**, which is worth stating because it is not obvious: inside
+a rung's band the price is `min(qty × unit, rungTotal)` and `qty × unit` only grows; at a crossing the rung
+total steps up by construction. So adding a photo never makes the cart cheaper, and the ladder can be presented
+to the buyer as a simple table.
+
+Alternatives considered: percent-off rungs (`{minQty, percentOff}`) — harder for a buyer to reason about, and
+the floor rule gets awkward because the total is derived rather than stated; an explicit price-per-count table —
+verbose and unbounded. Flat totals give the Sportograf headline ("all your photos: €20"), and the `min` against
+the singles price means no configuration, however wrong, can charge more than buying one at a time.
 
 **D3 — One calc point, client-safe, mirroring `getBuyerServiceFeeCents`.** `src/lib/bundle-pricing.ts` imports
 nothing server-only, so the cart can display the price the checkout will charge. This is the property that
 makes displayed-vs-charged divergence structurally impossible rather than test-enforced, and it is the reason
 `plans.ts` was deliberately kept free of `env.mjs` in T-195.
 
-**D4 — The photographer sets the tiers; the platform does not.** A platform-wide discount schedule would cut a
+**D4 — The photographer sets the rungs; the platform does not.** A platform-wide discount schedule would cut a
 photographer's revenue on their own goods without their consent. The platform's interest (higher AOV) is served
 by *any* bundle, whoever authored it, so there is nothing to gain by taking the decision away. Validation is
 enforced at write time in both event actions — the `isPhotoPriceAboveFloor` pattern — rather than as a DB
 constraint, so a later-tightened rule never breaks an event that is already selling.
+
+The rule that **totals must strictly increase with threshold** is load-bearing rather than cosmetic: without it
+a ladder silently collapses to its cheapest rung (D2). It is enforced at write time and re-checked on read, so
+a schedule that violates it can never be created *and* an older one can never mis-price.
 
 **D5 — The bundle floor is `MIN_PHOTO_PRICE_CENTS` applied to the TIER TOTAL, not per photo.** The floor's
 stated purpose (T-199) is presentation: at €0.25 + 3% a €0.50 item's fee is over half its price and reads
@@ -149,6 +172,61 @@ photographer's intent (visible, refundable) and never undercharge (silent, unrec
 migration-gated the way `session_end_time` and `organizer_fee_per_photo_cents` are, because prod migrations are
 currently applied by hand.
 
+**D15 — The ladder is shown everywhere the unit price is shown today, and that set is enumerated, not left to
+the implementer.** A volume price the buyer only discovers in the cart is a discount that does not convert —
+the whole point is that they decide to take more photos *while browsing*. Every surface that renders
+`price_per_photo` today is therefore in scope, and the inventory below is the checklist (it is the grep for
+`price_per_photo` / `pricePerPhoto`, filtered to render paths):
+
+*Buyer-facing*
+- `src/components/event-meta-line.tsx` — the "date · city · photographer · price" line, used by event cards and
+  by both event pages. This is the widest-reach surface: it needs a compact form ("€5/photo · packs from €12"),
+  not the full table.
+- `src/app/[lang]/events/[shareCode]/page.tsx` — the public event page: the price block, and the schema.org
+  `offers` JSON-LD, which today emits a single offer and should emit the ladder.
+- `src/app/[lang]/dashboard/talent/events/[id]/page.tsx` — the talent-dashboard view of the same event; it must
+  match the public page or the same event quotes two prices.
+- `src/components/photo-detail-modal.tsx` and `src/components/photo-album-viewer.tsx` — the price sits directly
+  above the add-to-cart button, which is the highest-intent moment to mention the pack.
+- `src/components/photo-selection-toolbar.tsx` — with N photos selected, this is where the running bundle price
+  and the next rung belong (see D16).
+- `src/components/cart-totals.tsx` and both carts — already covered by D10.
+- Talent orders history and the guest success page / purchase email — these render *paid* amounts, which are
+  the allocated per-photo amounts (D8), so they need no bundle concept, only a check that they still read
+  correctly when the amounts are not the list price.
+
+*Photographer-facing*
+- `src/app/[lang]/dashboard/photographer/events/new/steps/step-3-details.tsx` — where the price is configured in
+  the create wizard; the ladder editor lives beside it.
+- `src/app/[lang]/dashboard/photographer/events/new/steps/step-5-review.tsx` — the review step must show the
+  ladder, or the photographer confirms a price they were never shown.
+- `.../events/[id]/edit/` — `event-form-fields.tsx`, `edit-event-form.tsx`, `edit-event-schema.ts`,
+  `event-form-data.ts`: the edit path, which must accept and clear a ladder.
+- `src/app/[lang]/dashboard/photographer/events/[id]/event-info-card.tsx` — renders a "Price per photo" row in
+  the event's info grid; it becomes the read-only summary of the ladder.
+- `src/app/[lang]/dashboard/photographer/events/[id]/page.tsx` — the event detail page. **A dedicated pricing
+  section belongs here**, showing the ladder and linking to edit, so pricing is inspectable without entering
+  the edit form.
+
+**Do not add a top-level "Pricing" tab to that page in this change.** Its tabs today
+(`event-moderation-tabs.tsx`) are a photo-moderation switcher (`all` / `pending`), so a pricing tab would mix
+two unrelated axes — and **T-178 already restructures that page into top-level tabs** and would collide head-on.
+Ship pricing as a section inside the info card's area now; if T-178 lands first, it becomes a tab there for
+free.
+
+**D16 — "Buy all my photos" needs one button, and the plumbing already exists.** A ladder alone does not deliver
+the Sportograf promise: the buyer must be able to act on "all of mine" without ticking twenty checkboxes. Both
+gallery viewers already have multi-select and a working bulk add-to-cart (`PhotoSelectionToolbar` +
+`handleBulkAddToCart` on the public and talent viewers), so the missing piece is a single "add all my matches"
+action after a face search — not new infrastructure.
+
+This was initially deferred as a follow-up. It is pulled into scope because without it the feature reads as a
+discount rather than as a product, which is not what was asked for. The security constraint from D7 stands and
+decides where the ids come from: on a **non-gated** event the client already holds the matched ids from the
+search it just ran, so the action is client-side over ids the buyer legitimately has; on a **gated** event it
+MUST take the server's proven set (`getProvenRevealIds`) and never a fresh query. Both paths still add
+individual photos to the cart — no new entitlement, per D1.
+
 ## Risks / Trade-offs
 
 - **A discount is money the photographer gives up, and they may not model it well.** → The floor and the
@@ -184,11 +262,14 @@ currently applied by hand.
 
 ## Open Questions
 
-- **Tier shape in the UI:** how many tiers to allow (2 or 3 is likely enough) and whether the form should
-  suggest a starting schedule derived from `price_per_photo`. Deferred to ticket A, where the form is built.
-- **Does the "all my photos" framing need a dynamic count?** This design lets a photographer approximate it
-  with a high threshold (e.g. "6+ photos: €19.90"), which covers the Sportograf headline without a
-  face-match-defined set. Whether buyers need a literal "all N of your matches" price is a product question to
-  revisit after the first real bundled sales — and it depends on the deferred "add all my matches" control.
-- **Guest carts spanning events** already work; whether the next-tier nudge should be shown per event group or
+- **How many rungs to allow.** Three or four covers "single · small pack · all of them" with room to spare, and
+  a cap keeps the ladder readable on a card and in the meta line. The exact number is a ticket-A call once the
+  editor exists.
+- **Whether the ladder editor should suggest a starting schedule** derived from `price_per_photo` (e.g. 3 for
+  the price of 2.4). Useful, but it is the platform recommending a price cut, so it must read as a suggestion.
+- **"All my photos" is priced as a high rung, not as a literal match count.** "8+ photos: €20" delivers the
+  headline for anyone with 8 or more matches, and D16 gives them the one-click way to take them. A literal
+  "all N of *your* matches for €X" would make the price depend on a probabilistic face-match count — including
+  false positives at the 80 threshold, which the buyer would be paying for. Revisit only if real buyers ask.
+- **Guest carts spanning events** already work; whether the next-rung prompt should be shown per event group or
   only for the largest group is a UX call for ticket B.

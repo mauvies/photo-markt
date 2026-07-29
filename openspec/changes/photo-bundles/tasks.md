@@ -16,30 +16,44 @@ Groups 0 and 4 are OWNER gates, not code.
 
 - [ ] 1.1 Migration: additive nullable `events.bundle_tiers jsonb`; no constraint (the rules are app-level, per
       design D14). ⚠️ Apply to prod by hand via MCP after merge — `migrate.yml` is blocked on Actions billing
-- [ ] 1.2 New client-safe `src/lib/bundle-pricing.ts`: `getBundlePriceCents(quantity, unitPriceCents, tiers)` as
-      `min(quantity × unit, cheapest applicable tier total)`, the disable constant, and a `parseBundleTiers`
-      that fails closed to "no tiers" on anything it cannot validate
+- [ ] 1.2 New client-safe `src/lib/bundle-pricing.ts`: `getBundlePriceCents(quantity, unitPriceCents, tiers)`
+      selecting the rung with the **greatest** `minQuantity ≤ quantity` then taking
+      `min(quantity × unit, rungTotal)` — never the cheapest applicable rung, which would shadow every rung
+      above it; plus the disable constant and a `parseBundleTiers` that fails closed to "no tiers" on anything
+      it cannot validate
 - [ ] 1.3 Allocation kernel in the same module: largest-remainder split of a total across N photos with
       `sum(allocated) === total` exactly and deterministic ordering
 - [ ] 1.4 Validation predicate (`isValidBundleSchedule`): thresholds integer ≥ 2, strictly increasing, no
-      duplicates; totals positive integers ≥ `MIN_PHOTO_PRICE_CENTS`; every total strictly below
-      `minQuantity × price_per_photo`; tier count capped
+      duplicates; totals positive integers ≥ `MIN_PHOTO_PRICE_CENTS`; **totals strictly increasing with
+      threshold** (without this the ladder collapses to one rung); every total strictly below
+      `minQuantity × price_per_photo`; rung count capped
 - [ ] 1.5 Query layer: read/write `bundle_tiers` in `src/database/queries/events.ts`, migration-gated on write
       the way `session_end_time` / `organizer_fee_per_photo_cents` are
 - [ ] 1.6 Event create + edit actions: `superRefine` on the schedule; reject on `organizer` events; reject when
       the event is free (`price_per_photo` null/0); rejection travels as a parseable sentinel like
       `MIN_PHOTO_PRICE:<cents>` and is localized client-side
-- [ ] 1.7 Event create wizard + edit form: bundle-tier fields (hidden for organizer and free events), showing
-      the effective per-photo price at each threshold as the photographer types; strings in `en.json` + `es.json`
-- [ ] 1.8 Unit tests: kernel (tier selection picks the cheapest applicable, below-threshold undiscounted,
-      misconfigured tier can never exceed singles, disable constant), allocation (sums exactly, indivisible
-      totals, determinism), `parseBundleTiers` fail-closed, validation (each rule, and the floor at the tier
-      total not per photo)
-- [ ] 1.9 Integration tests against local Supabase: both event actions persist and clear a schedule, reject
-      below-floor / non-discount / organizer / free-event schedules without creating or mutating a row, and
-      leave existing rows untouched
-- [ ] 1.10 Verify dark: with tiers configured, no cart, checkout session, order row or payout differs from
-      today
+- [ ] 1.7 Ladder editor in the **create wizard** (`events/new/steps/step-3-details.tsx`, beside the price field)
+      and the **edit form** (`events/[id]/edit/`: `event-form-fields.tsx`, `edit-event-form.tsx`,
+      `edit-event-schema.ts`, `event-form-data.ts`, wizard `wizard-storage.ts` / `wizard-types.ts` /
+      `wizard.schema.ts`) — add, reorder and remove rungs; hidden for organizer and free events; shows the
+      effective per-photo price at each threshold as the photographer types; strings in `en.json` + `es.json`
+- [ ] 1.8 Wizard **review step** (`step-5-review.tsx`) shows every rung — nobody confirms a price they were
+      never shown
+- [ ] 1.9 Photographer **event detail page**: the ladder as a read-only pricing summary in
+      `events/[id]/event-info-card.tsx` (which today renders a single "Price per photo" row) plus a pricing
+      section on `events/[id]/page.tsx` linking to edit. **Do not add a top-level Pricing tab** — that page's
+      tabs are the photo-moderation switcher (`event-moderation-tabs.tsx`, `all`/`pending`), and **T-178**
+      restructures the page into top-level tabs; coordinate with it rather than colliding
+- [ ] 1.10 Unit tests: kernel (three-rung ladder charges each rung and the 8+ rung is not shadowed by a cheaper
+      3+ rung; below-threshold undiscounted; price non-decreasing in quantity across every valid schedule;
+      misconfigured rung can never exceed singles; disable constant), allocation (sums exactly, indivisible
+      totals, determinism), `parseBundleTiers` fail-closed, validation (each rule, the non-increasing-totals
+      rejection, and the floor applied to the rung total not per photo)
+- [ ] 1.11 Integration tests against local Supabase: both event actions persist and clear a schedule, reject
+      below-floor / non-increasing / non-discount / organizer / free-event schedules without creating or
+      mutating a row, and leave existing rows untouched
+- [ ] 1.12 Verify dark: with a ladder configured, no cart, checkout session, order row or payout differs from
+      today (the photographer-facing surfaces above are the only visible change)
 
 ## 2. Ticket B — buyer-facing pricing, both checkouts, webhook (the deploy where money changes)
 
@@ -57,19 +71,35 @@ Groups 0 and 4 are OWNER gates, not code.
 - [ ] 2.6 `src/components/cart-totals.tsx`: subtotal → bundle discount → service fee → total, rendering exactly
       today's single subtotal row when no discount applies; wired at all four render sites; strings in
       `en.json` + `es.json`
-- [ ] 2.7 Next-tier prompt in the cart, computed from the same kernel, stating the resulting total and hidden
-      when no further tier exists
+- [ ] 2.7 Next-rung prompt in the cart, computed from the same kernel, stating the resulting total and hidden
+      when no further rung exists
 - [ ] 2.8 Confirm already-owned photos stay excluded from the cart and do not count toward a threshold
-- [ ] 2.9 Integration tests, both flows: charged total equals `getBundlePriceCents`; allocation sums exactly to
+- [ ] 2.9 **Buyer-facing ladder display**, every surface that renders `price_per_photo` today:
+      `src/components/event-meta-line.tsx` (compact form — it feeds event cards and both event pages);
+      `events/[shareCode]/page.tsx` (price block **and** the schema.org `offers` JSON-LD, which currently emits
+      a single unit-price offer); `dashboard/talent/events/[id]/page.tsx` (must match the public page or one
+      event quotes two prices); `src/components/photo-detail-modal.tsx` and
+      `src/components/photo-album-viewer.tsx` (the price sits right above add-to-cart — highest-intent moment);
+      strings in `en.json` + `es.json`
+- [ ] 2.10 `src/components/photo-selection-toolbar.tsx`: with N photos selected, show the running bundle price
+      and the next rung
+- [ ] 2.11 **"Add all my photos" after a face search**, on both the public event page and the talent-dashboard
+      event view, reusing the existing multi-select + `handleBulkAddToCart` plumbing. Ids come from what the
+      buyer already holds — the client's match set on a non-gated event, `getProvenRevealIds` on a gated one —
+      **never** a fresh server-side query for the event's photos
+- [ ] 2.12 Check the paid-amount surfaces still read correctly now that amounts are allocated rather than list
+      prices: talent orders history, guest success page, guest purchase email
+- [ ] 2.13 Integration tests, both flows: charged total equals `getBundlePriceCents`; allocation sums exactly to
       it; exactly one service-fee line item, computed on the discounted subtotal; a client-supplied price is
       ignored; a cart spanning two events discounts only the qualifying group; a session with no allocation
       produces today's order unchanged
-- [ ] 2.10 Integration test: the photographer transfer for a bundled order equals
+- [ ] 2.14 Integration test: the photographer transfer for a bundled order equals
       `getPhotographerNetCents(bundleTotal, plan)` and never the list-price total
-- [ ] 2.11 Test that editing tiers between session creation and webhook delivery does not change the resulting
-      order
-- [ ] 2.12 Regression test that a reveal-gated event exposes no bundle affordance and no unrevealed photo ids
-- [ ] 2.13 `pnpm build` in addition to typecheck/lint/test — `bundle-pricing.ts` is imported by client
+- [ ] 2.15 Test that editing the ladder between session creation and webhook delivery does not change the
+      resulting order
+- [ ] 2.16 Regression test that a reveal-gated event exposes no bundle affordance and no unrevealed photo ids,
+      and that "add all my photos" on a gated event adds only ids in the proven reveal set
+- [ ] 2.17 `pnpm build` in addition to typecheck/lint/test — `bundle-pricing.ts` is imported by client
       components, and only a build catches a server-only leak into the client graph
 
 ## 3. Ticket C — photographer-facing truth (earnings and sales)
@@ -89,8 +119,6 @@ Groups 0 and 4 are OWNER gates, not code.
 
 ## 5. Follow-ups (out of scope — capture separately when wanted)
 
-- [ ] 5.1 "Add all my face matches to cart" — must derive ids from the reveal-gate proven set
-      (`getProvenRevealIds`), never from a fresh server-side query
-- [ ] 5.2 Organizer-event bundles — blocked on organizer revenue sharing existing at all
+- [ ] 5.1 Organizer-event bundles — blocked on organizer revenue sharing existing at all
       (`organizer_fee_per_photo_cents` is currently written and never read)
-- [ ] 5.3 Retroactive credit for photos already bought — needs a refund/credit mechanism this system lacks
+- [ ] 5.2 Retroactive credit for photos already bought — needs a refund/credit mechanism this system lacks
