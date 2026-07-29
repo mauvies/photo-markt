@@ -1,9 +1,9 @@
 # T-200 · [DISEÑO] Bundles / "compra todas mis fotos" — precio por volumen
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
-- **Rama:** `feat/photo-bundles` (o solo el change de OpenSpec si se ejecuta el diseño primero)
+- **Rama:** `design/photo-bundles` (solo el change de OpenSpec — el diseño se ejecuta primero)
 - **OpenSpec change:** **sí** — toca pagos y precios; empezar con `/opsx:propose` antes de escribir código
 - **PR:** —
 

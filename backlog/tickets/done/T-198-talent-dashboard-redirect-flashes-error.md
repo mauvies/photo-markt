@@ -1,11 +1,11 @@
 # T-198 · Error de Next intermitente en `/[lang]/dashboard/talent` mientras redirige
 
 - **Prioridad:** P1
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/talent-dashboard-redirect-error`
-- **OpenSpec change:** —  (se crea al ejecutar, si el cambio toca >1 archivo o es ambiguo)
-- **PR:** —
+- **OpenSpec change:** — (no hizo falta: bug-fix con requerimiento claro)
+- **PR:** #262 (merged)
 
 ## Requerimiento
 "A veces cuando la página navega a la ruta `https://www.photomarkt.com/en/dashboard/talent`, mientras
