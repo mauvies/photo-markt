@@ -372,6 +372,18 @@ Postgres-backed fixed-window limiter. Apply to:
 
 Helpers: `getClientIp(headers)` for unauthenticated keying, `retryAfterSeconds(result)` for the `Retry-After` response header. Fails open on backend errors. Backend is pluggable via the `RateLimitBackend` type — currently Postgres, swappable to Upstash/Redis later without touching call sites.
 
+**`src/lib/auth/require-user.ts`** — `requireUser()`
+Returns the request's authenticated user or redirects to login (`redirectToLogin()`), reading through
+the request-cached `getUser()` so every segment of one render shares a single auth snapshot.
+**Call it first in every dashboard layout/page that reads auth-dependent data** — Next renders a
+route's segments *in parallel*, so the login guard in `dashboard/layout.tsx` does **not** stop a child
+layout or page from executing. A child that reacts to a missing session by *throwing* (`getRoleContext`,
+`getProfileFields(supabase, '')`, `getDashboardData`, …) races the parent's `NEXT_REDIRECT` into
+`[lang]/error.tsx` — that race was T-198's intermittent "Something went wrong" screen on
+`/[lang]/dashboard/talent`. Redirecting instead of throwing makes the race harmless: every competing
+outcome becomes a redirect. Pinned by `test/unit/src/app/dashboard-auth-guard.test.ts` (behavioral) and
+`dashboard-guard-coverage.test.ts` (the list of segments that must guard — add new ones there).
+
 **`src/lib/auth/safe-next.ts`** — `safeNext(value)`
 Use for any redirect destination derived from user input (`?next=`, OAuth callback, etc). Rejects protocol-relative URLs (`//evil.com`), backslash variants, and control characters.
 

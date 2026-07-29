@@ -1,5 +1,4 @@
-import { createClient } from '@/database/server';
-import { redirectToLogin } from '@/lib/auth/redirect-to-login';
+import { requireUser } from '@/lib/auth/require-user';
 
 export default async function DashboardLayout({
   children,
@@ -7,14 +6,10 @@ export default async function DashboardLayout({
   children: React.ReactNode;
   params: Promise<{ lang: string }>;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return redirectToLogin();
-  }
+  // Reads through the request-cached `getUser()`, the same snapshot the child
+  // layouts see — a second, independent auth round-trip here could disagree
+  // with theirs and let a child crash on a request this guard let through.
+  await requireUser();
 
   return <>{children}</>;
 }

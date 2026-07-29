@@ -1,6 +1,7 @@
 import { Camera, DollarSign, ShoppingBag } from 'lucide-react';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { Card, CardContent } from '@/components/ui/card';
+import { requireUser } from '@/lib/auth/require-user';
 import { PLATFORM_CURRENCY } from '@/lib/currency';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
@@ -43,6 +44,11 @@ function StatCard({
 }
 
 export default async function TalentOrdersPage({ params }: { params: Promise<{ lang: string }> }) {
+  // Guard first: this page renders in parallel with the layouts above it, so
+  // their login redirects don't stop it, and the order queries throw without a
+  // session — that error would race them into the error boundary (T-198).
+  await requireUser();
+
   const { lang } = await params;
   const dict = await getDictionary(lang as Locale);
   const [orders, stats] = await Promise.all([getTalentOrders(), getTalentOrderStats()]);
