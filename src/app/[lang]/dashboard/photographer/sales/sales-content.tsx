@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { DollarSign, Image, ShoppingCart, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
+import { BuyerFeeNote } from '@/components/buyer-fee-note';
 import {
   Select,
   SelectContent,
@@ -179,6 +180,10 @@ function RecentSales({ sales, lang }: RecentSalesProps) {
           </tbody>
         </table>
       </div>
+      {/* T-197: the Commission column is the platform's cut of the price; the
+          buyer's service fee is separate and not the photographer's money.
+          Renders nothing while no buyer fee is charged. */}
+      <BuyerFeeNote className="mt-4">{t('buyerFeeNote')}</BuyerFeeNote>
     </div>
   );
 }

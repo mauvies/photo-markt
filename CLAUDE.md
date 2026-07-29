@@ -221,7 +221,7 @@ from it. Rates were lowered from 12/8/5 in **billing v2** (T-194), deliberately 
 the buyer fee line item (T-196): Pro at 0% is only solvent while that fee is live, because the webhook
 transfers `getPhotographerNetCents(gross)` and the platform absorbs Stripe's cost.
 
-### Buyer service fee (billing v2 — T-194/T-195/T-196)
+### Buyer service fee (billing v2 — T-194/T-195/T-196/T-197)
 The buyer pays a **fixed + percent** fee on top of the cart subtotal, as its own visible Stripe line
 item. The fixed part is what structurally covers Stripe's own fixed per-charge cost — a percent-only
 commission cannot, which is why small sales used to sell at a loss.
@@ -252,6 +252,14 @@ commission cannot, which is why small sales used to sell at a loss.
   `orders.total_amount_cents` stays photo-only while `orders.metadata.amount_total` (raw Stripe) is
   photos + fee; they legitimately differ. Anything counting photos must use `metadata.cart_count`,
   **not** the line-item count (that bug bit the guest success page — see T-196).
+- **Photographer earnings never include the fee.** It is platform revenue: not added to and not
+  deducted from their figures. `calculatePlatformFee` (`queries/earnings.ts`) derives the commission
+  as **`gross − getPhotographerNetCents(gross)`**, never `round(gross × rate)` — an independently
+  rounded commission disagreed with the floored payout by a cent, so the breakdown didn't add up and
+  the Earnings tab could contradict the Sales tab for the same sale. `gross = commission + net` is now
+  true by construction. `<BuyerFeeNote>` (`src/components/buyer-fee-note.tsx`) states this on both
+  tabs and renders **nothing** while `isBuyerServiceFeeEnabled()` is false, so a fee nobody pays is
+  never explained.
 - **Minimum photo price:** `MIN_PHOTO_PRICE_CENTS` is a floor on a *priced* event, enforced at write
   time in both event actions via `isPhotoPriceAboveFloor` (create + edit `superRefine`), **not** as a
   DB constraint — so an event priced below a later-raised floor keeps working until its price is next

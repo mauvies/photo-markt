@@ -10,17 +10,39 @@ import { getPhotographerPlanIds } from './subscriptions';
 import type { SupabaseServerClient } from './types';
 
 /**
- * Calculate platform fee from gross earnings using the photographer's plan rate.
+ * Platform commission on a gross amount, derived as `gross − net` (T-197).
+ *
+ * It is NOT `round(gross × rate)`, which is what this used to be. The payout is
+ * `getPhotographerNetCents` (a floor), so an independently-rounded fee could
+ * disagree with it by a cent and the breakdown would not add up: a €0.06 sale
+ * on Free showed a €0.00 fee against a €0.05 net, losing a cent. The Sales tab
+ * already derived its commission this way, so the two tabs of the same page
+ * could report different figures for the same sale.
+ *
+ * Deriving from the payout makes `gross = fee + net` true by construction, and
+ * makes the platform's cut exactly what the photographer did not receive.
+ *
+ * `planId` rather than a rate, so there is one place (`getPlatformFeeRate`)
+ * that maps a plan to its commission — the previous `feeRate = 0.1` default
+ * was a stale hardcoded rate matching no plan.
  */
-export function calculatePlatformFee(grossEarningsCents: number, feeRate = 0.1): number {
-  return Math.round(grossEarningsCents * feeRate);
+export function calculatePlatformFee(
+  grossEarningsCents: number,
+  planId: string | null | undefined,
+): number {
+  return grossEarningsCents - getPhotographerNetCents(grossEarningsCents, planId);
 }
 
 /**
- * Calculate net earnings after platform fee using the photographer's plan rate.
+ * Net earnings after commission — the photographer's payout. The buyer service
+ * fee (billing v2) is NOT part of this in either direction: it is charged to
+ * the buyer on top of the price and is platform revenue.
  */
-export function calculateNetEarnings(grossEarningsCents: number, feeRate = 0.1): number {
-  return grossEarningsCents - calculatePlatformFee(grossEarningsCents, feeRate);
+export function calculateNetEarnings(
+  grossEarningsCents: number,
+  planId: string | null | undefined,
+): number {
+  return getPhotographerNetCents(grossEarningsCents, planId);
 }
 
 /**
@@ -62,9 +84,10 @@ export async function getEarningsSummary(
       getPhotographerPlanIds(supabase, [photographerId]),
     ]);
 
-  const feeRate = getPlatformFeeRate(planIds.get(photographerId));
-  const platformFeeCents = calculatePlatformFee(totalGrossEarningsCents, feeRate);
-  const totalNetEarningsCents = calculateNetEarnings(totalGrossEarningsCents, feeRate);
+  const planId = planIds.get(photographerId);
+  const feeRate = getPlatformFeeRate(planId);
+  const platformFeeCents = calculatePlatformFee(totalGrossEarningsCents, planId);
+  const totalNetEarningsCents = calculateNetEarnings(totalGrossEarningsCents, planId);
   const withdrawableBalanceCents = totalNetEarningsCents - totalPaidOutCents - pendingPayoutsCents;
 
   return {
@@ -110,13 +133,12 @@ export async function getPhotographerEarnings(
   ]);
 
   const planId = planIds.get(photographerId);
-  const feeRate = getPlatformFeeRate(planId);
 
   const emailByUserId = await resolveBuyerEmails(supabase, items);
 
   return items.map((item) => {
     const grossAmountCents = item.totalPriceCents;
-    const platformFeeCents = calculatePlatformFee(grossAmountCents, feeRate);
+    const platformFeeCents = calculatePlatformFee(grossAmountCents, planId);
     const netAmountCents = getPhotographerNetCents(grossAmountCents, planId);
 
     return {

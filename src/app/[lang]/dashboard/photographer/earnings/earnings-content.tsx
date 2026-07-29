@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { CalendarClock, DollarSign, TrendingUp, Wallet } from 'lucide-react';
 import Link from 'next/link';
+import { BuyerFeeNote } from '@/components/buyer-fee-note';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { PhotographerEarning } from '@/database/queries/earnings';
@@ -290,6 +291,11 @@ export function EarningsContent() {
               description={t('readyToWithdraw')}
             />
           </div>
+
+          {/* T-197: the buyer service fee is platform revenue — say so, so the
+              figures above aren't misread as having it taken out of them.
+              Renders nothing while no buyer fee is charged. */}
+          <BuyerFeeNote>{t('buyerFeeNote')}</BuyerFeeNote>
 
           {/* Stripe Connect balance (live from Stripe API) */}
           {stripeBalance && (
