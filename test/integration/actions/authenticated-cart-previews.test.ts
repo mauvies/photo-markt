@@ -56,6 +56,7 @@ import {
   createCheckoutSessionAction,
   getCurrentCart,
 } from '@/app/[lang]/dashboard/talent/cart/actions';
+import { SERVICE_FEE_LINE_ITEM_NAME } from '@/lib/stripe/service-fee-line-item';
 import {
   createServiceClient,
   createTestEvent,
@@ -163,11 +164,21 @@ describe('T-130 — authenticated cart preview resolution', () => {
     expect(result.ok && result.url).toContain('checkout.stripe.test');
     expect(createSessionMock).toHaveBeenCalledTimes(1);
     const args = createSessionMock.mock.calls[0][0] as {
-      line_items: Array<{ price_data: { currency: string } }>;
+      line_items: Array<{ price_data: { currency: string; product_data: { name: string } } }>;
     };
-    expect(args.line_items).toHaveLength(1);
+    // T-196/T-199: the session also carries the buyer service-fee line item, so
+    // count the PHOTO line items — the point here is that the foreign item made
+    // it into the session at all.
+    const photoLineItems = args.line_items.filter(
+      (i) => i.price_data.product_data.name !== SERVICE_FEE_LINE_ITEM_NAME,
+    );
+    expect(photoLineItems).toHaveLength(1);
     // T-193: the authenticated checkout must charge in EUR (platform settlement
     // currency), not USD — otherwise every sale eats a ~2% conversion fee.
-    expect(args.line_items[0]?.price_data.currency).toBe('eur');
+    expect(photoLineItems[0]?.price_data.currency).toBe('eur');
+    // The fee rides in the same currency.
+    for (const item of args.line_items) {
+      expect(item.price_data.currency).toBe('eur');
+    }
   });
 });

@@ -1,13 +1,13 @@
 /**
  * Integration tests for the buyer service fee in both checkout flows
- * (billing v2, T-196).
+ * (billing v2, T-196; amounts switched on in T-199).
  *
- * The fee ships configured at 0, so `getBuyerServiceFeeCents` is overridden
- * here to make it live. That is deliberate: the property under test is that
- * each checkout itemizes the fee AS ITS OWN LINE ITEM, off the SERVER-validated
- * subtotal, using the shared calc point — not what the amount happens to be
- * today. The kill-switch case (fee 0 → session identical to v1) is covered by
- * the last block, which uses the real, shipped calc point.
+ * `getBuyerServiceFeeCents` is overridden here rather than relying on the
+ * shipped constants: the property under test is that each checkout itemizes
+ * the fee AS ITS OWN LINE ITEM, off the SERVER-validated subtotal, using the
+ * shared calc point — not what the amount happens to be this month. The last
+ * block drives the fee to 0 to prove the kill-switch still produces a v1
+ * session, which is what a rollback relies on.
  *
  * Stripe is mocked; these pin the session payload we hand it.
  */
@@ -20,19 +20,21 @@ import { mockSession } from '../../helpers/server-action-mocks';
  * setting it to a passthrough of the real function in the kill-switch block.
  */
 const feeMock = vi.hoisted(() => ({
-  enabled: true,
-  compute: (subtotalCents: number) =>
-    subtotalCents <= 0 ? 0 : 30 + Math.round((subtotalCents * 150) / 10000),
+  /** Fixed cents; set to 0 together with `bps` to exercise the kill-switch. */
+  fixed: 30,
+  bps: 150,
+  compute(subtotalCents: number) {
+    if (subtotalCents <= 0) return 0;
+    if (this.fixed === 0 && this.bps === 0) return 0;
+    return this.fixed + Math.round((subtotalCents * this.bps) / 10000);
+  },
 }));
 
 vi.mock('@/lib/plans', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/plans')>();
   return {
     ...actual,
-    getBuyerServiceFeeCents: (subtotalCents: number) =>
-      feeMock.enabled
-        ? feeMock.compute(subtotalCents)
-        : actual.getBuyerServiceFeeCents(subtotalCents),
+    getBuyerServiceFeeCents: (subtotalCents: number) => feeMock.compute(subtotalCents),
   };
 });
 
@@ -144,7 +146,8 @@ beforeEach(async () => {
   mockSession.userId = null;
   mockSession.activeRole = 'talent';
   createSessionMock.mockClear();
-  feeMock.enabled = true;
+  feeMock.fixed = 30;
+  feeMock.bps = 150;
 });
 
 describe('guest checkout — service fee line item', () => {
@@ -264,9 +267,13 @@ describe('authenticated checkout — service fee line item', () => {
   });
 });
 
-describe('kill-switch — the shipped configuration adds no fee', () => {
+describe('kill-switch — a fee of 0 adds no line item', () => {
+  // What a rollback relies on: set the amounts back to 0 and the session is
+  // byte-identical to the pre-v2 one, with no code revert needed beyond the
+  // constants.
   beforeEach(() => {
-    feeMock.enabled = false;
+    feeMock.fixed = 0;
+    feeMock.bps = 0;
   });
 
   it('guest checkout sends photo line items only', async () => {

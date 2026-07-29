@@ -72,13 +72,34 @@ describe('computeBuyerServiceFeeCents', () => {
 });
 
 describe('getBuyerServiceFeeCents (what ships today)', () => {
-  it('is dark — the configured amounts are 0, so no buyer is charged a fee', () => {
-    // Guards the dark launch: if someone raises these constants, they have to
-    // come here and say so deliberately, in a reviewable diff.
-    expect(BUYER_SERVICE_FEE_FIXED_CENTS).toBe(0);
-    expect(BUYER_SERVICE_FEE_BPS).toBe(0);
-    expect(getBuyerServiceFeeCents(1000)).toBe(0);
-    expect(getBuyerServiceFeeCents(1)).toBe(0);
+  it('charges the configured €0.25 + 3% (T-199)', () => {
+    // Pins what every buyer is actually charged. Changing it means coming here
+    // and saying so deliberately, in a reviewable diff.
+    expect(BUYER_SERVICE_FEE_FIXED_CENTS).toBe(25);
+    expect(BUYER_SERVICE_FEE_BPS).toBe(300);
+  });
+
+  it('produces the fee amounts the pricing decision was made on', () => {
+    // The worked examples behind the choice — a Pro sale is the binding case,
+    // since there the fee is the only thing covering Stripe.
+    expect(getBuyerServiceFeeCents(100)).toBe(28); // €1.00 photo  → €0.28
+    expect(getBuyerServiceFeeCents(500)).toBe(40); // €5.00 photo  → €0.40
+    expect(getBuyerServiceFeeCents(1000)).toBe(55); // €10.00 photo → €0.55
+    expect(getBuyerServiceFeeCents(5000)).toBe(175); // €50.00 photo → €1.75
+  });
+
+  it('still charges nothing on an empty or free cart', () => {
+    expect(getBuyerServiceFeeCents(0)).toBe(0);
+    expect(getBuyerServiceFeeCents(-1)).toBe(0);
+  });
+
+  it('grows with the subtotal but never faster than the configured percent', () => {
+    // Guards against a future edit that makes the fee superlinear.
+    const perCentOfSubtotal = (subtotal: number) =>
+      (getBuyerServiceFeeCents(subtotal) - BUYER_SERVICE_FEE_FIXED_CENTS) / subtotal;
+    for (const subtotal of [100, 1000, 10_000, 100_000]) {
+      expect(perCentOfSubtotal(subtotal)).toBeCloseTo(BUYER_SERVICE_FEE_BPS / 10_000, 4);
+    }
   });
 
   it('binds the configured amounts to the kernel', () => {
@@ -112,8 +133,19 @@ describe('isPhotoPriceAboveFloor', () => {
     expect(isPhotoPriceAboveFloor(50, 0)).toBe(true);
   });
 
-  it('is dark today — the shipped floor is 0, so no existing price is rejected', () => {
-    expect(MIN_PHOTO_PRICE_CENTS).toBe(0);
-    expect(isPhotoPriceAboveFloor(1, MIN_PHOTO_PRICE_CENTS)).toBe(true);
+  it('enforces the shipped €1.50 floor (T-199)', () => {
+    expect(MIN_PHOTO_PRICE_CENTS).toBe(150);
+    expect(isPhotoPriceAboveFloor(149, MIN_PHOTO_PRICE_CENTS)).toBe(false);
+    expect(isPhotoPriceAboveFloor(150, MIN_PHOTO_PRICE_CENTS)).toBe(true);
+    // Free events stay exempt at any floor.
+    expect(isPhotoPriceAboveFloor(null, MIN_PHOTO_PRICE_CENTS)).toBe(true);
+    expect(isPhotoPriceAboveFloor(0, MIN_PHOTO_PRICE_CENTS)).toBe(true);
+  });
+
+  it('keeps the fee proportionate at the floor', () => {
+    // The floor exists so the fee is never a silly fraction of the price: at
+    // €1.50 the fee is €0.30, i.e. 20% — the ceiling we were willing to show.
+    const feeAtFloor = getBuyerServiceFeeCents(MIN_PHOTO_PRICE_CENTS);
+    expect(feeAtFloor / MIN_PHOTO_PRICE_CENTS).toBeLessThanOrEqual(0.2);
   });
 });

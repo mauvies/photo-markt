@@ -6,20 +6,14 @@
  * until someone next writes its price. These pin that behaviour end to end
  * against the real schema.
  *
- * The shipped floor is 0 (dark launch), so the constant is overridden here to
- * drive the rule at a value we have not turned on yet. Only the amount is
- * replaced — the predicate and everything else in `plans.ts` stay real.
+ * These run against the REAL shipped floor (€1.50 as of T-199) — no mock — so
+ * they prove what production actually rejects.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockSession } from '../../helpers/server-action-mocks';
 
 const TEST_FLOOR_CENTS = 150;
-
-vi.mock('@/lib/plans', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/plans')>();
-  return { ...actual, MIN_PHOTO_PRICE_CENTS: 150 };
-});
 
 vi.mock('@/database/server', async () => {
   const { createClient } = await import('@supabase/supabase-js');
@@ -107,7 +101,8 @@ beforeEach(async () => {
 });
 
 describe('minimum photo price — configuration', () => {
-  it('runs against the overridden floor (€1.50), not the shipped 0', () => {
+  it('runs against the real shipped floor (€1.50)', () => {
+    // If this fails the floor moved; the price literals below assume €1.50.
     expect(MIN_PHOTO_PRICE_CENTS).toBe(TEST_FLOOR_CENTS);
   });
 });
