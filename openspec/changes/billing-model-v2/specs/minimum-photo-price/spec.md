@@ -2,7 +2,7 @@
 
 ### Requirement: Priced photos must meet a configurable minimum price
 
-When a photographer sets a non-null, non-zero `price_per_photo` on event create or edit, the value MUST be at least `MIN_PHOTO_PRICE_CENTS` (a validated env var, provisional €1.50). The floor is enforced at write time in the event create and edit actions/schemas — not as a database constraint — so the fixed service fee is never disproportionate to the item. A free event (`price_per_photo` null or 0) is exempt. Setting `MIN_PHOTO_PRICE_CENTS=0` disables the floor.
+When a photographer sets a non-null, non-zero `price_per_photo` on event create or edit, the value MUST be at least `MIN_PHOTO_PRICE_CENTS` (a named constant in `src/lib/plans.ts`, shipping at 0 and provisionally targeted at €1.50 — see the buyer-service-fee spec for why these are constants rather than env vars). The floor is enforced at write time in the event create and edit actions/schemas — not as a database constraint — so the fixed service fee is never disproportionate to the item. A free event (`price_per_photo` null or 0) is exempt. Setting `MIN_PHOTO_PRICE_CENTS=0` disables the floor.
 
 #### Scenario: A priced photo below the floor is rejected at create
 - **WHEN** a photographer creates an event with `price_per_photo` = €0.50 and the floor is €1.50
@@ -21,5 +21,5 @@ When a photographer sets a non-null, non-zero `price_per_photo` on event create 
 - **THEN** it is not retroactively rejected; the floor applies only when its price is next written
 
 #### Scenario: The floor can be disabled
-- **WHEN** `MIN_PHOTO_PRICE_CENTS=0`
+- **WHEN** `MIN_PHOTO_PRICE_CENTS` is 0
 - **THEN** any positive price is accepted (no minimum enforced)

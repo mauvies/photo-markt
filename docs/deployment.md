@@ -66,8 +66,6 @@ Production environment. Defaults noted where the schema provides one.
 | `NEXT_PUBLIC_GOOGLE_PLACES_API_KEY` | Location autocomplete in event forms falls back to mock suggestions. |
 | `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` | Server / browser error monitoring is a no-op (no events sent). |
 | `SENTRY_ORG` / `SENTRY_PROJECT` / `SENTRY_AUTH_TOKEN` | Build-time only. Source maps upload to Sentry **only when `SENTRY_AUTH_TOKEN` is set**; token-less builds still succeed. |
-| `BUYER_SERVICE_FEE_FIXED_CENTS` / `BUYER_SERVICE_FEE_BPS` | Buyer service fee (billing v2). Both default to **0**, which reproduces the pre-v2 behaviour exactly: no fee is charged, no fee line item is created, no fee is displayed. Setting them switches v2 on; setting them back to 0 is the rollback (no code revert). |
-| `MIN_PHOTO_PRICE_CENTS` | Minimum price for a *priced* event, enforced when the price is written. Default **0** = no floor. Free events are always exempt. |
 
 > **Not required:** `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `PLATFORM_FEE_BPS`,
 > `SUPABASE_JWT_SECRET`, and `RESEND_FROM_EMAIL` appear in some older docs but

@@ -6,17 +6,19 @@
  * until someone next writes its price. These pin that behaviour end to end
  * against the real schema.
  *
- * The floor is env-configured and `env.mjs` parses at import time, so the value
- * is set in a `vi.hoisted` block: it runs before the module imports below.
- * (Default in every other test file is 0 = disabled, which is also production's
- * dark-launch default.)
+ * The shipped floor is 0 (dark launch), so the constant is overridden here to
+ * drive the rule at a value we have not turned on yet. Only the amount is
+ * replaced — the predicate and everything else in `plans.ts` stay real.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockSession } from '../../helpers/server-action-mocks';
 
-vi.hoisted(() => {
-  process.env.MIN_PHOTO_PRICE_CENTS = '150';
+const TEST_FLOOR_CENTS = 150;
+
+vi.mock('@/lib/plans', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/plans')>();
+  return { ...actual, MIN_PHOTO_PRICE_CENTS: 150 };
 });
 
 vi.mock('@/database/server', async () => {
@@ -63,7 +65,7 @@ vi.mock('next/headers', () => ({
 
 import { updateEventAction } from '@/app/[lang]/dashboard/photographer/events/[id]/edit/actions';
 import { createEvent } from '@/app/[lang]/dashboard/photographer/events/new/actions';
-import { getMinPhotoPriceCents } from '@/lib/plans';
+import { MIN_PHOTO_PRICE_CENTS } from '@/lib/plans';
 import {
   createServiceClient,
   createTestEvent,
@@ -105,8 +107,8 @@ beforeEach(async () => {
 });
 
 describe('minimum photo price — configuration', () => {
-  it('reads the configured floor (€1.50)', () => {
-    expect(getMinPhotoPriceCents()).toBe(150);
+  it('runs against the overridden floor (€1.50), not the shipped 0', () => {
+    expect(MIN_PHOTO_PRICE_CENTS).toBe(TEST_FLOOR_CENTS);
   });
 });
 
