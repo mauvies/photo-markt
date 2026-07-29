@@ -7,10 +7,12 @@ Groups 0 and 4 are OWNER gates, not code.
 
 ## 0. Design gate (OWNER — not code)
 
-- [ ] 0.1 Owner approves this design in the PR before any child ticket below is opened
-- [ ] 0.2 Owner confirms they still want bundles knowing the economic premise was corrected — the buyer
+- [x] 0.1 Owner approves this design in the PR before any child ticket below is opened — **approved
+      2026-07-29**, PR #263 merged; children opened as **T-203 (A) → T-204 (B) → T-205 (C)**
+- [x] 0.2 Owner confirms they still want bundles knowing the economic premise was corrected — the buyer
       service fee is charged **once per checkout**, not once per photo, so bundles pay off through average
-      order value and conversion, not through amortizing a fee that was never paid eight times
+      order value and conversion, not through amortizing a fee that was never paid eight times —
+      **confirmed with the approval above**
 
 ## 1. Ticket A — schema, kernel, allocation, photographer configuration (ships dark)
 
