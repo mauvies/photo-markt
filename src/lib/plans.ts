@@ -194,6 +194,18 @@ export function getBuyerServiceFeeCents(subtotalCents: number): number {
 }
 
 /**
+ * Whether buyers are actually charged a service fee right now.
+ *
+ * Distinct from `getBuyerServiceFeeCents(x) > 0`, which needs a subtotal to ask
+ * about. This answers the question the photographer-facing copy needs — "is
+ * there a buyer fee at all?" — so an explanation of a fee nobody is being
+ * charged is never shown while the feature is dark.
+ */
+export function isBuyerServiceFeeEnabled(): boolean {
+  return BUYER_SERVICE_FEE_FIXED_CENTS > 0 || BUYER_SERVICE_FEE_BPS > 0;
+}
+
+/**
  * Whether a photo price clears the floor. The one predicate both event-write
  * paths (create + edit) use, so they can't drift apart.
  *

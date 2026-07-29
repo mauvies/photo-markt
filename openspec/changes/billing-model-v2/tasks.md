@@ -7,8 +7,8 @@ and the final rollout are OWNER gates, not code.
 
 ## 0. Prerequisite gate (OWNER — measurement, not code)
 
-- [ ] 0.1 Measure the real Stripe fee distribution from the dashboard for the actual card/currency mix — average AND worst case (domestic EU vs cross-border vs non-EEA card vs Link), including the ~0.5% Connect transfer fee
-- [ ] 0.2 Set the worst-case-safe values for `BUYER_SERVICE_FEE_FIXED_CENTS`, `BUYER_SERVICE_FEE_BPS`, `MIN_PHOTO_PRICE_CENTS` — validate against the tightest case (Pro 0% commission, €1.50 photo, expensive card) staying ≥ €0
+- [x] 0.1 Measure the real Stripe fee distribution from the dashboard for the actual card/currency mix — average AND worst case (domestic EU vs cross-border vs non-EEA card vs Link), including the ~0.5% Connect transfer fee — **done by the owner (2026-07-29)**
+- [ ] 0.2 Set the worst-case-safe values for `BUYER_SERVICE_FEE_FIXED_CENTS`, `BUYER_SERVICE_FEE_BPS`, `MIN_PHOTO_PRICE_CENTS` — validate against the tightest case (Pro 0% commission, €1.50 photo, expensive card) staying ≥ €0. **Tracked as T-199**; measurement is done, the numbers still need to be chosen and written into `plans.ts`
 - [x] 0.3 Owner approves this design before any child ticket below is opened — approved 2026-07-28; children opened as T-195 (A) / T-196 (B) / T-197 (C)
 
 ## 1. Ticket A — config, calc point, min price (dark: fee constants ship at 0)
@@ -37,14 +37,14 @@ here: it is a subscription price, not per-sale economics.
 
 ## 3. Ticket C — earnings breakdown + i18n polish
 
-- [ ] 3.1 Photographer earnings/sales view: net = `price × (1 − commission)`; buyer fee excluded from the photographer's figure; add any breakdown copy (en+es)
-- [ ] 3.2 Regression test: a Pro 0% sale shows net = price and the buyer fee is neither added to nor subtracted from the photographer's total
+- [x] 3.1 Photographer earnings/sales view: net = `price × (1 − commission)`; buyer fee excluded from the photographer's figure; add any breakdown copy (en+es)
+- [x] 3.2 Regression test: a Pro 0% sale shows net = price and the buyer fee is neither added to nor subtracted from the photographer's total
 
 ## 4. Rollout (OWNER gate)
 
-- [ ] 4.1 Ship tickets A–C with fee env = 0 (dark, no buyer-facing change)
-- [ ] 4.2 Flip the env vars to the measured worst-case values → v2 goes live; rollback = set them back to 0 (no code revert). Historical orders/earnings not migrated.
+- [x] 4.1 Ship tickets A–C with the fee constants at 0 (dark, no buyer-facing change) — A #258, B #259, C (this change)
+- [ ] 4.2 Raise the constants in `src/lib/plans.ts` from 0 to the measured values → v2 goes live; rollback = revert that commit. Historical orders/earnings not migrated. **Tracked as T-199.**
 
 ## 5. Follow-up (out of scope, capture separately)
 
-- [ ] 5.1 Bundles / "buy all my photos" volume pricing (Sportograf model) — decide before/after v2 goes live; amortizes the fixed fee across more photos
+- [ ] 5.1 Bundles / "buy all my photos" volume pricing (Sportograf model) — amortizes the fixed fee across more photos. **Captured as T-200** (the owner wants it soon).
