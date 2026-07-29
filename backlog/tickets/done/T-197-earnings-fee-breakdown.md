@@ -5,7 +5,7 @@
 - **Blockers:** ninguno — T-196 mergeado en `main` (PR #259)
 - **Rama:** `feat/earnings-fee-breakdown`
 - **OpenSpec change:** `billing-model-v2` (activo → **archivar con `/opsx:archive` al cerrar este ticket**, es el último hijo). Grupo **3** de `tasks.md`
-- **PR:** (draft)
+- **PR:** #260 (draft)
 
 ## Requerimiento
 Tercer y último hijo de **T-194**. La vista de ventas/ganancias del fotógrafo debe dejar claro que el **service fee del
