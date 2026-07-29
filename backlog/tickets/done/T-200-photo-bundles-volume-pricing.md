@@ -1,11 +1,11 @@
 # T-200 · [DISEÑO] Bundles / "compra todas mis fotos" — precio por volumen
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `design/photo-bundles` (solo el change de OpenSpec — el diseño se ejecuta primero)
-- **OpenSpec change:** **sí** — toca pagos y precios; empezar con `/opsx:propose` antes de escribir código
-- **PR:** —
+- **OpenSpec change:** `photo-bundles` — **activo** (NO archivado; los hijos A–C lo consumen vía `/opsx:apply`)
+- **PR:** #263 (draft — gate: aprobación del usuario antes de abrir los hijos)
 
 ## Requerimiento
 Precio por volumen: en vez de pagar foto a foto, el atleta puede comprar **todas las fotos suyas de un evento**
