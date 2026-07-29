@@ -19,6 +19,8 @@ import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { isValidSessionRange, normalizeSessionTime, SESSION_RANGE_ERROR } from '@/lib/format-date';
 import { inngest } from '@/lib/inngest/client';
+import { minPhotoPriceErrorMessage } from '@/lib/min-photo-price';
+import { isPhotoPriceAboveFloor, MIN_PHOTO_PRICE_CENTS } from '@/lib/plans';
 
 // --- Constants ---
 
@@ -106,6 +108,19 @@ const eventSchema = z
         code: z.ZodIssueCode.custom,
         message: SESSION_RANGE_ERROR,
         path: ['session_end_time'],
+      });
+    }
+    // T-195: mirror of the create action's floor. Applied only when the price
+    // is actually written, so an event priced below a later-raised floor keeps
+    // working until someone edits it.
+    const minCents = MIN_PHOTO_PRICE_CENTS;
+    const priceCents =
+      data.price_per_photo === null ? null : Math.round(data.price_per_photo * 100);
+    if (!isPhotoPriceAboveFloor(priceCents, minCents)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: minPhotoPriceErrorMessage(minCents),
+        path: ['price_per_photo'],
       });
     }
   });

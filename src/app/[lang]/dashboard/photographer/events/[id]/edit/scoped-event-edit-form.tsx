@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import type { Event } from '@/database/queries/events';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { minPhotoPriceMessage } from '@/lib/min-photo-price';
 import { updateEventAction } from './actions';
 import { EventAiSettingsFields } from './components/event-ai-settings-fields';
 import { EventFormFields } from './components/event-form-fields';
@@ -80,8 +81,15 @@ export function ScopedEventEditForm({ event, section, labels }: ScopedEventEditF
             router.push(lp(`/dashboard/photographer/events/${event.id}?tab=details`));
           } catch (error) {
             console.error(error);
+            // T-195: render the price-floor sentinel as prose. This form has no
+            // dictionary (like its sibling `event-form-fields`), so the copy is
+            // English here — matching the file's existing convention.
+            const minPrice = minPhotoPriceMessage(error, 'Price per photo must be at least {min}.');
             setSubmitError(
-              error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+              minPrice ??
+                (error instanceof Error
+                  ? error.message
+                  : 'Something went wrong. Please try again.'),
             );
           }
         });

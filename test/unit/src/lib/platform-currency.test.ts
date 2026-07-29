@@ -29,7 +29,9 @@ describe('platform currency', () => {
     const monthly = formatPlanPrice(starter, 'monthly');
     expect(monthly.startsWith('€')).toBe(true);
     expect(monthly).not.toContain('$');
-    expect(monthly).toBe('€14.99/mo');
+    // Starter was repriced to 9.99 in billing v2 (T-195); the point of this
+    // assertion is the currency, and the amount is pinned in plans.test.ts.
+    expect(monthly).toBe('€9.99/mo');
   });
 
   it('formatPlanPrice returns Free for the free plan (no currency)', () => {

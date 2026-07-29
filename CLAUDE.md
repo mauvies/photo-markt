@@ -212,9 +212,39 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
 ## Payments
 
 ### Photographer Subscriptions
-Three plans: **Free** (12% commission), **Starter** ($14.99/mo, 8% commission), **Pro** ($29.99/mo, 5% commission).
+Three plans: **Free** (12% commission), **Starter** (€14.99/mo, 8% commission), **Pro** (€29.99/mo, 5% commission).
 Price IDs in env: `STRIPE_PRICE_AMATEUR`, `STRIPE_PRICE_PRO`.
 Billing management in `/dashboard/photographer/settings/`.
+`PLANS[].salesFeePercent` in `src/lib/plans.ts` is the single source of truth: `PLATFORM_FEE_RATES`
+derives from it, and `test/unit/lib/pricing-consistency.test.ts` fails if the advertised copy drifts
+from it. **Billing v2 lowers these to 8/4/0 and reprices Starter to €9.99, but that ships with T-196,
+not before** — the webhook transfers `getPhotographerNetCents(gross)` and the platform absorbs
+Stripe's cost, so Pro at 0% without the buyer fee live would make every Pro sale a loss.
+
+### Buyer service fee (billing v2 — T-194/T-195)
+The buyer pays a **fixed + percent** fee on top of the cart subtotal, as its own visible Stripe line
+item. The fixed part is what structurally covers Stripe's own fixed per-charge cost — a percent-only
+commission cannot, which is why small sales used to sell at a loss.
+- **Single calc point:** `getBuyerServiceFeeCents(subtotalCents)` in `src/lib/plans.ts`
+  (`FIXED + round(subtotal × BPS / 10000)`; non-positive subtotal ⇒ 0). No checkout, cart, or earnings
+  path may re-derive the fee inline — the charged and the displayed amount must come from here or a
+  receipt can disagree with the cart (the PSD2 risk is surprise pricing, not the flat fee itself).
+  Safe to call from the browser too, so the cart displays exactly what checkout charges.
+- **Plain constants, deliberately NOT env vars:** `BUYER_SERVICE_FEE_FIXED_CENTS`,
+  `BUYER_SERVICE_FEE_BPS`, `MIN_PHOTO_PRICE_CENTS` in `plans.ts`, all shipping at **0**. These decide
+  what every buyer is charged, so the review trail beats deploy-free tweaking: a constant gives a
+  diff, a reviewer and a revertible commit, and a typo gets caught by a human rather than silently
+  charging everyone. **0 reproduces pre-v2 behaviour exactly** — the feature ships dark, turning it on
+  is a one-line PR, rollback is reverting it. `computeBuyerServiceFeeCents` is the pure kernel tests
+  use to exercise values that aren't shipped yet.
+- **Minimum photo price:** `MIN_PHOTO_PRICE_CENTS` is a floor on a *priced* event, enforced at write
+  time in both event actions via `isPhotoPriceAboveFloor` (create + edit `superRefine`), **not** as a
+  DB constraint — so an event priced below a later-raised floor keeps working until its price is next
+  written. Free events (`null`/0) are exempt; a floor of 0 disables the rule. The rejection travels to
+  the client as the parseable sentinel `MIN_PHOTO_PRICE:<cents>` (`src/lib/min-photo-price.ts`,
+  same scheme as `plan-limits.ts`) because server actions have no dictionary. ⚠️ Next redacts thrown
+  Server Action messages in prod (the T-189 finding), so the localized copy only renders reliably in
+  dev — same caveat as `PlanLimitError`.
 
 ### Photo Purchases (Talent)
 One-time Stripe payments. Webhook handler at `/src/app/api/stripe/webhook/route.ts`.

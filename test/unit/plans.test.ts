@@ -72,16 +72,27 @@ describe('formatPlanPrice', () => {
     expect(formatPlanPrice(getPlanById('free')!)).toBe('Free');
   });
 
-  it('formats a monthly plan as €X/mo (T-193)', () => {
-    expect(formatPlanPrice(getPlanById('starter')!)).toBe('€14.99/mo');
-    expect(formatPlanPrice(getPlanById('starter')!, 'monthly')).toBe('€14.99/mo');
+  it('formats a monthly plan as €X/mo (T-193; Starter repriced in T-195)', () => {
+    expect(formatPlanPrice(getPlanById('starter')!)).toBe('€9.99/mo');
+    expect(formatPlanPrice(getPlanById('starter')!, 'monthly')).toBe('€9.99/mo');
   });
 
   it('formats a yearly plan as the per-month equivalent (€X/mo)', () => {
     // Yearly billing shows the per-month-equivalent on cards. The full
     // "billed yearly" lump-sum is rendered as a subtitle by the UI, not
     // by this helper.
-    expect(formatPlanPrice(getPlanById('starter')!, 'yearly')).toBe('€11.99/mo');
+    expect(formatPlanPrice(getPlanById('starter')!, 'yearly')).toBe('€7.99/mo');
     expect(formatPlanPrice(getPlanById('pro')!, 'yearly')).toBe('€23.99/mo');
+  });
+
+  it('keeps the Starter yearly lump sum consistent with its per-month figure', () => {
+    // 95.88 / 12 = 7.99 — the card would otherwise advertise a discount that
+    // Stripe does not actually charge.
+    const starter = getPlanById('starter')!;
+    expect(starter.pricing?.yearlyTotal).toBe(95.88);
+    expect(starter.pricing?.yearlyMonthlyEquivalent).toBeCloseTo(
+      (starter.pricing?.yearlyTotal ?? 0) / 12,
+      2,
+    );
   });
 });

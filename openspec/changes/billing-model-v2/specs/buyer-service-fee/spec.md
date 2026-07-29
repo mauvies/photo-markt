@@ -2,7 +2,9 @@
 
 ### Requirement: Service fee is computed in a single place as fixed + percent
 
-The buyer service fee MUST be computed by exactly one function, `getBuyerServiceFeeCents(subtotalCents)` in `src/lib/plans.ts`, as `BUYER_SERVICE_FEE_FIXED_CENTS + round(subtotalCents × BUYER_SERVICE_FEE_BPS / 10000)`. The three values (`BUYER_SERVICE_FEE_FIXED_CENTS`, `BUYER_SERVICE_FEE_BPS`, and the minimum-price constant) MUST come from validated environment variables (`env.mjs`), never hardcoded at call sites. No checkout, cart, or earnings code path MAY re-derive the fee inline.
+The buyer service fee MUST be computed by exactly one function, `getBuyerServiceFeeCents(subtotalCents)` in `src/lib/plans.ts`, as `BUYER_SERVICE_FEE_FIXED_CENTS + round(subtotalCents × BUYER_SERVICE_FEE_BPS / 10000)`. The three values (`BUYER_SERVICE_FEE_FIXED_CENTS`, `BUYER_SERVICE_FEE_BPS`, and the minimum-price constant) MUST be declared in exactly one place in `src/lib/plans.ts` and MUST NOT be duplicated or re-stated at call sites. No checkout, cart, or earnings code path MAY re-derive the fee inline.
+
+They are **named constants, not environment variables** (amended during T-195, superseding the original env-var decision in `design.md` D2). These amounts determine what every buyer is charged, so a reviewable diff and a revertible commit are worth more than the ability to change them without a deploy — which on Vercel needs a redeploy anyway. Constants also keep the values out of silent staging/prod drift, put a human between a typo and every buyer's card, and keep `plans.ts` free of server-only env access so the cart can display the fee from the same function that charges it.
 
 #### Scenario: Fee combines the fixed and percent components
 - **WHEN** `getBuyerServiceFeeCents` is called for a €10.00 (1000-cent) subtotal with `FIXED=30`, `BPS=150`
@@ -34,10 +36,10 @@ The cart and checkout UI MUST show the fee as its own line and the total as `sub
 
 ### Requirement: The fee is disable-able via configuration
 
-Setting `BUYER_SERVICE_FEE_FIXED_CENTS=0` and `BUYER_SERVICE_FEE_BPS=0` MUST reproduce the pre-v2 buyer-facing behavior: no fee line item is added and no fee line is displayed. This is the kill-switch / dark-launch default.
+`BUYER_SERVICE_FEE_FIXED_CENTS = 0` and `BUYER_SERVICE_FEE_BPS = 0` MUST reproduce the pre-v2 buyer-facing behavior: no fee line item is added and no fee line is displayed. This is the kill-switch, and it is the value the constants ship at — the feature lands dark and is switched on by a one-line change to `plans.ts`, with rollback being a revert of that commit.
 
 #### Scenario: Zero configuration adds no fee
-- **WHEN** both fee env values are 0
+- **WHEN** both fee constants are 0
 - **THEN** `getBuyerServiceFeeCents` returns 0, no service-fee line item is added to the Stripe session, and the cart shows no fee line (total equals subtotal)
 
 ### Requirement: Seller commission is reduced to clean margin

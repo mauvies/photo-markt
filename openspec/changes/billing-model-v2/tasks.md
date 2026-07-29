@@ -9,22 +9,31 @@ and the final rollout are OWNER gates, not code.
 
 - [ ] 0.1 Measure the real Stripe fee distribution from the dashboard for the actual card/currency mix — average AND worst case (domestic EU vs cross-border vs non-EEA card vs Link), including the ~0.5% Connect transfer fee
 - [ ] 0.2 Set the worst-case-safe values for `BUYER_SERVICE_FEE_FIXED_CENTS`, `BUYER_SERVICE_FEE_BPS`, `MIN_PHOTO_PRICE_CENTS` — validate against the tightest case (Pro 0% commission, €1.50 photo, expensive card) staying ≥ €0
-- [ ] 0.3 Owner approves this design before any child ticket below is opened
+- [x] 0.3 Owner approves this design before any child ticket below is opened — approved 2026-07-28; children opened as T-195 (A) / T-196 (B) / T-197 (C)
 
-## 1. Ticket A — config, calc point, min price, commission rates (dark: fee defaults 0)
+## 1. Ticket A — config, calc point, min price (dark: fee constants ship at 0)
 
-- [ ] 1.1 Add `BUYER_SERVICE_FEE_FIXED_CENTS`, `BUYER_SERVICE_FEE_BPS`, `MIN_PHOTO_PRICE_CENTS` to `env.mjs` (Zod, safe defaults = 0)
-- [ ] 1.2 Add `getBuyerServiceFeeCents(subtotalCents)` to `src/lib/plans.ts` with the single fixed+percent+round rule; unit tests for combine/round/zero-disable
-- [ ] 1.3 Lower `PLATFORM_FEE_RATES` to Free 8 / Starter 4 / Pro 0; update any advertised-percent copy that derives from it; unit test asserts `getPhotographerNetCents` per tier
-- [ ] 1.4 Enforce `MIN_PHOTO_PRICE_CENTS` in the event create + edit actions/schemas (free events exempt; floor=0 disables); regression tests (reject below, accept at/above, exempt free, existing rows untouched)
-- [ ] 1.5 Reprice Starter — update `plans.ts` display to €9.99/€95.88 (⚠️ recreate the `STRIPE_PRICE_AMATEUR*` Price objects at €9.99 EUR in the Stripe dashboard — deploy prerequisite, not code)
+<!--
+Amended during T-195: the commission cut (1.3) moved to ticket B. It is NOT gated
+by the fee amounts, so shipping it before the buyer fee is live would settle every
+Pro sale at 0% commission while the platform still absorbs Stripe's cost — a loss
+on each one. The two halves must deploy together. The Starter reprice (1.5) stays
+here: it is a subscription price, not per-sale economics.
+-->
 
-## 2. Ticket B — checkout line item + cart/checkout display (both flows)
+- [x] 1.1 Declare `BUYER_SERVICE_FEE_FIXED_CENTS`, `BUYER_SERVICE_FEE_BPS`, `MIN_PHOTO_PRICE_CENTS` as named constants in `src/lib/plans.ts`, shipping at 0 (amended from env vars — see the buyer-service-fee spec)
+- [x] 1.2 Add `getBuyerServiceFeeCents(subtotalCents)` to `src/lib/plans.ts` with the single fixed+percent+round rule; unit tests for combine/round/zero-disable
+- [ ] 1.3 **→ moved to ticket B.** Lower `PLATFORM_FEE_RATES` to Free 8 / Starter 4 / Pro 0; update any advertised-percent copy that derives from it; unit test asserts `getPhotographerNetCents` per tier
+- [x] 1.4 Enforce `MIN_PHOTO_PRICE_CENTS` in the event create + edit actions/schemas (free events exempt; floor=0 disables); regression tests (reject below, accept at/above, exempt free, existing rows untouched)
+- [x] 1.5 Reprice Starter — `plans.ts` display at €9.99/€95.88. Stays in ticket A (unlike 1.3): a subscription price is unrelated to the per-sale commission math, and the `STRIPE_PRICE_AMATEUR*` Price objects were already recreated at €9.99 EUR on 2026-07-28 — so shipping the display change closes a live mismatch rather than opening one
+
+## 2. Ticket B — checkout line item + cart/checkout display + commission cut (both flows)
 
 - [ ] 2.1 Add the service-fee Stripe `line_item` to the guest checkout (`cart/actions.ts`) from `getBuyerServiceFeeCents` of the validated subtotal; skip when fee = 0
 - [ ] 2.2 Add the same to the authenticated checkout (`dashboard/talent/cart/actions.ts`)
 - [ ] 2.3 Cart/checkout UI: show subtotal + labeled service-fee line + total, up front; i18n strings (en+es); hidden when fee = 0
-- [ ] 2.4 Regression tests: checkout session itemizes the fee and equals `getBuyerServiceFeeCents`; zero-config adds no line item; displayed total = subtotal + fee
+- [ ] 2.4 Land task 1.3 here (commission rates 8/4/0), so the seller economics and the buyer fee go live in the same deploy
+- [ ] 2.5 Regression tests: checkout session itemizes the fee and equals `getBuyerServiceFeeCents`; zero-config adds no line item; displayed total = subtotal + fee; `getPhotographerNetCents` per tier at the new rates
 
 ## 3. Ticket C — earnings breakdown + i18n polish
 
