@@ -1,7 +1,7 @@
 # T-198 · Error de Next intermitente en `/[lang]/dashboard/talent` mientras redirige
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `fix/talent-dashboard-redirect-error`
 - **OpenSpec change:** —  (se crea al ejecutar, si el cambio toca >1 archivo o es ambiguo)
