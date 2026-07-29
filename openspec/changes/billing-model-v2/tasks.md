@@ -23,17 +23,17 @@ here: it is a subscription price, not per-sale economics.
 
 - [x] 1.1 Declare `BUYER_SERVICE_FEE_FIXED_CENTS`, `BUYER_SERVICE_FEE_BPS`, `MIN_PHOTO_PRICE_CENTS` as named constants in `src/lib/plans.ts`, shipping at 0 (amended from env vars — see the buyer-service-fee spec)
 - [x] 1.2 Add `getBuyerServiceFeeCents(subtotalCents)` to `src/lib/plans.ts` with the single fixed+percent+round rule; unit tests for combine/round/zero-disable
-- [ ] 1.3 **→ moved to ticket B.** Lower `PLATFORM_FEE_RATES` to Free 8 / Starter 4 / Pro 0; update any advertised-percent copy that derives from it; unit test asserts `getPhotographerNetCents` per tier
+- [x] 1.3 **Landed in ticket B (T-196).** Lower `PLATFORM_FEE_RATES` to Free 8 / Starter 4 / Pro 0; update any advertised-percent copy that derives from it; unit test asserts `getPhotographerNetCents` per tier
 - [x] 1.4 Enforce `MIN_PHOTO_PRICE_CENTS` in the event create + edit actions/schemas (free events exempt; floor=0 disables); regression tests (reject below, accept at/above, exempt free, existing rows untouched)
 - [x] 1.5 Reprice Starter — `plans.ts` display at €9.99/€95.88. Stays in ticket A (unlike 1.3): a subscription price is unrelated to the per-sale commission math, and the `STRIPE_PRICE_AMATEUR*` Price objects were already recreated at €9.99 EUR on 2026-07-28 — so shipping the display change closes a live mismatch rather than opening one
 
 ## 2. Ticket B — checkout line item + cart/checkout display + commission cut (both flows)
 
-- [ ] 2.1 Add the service-fee Stripe `line_item` to the guest checkout (`cart/actions.ts`) from `getBuyerServiceFeeCents` of the validated subtotal; skip when fee = 0
-- [ ] 2.2 Add the same to the authenticated checkout (`dashboard/talent/cart/actions.ts`)
-- [ ] 2.3 Cart/checkout UI: show subtotal + labeled service-fee line + total, up front; i18n strings (en+es); hidden when fee = 0
-- [ ] 2.4 Land task 1.3 here (commission rates 8/4/0), so the seller economics and the buyer fee go live in the same deploy
-- [ ] 2.5 Regression tests: checkout session itemizes the fee and equals `getBuyerServiceFeeCents`; zero-config adds no line item; displayed total = subtotal + fee; `getPhotographerNetCents` per tier at the new rates
+- [x] 2.1 Add the service-fee Stripe `line_item` to the guest checkout (`cart/actions.ts`) from `getBuyerServiceFeeCents` of the validated subtotal; skip when fee = 0
+- [x] 2.2 Add the same to the authenticated checkout (`dashboard/talent/cart/actions.ts`)
+- [x] 2.3 Cart/checkout UI: show subtotal + labeled service-fee line + total, up front; i18n strings (en+es); hidden when fee = 0
+- [x] 2.4 Land task 1.3 here (commission rates 8/4/0), so the seller economics and the buyer fee go live in the same deploy
+- [x] 2.5 Regression tests: checkout session itemizes the fee and equals `getBuyerServiceFeeCents`; zero-config adds no line item; displayed total = subtotal + fee; `getPhotographerNetCents` per tier at the new rates
 
 ## 3. Ticket C — earnings breakdown + i18n polish
 

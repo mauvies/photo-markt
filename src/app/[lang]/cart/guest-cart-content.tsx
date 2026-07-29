@@ -11,6 +11,7 @@ import {
   loadGuestCartStateAction,
 } from '@/app/[lang]/cart/actions';
 import { CartItemRow } from '@/components/cart/cart-item-row';
+import { CartTotals } from '@/components/cart-totals';
 import { useGuestCart } from '@/components/guest-cart-provider';
 import { PhotoLightbox } from '@/components/photo-lightbox';
 import {
@@ -29,7 +30,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { useLoginHref, useSignupHref } from '@/hooks/use-login-href';
 import { checkoutErrorMessageKey } from '@/lib/checkout-error';
-import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 
@@ -86,6 +86,8 @@ export function GuestCartContent() {
     cancel: string;
     checkoutCanceled: string;
     subtotal: string;
+    serviceFee: string;
+    total: string;
     emailNotice: string;
     proceedToCheckout: string;
     processing: string;
@@ -144,8 +146,12 @@ export function GuestCartContent() {
     });
   };
 
-  const formatPrice = (cents: number) =>
-    cents === 0 ? t('free') : `${PLATFORM_CURRENCY_SYMBOL}${(cents / 100).toFixed(2)}`;
+  const totalsLabels = {
+    subtotal: t('subtotal'),
+    serviceFee: t('serviceFee'),
+    total: t('total'),
+    free: t('free'),
+  };
 
   // The guest cart lives in localStorage and is read on mount, so `items` is
   // empty on the first client render regardless of whether the cart truly is.
@@ -279,12 +285,7 @@ export function GuestCartContent() {
         <div className="hidden md:block flex-1 min-w-0">
           <div className="sticky top-[calc(var(--header-height)+1rem)] self-start rounded-lg border border-border bg-card p-6 shadow-lg">
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-muted-foreground">{t('subtotal')}</span>
-                <span className="text-xl font-bold text-foreground">
-                  {formatPrice(subtotalCents)}
-                </span>
-              </div>
+              <CartTotals subtotalCents={subtotalCents} labels={totalsLabels} />
               <p className="text-xs text-muted-foreground">{t('emailNotice')}</p>
               <div className="pt-4 border-t border-border">
                 <Button
@@ -314,9 +315,8 @@ export function GuestCartContent() {
       {/* Mobile sticky footer */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card shadow-lg">
         <div className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium text-muted-foreground">{t('subtotal')}</span>
-            <span className="text-lg font-bold text-foreground">{formatPrice(subtotalCents)}</span>
+          <div className="mb-3">
+            <CartTotals subtotalCents={subtotalCents} labels={totalsLabels} variant="mobile" />
           </div>
           <Button
             className="w-full"

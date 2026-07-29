@@ -1,9 +1,11 @@
 # Photo Markt — Billing Model
 
-> Status: **v1 is what ships today (in code). v2 is a proposal** pending the T-194 design and a
-> measurement of the real Stripe fee distribution. Do not implement v2 numbers as-is — they are
-> illustrative until finalized. Single source of truth for commission math: `src/lib/plans.ts`
-> (`getPhotographerNetCents`, `PLATFORM_FEE_RATES`).
+> Status: **v2 has shipped its structure** (T-195 config + calc point, T-196 buyer fee line item and
+> the 8/4/0 commissions). The buyer fee **amounts** are still 0 pending a measurement of the real
+> Stripe fee distribution — turning them on is a one-line change to the constants in
+> `src/lib/plans.ts`. The v1 sections below are kept as the record of the analysis, not as a
+> description of current behaviour. Single source of truth for commission math: `src/lib/plans.ts`
+> (`getPhotographerNetCents`, `PLATFORM_FEE_RATES`, `getBuyerServiceFeeCents`).
 
 ## The core principle
 
@@ -15,7 +17,7 @@ introducing a fixed component into the fees.
 
 ---
 
-## v1 — Current model (in code today)
+## v1 — Superseded model (historical; replaced by v2 in T-195/T-196)
 
 | Plan | Subscription | Seller commission | Buyer fee | Who absorbs Stripe fee | Min photo price |
 |---|---|---|---|---|---|

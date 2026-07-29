@@ -30,12 +30,16 @@ export default async function GuestCheckoutSuccessPage({
   let sessionEmail: string | null = null;
   let photoCount = 0;
   try {
-    const session = await stripe.checkout.sessions.retrieve(session_id as string, {
-      expand: ['line_items'],
-    });
+    const session = await stripe.checkout.sessions.retrieve(session_id as string);
 
     sessionEmail = session.customer_details?.email ?? null;
-    photoCount = session.line_items?.data.length ?? 0;
+    // T-196: count photos from `cart_count`, NOT from the line items. Once the
+    // buyer service fee is live the session carries an extra non-photo line
+    // item, and counting line items would report "4 photos" for a 3-photo
+    // order. `cart_count` is written by the checkout action from the same
+    // validated set the webhook uses to build the order.
+    photoCount = Number.parseInt(session.metadata?.cart_count ?? '0', 10);
+    if (!Number.isFinite(photoCount) || photoCount < 0) photoCount = 0;
   } catch {
     localizedRedirect(lang, '/events');
   }

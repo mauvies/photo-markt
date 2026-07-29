@@ -14,6 +14,7 @@ import { getBaseUrl } from '@/lib/get-base-url';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import { getClientIp, rateLimit } from '@/lib/rate-limit';
 import { stripe } from '@/lib/stripe/config';
+import { buildServiceFeeLineItem } from '@/lib/stripe/service-fee-line-item';
 
 /**
  * Ceiling on ids per guest-cart state request. A real guest cart holds a
@@ -186,20 +187,30 @@ export async function createGuestCheckoutSessionAction(
 
   const baseUrl = await getBaseUrl();
 
+  // T-196: the service fee rides on the SERVER-validated subtotal (what
+  // survived the purchasability + accessibility gates above), never on
+  // anything the client sent. `buildServiceFeeLineItem` returns null while the
+  // fee is configured at 0, so the session stays identical to v1.
+  const subtotalCents = validatedItems.reduce((sum, item) => sum + item.unitPriceCents, 0);
+  const serviceFeeLineItem = buildServiceFeeLineItem(subtotalCents);
+
   const session = await stripe.checkout.sessions.create({
     mode: 'payment',
     customer_creation: 'always',
     billing_address_collection: 'auto',
-    line_items: validatedItems.map((item) => ({
-      price_data: {
-        currency: PLATFORM_CURRENCY,
-        product_data: {
-          name: item.eventName ? `Photo from ${item.eventName}` : 'Photo',
+    line_items: [
+      ...validatedItems.map((item) => ({
+        price_data: {
+          currency: PLATFORM_CURRENCY,
+          product_data: {
+            name: item.eventName ? `Photo from ${item.eventName}` : 'Photo',
+          },
+          unit_amount: item.unitPriceCents,
         },
-        unit_amount: item.unitPriceCents,
-      },
-      quantity: 1,
-    })),
+        quantity: 1,
+      })),
+      ...(serviceFeeLineItem ? [serviceFeeLineItem] : []),
+    ],
     success_url: `${baseUrl}/checkout/guest/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${baseUrl}/cart?canceled=true`,
     metadata: cartMetadata,
