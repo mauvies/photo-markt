@@ -1,0 +1,63 @@
+# T-213 · Bundles · Plumbing de errores y UX del editor de precios
+
+- **Prioridad:** P2
+- **Estado:** todo
+- **Blockers:** **T-212** (mismo archivo `bundle-schedule-error.ts` y mismos formularios — ejecutar después)
+- **Rama:** `fix/bundle-error-plumbing`
+- **OpenSpec change:** —
+- **PR:** —
+
+## Requerimiento
+
+Segundo grupo de hallazgos de `/code-review ultra` sobre **PR #265 (T-203)**. Ninguno cobra mal ni
+pierde datos — son errores que el fotógrafo no puede entender y fricción de UX — pero todos dejan al
+usuario sin saber qué pasó justo en la pantalla donde configura dinero.
+
+1. **`src/lib/bundle-schedule-error.ts:37`** — `KNOWN_ERRORS` omite los **tres códigos nuevos del
+   techo** (`all_photos_below_floor`, `all_photos_not_above_unit`, `all_photos_below_a_pack`), así que
+   `parseBundleScheduleError` devuelve `null` para toda rechazo de "todas las fotos" y **las tres
+   cadenas localizadas que SÍ existen** en `en.json`/`es.json` son inalcanzables. El fotógrafo ve el
+   sentinel crudo `BUNDLE_TIERS:all_photos_not_above_unit` en dev, y el error genérico redactado de
+   Next en prod.
+2. **`edit/edit-event-form.tsx:255`** — el formulario `/edit` completo decodifica `PlanLimitError` y el
+   sentinel `MIN_PHOTO_PRICE:`, pero **nunca el nuevo `BUNDLE_TIERS:`**, así que un rechazo de escalera
+   desde esa ruta sale como el string crudo (dev) o un error opaco (prod) — a diferencia del formulario
+   con alcance `?section=pricing`, que sí recibió el mapeo. **El wizard de creación tiene el mismo
+   hueco** (`events/new/wizard.tsx:531`).
+3. **`edit/scoped-event-edit-form.tsx:92`** — el redirect post-guardado está hardcodeado a
+   `?tab=details`, escrito cuando `info` y `settings` eran las únicas secciones. Quien edita sus packs
+   vía `?section=pricing` y guarda **aterriza en el tab Details**, que no muestra precio alguno: el
+   guardado no da confirmación visible de que la escalera cambió.
+4. **`edit/components/event-price-field.tsx:16`** — el campo de precio extraído añade un prop `label`
+   opcional que **ningún call site pasa**, dejando la etiqueta visible hardcodeada en inglés
+   ("Price per Photo (Optional)") en un componente compartido nuevo. Un fotógrafo en español ve inglés
+   junto a copy `bundlePricing` completamente traducido. Viola `CLAUDE.md` ("Never hardcode visible
+   strings").
+5. **`events/[id]/event-pricing-tab.tsx:10`** — el tab importa `buttonVariants` del módulo
+   `'use client'` `ui/button` y se empujó **el tab entero al cliente** para compensar, cuando
+   `@/components/ui/button-variants` existe precisamente para que un Server Component pueda llamarlo
+   (`photographer-public-profile.tsx:11` ya lo hace). Cambiar el import arregla el crash sin frontera
+   de cliente; tal como está, una tabla de solo lectura sin interactividad viaja al bundle del
+   navegador, y hay un test a nivel de fuente fijando el workaround.
+
+## Criterio de aceptación (Definition of Done)
+
+- [ ] Los tres rechazos del techo muestran su copy localizada, no el sentinel crudo
+- [ ] Un rechazo de escalera desde el `/edit` completo **y desde el wizard** muestra copy legible
+- [ ] Guardar desde `?section=pricing` aterriza en el tab **Pricing**
+- [ ] La etiqueta del campo de precio se traduce (o se elimina el prop muerto y se localiza en origen)
+- [ ] `EventPricingTab` vuelve a ser Server Component vía `@/components/ui/button-variants`; el test de
+      frontera `pricing-tab-client-boundary.test.ts` se ajusta a la regla correcta en vez de fijar el
+      workaround
+- [ ] strings nuevos en `en.json` y `es.json`
+- [ ] test que falla antes y pasa después
+- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+
+## Notas
+
+- Depende de **T-212**: ambos tocan `bundle-schedule-error.ts` y los mismos formularios de edición.
+  Mergear T-212 antes de empezar este.
+- El punto 5 tiene un matiz que el revisor señala bien: el test `pricing-tab-client-boundary.test.ts`
+  se escribió para fijar el `'use client'` como si fuera la regla, cuando la regla real es "usa el
+  módulo sin directiva". Al arreglarlo hay que **reescribir el test**, no borrarlo.
+- Familia: T-200 (diseño) → T-203 (A) → T-204 (B) → T-212 (correctness) → **T-213**.
