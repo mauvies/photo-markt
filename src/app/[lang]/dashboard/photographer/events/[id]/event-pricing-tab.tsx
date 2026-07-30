@@ -1,13 +1,13 @@
-'use client';
-
-// Required, not incidental: `buttonVariants` lives in a client module
-// (`ui/button`), and a Server Component cannot CALL a client function — only
-// render one as a component. `EventInfoCard`, whose header/Edit-link pattern this
-// mirrors, is a client component for exactly the same reason. `pnpm build`
-// compiles this either way; the failure only surfaces when the tab renders.
+// This tab is a Server Component: a read-only table with no state, no handlers
+// and no browser APIs. It once carried `'use client'` only to work around
+// calling `buttonVariants` — which a Server Component genuinely cannot do while
+// importing it from the `'use client'` module `ui/button`. The directive-free
+// `ui/button-variants` exists precisely for this (T-213), so the import below is
+// the fix and the client boundary goes away instead of shipping a static table
+// to the browser bundle.
 import { Pencil } from 'lucide-react';
 import Link from 'next/link';
-import { buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import {
   type BundleTier,
   getAllPhotosBreakEvenQuantity,

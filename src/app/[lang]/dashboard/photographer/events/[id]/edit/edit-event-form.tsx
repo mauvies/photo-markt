@@ -14,6 +14,7 @@ import { Dropzone } from '@/components/uploader/Dropzone';
 import type { Event } from '@/database/queries/events';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { parseAllPhotosCents, parseBundleTiers } from '@/lib/bundle-pricing';
+import { bundleScheduleErrorText } from '@/lib/bundle-schedule-error';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { minPhotoPriceMessage } from '@/lib/min-photo-price';
@@ -38,9 +39,20 @@ interface EditEventFormProps {
   initialPhotos: PhotoWithUrl[];
   /** Signed URL of the event's dedicated cover, or null when it has none (T-166). */
   initialCoverUrl: string | null;
+  /**
+   * Bundle-pricing copy (T-213). This form's provider carries `newEvent`, which
+   * has no ladder strings, so the block is passed explicitly — same shape as
+   * `ScopedEventEditForm`.
+   */
+  bundleT: Dictionary['bundlePricing'];
 }
 
-export function EditEventForm({ event, initialPhotos, initialCoverUrl }: EditEventFormProps) {
+export function EditEventForm({
+  event,
+  initialPhotos,
+  initialCoverUrl,
+  bundleT,
+}: EditEventFormProps) {
   const router = useRouter();
   const { t } = useTranslations<Dictionary['newEvent']>();
   const lp = useLocalizedPath();
@@ -254,6 +266,20 @@ export function EditEventForm({ event, initialPhotos, initialCoverUrl }: EditEve
             const minPrice = minPhotoPriceMessage(error, t('priceBelowMinimum'));
             if (minPrice !== null) {
               setSubmitError(minPrice);
+              return;
+            }
+            // T-213: decode the ladder sentinel like every other form that can
+            // receive it. Since T-212 this form sends `absent` for both bundle
+            // columns, so the action does not currently reject a ladder from
+            // here — but the sentinel is a property of the ACTION, shared by
+            // every caller, and the failure mode when a caller forgets is silent
+            // (a raw `BUNDLE_TIERS:` string in dev, an opaque error in prod).
+            const bundleError = bundleScheduleErrorText(error, {
+              ...bundleT.errors,
+              fallback: bundleT.errors.fallback,
+            });
+            if (bundleError !== null) {
+              setSubmitError(bundleError);
               return;
             }
             setSubmitError(
