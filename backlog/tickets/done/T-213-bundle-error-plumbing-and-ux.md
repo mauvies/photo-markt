@@ -1,11 +1,11 @@
 # T-213 · Bundles · Plumbing de errores y UX del editor de precios
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ~~**T-212**~~ (PR #267, mergeado — mismos formularios). ⚠️ El punto 1 (códigos `all_photos_*` sin mapear) **ya lo arregló T-212**, que editaba ese mismo allow-list; queda pinchado su test de exhaustividad.
 - **Rama:** `fix/bundle-error-plumbing`
 - **OpenSpec change:** —
-- **PR:** —
+- **PR:** #268
 
 ## Requerimiento
 
