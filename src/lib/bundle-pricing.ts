@@ -63,10 +63,15 @@ export const MIN_BUNDLE_TIER_QUANTITY = 2;
  * structurally impossible for a rung to charge MORE than buying the same photos
  * singly, whatever the configured values.
  *
- * Together with the validation rule that totals strictly increase with
- * threshold (`isValidBundleSchedule`), the resulting price is **non-decreasing
- * in quantity**: inside a rung's band `quantity × unit` only grows, and at a
- * crossing the rung total steps up. Adding a photo never makes a cart cheaper.
+ * ⚠️ The price is NOT non-decreasing in quantity, and must not be assumed to be
+ * (an earlier version of this comment claimed it was — T-212). A rung whose
+ * total falls below `(minQuantity − 1) × unit` prices a smaller set higher: "3
+ * for €9" at €5 a photo charges €10 for two and €9 for three. That is not a
+ * defect, it is what a volume discount IS — the flagship Foto-Flat shape ("40
+ * photos for €19.90") drops from €195 to €19.90 at its threshold, and any rule
+ * strong enough to forbid the first also forbids that. The buyer is protected by
+ * the `min` above, not by monotonicity: no configuration can ever charge more
+ * than buying the same photos one at a time.
  */
 export function getBundlePriceCents(
   quantity: number,
@@ -77,9 +82,26 @@ export function getBundlePriceCents(
   if (!Number.isFinite(quantity) || quantity <= 0) return 0;
   if (!Number.isFinite(unitPriceCents) || unitPriceCents <= 0) return 0;
 
-  const listTotal = quantity * unitPriceCents;
-  if (!BUNDLE_PRICING_ENABLED) return listTotal;
+  if (!BUNDLE_PRICING_ENABLED) return quantity * unitPriceCents;
+  return computeSetPriceCents(quantity, unitPriceCents, tiers, allPhotosCents);
+}
 
+/**
+ * The price rule itself, WITHOUT the kill switch.
+ *
+ * Split out (T-212) so callers that must reason about the ladder's real shape —
+ * validation, and the tests that assert "never more than singles" — can do so
+ * even while `BUNDLE_PRICING_ENABLED` is false. Reasoning through the
+ * kill-switched entry point would pass vacuously during a rollback and let a
+ * broken ladder be saved, to start mispricing the day the switch goes back on.
+ */
+function computeSetPriceCents(
+  quantity: number,
+  unitPriceCents: number,
+  tiers: readonly BundleTier[] | null | undefined,
+  allPhotosCents?: number | null,
+): number {
+  const listTotal = quantity * unitPriceCents;
   let best = listTotal;
 
   if (tiers && tiers.length > 0) {
@@ -120,9 +142,8 @@ export function getBundlePriceCents(
  *   threshold to pick and nothing to keep in sync.
  *
  * It composes with the rungs through the same `min`, and because it is a
- * constant it cannot break the "price never decreases as photos are added"
- * property (`min` of a non-decreasing function and a constant is
- * non-decreasing).
+ * constant it can only ever lower the price — never raise it above what the
+ * rungs and the unit price already allow.
  *
  * Note the deliberate consequence: a buyer who reaches the cap with only some of
  * their photos pays the same as one who takes all of them — so once they are at
@@ -189,11 +210,17 @@ export function getBundleDiscountCents(
   quantity: number,
   unitPriceCents: number,
   tiers: readonly BundleTier[] | null | undefined,
+  allPhotosCents?: number | null,
 ): number {
   if (!Number.isFinite(quantity) || quantity <= 0) return 0;
   if (!Number.isFinite(unitPriceCents) || unitPriceCents <= 0) return 0;
   const listTotal = quantity * unitPriceCents;
-  return listTotal - getBundlePriceCents(quantity, unitPriceCents, tiers);
+  // The ceiling MUST be forwarded (T-212). Without it this reported a 0
+  // discount on exactly the carts the Foto-Flat binds — a cart charged €20
+  // would have rendered "subtotal €50, discount €0", which is the
+  // displayed-vs-charged divergence the single-calc-point rule exists to
+  // prevent.
+  return listTotal - getBundlePriceCents(quantity, unitPriceCents, tiers, allPhotosCents);
 }
 
 /**
@@ -236,6 +263,7 @@ export type BundleScheduleError =
   | 'total_below_floor'
   | 'total_not_increasing'
   | 'total_not_a_discount'
+  | 'not_parseable'
   | 'all_photos_below_floor'
   | 'all_photos_not_above_unit'
   | 'all_photos_below_a_pack';
@@ -332,6 +360,25 @@ export function validateBundleSchedule(
     previous = tier;
   }
 
+  // ── On monotonicity: NOT enforced, and deliberately so (T-212) ────────────
+  //
+  // A code review flagged that nothing ties a rung total to
+  // `(minQuantity − 1) × unit`, so "€5 a photo, 3 for €9" prices 2 photos at €10
+  // and 3 at €9 — removing a photo RAISES the total — while `CLAUDE.md` claimed
+  // the price was "non-decreasing in quantity". The claim was false. The
+  // conclusion drawn from it was too.
+  //
+  // Enforcing it would forbid the product's flagship shape: the Foto-Flat rung
+  // "40 photos for €19.90" prices 39 photos at €195 and 40 at €19.90, a far
+  // bigger drop, and it is exactly what Sportograf-style volume pricing IS. Any
+  // rule strong enough to reject "3 for €9" also rejects that.
+  //
+  // What actually protects the buyer is the guard that IS enforced, in
+  // `computeSetPriceCents`: `min(quantity × unit, …)` makes it structurally
+  // impossible for any configuration, however odd, to charge MORE than buying
+  // the same photos one at a time. A ladder that dips below the quantity beneath
+  // it is a published, visible discount — not an overcharge. The docs now say
+  // this instead of promising monotonicity.
   return { ok: true };
 }
 
@@ -439,6 +486,98 @@ export function parseBundleTiersInput(raw: unknown): BundleTier[] | null {
   return tiers;
 }
 
+/**
+ * ── The three states a submitted ladder can be in (T-212) ──────────────────
+ *
+ * `parseBundleTiersInput` collapses "the form didn't send the field", "the
+ * photographer cleared it" and "this doesn't parse" into a single `null`, and
+ * the write paths then read that null as "clear the ladder". So vaciar un campo,
+ * typing `1` in a threshold, or a stored ladder the reader rejects all DELETED
+ * the photographer's pricing while reporting success — silent data loss on a
+ * money column, and the reason `quantity_too_low` was an unreachable message.
+ *
+ * Keeping the three apart is the fix the rest of this ticket hangs off:
+ *  - `absent`  → the field was not part of this form; DON'T TOUCH the column.
+ *  - `cleared` → the photographer explicitly emptied it; write null.
+ *  - `invalid` → reject the save and name the reason; never write.
+ *  - `tiers`   → validate against the price, then write.
+ */
+export type BundleTiersSubmission =
+  | { kind: 'absent' }
+  | { kind: 'cleared' }
+  | { kind: 'invalid'; error: BundleScheduleError }
+  | { kind: 'tiers'; tiers: BundleTier[] };
+
+export function parseBundleTiersSubmission(raw: unknown): BundleTiersSubmission {
+  if (raw === undefined || raw === null) return { kind: 'absent' };
+  if (typeof raw === 'string' && raw.trim() === '') return { kind: 'cleared' };
+
+  let value: unknown = raw;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return { kind: 'invalid', error: 'not_parseable' };
+    }
+  }
+
+  if (!Array.isArray(value)) return { kind: 'invalid', error: 'not_parseable' };
+  // An empty list is the editor's "I removed every pack", not corruption.
+  if (value.length === 0) return { kind: 'cleared' };
+  if (value.length > MAX_BUNDLE_TIERS) return { kind: 'invalid', error: 'too_many_tiers' };
+
+  const tiers: BundleTier[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'object' || entry === null) {
+      return { kind: 'invalid', error: 'not_parseable' };
+    }
+    const record = entry as Record<string, unknown>;
+    const minQuantity = record.minQuantity ?? record.min_quantity;
+    const totalPriceCents = record.totalPriceCents ?? record.total_price_cents;
+
+    // Each of these used to be a silent `null`. They are the exact values the
+    // editor produces from a cleared box or a typed `1`, so they are the common
+    // case, not corruption — and each now names itself to the photographer.
+    if (typeof minQuantity !== 'number' || !Number.isInteger(minQuantity)) {
+      return { kind: 'invalid', error: 'quantity_not_integer' };
+    }
+    if (minQuantity < MIN_BUNDLE_TIER_QUANTITY) {
+      return { kind: 'invalid', error: 'quantity_too_low' };
+    }
+    if (typeof totalPriceCents !== 'number' || !Number.isInteger(totalPriceCents)) {
+      return { kind: 'invalid', error: 'total_not_integer' };
+    }
+    if (totalPriceCents <= 0) return { kind: 'invalid', error: 'total_not_integer' };
+
+    tiers.push({ minQuantity, totalPriceCents });
+  }
+
+  tiers.sort((a, b) => a.minQuantity - b.minQuantity);
+  return { kind: 'tiers', tiers };
+}
+
+/** The same three states for the "all photos" ceiling. */
+export type AllPhotosSubmission =
+  | { kind: 'absent' }
+  | { kind: 'cleared' }
+  | { kind: 'invalid'; error: BundleScheduleError }
+  | { kind: 'cents'; cents: number };
+
+export function parseAllPhotosSubmission(raw: unknown): AllPhotosSubmission {
+  if (raw === undefined || raw === null) return { kind: 'absent' };
+  if (typeof raw === 'string' && raw.trim() === '') return { kind: 'cleared' };
+
+  const value = typeof raw === 'string' ? Number.parseInt(raw, 10) : raw;
+  if (typeof value !== 'number' || !Number.isInteger(value)) {
+    return { kind: 'invalid', error: 'not_parseable' };
+  }
+  // Zero is how the editor reports a cleared amount box, and "no flat price" is
+  // what the photographer means by it.
+  if (value === 0) return { kind: 'cleared' };
+  if (value < 0) return { kind: 'invalid', error: 'not_parseable' };
+  return { kind: 'cents', cents: value };
+}
+
 /** Serialize for storage. Kept beside the parser so the two can't drift. */
 export function serializeBundleTiers(tiers: readonly BundleTier[] | null): BundleTier[] | null {
   if (!tiers || tiers.length === 0) return null;
@@ -514,6 +653,27 @@ export function eventSupportsBundles(event: {
   price_per_photo?: number | null;
 }): boolean {
   if (!BUNDLE_PRICING_ENABLED) return false;
+  return eventAcceptsBundleConfig(event);
+}
+
+/**
+ * Whether an event's OWN properties permit a stored ladder — deliberately
+ * ignoring `BUNDLE_PRICING_ENABLED`.
+ *
+ * This is the predicate every WRITE path must use, and the distinction is the
+ * whole point (T-212). `eventSupportsBundles` folds in the kill switch, which is
+ * right for hiding UI but catastrophic for a write: flipping the switch to roll
+ * back made every edit action see "this event can't have a ladder" and normalize
+ * the stored columns to null, so the next save of ANY kind — a rename, a
+ * settings toggle — permanently erased the photographer's pricing. That is the
+ * exact opposite of the property the switch advertises ("stored ladders survive
+ * it unread, so rollback needs no migration"): rollback has to be inert, and
+ * inert means the write paths keep their hands off the columns.
+ */
+export function eventAcceptsBundleConfig(event: {
+  type?: string | null;
+  price_per_photo?: number | null;
+}): boolean {
   if (event.type === 'organizer') return false;
   const price = event.price_per_photo;
   if (price === null || price === undefined || price <= 0) return false;

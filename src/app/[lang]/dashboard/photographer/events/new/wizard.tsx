@@ -8,7 +8,7 @@ import { DashboardHeader } from '@/components/dashboard-header';
 import { Button } from '@/components/ui/button';
 import { UploadProgressDialog } from '@/components/upload-progress-dialog';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
-import { getEffectivePerPhotoCents } from '@/lib/bundle-pricing';
+import { eventAcceptsBundleConfig, getEffectivePerPhotoCents } from '@/lib/bundle-pricing';
 import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
@@ -613,9 +613,17 @@ export default function NewEventForm({
       });
     } else {
       detailsRows.push({ label: t('summaryPrice'), value: formatPrice(v.price_per_photo) });
+      // T-212: only list volume pricing the event will actually be created with.
+      // A free event can't carry a ladder, so `createEvent` drops it — and the
+      // review step listing packs it was about to discard is how a photographer
+      // came to confirm pricing that then silently disappeared.
+      const willStoreBundles = eventAcceptsBundleConfig({
+        type: v.event_type,
+        price_per_photo: v.price_per_photo ?? null,
+      });
       // "All photos" flat price first — it is the headline offer; the rungs are
       // steps on the way to it (T-203).
-      if (v.bundle_all_photos_cents !== null) {
+      if (willStoreBundles && v.bundle_all_photos_cents !== null) {
         detailsRows.push({
           label: bundlePricingLabels.allPhotosLabel,
           value: formatPrice(v.bundle_all_photos_cents / 100),
@@ -624,7 +632,7 @@ export default function NewEventForm({
       // Volume packs (T-203): every rung gets its own row, so nobody confirms a
       // price they were never shown. Stated as the flat total plus what it works
       // out to per photo, which is the part a photographer can't do in their head.
-      for (const tier of v.bundle_tiers ?? []) {
+      for (const tier of (willStoreBundles ? v.bundle_tiers : null) ?? []) {
         detailsRows.push({
           label: bundlePricingLabels.photosOrMore.replace('{n}', String(tier.minQuantity)),
           value: `${formatPrice(tier.totalPriceCents / 100)} · ${bundlePricingLabels.effectivePerPhoto.replace(

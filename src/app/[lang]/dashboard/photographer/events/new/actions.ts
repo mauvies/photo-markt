@@ -10,9 +10,9 @@ import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import {
   type BundleTier,
-  eventSupportsBundles,
-  parseAllPhotosCents,
-  parseBundleTiersInput,
+  eventAcceptsBundleConfig,
+  parseAllPhotosSubmission,
+  parseBundleTiersSubmission,
   serializeBundleTiers,
   validateBundleSchedule,
 } from '@/lib/bundle-pricing';
@@ -119,16 +119,10 @@ const eventSchema = z
     // discard what the photographer typed and report success. Shape-only parsing
     // lets `validateBundleSchedule` in the superRefine below name the actual
     // violation (ordering, floor, not-a-discount) so the form can explain it.
-    bundle_tiers: z
-      .string()
-      .optional()
-      .transform((val) => (val && val.trim() !== '' ? parseBundleTiersInput(val) : null)),
+    bundle_tiers: z.string().optional().transform(parseBundleTiersSubmission),
     // "All photos" flat price in cents (T-203) — a ceiling, independent of the
     // rungs. An absent field means "no flat price".
-    bundle_all_photos_cents: z
-      .string()
-      .optional()
-      .transform((val) => (val && val.trim() !== '' ? parseAllPhotosCents(val) : null)),
+    bundle_all_photos_cents: z.string().optional().transform(parseAllPhotosSubmission),
   })
   .superRefine((data, ctx) => {
     // T-180: an end time requires a start and must be after it.
@@ -162,17 +156,42 @@ const eventSchema = z
     // rejected here, so pricing state can never block a save that isn't about
     // pricing. Only a ladder that contradicts a price actually being set is an
     // error the photographer can act on.
+    //
+    // T-212: an UNPARSEABLE submission is now its own state and is always
+    // rejected. It used to collapse into the same `null` as "no ladder", so a
+    // cleared amount box or a `1` typed into a threshold silently discarded the
+    // whole ladder and reported success — the very failure the input/read parser
+    // split was introduced to prevent.
+    if (data.bundle_tiers.kind === 'invalid') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: bundleScheduleErrorMessage(data.bundle_tiers.error),
+        path: ['bundle_tiers'],
+      });
+    }
+    if (data.bundle_all_photos_cents.kind === 'invalid') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: bundleScheduleErrorMessage(data.bundle_all_photos_cents.error),
+        path: ['bundle_all_photos_cents'],
+      });
+    }
+
+    const submittedTiers = data.bundle_tiers.kind === 'tiers' ? data.bundle_tiers.tiers : null;
+    const submittedCap =
+      data.bundle_all_photos_cents.kind === 'cents' ? data.bundle_all_photos_cents.cents : null;
+
     if (
       priceCents !== null &&
       priceCents > 0 &&
       data.event_type !== 'organizer' &&
-      (data.bundle_tiers !== null || data.bundle_all_photos_cents !== null)
+      (submittedTiers !== null || submittedCap !== null)
     ) {
       const result = validateBundleSchedule(
-        data.bundle_tiers ?? [],
+        submittedTiers ?? [],
         priceCents,
         minCents,
-        data.bundle_all_photos_cents,
+        submittedCap,
       );
       if (!result.ok && result.error) {
         ctx.addIssue({
@@ -333,14 +352,20 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
   // neither may carry a ladder. Same shape as the forced `watermarkEnabled` /
   // `revealGateEnabled` above — and it is what lets the schema stay silent about
   // ineligible events instead of failing a save.
-  const bundleEligible = eventSupportsBundles({
+  // T-212: `eventAcceptsBundleConfig`, NOT `eventSupportsBundles` — the latter
+  // folds in `BUNDLE_PRICING_ENABLED`, so rolling the feature back would make
+  // every create drop the ladder the photographer configured. The kill switch
+  // must stop bundles being READ, never stop them being stored.
+  const bundleEligible = eventAcceptsBundleConfig({
     type: eventType,
     price_per_photo: eventType === 'organizer' ? null : (payload.price_per_photo ?? null),
   });
-  const bundleTiers: BundleTier[] | null = bundleEligible ? payload.bundle_tiers : null;
-  const bundleAllPhotosCents: number | null = bundleEligible
-    ? payload.bundle_all_photos_cents
-    : null;
+  const bundleTiers: BundleTier[] | null =
+    bundleEligible && payload.bundle_tiers.kind === 'tiers' ? payload.bundle_tiers.tiers : null;
+  const bundleAllPhotosCents: number | null =
+    bundleEligible && payload.bundle_all_photos_cents.kind === 'cents'
+      ? payload.bundle_all_photos_cents.cents
+      : null;
 
   const event = await dbCreateEvent(supabase, user.id, {
     name: payload.name,

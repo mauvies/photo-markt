@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-212 | Bundles — el camino de **escritura** borra en silencio la escalera (+ monotonicidad + input de dinero); 9 hallazgos de `/code-review ultra` sobre #265 | — | todo |
+| 1 | P1 | T-212 | Bundles — el camino de **escritura** borra en silencio la escalera (+ monotonicidad + input de dinero); 9 hallazgos de `/code-review ultra` sobre #265 | — | doing |
 | 2 | P2 | T-213 | Bundles — plumbing de errores del editor de precios (códigos del techo sin mapear, sentinel, redirect, i18n, `button-variants`) | **T-212** (mismos archivos) | todo |
 | 3 | P2 | T-205 | Bundles C — Ventas/Ganancias reportan el bruto con descuento; cierra y archiva el OpenSpec change | ~~T-204~~ (PR #266 mergeado) | todo |
 | 4 | P2 | T-211 | Bug: el toggle de watermark se revierte en silencio en eventos privados (+ edit pierde la excepción `organizer` que sí tiene create) | ~~T-203~~ (PR #265 mergeado) | todo |

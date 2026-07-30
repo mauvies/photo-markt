@@ -200,7 +200,11 @@ export function EditEventForm({ event, initialPhotos, initialCoverUrl }: EditEve
         const parsed = eventSchema.parse(value);
         setSubmitError(null);
 
-        const formData = buildEventUpdateFormData(parsed);
+        // This form seeds the ladder but renders NO ladder editor, so it must
+        // not speak about it (T-212). Echoing it back was what made lowering a
+        // price here throw `BUNDLE_TIERS:total_not_a_discount` — an error about
+        // a field the photographer could not see or fix from this page.
+        const formData = buildEventUpdateFormData(parsed, { includeBundlePricing: false });
 
         const photoIdsToDelete = Array.from(pendingDeletions);
 

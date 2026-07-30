@@ -202,11 +202,16 @@ describe('createEvent — bundle ladder', () => {
     expect(await readTiers(result.eventId)).toBeNull();
   });
 
-  it('fails closed to no ladder on a malformed payload instead of erroring', async () => {
-    // A garbage payload parses to "no ladder", which prices at quantity × unit —
-    // a direction that can only overcharge relative to intent, never undercharge.
-    const result = await createEvent(buildEventFormData({ bundle_tiers: 'not json at all' }));
-    expect(await readTiers(result.eventId)).toBeNull();
+  it('REJECTS a malformed payload rather than creating the event without a ladder', async () => {
+    // Expectation flipped in T-212. This used to assert that garbage parsed to
+    // "no ladder" — reasoning that pricing at quantity × unit can only overcharge
+    // relative to intent. That reasoning holds for a READ of stored data; on a
+    // WRITE it means the photographer's input is discarded and the save reports
+    // success, which is the data-loss bug this ticket fixes. A write that cannot
+    // be understood must say so.
+    await expect(
+      createEvent(buildEventFormData({ bundle_tiers: 'not json at all' })),
+    ).rejects.toThrow(/BUNDLE_TIERS:not_parseable/);
   });
 });
 
@@ -259,13 +264,13 @@ describe('updateEventAction — bundle ladder', () => {
     expect(await readTiers(event.id)).toEqual(LADDER);
   });
 
-  it('drops the ladder when the event is made free, instead of failing the save', async () => {
-    // Regression for a 500 found in review: every section-scoped form echoes the
-    // WHOLE event, so on an event whose price had been cleared, editing an
-    // unrelated section (settings) submitted the stored ladder with a null price
-    // and threw `BUNDLE_TIERS:total_not_a_discount`. A free event carries no
-    // ladder by definition, so the correct move is to normalize it away — pricing
-    // state must never block a save that isn't about pricing.
+  it('KEEPS the ladder when the event is made free, and still saves', async () => {
+    // Expectation flipped in T-212. T-203 fixed a real 500 here (a scoped form
+    // echoing a ladder with a cleared price threw `total_not_a_discount`) but
+    // fixed it by DELETING the ladder. The save-must-not-be-blocked half was
+    // right; the deletion half was the same silent data loss in a new place.
+    // A free event simply cannot apply its ladder — nothing has to be destroyed
+    // for that to be true, and restoring a price restores the packs.
     const event = await createTestEvent(userId, { price_per_photo: 5 });
     await updateEventAction(event.id, buildEventFormData({ bundle_tiers: JSON.stringify(LADDER) }));
     expect(await readTiers(event.id)).toEqual(LADDER);
@@ -275,7 +280,7 @@ describe('updateEventAction — bundle ladder', () => {
       buildEventFormData({ price_per_photo: '', bundle_tiers: JSON.stringify(LADDER) }),
     );
 
-    expect(await readTiers(event.id)).toBeNull();
+    expect(await readTiers(event.id)).toEqual(LADDER);
     const sb = createServiceClient();
     const { data } = await sb.from('events').select('price_per_photo').eq('id', event.id).single();
     expect(data?.price_per_photo).toBeNull();
@@ -304,7 +309,8 @@ describe('updateEventAction — bundle ladder', () => {
 
     const { data } = await sb.from('events').select('name').eq('id', event.id).single();
     expect(data?.name).toBe('Renamed While Free');
-    expect(await readTiers(event.id)).toBeNull();
+    // T-212: the unrelated save succeeds AND leaves the pricing intact.
+    expect(await readTiers(event.id)).toEqual(LADDER);
   });
 
   it('persists an "all photos" flat price with no rungs at all', async () => {
@@ -369,5 +375,108 @@ describe('stored ladders price correctly end to end', () => {
     expect(getBundlePriceCents(7, unit, tiers)).toBe(1200);
     expect(getBundlePriceCents(8, unit, tiers)).toBe(2000);
     expect(getBundlePriceCents(20, unit, tiers)).toBe(2000);
+  });
+});
+
+/**
+ * T-212 — the write path must never delete a stored ladder as a side effect.
+ *
+ * Every case below ends with the ladder still in the row. Before this ticket
+ * each of them wiped it and reported success, because "could not parse", "the
+ * photographer cleared it" and "this form didn't mention it" were all the same
+ * `null`.
+ */
+describe('updateEventAction — the ladder survives edits that are not about it', () => {
+  async function seedLadder(price = 5) {
+    const event = await createTestEvent(userId, { price_per_photo: price });
+    await updateEventAction(event.id, buildEventFormData({ bundle_tiers: JSON.stringify(LADDER) }));
+    expect(await readTiers(event.id)).toEqual(LADDER);
+    return event;
+  }
+
+  it('an edit that OMITS the field leaves the ladder alone', async () => {
+    // What a section with no ladder editor now sends: nothing at all.
+    const event = await seedLadder();
+    const fd = buildEventFormData({ name: 'Renamed' });
+    expect(fd.has('bundle_tiers')).toBe(false);
+
+    await updateEventAction(event.id, fd);
+
+    expect(await readTiers(event.id)).toEqual(LADDER);
+  });
+
+  it('LOWERING the price from a form without the editor is not blocked', async () => {
+    // The stored rung (3 → €12) stops being a discount at €3/photo. That used
+    // to throw `total_not_a_discount` from a section that cannot show the
+    // ladder, so the price change was simply impossible there.
+    const event = await seedLadder();
+
+    await updateEventAction(event.id, buildEventFormData({ price_per_photo: '3.00' }));
+
+    const sb = createServiceClient();
+    const { data } = await sb.from('events').select('price_per_photo').eq('id', event.id).single();
+    expect(Number(data?.price_per_photo)).toBe(3);
+    // And the ladder is still there — a now-dead rung is harmless, because the
+    // kernel's `min` guard just stops applying it.
+    expect(await readTiers(event.id)).toEqual(LADDER);
+  });
+
+  it('a rung with a cleared total is REJECTED, not silently turned into "no ladder"', async () => {
+    const event = await seedLadder();
+
+    await expect(
+      updateEventAction(
+        event.id,
+        buildEventFormData({
+          bundle_tiers: JSON.stringify([{ minQuantity: 3, totalPriceCents: 0 }]),
+        }),
+      ),
+    ).rejects.toThrow(/BUNDLE_TIERS:/);
+
+    expect(await readTiers(event.id)).toEqual(LADDER);
+  });
+
+  it('a threshold of 1 is REJECTED by name rather than deleting the ladder', async () => {
+    const event = await seedLadder();
+
+    await expect(
+      updateEventAction(
+        event.id,
+        buildEventFormData({
+          bundle_tiers: JSON.stringify([{ minQuantity: 1, totalPriceCents: 900 }]),
+        }),
+      ),
+    ).rejects.toThrow(/quantity_too_low/);
+
+    expect(await readTiers(event.id)).toEqual(LADDER);
+  });
+
+  it('unparseable JSON is REJECTED rather than read as an empty ladder', async () => {
+    const event = await seedLadder();
+
+    await expect(
+      updateEventAction(event.id, buildEventFormData({ bundle_tiers: 'not-json' })),
+    ).rejects.toThrow(/BUNDLE_TIERS:/);
+
+    expect(await readTiers(event.id)).toEqual(LADDER);
+  });
+
+  it('clearing the PRICE keeps the ladder stored instead of dropping it', async () => {
+    // The ladder cannot apply while the event is free, but deleting the
+    // photographer's configuration as a side effect of making an event free is
+    // data loss — restoring a price restores the packs.
+    const event = await seedLadder();
+
+    await updateEventAction(event.id, buildEventFormData({ price_per_photo: '0' }));
+
+    expect(await readTiers(event.id)).toEqual(LADDER);
+  });
+
+  it('an explicit empty value still clears it — the one case that should', async () => {
+    const event = await seedLadder();
+
+    await updateEventAction(event.id, buildEventFormData({ bundle_tiers: '' }));
+
+    expect(await readTiers(event.id)).toBeNull();
   });
 });

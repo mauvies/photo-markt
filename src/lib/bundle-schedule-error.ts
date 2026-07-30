@@ -34,6 +34,20 @@ export interface ParsedBundleScheduleError {
   minCents: number | null;
 }
 
+/**
+ * Every code `validateBundleSchedule` / the submission parsers can produce.
+ *
+ * An omission here is invisible in review and total at runtime: `parseBundle
+ * ScheduleError` returns null for an unlisted code, so the caller falls through
+ * to `error.message` and the photographer gets the raw `BUNDLE_TIERS:<code>`
+ * sentinel (dev) or Next's redacted generic error (prod), while the localized
+ * copy that DOES exist in both dictionaries is simply unreachable. That is what
+ * had happened to the three `all_photos_*` codes.
+ *
+ * ⚠️ Adding a `BundleScheduleError` member? Add it here and to
+ * `bundlePricing.errors` in `en.json` + `es.json`; the exhaustiveness test in
+ * `test/unit/src/lib/bundle-schedule-error.test.ts` fails otherwise.
+ */
 const KNOWN_ERRORS: ReadonlySet<string> = new Set<BundleScheduleError>([
   'empty',
   'too_many_tiers',
@@ -44,6 +58,10 @@ const KNOWN_ERRORS: ReadonlySet<string> = new Set<BundleScheduleError>([
   'total_below_floor',
   'total_not_increasing',
   'total_not_a_discount',
+  'not_parseable',
+  'all_photos_below_floor',
+  'all_photos_not_above_unit',
+  'all_photos_below_a_pack',
 ]);
 
 /**

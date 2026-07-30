@@ -18,9 +18,9 @@ import type { SupabaseServerClient } from '@/database/queries/types';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import {
-  eventSupportsBundles,
-  parseAllPhotosCents,
-  parseBundleTiersInput,
+  eventAcceptsBundleConfig,
+  parseAllPhotosSubmission,
+  parseBundleTiersSubmission,
   serializeBundleTiers,
   validateBundleSchedule,
 } from '@/lib/bundle-pricing';
@@ -111,16 +111,10 @@ const eventSchema = z
     // Volume-pricing ladder (T-203) — mirror of the create action. An absent
     // field means "clear the ladder", which is what lets the scoped pricing
     // editor remove every rung.
-    bundle_tiers: z
-      .string()
-      .optional()
-      .transform((val) => (val && val.trim() !== '' ? parseBundleTiersInput(val) : null)),
+    bundle_tiers: z.string().optional().transform(parseBundleTiersSubmission),
     // "All photos" flat price in cents (T-203) — a ceiling, independent of the
     // rungs. An absent field means "no flat price".
-    bundle_all_photos_cents: z
-      .string()
-      .optional()
-      .transform((val) => (val && val.trim() !== '' ? parseAllPhotosCents(val) : null)),
+    bundle_all_photos_cents: z.string().optional().transform(parseAllPhotosSubmission),
   })
   .superRefine((data, ctx) => {
     // T-180: an end time requires a start and must be after it.
@@ -160,16 +154,44 @@ const eventSchema = z
     //
     // What IS worth an error is a ladder that contradicts a price the
     // photographer is actually setting — that is a real mistake with a fix.
+    //
+    // T-212: an unparseable submission is rejected outright instead of
+    // collapsing into "no ladder" and deleting the stored one.
+    if (data.bundle_tiers.kind === 'invalid') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: bundleScheduleErrorMessage(data.bundle_tiers.error),
+        path: ['bundle_tiers'],
+      });
+    }
+    if (data.bundle_all_photos_cents.kind === 'invalid') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: bundleScheduleErrorMessage(data.bundle_all_photos_cents.error),
+        path: ['bundle_all_photos_cents'],
+      });
+    }
+
+    const submittedTiers = data.bundle_tiers.kind === 'tiers' ? data.bundle_tiers.tiers : null;
+    const submittedCap =
+      data.bundle_all_photos_cents.kind === 'cents' ? data.bundle_all_photos_cents.cents : null;
+
+    // Only a ladder this form is actually WRITING gets validated against the
+    // price (T-212). A form with no ladder editor sends `absent`, so lowering a
+    // price from the Info card no longer trips `total_not_a_discount` on a
+    // ladder that section cannot even show — a save that isn't about pricing is
+    // never blocked by pricing state. A now-dead rung is harmless: the `min`
+    // guard in the kernel means it simply stops applying.
     if (
       priceCents !== null &&
       priceCents > 0 &&
-      (data.bundle_tiers !== null || data.bundle_all_photos_cents !== null)
+      (submittedTiers !== null || submittedCap !== null)
     ) {
       const result = validateBundleSchedule(
-        data.bundle_tiers ?? [],
+        submittedTiers ?? [],
         priceCents,
         minCents,
-        data.bundle_all_photos_cents,
+        submittedCap,
       );
       if (!result.ok && result.error) {
         ctx.addIssue({
@@ -317,18 +339,38 @@ export async function updateEventAction(
   // revenue split to charge a discount against), so drop it rather than
   // erroring: the form never offers the field for those events, so a ladder
   // arriving here is a hand-crafted POST, not a user mistake worth explaining.
-  const bundleTiers = eventSupportsBundles({
+  //
+  // T-212 rewrote the decision as three separate questions, because collapsing
+  // them into one `null` was destroying photographers' pricing:
+  //
+  //  1. Did this form even carry the field? `absent` (a section with no ladder
+  //     editor) must leave the column ALONE — echoing `null` from the Info card
+  //     was deleting a ladder that card never showed.
+  //  2. Is the event allowed to store one? `eventAcceptsBundleConfig`, which
+  //     deliberately ignores `BUNDLE_PRICING_ENABLED`: rolling the feature back
+  //     has to be inert, and the old `eventSupportsBundles` here meant the next
+  //     save of any kind erased the ladder permanently.
+  //  3. Only then: write what was submitted, or null if explicitly cleared.
+  //
+  // An event that has merely become ineligible (price cleared to free) KEEPS its
+  // stored ladder rather than having it silently dropped — it cannot apply while
+  // the event is free, and restoring a price restores the packs. Deleting the
+  // photographer's data as a side effect of an unrelated edit is the bug, not
+  // the tidy-up.
+  const acceptsBundleConfig = eventAcceptsBundleConfig({
     type: currentEvent.type,
     price_per_photo: payload.price_per_photo ?? null,
-  })
-    ? payload.bundle_tiers
-    : null;
-  const bundleAllPhotosCents = eventSupportsBundles({
-    type: currentEvent.type,
-    price_per_photo: payload.price_per_photo ?? null,
-  })
-    ? payload.bundle_all_photos_cents
-    : null;
+  });
+  const tiersSubmission = payload.bundle_tiers;
+  const capSubmission = payload.bundle_all_photos_cents;
+
+  const writeTiers =
+    tiersSubmission.kind === 'cleared' || (tiersSubmission.kind === 'tiers' && acceptsBundleConfig);
+  const writeCap =
+    capSubmission.kind === 'cleared' || (capSubmission.kind === 'cents' && acceptsBundleConfig);
+
+  const bundleTiers = tiersSubmission.kind === 'tiers' ? tiersSubmission.tiers : null;
+  const bundleAllPhotosCents = capSubmission.kind === 'cents' ? capSubmission.cents : null;
 
   const updateData: Parameters<typeof updateEvent>[3] = {
     name: payload.name,
@@ -366,11 +408,14 @@ export async function updateEventAction(
   // Same migration-gating for the T-203 ladder: only touch the column when a
   // ladder is being set or an existing one cleared, so a plain edit still works
   // against a DB that hasn't applied the migration yet.
-  if (bundleTiers !== null || currentEvent.bundle_tiers != null) {
+  // The migration gate still applies, but it is now ANDed with "this save is
+  // actually about the ladder" (T-212) — otherwise an absent field kept looking
+  // like a clear.
+  if (writeTiers && (bundleTiers !== null || currentEvent.bundle_tiers != null)) {
     updateData.bundle_tiers = serializeBundleTiers(bundleTiers);
   }
   // Same migration-gating for the "all photos" ceiling.
-  if (bundleAllPhotosCents !== null || currentEvent.bundle_all_photos_cents != null) {
+  if (writeCap && (bundleAllPhotosCents !== null || currentEvent.bundle_all_photos_cents != null)) {
     updateData.bundle_all_photos_cents = bundleAllPhotosCents;
   }
 

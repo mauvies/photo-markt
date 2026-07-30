@@ -2025,6 +2025,8 @@
     "noLadder": "Todavía no hay packs por volumen.",
     "unavailableFree": "Los packs por volumen necesitan un precio por foto. Fija uno primero.",
     "unavailableOrganizer": "Los packs por volumen aún no están disponibles en eventos de organizador.",
+    "inactiveWithoutPrice": "Estos packs por volumen están inactivos porque el evento no tiene precio por foto. Pon un precio para usarlos, o elimínalos.",
+    "removeAllPacks": "Eliminar todos los packs",
     "errors": {
       "fallback": "Esos precios no son válidos. Revisa los packs e inténtalo de nuevo.",
       "empty": "Añade al menos un pack, o quita del todo el precio por volumen.",
