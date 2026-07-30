@@ -331,6 +331,9 @@ export default async function EventDetailPage({
       freeLabel={dict.eventDetails.free}
       pricePerPhoto={event.price_per_photo}
       bundleTiers={parseBundleTiers(eventRecord.bundle_tiers)}
+      bundleAllPhotosCents={
+        (eventRecord.bundle_all_photos_cents as number | null | undefined) ?? null
+      }
       isOrganizerEvent={event.type === 'organizer'}
       editHref={localizedPath(lang, `/dashboard/photographer/events/${id}/edit?section=pricing`)}
     />

@@ -138,6 +138,26 @@ export function hasAllPhotosPrice(cents: number | null | undefined): boolean {
 }
 
 /**
+ * The photo count at which the "all photos" ceiling starts being the cheaper
+ * option — `ceil(cap / unit)`.
+ *
+ * The ceiling deliberately carries no threshold (that is the whole point: a
+ * derived threshold goes stale when the unit price changes), but the photographer
+ * still wants to know where it engages, and so does the read-only pricing tab.
+ * Derived on demand from the two live values, never stored, so it cannot go
+ * stale. Returns null when either input makes the question meaningless.
+ */
+export function getAllPhotosBreakEvenQuantity(
+  allPhotosCents: number | null | undefined,
+  unitPriceCents: number | null | undefined,
+): number | null {
+  if (!isValidAllPhotosCap(allPhotosCents)) return null;
+  if (typeof unitPriceCents !== 'number' || !Number.isFinite(unitPriceCents)) return null;
+  if (unitPriceCents <= 0) return null;
+  return Math.ceil(allPhotosCents / unitPriceCents);
+}
+
+/**
  * The next rung a buyer has not reached yet, or null when none remains — the
  * input to the cart's "add 2 more photos and pay €X" prompt.
  *
