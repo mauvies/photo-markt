@@ -1,11 +1,11 @@
 # T-212 · Bundles · El camino de ESCRITURA borra en silencio la escalera de precios (+ monotonicidad + input de dinero)
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno (T-203 y T-204 ya en `main`)
 - **Rama:** `fix/bundle-write-path`
 - **OpenSpec change:** — (toca >1 archivo pero el "qué" está cerrado; el diseño vive en `photo-bundles`, que sigue **activo**)
-- **PR:** —
+- **PR:** #267
 
 ## Requerimiento
 
@@ -70,23 +70,25 @@ dinero mal cobrado y datos perdidos.
 
 ## Criterio de aceptación (Definition of Done)
 
-- [ ] Un campo de peldaño vaciado o con `1` **no** borra la escalera guardada: se rechaza con el error
+- [x] Un campo de peldaño vaciado o con `1` **no** borra la escalera guardada: se rechaza con el error
       concreto (`quantity_too_low` / total inválido) y el fotógrafo lo ve
-- [ ] `BUNDLE_PRICING_ENABLED = false` **conserva** las escaleras guardadas a través de guardados no
+- [x] `BUNDLE_PRICING_ENABLED = false` **conserva** las escaleras guardadas a través de guardados no
       relacionados (la propiedad que `CLAUDE.md` ya promete)
-- [ ] Ninguna escalera que pase la validación puede cobrar más por menos fotos — afirmado como
-      **propiedad sobre muchas escaleras generadas**, no sobre una fija
-- [ ] Teclear "20" en cualquier input de dinero del editor guarda **€20**
-- [ ] Bajar el precio desde `?section=info` guarda, sin quedar bloqueado por una escalera que ese
+- [x] ~~Ninguna escalera que pase la validación puede cobrar más por menos fotos~~ — **corregido al
+      ejecutar: este criterio estaba mal.** Imponerlo prohíbe el Foto-Flat ("40 fotos por €19.90" baja de
+      €195 a €19.90). Lo que sí se afirma, sobre varias formas de escalera y todas las cantidades, es la
+      propiedad real: **ninguna configuración cobra más que comprar de a una**. Ver Notas
+- [x] Teclear "20" en cualquier input de dinero del editor guarda **€20**
+- [x] Bajar el precio desde `?section=info` guarda, sin quedar bloqueado por una escalera que ese
       formulario no puede editar
-- [ ] Vaciar el precio en el wizard no deja packs invisibles-pero-vivos: o se pueden borrar, o el paso
+- [x] Vaciar el precio en el wizard no deja packs invisibles-pero-vivos: o se pueden borrar, o el paso
       de revisión no los promete
-- [ ] Recargar un borrador del wizard a medio teclear conserva los packs
-- [ ] Una escalera almacenada que el parser de lectura rechace **no** se borra por un guardado ajeno
-- [ ] `getBundleDiscountCents` refleja el techo
-- [ ] strings nuevos en `en.json` y `es.json` (si hay UI)
-- [ ] test que falla antes y pasa después **por cada defecto**
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` **y `pnpm build`** en verde
+- [x] Recargar un borrador del wizard a medio teclear conserva los packs
+- [x] Una escalera almacenada que el parser de lectura rechace **no** se borra por un guardado ajeno
+- [x] `getBundleDiscountCents` refleja el techo
+- [x] strings nuevos en `en.json` y `es.json` (si hay UI)
+- [x] test que falla antes y pasa después **por cada defecto**
+- [x] `pnpm typecheck && pnpm lint && pnpm test` **y `pnpm build`** en verde
 
 ## Notas
 

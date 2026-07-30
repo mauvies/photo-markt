@@ -2,7 +2,7 @@
 
 - **Prioridad:** P2
 - **Estado:** todo
-- **Blockers:** **T-212** (mismo archivo `bundle-schedule-error.ts` y mismos formularios — ejecutar después)
+- **Blockers:** **T-212** (PR #267, sin mergear — mismos formularios). ⚠️ El punto 1 (códigos `all_photos_*` sin mapear) **ya lo arregló T-212**, que editaba ese mismo allow-list; queda pinchado su test de exhaustividad.
 - **Rama:** `fix/bundle-error-plumbing`
 - **OpenSpec change:** —
 - **PR:** —
@@ -42,7 +42,7 @@ usuario sin saber qué pasó justo en la pantalla donde configura dinero.
 
 ## Criterio de aceptación (Definition of Done)
 
-- [ ] Los tres rechazos del techo muestran su copy localizada, no el sentinel crudo
+- [x] ~~Los tres rechazos del techo muestran su copy localizada~~ — **hecho en T-212** (PR #267), junto con un test de exhaustividad sobre toda la unión `BundleScheduleError`
 - [ ] Un rechazo de escalera desde el `/edit` completo **y desde el wizard** muestra copy legible
 - [ ] Guardar desde `?section=pricing` aterriza en el tab **Pricing**
 - [ ] La etiqueta del campo de precio se traduce (o se elimina el prop muerto y se localiza en origen)

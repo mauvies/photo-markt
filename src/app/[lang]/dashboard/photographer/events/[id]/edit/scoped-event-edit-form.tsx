@@ -72,8 +72,9 @@ export function ScopedEventEditForm({ event, section, labels, bundleT }: ScopedE
     contains_minors: Boolean(record.contains_minors),
     bib_detection_enabled: Boolean(record.bib_detection_enabled),
     reveal_gate_enabled: Boolean(record.reveal_gate_enabled),
-    // T-203: echo the stored ladder so editing another section round-trips it
-    // unchanged instead of clearing it.
+    // Seeds the pricing section's editor. Other sections no longer SEND this
+    // (T-212), so a ladder the read parser rejects is round-tripped by silence
+    // rather than by echoing a value that could not represent it.
     bundle_tiers: parseBundleTiers(record.bundle_tiers),
     bundle_all_photos_cents: parseAllPhotosCents(record.bundle_all_photos_cents),
   };
@@ -84,7 +85,12 @@ export function ScopedEventEditForm({ event, section, labels, bundleT }: ScopedE
       try {
         const parsed = eventSchema.parse(value);
         setSubmitError(null);
-        const formData = buildEventUpdateFormData(parsed);
+        // Only the pricing section renders the ladder editor, so only it may
+        // speak about the ladder (T-212). The others stay silent and the action
+        // leaves the stored columns untouched.
+        const formData = buildEventUpdateFormData(parsed, {
+          includeBundlePricing: section === 'pricing',
+        });
         startTransition(async () => {
           try {
             const result = await updateEventAction(event.id, formData);

@@ -66,26 +66,60 @@ describe('buildEventUpdateFormData', () => {
     expect(fd.get('session_end_time')).toBe('');
   });
 
-  it('always sends the bundle ladder, so editing another section cannot wipe it (T-203)', () => {
-    // The server treats an absent `bundle_tiers` as "clear the ladder". A
-    // section-scoped form edits (say) the info card but still submits the whole
-    // event, so it MUST echo the stored ladder — otherwise renaming an event
-    // would silently delete its volume pricing.
-    const withLadder = buildEventUpdateFormData({
-      ...base,
-      bundle_tiers: [
-        { minQuantity: 3, totalPriceCents: 1200 },
-        { minQuantity: 8, totalPriceCents: 2000 },
-      ],
-    });
-    expect(JSON.parse(withLadder.get('bundle_tiers') as string)).toEqual([
+  /**
+   * T-212 reversed the T-203 rule here, and the reversal is the point.
+   *
+   * T-203 had every form echo the stored ladder, because an absent field meant
+   * "clear". That made a form which cannot SHOW the ladder responsible for
+   * preserving it, and it failed in both directions: a stored ladder the read
+   * parser rejects came back as `''` and got deleted by the first unrelated
+   * save, and lowering a price from the Info card validated the echoed ladder
+   * and threw an error about a field that section does not render.
+   *
+   * Now only a form that actually edits the ladder speaks about it. Silence
+   * means `absent`, and the action leaves the column untouched.
+   */
+  it('omits the ladder entirely for a form with no ladder editor', () => {
+    const fd = buildEventUpdateFormData(
+      {
+        ...base,
+        bundle_tiers: [{ minQuantity: 3, totalPriceCents: 1200 }],
+        bundle_all_photos_cents: 2500,
+      },
+      { includeBundlePricing: false },
+    );
+    // Absent — NOT `''`, which would mean "clear it".
+    expect(fd.has('bundle_tiers')).toBe(false);
+    expect(fd.has('bundle_all_photos_cents')).toBe(false);
+  });
+
+  it('sends the ladder from the form that does edit it', () => {
+    const fd = buildEventUpdateFormData(
+      {
+        ...base,
+        bundle_tiers: [
+          { minQuantity: 3, totalPriceCents: 1200 },
+          { minQuantity: 8, totalPriceCents: 2000 },
+        ],
+        bundle_all_photos_cents: 2500,
+      },
+      { includeBundlePricing: true },
+    );
+    expect(JSON.parse(fd.get('bundle_tiers') as string)).toEqual([
       { minQuantity: 3, totalPriceCents: 1200 },
       { minQuantity: 8, totalPriceCents: 2000 },
     ]);
+    expect(fd.get('bundle_all_photos_cents')).toBe('2500');
+  });
 
-    // And a genuinely absent ladder is sent as empty rather than omitted, so
-    // clearing one persists.
-    const withoutLadder = buildEventUpdateFormData({ ...base, bundle_tiers: null });
-    expect(withoutLadder.get('bundle_tiers')).toBe('');
+  it('lets the pricing form clear the ladder with an explicit empty value', () => {
+    const fd = buildEventUpdateFormData(
+      { ...base, bundle_tiers: null, bundle_all_photos_cents: null },
+      { includeBundlePricing: true },
+    );
+    // Present-but-empty is how "the photographer removed every pack" travels,
+    // and it stays distinguishable from the absent case above.
+    expect(fd.get('bundle_tiers')).toBe('');
+    expect(fd.get('bundle_all_photos_cents')).toBe('');
   });
 });

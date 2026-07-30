@@ -2013,6 +2013,8 @@
     "noLadder": "No volume packs yet.",
     "unavailableFree": "Volume packs need a photo price. Set one first.",
     "unavailableOrganizer": "Volume packs are not available on organizer events yet.",
+    "inactiveWithoutPrice": "These volume packs are inactive because this event has no photo price. Set a price to use them, or remove them.",
+    "removeAllPacks": "Remove all packs",
     "errors": {
       "fallback": "That pricing isn't valid. Check the packs and try again.",
       "empty": "Add at least one pack, or remove volume pricing entirely.",

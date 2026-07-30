@@ -9,7 +9,14 @@ import type { FormValues } from './edit-event-schema';
  * collaborative share code, reveal gate, minors) intact regardless of which
  * section was edited.
  */
-export function buildEventUpdateFormData(parsed: FormValues): FormData {
+export function buildEventUpdateFormData(
+  parsed: FormValues,
+  options: { includeBundlePricing?: boolean } = {},
+): FormData {
+  // T-212: whether THIS form actually edits the ladder. Only a form that renders
+  // the ladder editor may speak about it; everything else stays silent and the
+  // action leaves the stored columns untouched. See the append site below.
+  const { includeBundlePricing = true } = options;
   const formData = new FormData();
   formData.append('name', parsed.name.trim());
   formData.append('activity', parsed.activity);
@@ -36,17 +43,22 @@ export function buildEventUpdateFormData(parsed: FormValues): FormData {
   // `contains_minors` is read-only post-creation. We still send the current
   // value so the server-side guard can compare and reject any tampering.
   formData.append('contains_minors', parsed.contains_minors ? 'true' : 'false');
-  // Volume-pricing ladder (T-203) as JSON. ALWAYS sent, even when null — an
-  // absent field means "clear the ladder" server-side, so a scoped form that
-  // omitted it would silently wipe the pricing while editing something else.
-  // Sending the echoed current value is what makes an unrelated edit a no-op
-  // for pricing.
-  formData.append('bundle_tiers', parsed.bundle_tiers ? JSON.stringify(parsed.bundle_tiers) : '');
-  // Same always-send rule for the "all photos" ceiling — an absent field clears it.
-  formData.append(
-    'bundle_all_photos_cents',
-    parsed.bundle_all_photos_cents !== null ? String(parsed.bundle_all_photos_cents) : '',
-  );
+  // Volume-pricing ladder (T-203), sent ONLY by a form that actually edits it
+  // (T-212). The reverse rule shipped first — always send, absent means clear —
+  // and it had two bad consequences, because a scoped form echoes the whole
+  // event: (1) a stored ladder the read parser rejects came back as '' and the
+  // first unrelated save deleted it, and (2) lowering the price from the Info
+  // card validated the echoed ladder and threw `total_not_a_discount` from a
+  // section with no way to fix it. Staying silent makes the action treat the
+  // field as `absent` and leave the column alone, which is what an edit that
+  // isn't about pricing should do.
+  if (includeBundlePricing) {
+    formData.append('bundle_tiers', parsed.bundle_tiers ? JSON.stringify(parsed.bundle_tiers) : '');
+    formData.append(
+      'bundle_all_photos_cents',
+      parsed.bundle_all_photos_cents !== null ? String(parsed.bundle_all_photos_cents) : '',
+    );
+  }
   if (parsed.price_per_photo !== undefined && parsed.price_per_photo !== null) {
     const price =
       typeof parsed.price_per_photo === 'string'

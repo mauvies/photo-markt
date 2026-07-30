@@ -1,7 +1,31 @@
-import { parseAllPhotosCents, parseBundleTiers } from '@/lib/bundle-pricing';
+import {
+  type BundleTier,
+  parseAllPhotosSubmission,
+  parseBundleTiersSubmission,
+} from '@/lib/bundle-pricing';
+
 import { activityValues } from './activity-options';
 import type { StepNumber } from './components/wizard-steps';
 import type { FormValues } from './wizard.schema';
+
+/**
+ * Restore a draft's in-progress ladder (T-212).
+ *
+ * `cleared`/`absent`/`invalid` all restore as "no packs" — a draft cannot report
+ * an error at the user, and there is nothing to lose that wasn't already
+ * unusable. What matters is that a merely *half-typed* ladder (a total not yet
+ * above the previous rung's) now survives, where the fail-closed reader threw it
+ * all away.
+ */
+function restoreDraftTiers(raw: unknown): BundleTier[] | null {
+  const submission = parseBundleTiersSubmission(raw);
+  return submission.kind === 'tiers' ? submission.tiers : null;
+}
+
+function restoreDraftAllPhotos(raw: unknown): number | null {
+  const submission = parseAllPhotosSubmission(raw);
+  return submission.kind === 'cents' ? submission.cents : null;
+}
 
 // sessionStorage key — scoped per-tab. The wizard draft is discarded when
 // the tab closes, which matches user expectation (no surprise drafts
@@ -146,10 +170,16 @@ export function readStoredState(): StoredWizardState | null {
         typeof candidateValues.price_per_photo === 'number'
           ? candidateValues.price_per_photo
           : null,
-      // Restored through the shared fail-closed reader (T-203): a draft is
-      // localStorage, so it is untrusted input like any other.
-      bundle_tiers: parseBundleTiers(candidateValues.bundle_tiers),
-      bundle_all_photos_cents: parseAllPhotosCents(candidateValues.bundle_all_photos_cents),
+      // T-212: restored through the WRITE-side submission parser, not the
+      // fail-closed reader. A draft is what the photographer TYPED, and typing is
+      // transient: mid-edit a second pack's total is momentarily below the
+      // first's, which the reader rejects wholesale — so reloading the tab
+      // silently dropped every pack while the rest of the draft came back. The
+      // submission parser keeps any structurally sound list and leaves the
+      // semantic rules to the save, which is exactly the read/write asymmetry
+      // this module's doc describes.
+      bundle_tiers: restoreDraftTiers(candidateValues.bundle_tiers),
+      bundle_all_photos_cents: restoreDraftAllPhotos(candidateValues.bundle_all_photos_cents),
       organizer_fee_per_photo:
         typeof candidateValues.organizer_fee_per_photo === 'number'
           ? candidateValues.organizer_fee_per_photo

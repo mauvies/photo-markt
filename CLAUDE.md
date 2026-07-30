@@ -173,17 +173,30 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
   constraint: thresholds integer ≥ 2 strictly increasing; totals positive, **strictly increasing with threshold**
   (without this the ladder collapses to one rung), each ≥ `MIN_PHOTO_PRICE_CENTS` applied to the **rung total**
   (not per photo — the floor governs what is being bought, and for a bundle that is the set) and strictly below
-  `minQuantity × price_per_photo`. **Two parsers, deliberately:** `parseBundleTiers` (READ) fails **closed** to
-  "no ladder" on any inconsistency — falling back to `quantity × unit` can only overcharge vs. intent (visible,
-  refundable), never undercharge; `parseBundleTiersInput` (WRITE) validates shape only, because failing closed on
-  a write would silently discard what the photographer typed and report success. Excluded from **organizer**
-  events (several possible sellers, and `organizer_fee_per_photo_cents` is written but read by no money path, so
-  there is no revenue split to charge a discount against) and from free events. **An ineligible event's ladder is
-  NORMALIZED AWAY, not rejected** — the same treatment `watermark_enabled` / `reveal_gate_enabled` get when their
-  preconditions fail. Rejecting was a bug: every section-scoped edit form echoes the whole event, so a stored
-  ladder plus a cleared price made editing *settings* throw `BUNDLE_TIERS:total_not_a_discount` and 500. Pricing
-  state must never block a save that isn't about pricing. Global kill switch `BUNDLE_PRICING_ENABLED`; stored
-  ladders survive it unread, so rollback needs no migration
+  `minQuantity × price_per_photo`. ⚠️ **The price is NOT monotonic in quantity, and nothing enforces that it
+  is** (T-212 corrected an earlier claim here): a rung below `(minQuantity − 1) × unit` prices a smaller set
+  higher — "3 for €9" at €5/photo charges €10 for two and €9 for three — and that is what a volume discount IS,
+  since the flagship Foto-Flat shape ("40 for €19.90") drops from €195 to €19.90. Any rule strong enough to
+  forbid the first forbids the second. The buyer is protected by the `min` against singles, not by monotonicity.
+  **THREE submission states, not two (T-212):** `parseBundleTiersSubmission` / `parseAllPhotosSubmission` return
+  `absent` (the form never carried the field ⇒ **don't touch the column**), `cleared` (explicitly emptied ⇒ write
+  null), `invalid` (⇒ **reject the save and name the reason**; never write) or the parsed value. Collapsing these
+  into one `null` was silent data loss on a money column: a cleared amount box, a `1` typed into a threshold, or
+  a stored ladder the reader rejects each DELETED the photographer's pricing and reported success — and made
+  `quantity_too_low` an unreachable message. `parseBundleTiers` (READ) still fails **closed** to "no ladder",
+  which is right for a read (falling back to `quantity × unit` can only overcharge vs. intent — visible and
+  refundable — never undercharge) and wrong for a write. **Only a form that renders the ladder editor may send
+  it**: `buildEventUpdateFormData(parsed, { includeBundlePricing })` omits the field otherwise, so the scoped
+  `info`/`settings` sections and the full `/edit` form stay silent. That is what stopped an unrelated save from
+  wiping the ladder AND stopped lowering a price from throwing `total_not_a_discount` about a field the section
+  cannot show. Excluded from **organizer** events (several possible sellers, and `organizer_fee_per_photo_cents`
+  is written but read by no money path, so there is no revenue split to charge a discount against) and from free
+  events — but an ineligible event **KEEPS its stored ladder** (T-212; it simply cannot apply, and restoring a
+  price restores the packs). Write paths gate on **`eventAcceptsBundleConfig`**, never `eventSupportsBundles`:
+  the latter folds in the kill switch, so flipping `BUNDLE_PRICING_ENABLED` for a rollback made the next save of
+  any kind erase every stored ladder permanently — the exact opposite of the property the switch advertises.
+  Pricing state must never block a save that isn't about pricing, and rollback must be inert: stored ladders
+  survive it unread, so rollback needs no migration
 - **Cart-level pricing (T-204) — `src/lib/cart-bundle-pricing.ts`, `priceCartWithBundles`.** `bundle-pricing.ts`
   prices a SET; this prices a CART, and it is the single point where a cart is grouped and allocated. Both
   checkouts, both cart views (including the authenticated cart's **optimistic** re-price after a removal — a
