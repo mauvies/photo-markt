@@ -918,9 +918,9 @@
     "title": "Crear evento",
     "subtitle": "Completa los detalles y añade tus fotos.",
     "noPreview": "Sin vista previa",
-    "nameLabel": "Evento",
+    "nameLabel": "Nombre del evento",
     "namePlaceholder": "Nombre del evento",
-    "nameRequired": "El nombre es obligatorio.",
+    "nameRequired": "El nombre del evento es obligatorio.",
     "activityLabel": "Actividad",
     "activityPlaceholder": "Selecciona una actividad",
     "activityRequired": "La actividad es obligatoria.",
@@ -2000,8 +2000,14 @@
     "tabTitle": "Precios",
     "editTitle": "Editar precios",
     "editSubtitle": "Fija el precio por foto suelta y, si quieres, packs por volumen para este evento.",
-    "laddersHeading": "Packs por volumen",
-    "laddersDescription": "Ofrece un precio mejor a quien se lleve varias fotos. Cada pack es un total fijo a partir de esa cantidad de fotos.",
+    "laddersHeading": "Precio por volumen",
+    "laddersDescription": "Cobra menos a quien se lleve más de una foto.",
+    "allPhotosLabel": "Todas las fotos por un precio",
+    "allPhotosDescription": "Lo máximo que pagará un comprador por tus fotos de este evento, se lleve las que se lleve. Déjalo vacío si no quieres.",
+    "allPhotosPlaceholder": "p. ej. 20.00",
+    "allPhotosBreakEven": "Se aplica a partir de {n} fotos — por debajo pagan por foto.",
+    "packsHeading": "Packs (opcional)",
+    "packsDescription": "Escalones intermedios entre una foto suelta y el precio de todas. Cada pack es un total fijo a partir de esa cantidad de fotos.",
     "addTier": "Añadir pack",
     "removeTier": "Quitar",
     "minQuantityLabel": "A partir de esta cantidad de fotos",
@@ -2020,7 +2026,10 @@
       "total_not_integer": "Cada pack necesita un precio total válido.",
       "total_below_floor": "Cada pack tiene que costar al menos {min}.",
       "total_not_increasing": "Cada pack tiene que costar más que el anterior — si no, el pack más barato se aplicaría a todos los pedidos mayores.",
-      "total_not_a_discount": "Un pack tiene que costar menos que comprar esas fotos una a una."
+      "total_not_a_discount": "Un pack tiene que costar menos que comprar esas fotos una a una.",
+      "all_photos_below_floor": "El precio de todas las fotos tiene que ser al menos {min}.",
+      "all_photos_not_above_unit": "El precio de todas las fotos tiene que ser mayor que el de una foto suelta — si no, nadie pagaría nunca el precio por foto.",
+      "all_photos_below_a_pack": "Un pack cuesta igual o más que el precio de todas las fotos, así que nunca se aplicaría. Baja el pack o sube el precio de todas."
     }
   }
 }

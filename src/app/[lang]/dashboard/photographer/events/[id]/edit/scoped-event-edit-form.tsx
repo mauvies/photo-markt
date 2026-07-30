@@ -9,7 +9,7 @@ import { BundleTiersField } from '@/components/bundle-tiers-field';
 import { Button } from '@/components/ui/button';
 import type { Event } from '@/database/queries/events';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
-import { parseBundleTiers } from '@/lib/bundle-pricing';
+import { parseAllPhotosCents, parseBundleTiers } from '@/lib/bundle-pricing';
 import { bundleScheduleErrorText } from '@/lib/bundle-schedule-error';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { minPhotoPriceMessage } from '@/lib/min-photo-price';
@@ -75,6 +75,7 @@ export function ScopedEventEditForm({ event, section, labels, bundleT }: ScopedE
     // T-203: echo the stored ladder so editing another section round-trips it
     // unchanged instead of clearing it.
     bundle_tiers: parseBundleTiers(record.bundle_tiers),
+    bundle_all_photos_cents: parseAllPhotosCents(record.bundle_all_photos_cents),
   };
 
   const form = useForm({
@@ -171,13 +172,19 @@ export function ScopedEventEditForm({ event, section, labels, bundleT }: ScopedE
                         ? Number(raw)
                         : null;
                   return (
-                    <BundleTiersField
-                      value={tiersField.state.value}
-                      onChange={tiersField.handleChange}
-                      pricePerPhoto={price}
-                      eventType={event.type}
-                      t={bundleT}
-                    />
+                    <form.Field name="bundle_all_photos_cents">
+                      {(capField) => (
+                        <BundleTiersField
+                          value={tiersField.state.value}
+                          onChange={tiersField.handleChange}
+                          allPhotosCents={capField.state.value}
+                          onAllPhotosChange={capField.handleChange}
+                          pricePerPhoto={price}
+                          eventType={event.type}
+                          t={bundleT}
+                        />
+                      )}
+                    </form.Field>
                   );
                 }}
               </form.Field>

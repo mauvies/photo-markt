@@ -35,3 +35,26 @@ alter table events add column if not exists bundle_tiers jsonb;
 
 comment on column public.events.bundle_tiers is
   'Optional volume-pricing ladder: array of {minQuantity, totalPriceCents}, ascending. Null = no bundle. Validated in the app at write time (src/lib/bundle-pricing.ts), not by a constraint.';
+
+-- The "all photos" flat price ("Foto-Flat"): the MOST a buyer ever pays for one
+-- photographer's photos at this event, however many they take.
+--
+-- Modelled as a CEILING rather than another rung, deliberately. A rung needs a
+-- threshold the photographer would have to derive (ceil(cap / price_per_photo)),
+-- and that derived number goes stale the moment the unit price changes — a rung
+-- at "4+ for EUR 20" silently stops applying if the price drops to EUR 4, since
+-- EUR 20 is then no longer a discount, and nobody is told. A ceiling is one
+-- number that keeps meaning what was typed: it engages exactly when
+-- quantity * price_per_photo would exceed it, so a buyer with 3 matches still
+-- pays per photo while one with 40 pays the flat price.
+--
+-- Cents, nullable (null = no flat price). Independent of bundle_tiers: an event
+-- may set only this, which is the simplest useful configuration ("EUR 5 a photo,
+-- or EUR 20 for all of them"). App-level validation only, same reasoning as
+-- bundle_tiers above: at or above the floor, strictly above the unit price (at or
+-- below it the per-photo price would be unreachable), and strictly above every
+-- rung total (a rung at or above the ceiling could never apply).
+alter table events add column if not exists bundle_all_photos_cents integer;
+
+comment on column public.events.bundle_all_photos_cents is
+  'Optional "all photos" flat price in cents — a ceiling on what a buyer pays for this event, whatever the photo count. Null = none. Validated in the app at write time, not by a constraint.';

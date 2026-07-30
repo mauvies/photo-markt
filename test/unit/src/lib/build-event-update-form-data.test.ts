@@ -22,6 +22,7 @@ const base: FormValues = {
   bib_detection_enabled: false,
   reveal_gate_enabled: true,
   bundle_tiers: null,
+  bundle_all_photos_cents: null,
 };
 
 describe('buildEventUpdateFormData', () => {

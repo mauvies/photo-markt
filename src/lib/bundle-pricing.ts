@@ -72,23 +72,69 @@ export function getBundlePriceCents(
   quantity: number,
   unitPriceCents: number,
   tiers: readonly BundleTier[] | null | undefined,
+  allPhotosCents?: number | null,
 ): number {
   if (!Number.isFinite(quantity) || quantity <= 0) return 0;
   if (!Number.isFinite(unitPriceCents) || unitPriceCents <= 0) return 0;
 
   const listTotal = quantity * unitPriceCents;
-  if (!BUNDLE_PRICING_ENABLED || !tiers || tiers.length === 0) return listTotal;
+  if (!BUNDLE_PRICING_ENABLED) return listTotal;
 
-  let applicable: BundleTier | null = null;
-  for (const tier of tiers) {
-    if (tier.minQuantity > quantity) continue;
-    if (applicable === null || tier.minQuantity > applicable.minQuantity) {
-      applicable = tier;
+  let best = listTotal;
+
+  if (tiers && tiers.length > 0) {
+    let applicable: BundleTier | null = null;
+    for (const tier of tiers) {
+      if (tier.minQuantity > quantity) continue;
+      if (applicable === null || tier.minQuantity > applicable.minQuantity) {
+        applicable = tier;
+      }
     }
+    if (applicable !== null) best = Math.min(best, applicable.totalPriceCents);
   }
 
-  if (applicable === null) return listTotal;
-  return Math.min(listTotal, applicable.totalPriceCents);
+  // The "all photos" cap (see `BundleAllPhotos` below) is a plain ceiling, so it
+  // needs no threshold and applies from whatever quantity first reaches it.
+  if (isValidAllPhotosCap(allPhotosCents)) best = Math.min(best, allPhotosCents);
+
+  return best;
+}
+
+/**
+ * ── The "all photos" flat price ────────────────────────────────────────────
+ *
+ * `events.bundle_all_photos_cents`: the MOST a buyer ever pays for one
+ * photographer's photos at this event, however many they take. Sportograf's
+ * "Foto-Flat".
+ *
+ * Modelled as a **ceiling**, not another rung, and that choice matters:
+ *
+ * - A rung needs a threshold, and the photographer would have to compute it
+ *   (`ceil(cap / unitPrice)`). Worse, that derived threshold goes stale the
+ *   moment the unit price changes — a rung at "4+ photos for €20" silently stops
+ *   applying if the unit price drops to €4, because €20 is then no longer a
+ *   discount, and nobody is told.
+ * - A ceiling is one number that means what the photographer said. It engages
+ *   exactly when `quantity × unit` would exceed it, so a buyer with 3 matches
+ *   still pays per photo while one with 40 pays the flat price. There is no
+ *   threshold to pick and nothing to keep in sync.
+ *
+ * It composes with the rungs through the same `min`, and because it is a
+ * constant it cannot break the "price never decreases as photos are added"
+ * property (`min` of a non-decreasing function and a constant is
+ * non-decreasing).
+ *
+ * Note the deliberate consequence: a buyer who reaches the cap with only some of
+ * their photos pays the same as one who takes all of them — so once they are at
+ * the cap, adding the rest is free. That is the Foto-Flat bargain, not a bug.
+ */
+function isValidAllPhotosCap(cents: number | null | undefined): cents is number {
+  return typeof cents === 'number' && Number.isFinite(cents) && cents > 0;
+}
+
+/** Whether an event's "all photos" flat price is set and usable. */
+export function hasAllPhotosPrice(cents: number | null | undefined): boolean {
+  return BUNDLE_PRICING_ENABLED && isValidAllPhotosCap(cents);
 }
 
 /**
@@ -169,7 +215,10 @@ export type BundleScheduleError =
   | 'total_not_integer'
   | 'total_below_floor'
   | 'total_not_increasing'
-  | 'total_not_a_discount';
+  | 'total_not_a_discount'
+  | 'all_photos_below_floor'
+  | 'all_photos_not_above_unit'
+  | 'all_photos_below_a_pack';
 
 export interface BundleScheduleValidation {
   ok: boolean;
@@ -207,8 +256,35 @@ export function validateBundleSchedule(
   tiers: readonly BundleTier[],
   unitPriceCents: number,
   minPhotoPriceCents: number,
+  allPhotosCents?: number | null,
 ): BundleScheduleValidation {
-  if (tiers.length === 0) return { ok: false, error: 'empty' };
+  // The "all photos" ceiling is independent of the rungs — an event may set it
+  // with no rungs at all, which is the simplest useful configuration ("€5 a
+  // photo, or €20 for all of them").
+  if (isValidAllPhotosCap(allPhotosCents)) {
+    if (!Number.isInteger(allPhotosCents)) return { ok: false, error: 'total_not_integer' };
+    if (allPhotosCents < minPhotoPriceCents) {
+      return { ok: false, error: 'all_photos_below_floor', minCents: minPhotoPriceCents };
+    }
+    // At or below the unit price the ceiling would apply to a single photo too,
+    // making the per-photo price unreachable — that is a cheaper unit price
+    // being expressed in the wrong field, not a bundle.
+    if (allPhotosCents <= unitPriceCents) {
+      return { ok: false, error: 'all_photos_not_above_unit' };
+    }
+    // A rung at or above the ceiling can never apply, so it is dead config the
+    // photographer would believe was live.
+    for (const tier of tiers) {
+      if (tier.totalPriceCents >= allPhotosCents) {
+        return { ok: false, error: 'all_photos_below_a_pack' };
+      }
+    }
+  }
+
+  // With a ceiling set, an empty rung list is a complete, valid configuration.
+  if (tiers.length === 0) {
+    return isValidAllPhotosCap(allPhotosCents) ? { ok: true } : { ok: false, error: 'empty' };
+  }
   if (tiers.length > MAX_BUNDLE_TIERS) return { ok: false, error: 'too_many_tiers' };
 
   let previous: BundleTier | null = null;
@@ -244,8 +320,22 @@ export function isValidBundleSchedule(
   tiers: readonly BundleTier[],
   unitPriceCents: number,
   minPhotoPriceCents: number = MIN_PHOTO_PRICE_CENTS,
+  allPhotosCents?: number | null,
 ): boolean {
-  return validateBundleSchedule(tiers, unitPriceCents, minPhotoPriceCents).ok;
+  return validateBundleSchedule(tiers, unitPriceCents, minPhotoPriceCents, allPhotosCents).ok;
+}
+
+/**
+ * Parse a submitted "all photos" price, failing closed to null.
+ *
+ * Same read/write asymmetry as the rungs is NOT needed here: there is one number
+ * and no cross-rung ordering to report, so a structurally invalid value is
+ * simply absent, and the semantic checks live in `validateBundleSchedule`.
+ */
+export function parseAllPhotosCents(raw: unknown): number | null {
+  const value = typeof raw === 'string' ? Number.parseInt(raw, 10) : raw;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) return null;
+  return value;
 }
 
 /**

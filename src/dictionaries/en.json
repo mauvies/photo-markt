@@ -918,9 +918,9 @@
     "title": "Create Event",
     "subtitle": "Fill the details and add your photos.",
     "noPreview": "No preview",
-    "nameLabel": "Event",
+    "nameLabel": "Event Name",
     "namePlaceholder": "Enter the event name",
-    "nameRequired": "Name is required.",
+    "nameRequired": "Event name is required.",
     "activityLabel": "Activity",
     "activityPlaceholder": "Select an activity",
     "activityRequired": "Activity is required.",
@@ -1988,8 +1988,14 @@
     "tabTitle": "Pricing",
     "editTitle": "Edit pricing",
     "editSubtitle": "Set a single-photo price and optional volume packs for this event.",
-    "laddersHeading": "Volume packs",
-    "laddersDescription": "Offer a better price when someone takes several photos. Each pack is a flat total from that many photos upward.",
+    "laddersHeading": "Volume pricing",
+    "laddersDescription": "Charge less when someone takes more than one photo.",
+    "allPhotosLabel": "All photos for one price",
+    "allPhotosDescription": "The most a buyer ever pays for your photos at this event, however many they take. Leave empty for none.",
+    "allPhotosPlaceholder": "e.g. 20.00",
+    "allPhotosBreakEven": "Kicks in from {n} photos — below that they pay per photo.",
+    "packsHeading": "Packs (optional)",
+    "packsDescription": "Extra steps between a single photo and the all-photos price. Each pack is a flat total from that many photos upward.",
     "addTier": "Add a pack",
     "removeTier": "Remove",
     "minQuantityLabel": "From this many photos",
@@ -2008,7 +2014,10 @@
       "total_not_integer": "Each pack needs a valid total price.",
       "total_below_floor": "Each pack must cost at least {min}.",
       "total_not_increasing": "Each pack must cost more than the one before it — otherwise the cheaper pack would apply to every larger order.",
-      "total_not_a_discount": "A pack must cost less than buying that many photos one by one."
+      "total_not_a_discount": "A pack must cost less than buying that many photos one by one.",
+      "all_photos_below_floor": "The all-photos price must be at least {min}.",
+      "all_photos_not_above_unit": "The all-photos price must be higher than a single photo — otherwise nobody ever pays the per-photo price.",
+      "all_photos_below_a_pack": "A pack costs the same as or more than the all-photos price, so it could never apply. Lower the pack or raise the all-photos price."
     }
   }
 }

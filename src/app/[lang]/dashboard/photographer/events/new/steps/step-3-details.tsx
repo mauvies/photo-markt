@@ -455,38 +455,52 @@ export function Step3Details({
               )
             }
           </form.Subscribe>
+
+          {/* Volume pricing (T-203) — a THIRD child of this 2-column row with
+              `md:col-start-2`, so on desktop it sits directly beneath the price
+              input in the same column instead of drifting into the cover column,
+              and on mobile it stacks right after the price. Grouping it with the
+              price is the point: they are one decision.
+              Nested Fields so the editor sees the LIVE price as it is typed.
+              Organizer events price via an organizer fee and carry no ladder. */}
+          {eventType === 'organizer' ? null : (
+            <div className="md:col-start-2">
+              <form.Field name="price_per_photo">
+                {(priceField) => (
+                  <form.Field name="bundle_tiers">
+                    {(tiersField) => {
+                      const raw: unknown = priceField.state.value;
+                      const price =
+                        typeof raw === 'number' && Number.isFinite(raw)
+                          ? raw
+                          : typeof raw === 'string' &&
+                              raw.trim() !== '' &&
+                              !Number.isNaN(Number(raw))
+                            ? Number(raw)
+                            : null;
+                      return (
+                        <form.Field name="bundle_all_photos_cents">
+                          {(capField) => (
+                            <BundleTiersField
+                              value={tiersField.state.value}
+                              onChange={tiersField.handleChange}
+                              allPhotosCents={capField.state.value}
+                              onAllPhotosChange={capField.handleChange}
+                              pricePerPhoto={price}
+                              eventType={eventType}
+                              t={bundleT}
+                            />
+                          )}
+                        </form.Field>
+                      );
+                    }}
+                  </form.Field>
+                )}
+              </form.Field>
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Volume packs (T-203). Sits under the price it discounts. Nested Fields
-          so the editor sees the LIVE price as it is typed. Organizer events show
-          an organizer fee instead of a per-photo price and never carry a ladder. */}
-      {eventType === 'organizer' ? null : (
-        <form.Field name="price_per_photo">
-          {(priceField) => (
-            <form.Field name="bundle_tiers">
-              {(tiersField) => {
-                const raw: unknown = priceField.state.value;
-                const price =
-                  typeof raw === 'number' && Number.isFinite(raw)
-                    ? raw
-                    : typeof raw === 'string' && raw.trim() !== '' && !Number.isNaN(Number(raw))
-                      ? Number(raw)
-                      : null;
-                return (
-                  <BundleTiersField
-                    value={tiersField.state.value}
-                    onChange={tiersField.handleChange}
-                    pricePerPhoto={price}
-                    eventType={eventType}
-                    t={bundleT}
-                  />
-                );
-              }}
-            </form.Field>
-          )}
-        </form.Field>
-      )}
     </div>
   );
 }

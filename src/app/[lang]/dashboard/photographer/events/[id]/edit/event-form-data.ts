@@ -42,6 +42,11 @@ export function buildEventUpdateFormData(parsed: FormValues): FormData {
   // Sending the echoed current value is what makes an unrelated edit a no-op
   // for pricing.
   formData.append('bundle_tiers', parsed.bundle_tiers ? JSON.stringify(parsed.bundle_tiers) : '');
+  // Same always-send rule for the "all photos" ceiling — an absent field clears it.
+  formData.append(
+    'bundle_all_photos_cents',
+    parsed.bundle_all_photos_cents !== null ? String(parsed.bundle_all_photos_cents) : '',
+  );
   if (parsed.price_per_photo !== undefined && parsed.price_per_photo !== null) {
     const price =
       typeof parsed.price_per_photo === 'string'

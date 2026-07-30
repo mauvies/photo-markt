@@ -176,26 +176,30 @@ describe('createEvent — bundle ladder', () => {
     expect(await readTiers(result.eventId)).toEqual([{ minQuantity: 40, totalPriceCents: 1990 }]);
   });
 
-  it('rejects a ladder on a free event', async () => {
-    await expect(
-      createEvent(
-        buildEventFormData({ price_per_photo: '', bundle_tiers: JSON.stringify(LADDER) }),
-      ),
-    ).rejects.toThrow(/BUNDLE_TIERS:/);
+  it('drops a ladder on a free event instead of failing the create', async () => {
+    // A free event has nothing to discount, so a ladder is normalized away rather
+    // than rejected — the same treatment `watermark_enabled` and
+    // `reveal_gate_enabled` get when their preconditions fail. Rejecting instead
+    // made pricing state able to block saves that were not about pricing.
+    const result = await createEvent(
+      buildEventFormData({ price_per_photo: '', bundle_tiers: JSON.stringify(LADDER) }),
+    );
+    expect(result.eventId).toBeTruthy();
+    expect(await readTiers(result.eventId)).toBeNull();
   });
 
   it('drops a ladder on an organizer event rather than storing one', async () => {
     // Organizer events can span several sellers and have no revenue split to
     // charge a discount against, so they may never carry a ladder.
-    await expect(
-      createEvent(
-        buildEventFormData({
-          event_type: 'organizer',
-          organizer_fee_per_photo: '1.00',
-          bundle_tiers: JSON.stringify(LADDER),
-        }),
-      ),
-    ).rejects.toThrow(/BUNDLE_TIERS:/);
+    const result = await createEvent(
+      buildEventFormData({
+        event_type: 'organizer',
+        organizer_fee_per_photo: '1.00',
+        bundle_tiers: JSON.stringify(LADDER),
+      }),
+    );
+    expect(result.eventId).toBeTruthy();
+    expect(await readTiers(result.eventId)).toBeNull();
   });
 
   it('fails closed to no ladder on a malformed payload instead of erroring', async () => {
@@ -255,15 +259,79 @@ describe('updateEventAction — bundle ladder', () => {
     expect(await readTiers(event.id)).toEqual(LADDER);
   });
 
-  it('rejects a ladder when the event is being made free', async () => {
+  it('drops the ladder when the event is made free, instead of failing the save', async () => {
+    // Regression for a 500 found in review: every section-scoped form echoes the
+    // WHOLE event, so on an event whose price had been cleared, editing an
+    // unrelated section (settings) submitted the stored ladder with a null price
+    // and threw `BUNDLE_TIERS:total_not_a_discount`. A free event carries no
+    // ladder by definition, so the correct move is to normalize it away — pricing
+    // state must never block a save that isn't about pricing.
     const event = await createTestEvent(userId, { price_per_photo: 5 });
+    await updateEventAction(event.id, buildEventFormData({ bundle_tiers: JSON.stringify(LADDER) }));
+    expect(await readTiers(event.id)).toEqual(LADDER);
+
+    await updateEventAction(
+      event.id,
+      buildEventFormData({ price_per_photo: '', bundle_tiers: JSON.stringify(LADDER) }),
+    );
+
+    expect(await readTiers(event.id)).toBeNull();
+    const sb = createServiceClient();
+    const { data } = await sb.from('events').select('price_per_photo').eq('id', event.id).single();
+    expect(data?.price_per_photo).toBeNull();
+  });
+
+  it('saves an unrelated section on a free event that still holds a stored ladder', async () => {
+    // The exact reported shape: a stored ladder + no price + an edit that has
+    // nothing to do with pricing. Must succeed, not 500.
+    const event = await createTestEvent(userId, { price_per_photo: 5 });
+    const sb = createServiceClient();
+    await sb
+      .from('events')
+      .update({ bundle_tiers: LADDER, price_per_photo: null })
+      .eq('id', event.id);
 
     await expect(
       updateEventAction(
         event.id,
-        buildEventFormData({ price_per_photo: '', bundle_tiers: JSON.stringify(LADDER) }),
+        buildEventFormData({
+          name: 'Renamed While Free',
+          price_per_photo: '',
+          bundle_tiers: JSON.stringify(LADDER),
+        }),
       ),
-    ).rejects.toThrow(/BUNDLE_TIERS:/);
+    ).resolves.toMatchObject({ success: true });
+
+    const { data } = await sb.from('events').select('name').eq('id', event.id).single();
+    expect(data?.name).toBe('Renamed While Free');
+    expect(await readTiers(event.id)).toBeNull();
+  });
+
+  it('persists an "all photos" flat price with no rungs at all', async () => {
+    // The owner's ask: "EUR 5 a photo, or EUR 20 for all of them" — no packs.
+    const event = await createTestEvent(userId, { price_per_photo: 5 });
+    await updateEventAction(event.id, buildEventFormData({ bundle_all_photos_cents: '2000' }));
+
+    const sb = createServiceClient();
+    const { data } = await sb
+      .from('events')
+      .select('bundle_all_photos_cents')
+      .eq('id', event.id)
+      .single();
+    expect((data as { bundle_all_photos_cents?: number | null })?.bundle_all_photos_cents).toBe(
+      2000,
+    );
+
+    // And it prices as a ceiling: per photo below it, flat above.
+    expect(getBundlePriceCents(3, 500, null, 2000)).toBe(1500);
+    expect(getBundlePriceCents(40, 500, null, 2000)).toBe(2000);
+  });
+
+  it('rejects an "all photos" price at or below the single-photo price', async () => {
+    const event = await createTestEvent(userId, { price_per_photo: 5 });
+    await expect(
+      updateEventAction(event.id, buildEventFormData({ bundle_all_photos_cents: '500' })),
+    ).rejects.toThrow(/BUNDLE_TIERS:all_photos_not_above_unit/);
   });
 
   it('leaves an existing sub-rule ladder alone until its own write (write-time enforcement)', async () => {

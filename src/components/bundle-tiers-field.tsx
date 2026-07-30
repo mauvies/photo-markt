@@ -18,6 +18,9 @@ interface BundleTiersFieldProps {
   /** Current ladder, or null when the event has none. */
   value: BundleTier[] | null;
   onChange: (value: BundleTier[] | null) => void;
+  /** Current "all photos" flat price in CENTS, or null. */
+  allPhotosCents: number | null;
+  onAllPhotosChange: (cents: number | null) => void;
   /**
    * The LIVE unit price in euros, as the photographer is typing it — not the
    * stored one. Eligibility and the per-photo readouts both depend on it, so a
@@ -52,6 +55,8 @@ function formatCents(cents: number): string {
 export function BundleTiersField({
   value,
   onChange,
+  allPhotosCents,
+  onAllPhotosChange,
   pricePerPhoto,
   eventType,
   t,
@@ -99,6 +104,54 @@ export function BundleTiersField({
     <div className="rounded-lg border bg-card p-4">
       <h3 className="text-sm font-semibold">{t.laddersHeading}</h3>
       <p className="mt-1 text-sm text-muted-foreground">{t.laddersDescription}</p>
+
+      {/* The "all photos" flat price — a CEILING, so it needs no threshold: it
+          engages exactly when the per-photo total would exceed it. This is the
+          "buy all my photos for one price" offer; the packs below are optional
+          steps on the way there. */}
+      <div className="mt-4 border-t border-border pt-4">
+        <Label htmlFor="bundle_all_photos" className="text-sm font-medium">
+          {t.allPhotosLabel}
+        </Label>
+        <p className="mt-1 text-xs text-muted-foreground">{t.allPhotosDescription}</p>
+        <div className="relative mt-2 max-w-[12rem]">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+            {PLATFORM_CURRENCY_SYMBOL}
+          </span>
+          <Input
+            id="bundle_all_photos"
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="0.01"
+            placeholder={t.allPhotosPlaceholder}
+            value={allPhotosCents === null ? '' : (allPhotosCents / 100).toFixed(2)}
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw.trim() === '') {
+                onAllPhotosChange(null);
+                return;
+              }
+              const parsed = Number.parseFloat(raw);
+              onAllPhotosChange(Number.isNaN(parsed) ? null : Math.round(parsed * 100));
+            }}
+            className="pl-7 text-sm"
+          />
+        </div>
+        {allPhotosCents !== null && pricePerPhoto ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {t.allPhotosBreakEven.replace(
+              '{n}',
+              String(Math.ceil(allPhotosCents / Math.round(pricePerPhoto * 100))),
+            )}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="mt-4 border-t border-border pt-4">
+        <h4 className="text-sm font-medium">{t.packsHeading}</h4>
+        <p className="mt-1 text-xs text-muted-foreground">{t.packsDescription}</p>
+      </div>
 
       {tiers.length === 0 ? (
         <p className="mt-4 text-sm text-muted-foreground">{t.noLadder}</p>

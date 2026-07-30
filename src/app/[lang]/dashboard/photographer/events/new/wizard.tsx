@@ -403,6 +403,9 @@ export default function NewEventForm({
     if (parsed.bundle_tiers && parsed.bundle_tiers.length > 0) {
       formData.append('bundle_tiers', JSON.stringify(parsed.bundle_tiers));
     }
+    if (parsed.bundle_all_photos_cents !== null) {
+      formData.append('bundle_all_photos_cents', String(parsed.bundle_all_photos_cents));
+    }
     if (
       parsed.event_type === 'organizer' &&
       parsed.organizer_fee_per_photo !== null &&
@@ -610,6 +613,14 @@ export default function NewEventForm({
       });
     } else {
       detailsRows.push({ label: t('summaryPrice'), value: formatPrice(v.price_per_photo) });
+      // "All photos" flat price first — it is the headline offer; the rungs are
+      // steps on the way to it (T-203).
+      if (v.bundle_all_photos_cents !== null) {
+        detailsRows.push({
+          label: bundlePricingLabels.allPhotosLabel,
+          value: formatPrice(v.bundle_all_photos_cents / 100),
+        });
+      }
       // Volume packs (T-203): every rung gets its own row, so nobody confirms a
       // price they were never shown. Stated as the flat total plus what it works
       // out to per photo, which is the part a photographer can't do in their head.

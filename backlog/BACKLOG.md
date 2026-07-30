@@ -13,8 +13,9 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 |---|-----|------|--------|-----|--------|
 | 1 | P2 | T-204 | Bundles B — carrito, ambos checkouts y webhook: **aquí cambia el dinero** | ~~T-203~~ (PR #265, pendiente de merge) | todo |
 | 2 | P2 | T-205 | Bundles C — Ventas/Ganancias reportan el bruto con descuento; cierra y archiva el OpenSpec change | **T-204** | todo |
-| 3 | P2 | T-202 | Podar las API routes muertas `api/billing/checkout` + `api/billing/cancel` (gate: verificar Stripe primero) | — | todo |
-| 4 | P3 | T-201 | Manifiesto PWA: `public/manifest.json` → `src/app/manifest.ts` (`MetadataRoute.Manifest`) | — | todo |
+| 3 | P2 | T-206 | Reorganizar/UX de `events/[id]/edit` (columna plana, strings hardcodeados en inglés) | **T-203** (PR #265, sin mergear — mismo archivo) | todo |
+| 4 | P2 | T-202 | Podar las API routes muertas `api/billing/checkout` + `api/billing/cancel` (gate: verificar Stripe primero) | — | todo |
+| 5 | P3 | T-201 | Manifiesto PWA: `public/manifest.json` → `src/app/manifest.ts` (`MetadataRoute.Manifest`) | — | todo |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |

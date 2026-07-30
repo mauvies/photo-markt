@@ -1,3 +1,10 @@
+'use client';
+
+// Required, not incidental: `buttonVariants` lives in a client module
+// (`ui/button`), and a Server Component cannot CALL a client function — only
+// render one as a component. `EventInfoCard`, whose header/Edit-link pattern this
+// mirrors, is a client component for exactly the same reason. `pnpm build`
+// compiles this either way; the failure only surfaces when the tab renders.
 import { Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { buttonVariants } from '@/components/ui/button';

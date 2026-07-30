@@ -13,7 +13,7 @@ import { UploadProgressDialog } from '@/components/upload-progress-dialog';
 import { Dropzone } from '@/components/uploader/Dropzone';
 import type { Event } from '@/database/queries/events';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
-import { parseBundleTiers } from '@/lib/bundle-pricing';
+import { parseAllPhotosCents, parseBundleTiers } from '@/lib/bundle-pricing';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { minPhotoPriceMessage } from '@/lib/min-photo-price';
@@ -105,6 +105,9 @@ export function EditEventForm({ event, initialPhotos, initialCoverUrl }: EditEve
     // T-203: echo the stored ladder so a full edit round-trips it unchanged.
     // The ladder is edited from the Pricing tab's scoped form, not here.
     bundle_tiers: parseBundleTiers((event as unknown as Record<string, unknown>).bundle_tiers),
+    bundle_all_photos_cents: parseAllPhotosCents(
+      (event as unknown as Record<string, unknown>).bundle_all_photos_cents,
+    ),
   };
 
   const handleDeletePhoto = (photoId: string) => {

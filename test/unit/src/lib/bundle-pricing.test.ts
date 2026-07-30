@@ -7,7 +7,9 @@ import {
   getBundlePriceCents,
   getEffectivePerPhotoCents,
   getNextBundleTier,
+  hasAllPhotosPrice,
   MAX_BUNDLE_TIERS,
+  parseAllPhotosCents,
   parseBundleTiers,
   parseBundleTiersInput,
   serializeBundleTiers,
@@ -80,6 +82,118 @@ describe('getBundlePriceCents', () => {
     expect(getBundlePriceCents(-3, UNIT, LADDER)).toBe(0);
     expect(getBundlePriceCents(5, 0, LADDER)).toBe(0);
     expect(getBundlePriceCents(Number.NaN, UNIT, LADDER)).toBe(0);
+  });
+});
+
+describe('getBundlePriceCents — "all photos" flat price (ceiling)', () => {
+  it('caps the total however many photos are taken', () => {
+    // "EUR 5 a photo, or EUR 20 for all of them" — no rungs needed at all.
+    expect(getBundlePriceCents(1, UNIT, null, 2000)).toBe(500);
+    expect(getBundlePriceCents(3, UNIT, null, 2000)).toBe(1500);
+    expect(getBundlePriceCents(4, UNIT, null, 2000)).toBe(2000);
+    expect(getBundlePriceCents(40, UNIT, null, 2000)).toBe(2000);
+  });
+
+  it('still charges per photo below the cap — the small-match-set case', () => {
+    // This is what a threshold-based rung could NOT express: someone with only
+    // 3 matches must not be forced to pay the all-photos price.
+    expect(getBundlePriceCents(3, UNIT, null, 2000)).toBe(1500);
+    expect(getBundlePriceCents(2, UNIT, null, 2000)).toBe(1000);
+  });
+
+  it('needs no threshold, so it survives a unit-price change', () => {
+    // The equivalent rung would have been "4+ for EUR 20" (20/5). Drop the unit
+    // price to EUR 4 and that rung stops being a discount and silently dies;
+    // the ceiling just moves to where it belongs.
+    expect(getBundlePriceCents(5, 400, null, 2000)).toBe(2000);
+    expect(getBundlePriceCents(4, 400, null, 2000)).toBe(1600);
+  });
+
+  it('composes with rungs, taking whichever is cheaper', () => {
+    expect(getBundlePriceCents(3, UNIT, LADDER, 2000)).toBe(1200);
+    expect(getBundlePriceCents(8, UNIT, LADDER, 2000)).toBe(2000);
+    expect(getBundlePriceCents(30, UNIT, LADDER, 2000)).toBe(2000);
+  });
+
+  it('keeps the price non-decreasing in quantity', () => {
+    let previous = 0;
+    for (let quantity = 1; quantity <= 60; quantity++) {
+      const price = getBundlePriceCents(quantity, UNIT, LADDER, 2000);
+      expect(price).toBeGreaterThanOrEqual(previous);
+      previous = price;
+    }
+  });
+
+  it('is ignored when absent or not a usable amount', () => {
+    expect(getBundlePriceCents(40, UNIT, null, null)).toBe(20_000);
+    expect(getBundlePriceCents(40, UNIT, null, 0)).toBe(20_000);
+    expect(getBundlePriceCents(40, UNIT, null, -5)).toBe(20_000);
+  });
+});
+
+describe('validateBundleSchedule — "all photos" price', () => {
+  it('accepts a ceiling with no rungs at all', () => {
+    // The simplest useful configuration, and what the owner asked for.
+    expect(validateBundleSchedule([], UNIT, MIN_PHOTO_PRICE_CENTS, 2000).ok).toBe(true);
+  });
+
+  it('still rejects an empty schedule when there is no ceiling either', () => {
+    expect(validateBundleSchedule([], UNIT, MIN_PHOTO_PRICE_CENTS, null).error).toBe('empty');
+  });
+
+  it('rejects a ceiling at or below the unit price', () => {
+    // At EUR 5 all-photos with a EUR 5 unit price, a single photo already costs
+    // the cap — the per-photo price becomes unreachable.
+    expect(validateBundleSchedule([], UNIT, 150, UNIT).error).toBe('all_photos_not_above_unit');
+    expect(validateBundleSchedule([], UNIT, 150, 400).error).toBe('all_photos_not_above_unit');
+  });
+
+  it('rejects a ceiling below the price floor', () => {
+    expect(validateBundleSchedule([], UNIT, 150, 100)).toMatchObject({
+      ok: false,
+      error: 'all_photos_below_floor',
+      minCents: 150,
+    });
+  });
+
+  it('rejects a rung that costs as much as or more than the ceiling', () => {
+    // Such a rung could never apply, so the photographer would believe a pack
+    // was live when it was dead config.
+    expect(
+      validateBundleSchedule([{ minQuantity: 3, totalPriceCents: 2000 }], UNIT, 150, 2000).error,
+    ).toBe('all_photos_below_a_pack');
+    expect(
+      validateBundleSchedule([{ minQuantity: 3, totalPriceCents: 2500 }], UNIT, 150, 2000).error,
+    ).toBe('all_photos_below_a_pack');
+  });
+
+  it('accepts the full shape: unit price, rungs below the ceiling, and the ceiling', () => {
+    expect(validateBundleSchedule(LADDER, UNIT, MIN_PHOTO_PRICE_CENTS, 2500).ok).toBe(true);
+  });
+});
+
+describe('parseAllPhotosCents', () => {
+  it('accepts a positive integer, as a number or a string', () => {
+    expect(parseAllPhotosCents(2000)).toBe(2000);
+    expect(parseAllPhotosCents('2000')).toBe(2000);
+  });
+
+  it('fails closed on anything else', () => {
+    expect(parseAllPhotosCents(null)).toBeNull();
+    expect(parseAllPhotosCents(undefined)).toBeNull();
+    expect(parseAllPhotosCents('')).toBeNull();
+    expect(parseAllPhotosCents('abc')).toBeNull();
+    expect(parseAllPhotosCents(0)).toBeNull();
+    expect(parseAllPhotosCents(-1)).toBeNull();
+    expect(parseAllPhotosCents(19.99)).toBeNull();
+  });
+});
+
+describe('hasAllPhotosPrice', () => {
+  it('reports whether a flat price is set and usable', () => {
+    expect(hasAllPhotosPrice(2000)).toBe(true);
+    expect(hasAllPhotosPrice(null)).toBe(false);
+    expect(hasAllPhotosPrice(0)).toBe(false);
   });
 });
 

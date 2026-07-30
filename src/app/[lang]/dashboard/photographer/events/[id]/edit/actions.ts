@@ -19,6 +19,7 @@ import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import {
   eventSupportsBundles,
+  parseAllPhotosCents,
   parseBundleTiersInput,
   serializeBundleTiers,
   validateBundleSchedule,
@@ -114,6 +115,12 @@ const eventSchema = z
       .string()
       .optional()
       .transform((val) => (val && val.trim() !== '' ? parseBundleTiersInput(val) : null)),
+    // "All photos" flat price in cents (T-203) — a ceiling, independent of the
+    // rungs. An absent field means "no flat price".
+    bundle_all_photos_cents: z
+      .string()
+      .optional()
+      .transform((val) => (val && val.trim() !== '' ? parseAllPhotosCents(val) : null)),
   })
   .superRefine((data, ctx) => {
     // T-180: an end time requires a start and must be after it.
@@ -141,22 +148,35 @@ const eventSchema = z
     // in this payload (it is immutable after creation), so the organizer
     // exclusion is enforced against the stored row in the action body below;
     // here we can still reject a ladder on an event being made free.
-    if (data.bundle_tiers !== null) {
-      if (priceCents === null || priceCents <= 0) {
+    //
+    // A free event carries no bundle BY DEFINITION (`eventSupportsBundles`), so
+    // "no price + a ladder" is normalized away in the action body rather than
+    // rejected here. Rejecting it broke an unrelated edit: every section-scoped
+    // form echoes the whole event, so editing *settings* on an event whose price
+    // had been cleared threw `BUNDLE_TIERS:total_not_a_discount` and 500'd —
+    // pricing state blocking a save that never touched pricing. The body already
+    // forces the ladder off in exactly the way it forces `watermark_enabled` and
+    // `reveal_gate_enabled` off when their preconditions fail.
+    //
+    // What IS worth an error is a ladder that contradicts a price the
+    // photographer is actually setting — that is a real mistake with a fix.
+    if (
+      priceCents !== null &&
+      priceCents > 0 &&
+      (data.bundle_tiers !== null || data.bundle_all_photos_cents !== null)
+    ) {
+      const result = validateBundleSchedule(
+        data.bundle_tiers ?? [],
+        priceCents,
+        minCents,
+        data.bundle_all_photos_cents,
+      );
+      if (!result.ok && result.error) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: bundleScheduleErrorMessage('total_not_a_discount'),
+          message: bundleScheduleErrorMessage(result.error, result.minCents),
           path: ['bundle_tiers'],
         });
-      } else {
-        const result = validateBundleSchedule(data.bundle_tiers, priceCents, minCents);
-        if (!result.ok && result.error) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: bundleScheduleErrorMessage(result.error, result.minCents),
-            path: ['bundle_tiers'],
-          });
-        }
       }
     }
   });
@@ -243,6 +263,7 @@ export async function updateEventAction(
     contains_minors: formData.get('contains_minors')?.toString() ?? 'false',
     reveal_gate_enabled: formData.get('reveal_gate_enabled')?.toString() ?? 'false',
     bundle_tiers: formData.get('bundle_tiers')?.toString(),
+    bundle_all_photos_cents: formData.get('bundle_all_photos_cents')?.toString(),
   });
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? 'Invalid event data provided.');
@@ -302,6 +323,12 @@ export async function updateEventAction(
   })
     ? payload.bundle_tiers
     : null;
+  const bundleAllPhotosCents = eventSupportsBundles({
+    type: currentEvent.type,
+    price_per_photo: payload.price_per_photo ?? null,
+  })
+    ? payload.bundle_all_photos_cents
+    : null;
 
   const updateData: Parameters<typeof updateEvent>[3] = {
     name: payload.name,
@@ -341,6 +368,10 @@ export async function updateEventAction(
   // against a DB that hasn't applied the migration yet.
   if (bundleTiers !== null || currentEvent.bundle_tiers != null) {
     updateData.bundle_tiers = serializeBundleTiers(bundleTiers);
+  }
+  // Same migration-gating for the "all photos" ceiling.
+  if (bundleAllPhotosCents !== null || currentEvent.bundle_all_photos_cents != null) {
+    updateData.bundle_all_photos_cents = bundleAllPhotosCents;
   }
 
   await updateEvent(supabase, eventId, user.id, updateData);

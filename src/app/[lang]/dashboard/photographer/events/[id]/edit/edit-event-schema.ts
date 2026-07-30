@@ -59,6 +59,8 @@ export const eventSchema = z
       )
       .nullable()
       .default(null),
+    /** "All photos" flat price in cents (T-203), echoed like the ladder. */
+    bundle_all_photos_cents: z.number().int().nullable().default(null),
   })
   .superRefine((data, ctx) => {
     // T-180 backstop: block a submit with an invalid session range (the end-time

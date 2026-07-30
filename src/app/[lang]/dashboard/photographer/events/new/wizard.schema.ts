@@ -62,6 +62,8 @@ export const eventSchema = z
       )
       .nullable()
       .default(null),
+    /** "All photos" flat price in cents (T-203) — a ceiling, no threshold. */
+    bundle_all_photos_cents: z.number().int().nullable().default(null),
     // Per-photo fee (in dollars; converted to cents in the server action) that
     // the organizer charges on top of the platform fee. Only applies when
     // event_type === 'organizer'.

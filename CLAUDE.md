@@ -178,8 +178,24 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
   refundable), never undercharge; `parseBundleTiersInput` (WRITE) validates shape only, because failing closed on
   a write would silently discard what the photographer typed and report success. Excluded from **organizer**
   events (several possible sellers, and `organizer_fee_per_photo_cents` is written but read by no money path, so
-  there is no revenue split to charge a discount against) and from free events. Global kill switch
-  `BUNDLE_PRICING_ENABLED`; stored ladders survive it unread, so rollback needs no migration
+  there is no revenue split to charge a discount against) and from free events. **An ineligible event's ladder is
+  NORMALIZED AWAY, not rejected** — the same treatment `watermark_enabled` / `reveal_gate_enabled` get when their
+  preconditions fail. Rejecting was a bug: every section-scoped edit form echoes the whole event, so a stored
+  ladder plus a cleared price made editing *settings* throw `BUNDLE_TIERS:total_not_a_discount` and 500. Pricing
+  state must never block a save that isn't about pricing. Global kill switch `BUNDLE_PRICING_ENABLED`; stored
+  ladders survive it unread, so rollback needs no migration
+- **`bundle_all_photos_cents` (nullable `integer`, T-203) — "all photos for one price"** (Sportograf's
+  Foto-Flat). A **CEILING**, not another rung: `price = min(quantity × unit, applicable rung, cap)`. Deliberate,
+  because a rung needs a threshold the photographer would have to derive (`ceil(cap / price_per_photo)`) and that
+  derived number **goes stale when the unit price changes** — a rung at "4+ for €20" silently stops applying if
+  the price drops to €4, since €20 is then no longer a discount, and nobody is told. A ceiling keeps meaning what
+  was typed: it engages exactly where `quantity × unit` would exceed it, so a buyer with 3 matches still pays per
+  photo while one with 40 pays the flat price (which a threshold rung could not express). Independent of
+  `bundle_tiers` — a cap with no rungs is a complete configuration ("€5 a photo, or €20 for all of them").
+  Validated at write time: ≥ `MIN_PHOTO_PRICE_CENTS`, **strictly above** the unit price (at or below it the
+  per-photo price is unreachable), and **strictly above every rung total** (a rung at or above the cap can never
+  apply, so it is dead config). Consequence to know: once a buyer reaches the cap, adding their remaining photos
+  is free — that is the Foto-Flat bargain, not a bug
 
 **photos** (via `/src/database/queries/photos.ts`)
 - `face_index_status` (`pending`/`indexing`/`indexed`/`failed`/`no_faces`/`not_applicable`) and `thumbnail_status` track the Inngest jobs; `width`/`height` persisted for layout
