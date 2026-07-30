@@ -195,9 +195,14 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
   overcharge vs. intent, never undercharge — when the event is ineligible, has no schedule, has no `eventId`,
   or when a group's lines **disagree on the unit price** (a price change between two adds makes
   `quantity × unit` ill-defined). The **buyer service fee rides on the POST-DISCOUNT subtotal** in both
-  checkouts and in `CartTotals`. One-line offer display (meta line, purchase modal, selection toolbar) goes
-  through the shared `getBestBundleOffer` + `resolveBundleOfferLabel` (`src/lib/bundle-offer-label.ts`),
-  which picks the **deepest** offer (the cap, else the highest rung). The public page's schema.org `offers`
+  checkouts and in `CartTotals`. **Exactly one surface quotes an event's price:** a configured schedule moves
+  the whole price story to `EventPricingSection` (unit price + every package) and `EventMetaLine`
+  **suppresses its price segment entirely** — repeating the unit price under the title is redundant, and on
+  an event sold by the package it is the least relevant number to lead with; with no schedule the section
+  renders nothing, so the meta line keeps the price. One-line offer display (purchase modal, selection
+  toolbar — overlays where the section isn't visible) goes through the shared `getBestBundleOffer` +
+  `resolveBundleOfferLabel` (`src/lib/bundle-offer-label.ts`), which picks the **deepest** offer (the cap,
+  else the highest rung). The public page's schema.org `offers`
   becomes one Offer per rung via `buildEventOffers` (`src/lib/event-offers-json-ld.ts`) and stays a single
   bare Offer when there is no ladder. **"Add all my photos"** (after a face search, both viewers) takes its
   ids from the viewer's OWN match set — `faceSearch.matchedPhotos`, which on a reveal-gated event IS the

@@ -635,7 +635,6 @@ export default async function EventPage({
                 pricePerPhoto={event.price_per_photo}
                 bundleTiers={bundleTiers}
                 bundleAllPhotosCents={bundleAllPhotosCents}
-                bundleOfferLabels={bundleLabels}
                 photographerName={uploaderProfiles[event.user_id]?.username}
               />
               {/* Reveal gate (T-177): the total lives here (not above the

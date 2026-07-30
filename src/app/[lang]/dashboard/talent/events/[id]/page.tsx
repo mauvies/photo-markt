@@ -418,7 +418,6 @@ export default async function ExploreEventDetailPage({
           pricePerPhoto={event.price_per_photo}
           bundleTiers={bundleTiers}
           bundleAllPhotosCents={bundleAllPhotosCents}
-          bundleOfferLabels={bundleLabels}
           photographerName={uploaderProfiles[event.user_id]?.username}
         />
         {/* Reveal gate (T-177): total near the header (worth searching); the

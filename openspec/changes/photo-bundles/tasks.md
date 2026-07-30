@@ -118,10 +118,17 @@ Groups 0 and 4 are OWNER gates, not code.
 
 ### Corrections found while executing group 2 (T-204)
 
-- **2.9's premise about event cards was wrong.** The design said `event-meta-line.tsx` "feeds event
-  cards", so a card would quote a misleading unit price. It does not: `EventMetaLine` is used only by the
-  three event *detail* pages, and `event-card.tsx` renders **no price at all**. There was nothing to
-  correct on cards, and the ladder segment was added to the two buyer-facing detail pages only.
+- **2.9's premise about event cards was wrong, and its prescription for the meta line was backwards.**
+  The design said `event-meta-line.tsx` "feeds event cards", so a card would quote a misleading unit
+  price. It does not: `EventMetaLine` is used only by the three event *detail* pages, and
+  `event-card.tsx` renders **no price at all**. And on those detail pages the fix is not to *add* a
+  compact ladder segment next to the unit price (shipped first, then removed on owner feedback) but to
+  **remove the price segment altogether** once a schedule exists: `EventPricingSection` sits directly
+  below and already states the unit price and every package, so the segment was pure duplication — and
+  on an event sold by the package, the unit price is the least relevant number to lead with. The rule
+  is now "exactly one surface quotes the price": the section when there is a schedule, the meta line
+  when there isn't. The one-line offer formatter is still used by the purchase modal and the selection
+  toolbar, which are overlays where the section is not visible.
 - **1.10's pricing section never displayed `bundle_all_photos_cents`.** Ticket A made the "all photos"
   ceiling *writable* (both event actions validate and persist it) but `EventPricingSection` only rendered
   rungs — so a photographer could configure a Foto-Flat that no buyer was ever shown, which is exactly the
