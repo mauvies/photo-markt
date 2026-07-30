@@ -18,9 +18,14 @@ import {
   isEventAccessible,
   isPhotoInCart,
   isPhotoTaggedForTalent,
+  setCartItemAllocations,
 } from '@/database/queries';
+import type { CartItemWithDetails } from '@/database/queries/carts';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import type { BundleTier } from '@/lib/bundle-pricing';
+import type { BundleNextTierPrompt } from '@/lib/cart-bundle-pricing';
+import { discountedAllocations, priceCartWithBundles } from '@/lib/cart-bundle-pricing';
 import type { CheckoutResult } from '@/lib/checkout-error';
 import { PLATFORM_CURRENCY } from '@/lib/currency';
 import { getBaseUrl } from '@/lib/get-base-url';
@@ -40,14 +45,47 @@ export interface CartItemDetail {
   eventDate: string | null;
   /** Public event share code → `/events/[shareCode]` (null when unavailable). */
   eventShareCode: string | null;
+  /**
+   * Bundle-pricing inputs (T-204), carried per item so the client can re-price
+   * the cart with the SAME kernel the checkout charges from after an optimistic
+   * removal — otherwise removing a photo that drops the cart below a rung would
+   * leave a discounted total on screen that checkout no longer honours.
+   */
+  eventId: string | null;
+  bundleTiers: BundleTier[] | null;
+  bundleAllPhotosCents: number | null;
+  bundleEligible: boolean;
 }
 
 export interface CartData {
   items: CartItemDetail[];
+  /** Sum of the items' list prices — the cart's "Subtotal" row. */
   subtotalCents: number;
+  /** What bundle pricing takes off that subtotal; 0 when nothing qualifies. */
+  bundleDiscountCents: number;
+  /** The next-rung nudge, or null when no further rung is reachable. */
+  nextTier: BundleNextTierPrompt | null;
   itemCount: number;
   /** Cart items just removed because their photo is no longer purchasable (T-117). */
   removedCount: number;
+}
+
+/**
+ * Map cart rows to the shape the bundle kernel prices (T-204). Shared by
+ * `getCurrentCart` (display) and `createCheckoutSessionAction` (charge) so the
+ * two cannot group or price the same cart differently.
+ */
+function toBundleCartLines(items: CartItemWithDetails[]) {
+  return items.map((item) => ({
+    photoId: item.photo_id,
+    eventId: item.event_id,
+    photographerId: item.photographer_id,
+    unitPriceCents: item.unit_price_cents,
+    eventName: item.event_name,
+    bundleTiers: item.event_bundle_tiers,
+    bundleAllPhotosCents: item.event_bundle_all_photos_cents,
+    bundleEligible: item.event_supports_bundles,
+  }));
 }
 
 /**
@@ -110,7 +148,10 @@ export async function getCurrentCart(): Promise<CartData> {
     await getBaseUrl(),
   );
 
-  const subtotalCents = items.reduce((sum, item) => sum + item.unit_price_cents, 0);
+  // Price the cart through the shared bundle kernel (T-204) — the same call
+  // `createCheckoutSessionAction` makes, so the summary shown here is the
+  // summary that gets charged.
+  const priced = priceCartWithBundles(toBundleCartLines(items));
 
   return {
     items: items.map((item) => ({
@@ -123,8 +164,14 @@ export async function getCurrentCart(): Promise<CartData> {
       eventTitle: item.event_name,
       eventDate: item.event_date,
       eventShareCode: item.event_share_code,
+      eventId: item.event_id,
+      bundleTiers: item.event_bundle_tiers,
+      bundleAllPhotosCents: item.event_bundle_all_photos_cents,
+      bundleEligible: item.event_supports_bundles,
     })),
-    subtotalCents,
+    subtotalCents: priced.listSubtotalCents,
+    bundleDiscountCents: priced.discountCents,
+    nextTier: priced.nextTier,
     itemCount: items.length,
     removedCount: badIds.length,
   };
@@ -418,12 +465,30 @@ export async function createCheckoutSessionAction(): Promise<CheckoutResult> {
 
   const siteUrl = getSiteUrl();
 
-  // T-196: mirror of the guest flow — the fee rides on the SERVER-validated
-  // subtotal (`cartItems`, already filtered by the purchasability +
-  // accessibility sets), never on a client-supplied figure. Returns null while
-  // the fee is configured at 0, leaving the session identical to v1.
-  const subtotalCents = cartItems.reduce((sum, item) => sum + item.unit_price_cents, 0);
-  const serviceFeeLineItem = buildServiceFeeLineItem(subtotalCents);
+  // T-204: price the SERVER-validated set (`cartItems`, already filtered by the
+  // purchasability + accessibility sets) through the shared bundle kernel. Never
+  // a client figure — the client sends no price at all, and the ladder is read
+  // from the event row, not the request.
+  const priced = priceCartWithBundles(toBundleCartLines(cartItems));
+
+  // Commit the allocation BEFORE the session exists (T-204). The webhook reads
+  // it back rather than recomputing: the ladder is editable at any moment, and
+  // recomputing between the charge and the delivery would produce an order that
+  // disagrees with the buyer's card statement. Writing it first also means a
+  // session can never exist without its allocation — the reverse order could
+  // charge a discounted total and then fall back to list prices on delivery,
+  // transferring money the platform never collected.
+  //
+  // Only DISCOUNTED groups are committed. For everything else the allocation is
+  // the item's own list price, and writing that would blur what the column
+  // means: null has to keep saying "no bundle applied", so an unbundled cart
+  // leaves the column empty and every reader takes the pre-bundle path.
+  await setCartItemAllocations(supabaseAdmin, cart.id, discountedAllocations(priced));
+
+  // T-196: the fee rides on the POST-DISCOUNT subtotal — the buyer pays a
+  // percentage of what they are actually charged. Returns null while the fee is
+  // configured at 0, leaving the session identical to v1.
+  const serviceFeeLineItem = buildServiceFeeLineItem(priced.subtotalCents);
 
   // Create Stripe Checkout Session
   const session = await stripe.checkout.sessions.create({
@@ -438,7 +503,11 @@ export async function createCheckoutSessionAction(): Promise<CheckoutResult> {
             name: item.event_name ? `Photo from ${item.event_name}` : 'Photo',
             description: item.event_name ? `Photo from ${item.event_name}` : undefined,
           },
-          unit_amount: item.unit_price_cents,
+          // The allocated share, so the line items sum to the discounted total
+          // the buyer was quoted. Falls back to the list price for a photo the
+          // kernel didn't allocate (it allocates every line it is given, so this
+          // is a belt-and-braces default, not an expected path).
+          unit_amount: priced.allocations[item.photo_id] ?? item.unit_price_cents,
         },
         quantity: 1,
       })),

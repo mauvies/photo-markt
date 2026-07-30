@@ -151,3 +151,64 @@ describe('EventMetaLine', () => {
     expect(container.textContent).not.toContain('$');
   });
 });
+
+/**
+ * T-204 — exactly ONE surface quotes an event's price.
+ *
+ * Once volume pricing is configured, `EventPricingSection` renders directly below
+ * this line and states the unit price AND every package. Repeating the unit price
+ * here is redundant, and on an event whose selling point is the package price it
+ * is also the least relevant number to lead with. With no schedule the section
+ * renders nothing, so the line keeps the price — dropping it unconditionally
+ * would lose it altogether.
+ */
+describe('EventMetaLine price segment vs. volume pricing', () => {
+  const base = {
+    date: JUNE_6,
+    city: 'lisbon',
+    locale: 'en',
+    perPhotoLabel: 'per photo',
+    pricePerPhoto: 3,
+    photographerName: 'janedoe',
+  } as const;
+
+  it('keeps the unit price when the event has no volume pricing', () => {
+    const { container } = render(<EventMetaLine {...base} />);
+    expect(container.textContent).toContain('€3.00 per photo');
+  });
+
+  it('drops the unit price once a package ladder is configured', () => {
+    const { container } = render(
+      <EventMetaLine {...base} bundleTiers={[{ minQuantity: 3, totalPriceCents: 720 }]} />,
+    );
+
+    expect(container.textContent).not.toContain('per photo');
+    expect(container.textContent).not.toContain('€3.00');
+    // The rest of the line is untouched.
+    expect(container.textContent).toContain('June 6, 2026');
+    expect(container.textContent).toContain('Lisbon');
+    expect(screen.getByRole('link', { name: '@janedoe' })).toBeDefined();
+  });
+
+  it('drops the unit price for an "all photos" ceiling with no rungs', () => {
+    const { container } = render(<EventMetaLine {...base} bundleAllPhotosCents={2500} />);
+    expect(container.textContent).not.toContain('per photo');
+  });
+
+  it('keeps the unit price when the ladder is empty or the ceiling is zero', () => {
+    const { container } = render(
+      <EventMetaLine {...base} bundleTiers={[]} bundleAllPhotosCents={0} />,
+    );
+    expect(container.textContent).toContain('€3.00 per photo');
+  });
+
+  it('leaves no dangling separator where the price used to be', () => {
+    const { container } = render(
+      <EventMetaLine {...base} bundleTiers={[{ minQuantity: 3, totalPriceCents: 720 }]} />,
+    );
+
+    const text = (container.textContent ?? '').trim();
+    expect(text).not.toContain('• •');
+    expect(text.endsWith('•')).toBe(false);
+  });
+});

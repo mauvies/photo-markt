@@ -28,6 +28,8 @@ export interface EventPricingSectionLabels {
   eachSuffix: string;
   /** One-line explanation shown under the ladder. */
   ladderHint: string;
+  /** "All photos" row label for the flat-price ceiling (T-204). */
+  allPhotos?: string;
 }
 
 interface EventPricingSectionProps {
@@ -35,6 +37,13 @@ interface EventPricingSectionProps {
   pricePerPhoto: number | null;
   /** Parsed ladder, or null when the event has none. */
   bundleTiers: BundleTier[] | null;
+  /**
+   * The event's "all photos" flat price in cents (T-204) — a CEILING on what a
+   * buyer pays however many photos they take, so it belongs in this table as
+   * much as any rung. Without it a photographer could configure a Foto-Flat that
+   * no buyer is ever shown.
+   */
+  bundleAllPhotosCents?: number | null;
   labels: EventPricingSectionLabels;
   className?: string;
 }
@@ -46,6 +55,7 @@ function formatCents(cents: number): string {
 export function EventPricingSection({
   pricePerPhoto,
   bundleTiers,
+  bundleAllPhotosCents,
   labels,
   className,
 }: EventPricingSectionProps) {
@@ -54,11 +64,13 @@ export function EventPricingSection({
 
   const unitCents = Math.round(pricePerPhoto * 100);
   const tiers = bundleTiers ?? [];
+  const allPhotosCents =
+    bundleAllPhotosCents != null && bundleAllPhotosCents > 0 ? bundleAllPhotosCents : null;
 
-  // No ladder: the meta line already states the unit price, so a whole panel
-  // repeating it would be noise. Keeping the page identical to today for
-  // unbundled events is deliberate.
-  if (tiers.length === 0) return null;
+  // No ladder and no ceiling: the meta line already states the unit price, so a
+  // whole panel repeating it would be noise. Keeping the page identical to today
+  // for unbundled events is deliberate.
+  if (tiers.length === 0 && allPhotosCents === null) return null;
 
   return (
     <Card className={className}>
@@ -90,6 +102,16 @@ export function EventPricingSection({
               </dd>
             </div>
           ))}
+          {/* The ceiling sits last: it is validated to be strictly above every
+              rung total, so it is the final step of the same ladder. */}
+          {allPhotosCents !== null && labels.allPhotos ? (
+            <div className="flex items-baseline justify-between gap-4 border-t border-border pt-2">
+              <dt className="text-sm text-muted-foreground">{labels.allPhotos}</dt>
+              <dd className="text-sm font-semibold text-foreground">
+                {formatCents(allPhotosCents)}
+              </dd>
+            </div>
+          ) : null}
         </dl>
         <p className="mt-3 text-xs text-muted-foreground">{labels.ladderHint}</p>
       </CardContent>

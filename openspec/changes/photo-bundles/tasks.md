@@ -71,50 +71,72 @@ Groups 0 and 4 are OWNER gates, not code.
 
 ## 2. Ticket B — buyer-facing pricing, both checkouts, webhook (the deploy where money changes)
 
-- [ ] 2.1 Migration: additive nullable `cart_items.allocated_price_cents`. ⚠️ Same manual prod step as 1.1
-- [ ] 2.2 Group the validated cart by `(event, photographer)` and price each group through
+- [x] 2.1 Migration: additive nullable `cart_items.allocated_price_cents`. ⚠️ Same manual prod step as 1.1
+- [x] 2.2 Group the validated cart by `(event, photographer)` and price each group through
       `getBundlePriceCents`; groups without an applicable tier keep list prices
-- [ ] 2.3 Guest checkout (`src/app/[lang]/cart/actions.ts`): line items built from the allocated amounts;
+- [x] 2.3 Guest checkout (`src/app/[lang]/cart/actions.ts`): line items built from the allocated amounts;
       allocated cents written into the existing `cart_<i>` metadata `c` field (no new mechanism); service fee
       from `getBuyerServiceFeeCents` of the **post-discount** subtotal
-- [ ] 2.4 Authenticated checkout (`src/app/[lang]/dashboard/talent/cart/actions.ts`): same pricing and line
+- [x] 2.4 Authenticated checkout (`src/app/[lang]/dashboard/talent/cart/actions.ts`): same pricing and line
       items; allocation persisted to `cart_items.allocated_price_cents` before the session is created
-- [ ] 2.5 Webhook: prefer `allocated_price_cents` (authenticated) / the metadata `c` (guest) when building
+- [x] 2.5 Webhook: prefer `allocated_price_cents` (authenticated) / the metadata `c` (guest) when building
       `order_items` / `guest_order_items`; fall back to `unit_price_cents` when absent; **never** recompute a
       bundle price from the event's tiers
-- [ ] 2.6 `src/components/cart-totals.tsx`: subtotal → bundle discount → service fee → total, rendering exactly
+- [x] 2.6 `src/components/cart-totals.tsx`: subtotal → bundle discount → service fee → total, rendering exactly
       today's single subtotal row when no discount applies; wired at all four render sites; strings in
       `en.json` + `es.json`
-- [ ] 2.7 Next-rung prompt in the cart, computed from the same kernel, stating the resulting total and hidden
+- [x] 2.7 Next-rung prompt in the cart, computed from the same kernel, stating the resulting total and hidden
       when no further rung exists
-- [ ] 2.8 Confirm already-owned photos stay excluded from the cart and do not count toward a threshold
-- [ ] 2.9 **Remaining buyer-facing ladder display** (the dedicated pricing section on both event views already
+- [x] 2.8 Confirm already-owned photos stay excluded from the cart and do not count toward a threshold
+- [x] 2.9 **Remaining buyer-facing ladder display** (the dedicated pricing section on both event views already
       shipped dark in 1.10): `src/components/event-meta-line.tsx` in compact form (it feeds event cards and both
       event pages' header line — separate from the section in 1.10, which carries the full table);
       `events/[shareCode]/page.tsx`'s schema.org `offers` JSON-LD, which currently emits a single unit-price
       offer and must describe the ladder; `src/components/photo-detail-modal.tsx` and
       `src/components/photo-album-viewer.tsx` (the price sits right above add-to-cart — highest-intent moment);
       strings in `en.json` + `es.json`
-- [ ] 2.10 `src/components/photo-selection-toolbar.tsx`: with N photos selected, show the running bundle price
+- [x] 2.10 `src/components/photo-selection-toolbar.tsx`: with N photos selected, show the running bundle price
       and the next rung
-- [ ] 2.11 **"Add all my photos" after a face search**, on both the public event page and the talent-dashboard
+- [x] 2.11 **"Add all my photos" after a face search**, on both the public event page and the talent-dashboard
       event view, reusing the existing multi-select + `handleBulkAddToCart` plumbing. Ids come from what the
       buyer already holds — the client's match set on a non-gated event, `getProvenRevealIds` on a gated one —
       **never** a fresh server-side query for the event's photos
-- [ ] 2.12 Check the paid-amount surfaces still read correctly now that amounts are allocated rather than list
+- [x] 2.12 Check the paid-amount surfaces still read correctly now that amounts are allocated rather than list
       prices: talent orders history, guest success page, guest purchase email
-- [ ] 2.13 Integration tests, both flows: charged total equals `getBundlePriceCents`; allocation sums exactly to
+- [x] 2.13 Integration tests, both flows: charged total equals `getBundlePriceCents`; allocation sums exactly to
       it; exactly one service-fee line item, computed on the discounted subtotal; a client-supplied price is
       ignored; a cart spanning two events discounts only the qualifying group; a session with no allocation
       produces today's order unchanged
-- [ ] 2.14 Integration test: the photographer transfer for a bundled order equals
+- [x] 2.14 Integration test: the photographer transfer for a bundled order equals
       `getPhotographerNetCents(bundleTotal, plan)` and never the list-price total
-- [ ] 2.15 Test that editing the ladder between session creation and webhook delivery does not change the
+- [x] 2.15 Test that editing the ladder between session creation and webhook delivery does not change the
       resulting order
-- [ ] 2.16 Regression test that a reveal-gated event exposes no bundle affordance and no unrevealed photo ids,
+- [x] 2.16 Regression test that a reveal-gated event exposes no bundle affordance and no unrevealed photo ids,
       and that "add all my photos" on a gated event adds only ids in the proven reveal set
-- [ ] 2.17 `pnpm build` in addition to typecheck/lint/test — `bundle-pricing.ts` is imported by client
+- [x] 2.17 `pnpm build` in addition to typecheck/lint/test — `bundle-pricing.ts` is imported by client
       components, and only a build catches a server-only leak into the client graph
+
+### Corrections found while executing group 2 (T-204)
+
+- **2.9's premise about event cards was wrong, and its prescription for the meta line was backwards.**
+  The design said `event-meta-line.tsx` "feeds event cards", so a card would quote a misleading unit
+  price. It does not: `EventMetaLine` is used only by the three event *detail* pages, and
+  `event-card.tsx` renders **no price at all**. And on those detail pages the fix is not to *add* a
+  compact ladder segment next to the unit price (shipped first, then removed on owner feedback) but to
+  **remove the price segment altogether** once a schedule exists: `EventPricingSection` sits directly
+  below and already states the unit price and every package, so the segment was pure duplication — and
+  on an event sold by the package, the unit price is the least relevant number to lead with. The rule
+  is now "exactly one surface quotes the price": the section when there is a schedule, the meta line
+  when there isn't. The one-line offer formatter is still used by the purchase modal and the selection
+  toolbar, which are overlays where the section is not visible.
+- **1.10's pricing section never displayed `bundle_all_photos_cents`.** Ticket A made the "all photos"
+  ceiling *writable* (both event actions validate and persist it) but `EventPricingSection` only rendered
+  rungs — so a photographer could configure a Foto-Flat that no buyer was ever shown, which is exactly the
+  wrong-price class 2.9 exists to close. The ceiling is now a row in that table, on both surfaces.
+- **The allocation is committed only for DISCOUNTED groups.** Writing the list price into
+  `allocated_price_cents` for undiscounted items would produce identical orders but blur what the column
+  means; null has to keep saying "no bundle applied" so an unbundled cart provably takes the pre-bundle
+  path (`discountedAllocations`, asserted by test).
 
 ## 3. Ticket C — photographer-facing truth (earnings and sales)
 

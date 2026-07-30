@@ -11,6 +11,7 @@ import {
   loadGuestCartStateAction,
 } from '@/app/[lang]/cart/actions';
 import { CartItemRow } from '@/components/cart/cart-item-row';
+import { CartNextTierPrompt } from '@/components/cart-next-tier-prompt';
 import { CartTotals } from '@/components/cart-totals';
 import { useGuestCart } from '@/components/guest-cart-provider';
 import { PhotoLightbox } from '@/components/photo-lightbox';
@@ -29,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { useLoginHref, useSignupHref } from '@/hooks/use-login-href';
+import { priceCartWithBundles } from '@/lib/cart-bundle-pricing';
 import { checkoutErrorMessageKey } from '@/lib/checkout-error';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import { useTranslations } from '@/lib/i18n/translations-provider';
@@ -63,6 +65,32 @@ export function GuestCartContent() {
     enabled: photoIds.length > 0,
   });
   const livePreviews = guestCartState?.previews;
+
+  // Bundle pricing (T-204). The guest cart is a localStorage list with no ladder
+  // in it, so the ladder arrives from the server on the round trip above and the
+  // cart prices itself through the SAME kernel the checkout charges from. Until
+  // it arrives, `eventPricing` is empty and every group prices at list — the
+  // fail-closed direction (the total can only start high and come down, never
+  // the reverse).
+  const priced = useMemo(
+    () =>
+      priceCartWithBundles(
+        items.map((item) => {
+          const pricing = guestCartState?.eventPricing?.[item.eventId];
+          return {
+            photoId: item.photoId,
+            eventId: item.eventId,
+            photographerId: item.photographerId,
+            unitPriceCents: item.unitPriceCents,
+            eventName: item.eventName,
+            bundleTiers: pricing?.bundleTiers ?? null,
+            bundleAllPhotosCents: pricing?.bundleAllPhotosCents ?? null,
+            bundleEligible: pricing?.bundleEligible ?? false,
+          };
+        }),
+      ),
+    [items, guestCartState?.eventPricing],
+  );
   const lp = useLocalizedPath();
   const buildLoginHref = useLoginHref();
   const buildSignupHref = useSignupHref();
@@ -88,6 +116,9 @@ export function GuestCartContent() {
     subtotal: string;
     serviceFee: string;
     total: string;
+    bundleDiscount: string;
+    bundleNextTierOne: string;
+    bundleNextTierMany: string;
     emailNotice: string;
     proceedToCheckout: string;
     processing: string;
@@ -151,6 +182,12 @@ export function GuestCartContent() {
     serviceFee: t('serviceFee'),
     total: t('total'),
     free: t('free'),
+    bundleDiscount: t('bundleDiscount'),
+  };
+
+  const nextTierLabels = {
+    one: t('bundleNextTierOne'),
+    many: t('bundleNextTierMany'),
   };
 
   // The guest cart lives in localStorage and is read on mount, so `items` is
@@ -285,7 +322,12 @@ export function GuestCartContent() {
         <div className="hidden md:block flex-1 min-w-0">
           <div className="sticky top-[calc(var(--header-height)+1rem)] self-start rounded-lg border border-border bg-card p-6 shadow-lg">
             <div className="space-y-4">
-              <CartTotals subtotalCents={subtotalCents} labels={totalsLabels} />
+              <CartTotals
+                subtotalCents={subtotalCents}
+                bundleDiscountCents={priced.discountCents}
+                labels={totalsLabels}
+              />
+              <CartNextTierPrompt nextTier={priced.nextTier} labels={nextTierLabels} />
               <p className="text-xs text-muted-foreground">{t('emailNotice')}</p>
               <div className="pt-4 border-t border-border">
                 <Button
@@ -315,8 +357,14 @@ export function GuestCartContent() {
       {/* Mobile sticky footer */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card shadow-lg">
         <div className="p-4">
-          <div className="mb-3">
-            <CartTotals subtotalCents={subtotalCents} labels={totalsLabels} variant="mobile" />
+          <div className="mb-3 space-y-2">
+            <CartTotals
+              subtotalCents={subtotalCents}
+              bundleDiscountCents={priced.discountCents}
+              labels={totalsLabels}
+              variant="mobile"
+            />
+            <CartNextTierPrompt nextTier={priced.nextTier} labels={nextTierLabels} />
           </div>
           <Button
             className="w-full"

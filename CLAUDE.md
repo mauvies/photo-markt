@@ -184,6 +184,31 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
   ladder plus a cleared price made editing *settings* throw `BUNDLE_TIERS:total_not_a_discount` and 500. Pricing
   state must never block a save that isn't about pricing. Global kill switch `BUNDLE_PRICING_ENABLED`; stored
   ladders survive it unread, so rollback needs no migration
+- **Cart-level pricing (T-204) — `src/lib/cart-bundle-pricing.ts`, `priceCartWithBundles`.** `bundle-pricing.ts`
+  prices a SET; this prices a CART, and it is the single point where a cart is grouped and allocated. Both
+  checkouts, both cart views (including the authenticated cart's **optimistic** re-price after a removal — a
+  `reduce` there would leave a discount on screen that checkout won't honour) and the selection toolbar call
+  it, so displayed and charged cannot diverge. **Grouping is `(event, photographer)`**, never the whole cart:
+  a discount must not be funded by another photographer's revenue, so a cart spanning two events discounts
+  only the qualifying group; the pair rather than event alone keeps organizer events (several sellers) a gate
+  change away rather than a redesign. It **fails closed to list price** — the direction that can only
+  overcharge vs. intent, never undercharge — when the event is ineligible, has no schedule, has no `eventId`,
+  or when a group's lines **disagree on the unit price** (a price change between two adds makes
+  `quantity × unit` ill-defined). The **buyer service fee rides on the POST-DISCOUNT subtotal** in both
+  checkouts and in `CartTotals`. **Exactly one surface quotes an event's price:** a configured schedule moves
+  the whole price story to `EventPricingSection` (unit price + every package) and `EventMetaLine`
+  **suppresses its price segment entirely** — repeating the unit price under the title is redundant, and on
+  an event sold by the package it is the least relevant number to lead with; with no schedule the section
+  renders nothing, so the meta line keeps the price. One-line offer display (purchase modal, selection
+  toolbar — overlays where the section isn't visible) goes through the shared `getBestBundleOffer` +
+  `resolveBundleOfferLabel` (`src/lib/bundle-offer-label.ts`), which picks the **deepest** offer (the cap,
+  else the highest rung). The public page's schema.org `offers`
+  becomes one Offer per rung via `buildEventOffers` (`src/lib/event-offers-json-ld.ts`) and stays a single
+  bare Offer when there is no ladder. **"Add all my photos"** (after a face search, both viewers) takes its
+  ids from the viewer's OWN match set — `faceSearch.matchedPhotos`, which on a reveal-gated event IS the
+  proven set the reveal token was minted over — and **never** a fresh query for the event's photos; that id
+  source is pinned by `test/unit/src/app/bundle-add-all-id-source.test.ts`, because breaking the gate is one
+  call away and both versions compile. Note `event-card.tsx` renders **no** price, so cards needed no change
 - **`bundle_all_photos_cents` (nullable `integer`, T-203) — "all photos for one price"** (Sportograf's
   Foto-Flat). A **CEILING**, not another rung: `price = min(quantity × unit, applicable rung, cap)`. Deliberate,
   because a rung needs a threshold the photographer would have to derive (`ceil(cap / price_per_photo)`) and that
@@ -192,6 +217,8 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
   was typed: it engages exactly where `quantity × unit` would exceed it, so a buyer with 3 matches still pays per
   photo while one with 40 pays the flat price (which a threshold rung could not express). Independent of
   `bundle_tiers` — a cap with no rungs is a complete configuration ("€5 a photo, or €20 for all of them").
+  Shown to buyers as the last row of the `EventPricingSection` table (T-204 — ticket A made it writable but
+  never displayed it, so a configured Foto-Flat reached no buyer).
   Validated at write time: ≥ `MIN_PHOTO_PRICE_CENTS`, **strictly above** the unit price (at or below it the
   per-photo price is unreachable), and **strictly above every rung total** (a rung at or above the cap can never
   apply, so it is dead config). Consequence to know: once a buyer reaches the cap, adding their remaining photos
@@ -213,6 +240,18 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
 `carts: id, user_id` — `cart_items: id, cart_id, photo_id, photographer_id, unit_price_cents, access_share_code`
 - Guest cart stored in `localStorage` under `photo-markt_guest_cart`
 - Guest cart merged into authenticated cart on login via `src/components/guest-cart-merge.tsx`
+- **`allocated_price_cents` (nullable `integer`, T-204) — the COMMITTED bundle allocation.** When a ladder
+  discounts a set, the buyer pays one discounted total but the purchasable unit stays the photo, so the
+  total is split across the photos exactly (`allocateBundleTotalCents`, largest remainder) and the split is
+  written here **before** the Stripe session is created. The webhook **reads** it (`allocated_price_cents ??
+  unit_price_cents`) and **never recomputes** a bundle price from the event's tiers — the ladder is editable
+  at any moment, and a recompute between the charge and a retried/late delivery would build an order that
+  disagrees with the buyer's card statement. Null means "no bundle applied" and every reader falls back to
+  the list price, which is exactly pre-bundle behaviour; only **discounted** groups are written
+  (`discountedAllocations`), so the column stays empty for unbundled carts and rollback needs no migration.
+  Writing it also **clears every other row in the cart first**, so a 5-photo bundle's allocation can't
+  survive into a later 2-photo checkout. The guest flow needs no column — it commits the same allocation in
+  the `c` field of the `cart_<i>` metadata it already writes
 - `access_share_code` (nullable, T-134) persists the private-event share code the buyer presented at add/merge time — the access proof authenticated checkout re-validates against. Both `createCheckoutSessionAction` and the `getCurrentCart` self-heal drop/refuse an item unless its event is public now, its stored `access_share_code` still matches the event's `share_code`, or the buyer still has the photo tagged (live check) — parity with the guest checkout, closing the public→private-flip charge. Stored null for public events and the favorites/tag path; legacy rows (null) fail closed for private events
 
 **Access proof is per-item and validated live.** Never treat the display-only `event_share_code` (the event's *current* code, joined for the `/events/[shareCode]` link) as the access proof — the proof is the persisted `cart_items.access_share_code`. The shared accessibility rule is `isEventAccessible` / `getAccessibleAuthedCartPhotoIds` (reuse, don't re-derive)

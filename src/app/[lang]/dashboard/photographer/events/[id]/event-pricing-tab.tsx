@@ -8,7 +8,11 @@
 import { Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { buttonVariants } from '@/components/ui/button';
-import { type BundleTier, getEffectivePerPhotoCents } from '@/lib/bundle-pricing';
+import {
+  type BundleTier,
+  getAllPhotosBreakEvenQuantity,
+  getEffectivePerPhotoCents,
+} from '@/lib/bundle-pricing';
 import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { cn } from '@/lib/utils';
@@ -23,6 +27,13 @@ interface EventPricingTabProps {
   pricePerPhoto: number | null;
   /** Parsed ladder, or null when the event has none. */
   bundleTiers: BundleTier[] | null;
+  /**
+   * The event's "all photos" flat price in cents (T-204). Both event actions
+   * validate and persist it, so leaving it out of this tab meant a photographer
+   * could save a Foto-Flat and then be shown a pricing summary that denied it
+   * existed — the same omission the buyer-facing `EventPricingSection` had.
+   */
+  bundleAllPhotosCents: number | null;
   /**
    * Set when the event is an organizer event. Those can never carry a ladder
    * (several possible sellers, no revenue split to charge a discount against),
@@ -53,6 +64,7 @@ export function EventPricingTab({
   editLabel,
   pricePerPhoto,
   bundleTiers,
+  bundleAllPhotosCents,
   isOrganizerEvent,
   editHref,
   freeLabel,
@@ -60,6 +72,14 @@ export function EventPricingTab({
   const isFree = pricePerPhoto === null || pricePerPhoto <= 0;
   const unitCents = isFree ? 0 : Math.round(pricePerPhoto * 100);
   const tiers = bundleTiers ?? [];
+  const allPhotosCents =
+    bundleAllPhotosCents != null && bundleAllPhotosCents > 0 ? bundleAllPhotosCents : null;
+  // Where the ceiling starts being the cheaper option — derived from the two live
+  // values, so it can't go stale when the unit price changes.
+  const allPhotosBreakEven = getAllPhotosBreakEvenQuantity(allPhotosCents, unitCents);
+  // A ceiling with no rungs is a complete configuration ("€3 a photo, or €25 for
+  // all of them"), so "has a schedule" must not mean "has rungs".
+  const hasSchedule = tiers.length > 0 || allPhotosCents !== null;
 
   return (
     <section className="rounded-lg border bg-card p-5">
@@ -110,6 +130,23 @@ export function EventPricingTab({
             </dd>
           </div>
         ))}
+        {/* The ceiling sits last: validation keeps it strictly above every rung
+            total, so it is the final step of the same ladder. */}
+        {allPhotosCents !== null ? (
+          <div className="flex items-baseline justify-between gap-4 border-t border-border pt-2">
+            <dt className="text-sm text-muted-foreground">{t.allPhotos}</dt>
+            <dd className="text-right">
+              <span className="text-sm font-semibold text-foreground">
+                {formatCents(allPhotosCents)}
+              </span>
+              {allPhotosBreakEven !== null ? (
+                <span className="ml-2 text-xs text-muted-foreground">
+                  {t.allPhotosBreakEven.replace('{n}', String(allPhotosBreakEven))}
+                </span>
+              ) : null}
+            </dd>
+          </div>
+        ) : null}
       </dl>
 
       <p className="mt-4 text-xs text-muted-foreground">
@@ -117,9 +154,9 @@ export function EventPricingTab({
           ? t.unavailableOrganizer
           : isFree
             ? t.unavailableFree
-            : tiers.length === 0
-              ? t.noLadder
-              : t.laddersDescription}
+            : hasSchedule
+              ? t.laddersDescription
+              : t.noLadder}
       </p>
     </section>
   );

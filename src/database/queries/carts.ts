@@ -2,6 +2,7 @@
  * Cart-related database queries
  */
 
+import { type BundleTier, eventSupportsBundles, parseBundleTiers } from '@/lib/bundle-pricing';
 import type { SupabaseServerClient } from './types';
 import { getErrorMessage } from './types';
 
@@ -26,10 +27,21 @@ export interface CartItemWithDetails extends CartItem {
   photographer_name: string | null;
   /** Public profile slug for the photographer link (`slug` ?? `username`). */
   photographer_slug: string | null;
+  event_id: string | null;
   event_name: string | null;
   event_date: string | null;
   /** Public event share code for the `/events/[shareCode]` link. */
   event_share_code: string | null;
+  /**
+   * Volume-pricing ladder for this item's event, already through
+   * `parseBundleTiers` (T-204). Null = no ladder, which is also what a
+   * corrupt stored value parses to — the fail-closed direction.
+   */
+  event_bundle_tiers: BundleTier[] | null;
+  /** The event's "all photos" flat price in cents, if any (T-204). */
+  event_bundle_all_photos_cents: number | null;
+  /** Whether the event may carry a bundle at all (`eventSupportsBundles`). */
+  event_supports_bundles: boolean;
 }
 
 /**
@@ -253,6 +265,59 @@ export async function deleteCartItemsByPhotoIds(
 }
 
 /**
+ * Commit the per-photo bundle allocation onto a cart's rows (T-204), so the
+ * webhook can read what the buyer was charged instead of recomputing it.
+ *
+ * Two properties this has to guarantee:
+ *
+ *  - **It clears first.** A buyer who starts checkout with 5 photos, abandons,
+ *    removes 3 and checks out again must not have the 5-photo bundle's
+ *    allocation applied to a 2-photo order. Every row in the cart is reset to
+ *    null before the new amounts land, so a stale allocation can never survive
+ *    into a later session.
+ *  - **Null means "no bundle".** Rows absent from `allocations` — items priced
+ *    at list, or not part of the validated set — stay null, and every reader
+ *    falls back to `unit_price_cents`, which is exactly today's behaviour.
+ */
+export async function setCartItemAllocations(
+  supabase: SupabaseServerClient,
+  cartId: string,
+  allocations: Record<string, number>,
+): Promise<void> {
+  const { error: clearError } = await supabase
+    .from('cart_items')
+    .update({ allocated_price_cents: null })
+    .eq('cart_id', cartId)
+    .not('allocated_price_cents', 'is', null);
+
+  if (clearError) {
+    throw new Error(`Failed to clear cart item allocations: ${getErrorMessage(clearError)}`);
+  }
+
+  // One update per distinct amount rather than per row: a bundle splits evenly
+  // apart from the remainder cent, so this is at most two round trips for a
+  // group however many photos it holds.
+  const idsByAmount = new Map<number, string[]>();
+  for (const [photoId, cents] of Object.entries(allocations)) {
+    const existing = idsByAmount.get(cents);
+    if (existing) existing.push(photoId);
+    else idsByAmount.set(cents, [photoId]);
+  }
+
+  for (const [cents, photoIds] of idsByAmount) {
+    const { error } = await supabase
+      .from('cart_items')
+      .update({ allocated_price_cents: cents })
+      .eq('cart_id', cartId)
+      .in('photo_id', photoIds);
+
+    if (error) {
+      throw new Error(`Failed to write cart item allocations: ${getErrorMessage(error)}`);
+    }
+  }
+}
+
+/**
  * Get cart items with photo and event details
  */
 export async function getCartItemsWithDetails(
@@ -279,10 +344,15 @@ export async function getCartItemsWithDetails(
       photos!inner(
         original_url,
         events!inner(
+          id,
           name,
           date,
           share_code,
-          deleted_at
+          deleted_at,
+          type,
+          price_per_photo,
+          bundle_tiers,
+          bundle_all_photos_cents
         )
       )
     `,
@@ -346,9 +416,19 @@ export async function getCartItemsWithDetails(
       photo_url: photo?.original_url ?? null,
       photographer_name: photographer.name,
       photographer_slug: photographer.slug,
+      event_id: event?.id ?? null,
       event_name: event?.name ?? null,
       event_date: event?.date ?? null,
       event_share_code: event?.share_code ?? null,
+      // Bundle pricing inputs (T-204). Parsed here — once, at the edge — so no
+      // caller re-derives "is there a ladder?" from raw jsonb, and a corrupt
+      // value fails closed to "no ladder" (falls back to list price) rather
+      // than reaching a money path unvalidated.
+      event_bundle_tiers: parseBundleTiers(event?.bundle_tiers),
+      event_bundle_all_photos_cents: event?.bundle_all_photos_cents ?? null,
+      event_supports_bundles: event
+        ? eventSupportsBundles({ type: event.type, price_per_photo: event.price_per_photo })
+        : false,
     };
   }) as CartItemWithDetails[];
 }

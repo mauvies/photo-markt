@@ -138,6 +138,26 @@ export function hasAllPhotosPrice(cents: number | null | undefined): boolean {
 }
 
 /**
+ * The photo count at which the "all photos" ceiling starts being the cheaper
+ * option — `ceil(cap / unit)`.
+ *
+ * The ceiling deliberately carries no threshold (that is the whole point: a
+ * derived threshold goes stale when the unit price changes), but the photographer
+ * still wants to know where it engages, and so does the read-only pricing tab.
+ * Derived on demand from the two live values, never stored, so it cannot go
+ * stale. Returns null when either input makes the question meaningless.
+ */
+export function getAllPhotosBreakEvenQuantity(
+  allPhotosCents: number | null | undefined,
+  unitPriceCents: number | null | undefined,
+): number | null {
+  if (!isValidAllPhotosCap(allPhotosCents)) return null;
+  if (typeof unitPriceCents !== 'number' || !Number.isFinite(unitPriceCents)) return null;
+  if (unitPriceCents <= 0) return null;
+  return Math.ceil(allPhotosCents / unitPriceCents);
+}
+
+/**
  * The next rung a buyer has not reached yet, or null when none remains — the
  * input to the cart's "add 2 more photos and pay €X" prompt.
  *
@@ -426,6 +446,44 @@ export function serializeBundleTiers(tiers: readonly BundleTier[] | null): Bundl
     minQuantity: tier.minQuantity,
     totalPriceCents: tier.totalPriceCents,
   }));
+}
+
+/**
+ * The single most compelling offer on an event, for the surfaces that have room
+ * for one line and not a table (T-204): the meta line that feeds event cards,
+ * the purchase modal above add-to-cart, the selection toolbar.
+ *
+ * "Most compelling" is the deepest one: the "all photos" ceiling when set (it is
+ * strictly above every rung total by validation, and it is the offer that needs
+ * no threshold at all), otherwise the highest rung — the biggest saving per
+ * photo, and the one whose per-photo price reads lowest.
+ *
+ * Returns null when the event has no ladder, so an unbundled event's card and
+ * modal render exactly as they did before bundles existed.
+ */
+export type BundleOffer =
+  | { kind: 'all-photos'; totalCents: number }
+  | { kind: 'tier'; minQuantity: number; totalCents: number };
+
+export function getBestBundleOffer(
+  tiers: readonly BundleTier[] | null | undefined,
+  allPhotosCents?: number | null,
+): BundleOffer | null {
+  if (!BUNDLE_PRICING_ENABLED) return null;
+
+  if (isValidAllPhotosCap(allPhotosCents)) {
+    return { kind: 'all-photos', totalCents: allPhotosCents };
+  }
+
+  if (!tiers || tiers.length === 0) return null;
+
+  let best: BundleTier | null = null;
+  for (const tier of tiers) {
+    if (best === null || tier.minQuantity > best.minQuantity) best = tier;
+  }
+  if (best === null) return null;
+
+  return { kind: 'tier', minQuantity: best.minQuantity, totalCents: best.totalPriceCents };
 }
 
 /**

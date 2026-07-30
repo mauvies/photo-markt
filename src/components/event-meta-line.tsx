@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { BundleTier } from '@/lib/bundle-pricing';
 import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import { formatEventDate, formatSessionTimeRange } from '@/lib/format-date';
 import { formatEventLocation } from '@/lib/format-location';
@@ -25,6 +26,13 @@ interface EventMetaLineProps {
   perPhotoLabel: string;
   /** Flat price in dollars; the price segment is omitted when null/undefined. */
   pricePerPhoto?: number | null;
+  /**
+   * Volume-pricing ladder (T-204). Its presence SUPPRESSES the price segment
+   * entirely — see the note on the component.
+   */
+  bundleTiers?: BundleTier[] | null;
+  /** The event's "all photos" flat price in cents, if set (T-204). */
+  bundleAllPhotosCents?: number | null;
   /** Event photographer's username — rendered as a link to their public
    * profile, positioned just before the price. Omitted when absent. */
   photographerName?: string | null;
@@ -35,6 +43,15 @@ interface EventMetaLineProps {
  * The metadata line under an event title: date · city · photographer · price.
  * Shared by the public event page and the talent-dashboard event page (T-103)
  * so the two never diverge in date format or field order.
+ *
+ * **The price segment appears only when the event has NO volume pricing.** Once a
+ * ladder or an "all photos" ceiling is configured, `EventPricingSection` renders
+ * right below this line and states the unit price AND every package — so
+ * repeating the unit price here is redundant, and worse, it is the *least*
+ * relevant number on an event whose whole point is the package price. Exactly one
+ * surface quotes the price: the section when there is a schedule, this line when
+ * there isn't (the section renders nothing in that case, so dropping it here
+ * unconditionally would lose the price altogether).
  */
 export function EventMetaLine({
   date,
@@ -46,6 +63,8 @@ export function EventMetaLine({
   locale,
   perPhotoLabel,
   pricePerPhoto,
+  bundleTiers,
+  bundleAllPhotosCents,
   photographerName,
   className,
 }: EventMetaLineProps) {
@@ -53,6 +72,11 @@ export function EventMetaLine({
   const formattedTime = formatSessionTimeRange(sessionTime, sessionEndTime, locale);
   const location = formatEventLocation({ city, state, country });
   const formattedCity = location ? location[0]?.toUpperCase() + location.slice(1) : '';
+  // A configured schedule moves the whole price story to `EventPricingSection`.
+  const hasBundleSchedule =
+    (bundleTiers != null && bundleTiers.length > 0) ||
+    (bundleAllPhotosCents != null && bundleAllPhotosCents > 0);
+  const showPrice = pricePerPhoto != null && !hasBundleSchedule;
 
   return (
     <div className={cn('text-sm leading-relaxed text-muted-foreground', className)}>
@@ -71,7 +95,7 @@ export function EventMetaLine({
           </Link>
         </>
       ) : null}
-      {pricePerPhoto != null ? (
+      {showPrice ? (
         <>
           {' '}
           • {PLATFORM_CURRENCY_SYMBOL}

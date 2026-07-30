@@ -87,7 +87,7 @@ export function FindMyPhotosBanner({ labels, face, bib }: FindMyPhotosBannerProp
   });
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-input bg-card p-3 md:p-6">
+    <div className="flex flex-col gap-3 rounded-lg border border-input bg-card p-3 shadow-sm md:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <h2 className="text-base font-semibold md:text-lg">{title}</h2>

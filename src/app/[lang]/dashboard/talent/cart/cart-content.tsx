@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useLayoutEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { CartItemRow } from '@/components/cart/cart-item-row';
+import { CartNextTierPrompt } from '@/components/cart-next-tier-prompt';
 import { CartTotals } from '@/components/cart-totals';
 import { CART_MERGE_STATE_KEY } from '@/components/guest-cart-merge';
 import { PhotoLightbox } from '@/components/photo-lightbox';
@@ -23,6 +24,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { priceCartWithBundles } from '@/lib/cart-bundle-pricing';
 import { cartView } from '@/lib/cart-view';
 import { checkoutErrorMessageKey } from '@/lib/checkout-error';
 import { GUEST_CART_KEY } from '@/lib/guest-cart';
@@ -38,6 +40,37 @@ import {
 
 interface CartContentProps {
   initialCartData: CartData;
+}
+
+/**
+ * Re-derive a cart's money summary from an optimistic item list (T-204).
+ *
+ * Removing a photo can drop the cart below a bundle rung, so the subtotal is no
+ * longer a simple sum — it has to go back through the same kernel the checkout
+ * charges from. Recomputing with `reduce` here (what this replaced) would leave a
+ * discount on screen that checkout would not honour.
+ */
+function repriced(current: CartData, items: CartItemDetail[]): CartData {
+  const priced = priceCartWithBundles(
+    items.map((item) => ({
+      photoId: item.photoId,
+      eventId: item.eventId,
+      photographerId: item.photographerId,
+      unitPriceCents: item.unitPriceCents,
+      eventName: item.eventTitle,
+      bundleTiers: item.bundleTiers,
+      bundleAllPhotosCents: item.bundleAllPhotosCents,
+      bundleEligible: item.bundleEligible,
+    })),
+  );
+  return {
+    ...current,
+    items,
+    itemCount: items.length,
+    subtotalCents: priced.listSubtotalCents,
+    bundleDiscountCents: priced.discountCents,
+    nextTier: priced.nextTier,
+  };
 }
 
 export function CartContent({ initialCartData }: CartContentProps) {
@@ -147,6 +180,9 @@ export function CartContent({ initialCartData }: CartContentProps) {
     subtotal: string;
     serviceFee: string;
     total: string;
+    bundleDiscount: string;
+    bundleNextTierOne: string;
+    bundleNextTierMany: string;
     allItemsFree: string;
     proceedToCheckout: string;
     processing: string;
@@ -204,13 +240,10 @@ export function CartContent({ initialCartData }: CartContentProps) {
     queryClient.cancelQueries({ queryKey: ['cart-count'] });
     queryClient.setQueryData<CartData>(['cart-data'], (curr) => {
       const current = curr ?? base;
-      const items = current.items.filter((i) => i.photoId !== photoId);
-      return {
-        ...current,
-        items,
-        itemCount: items.length,
-        subtotalCents: items.reduce((sum, i) => sum + i.unitPriceCents, 0),
-      };
+      return repriced(
+        current,
+        current.items.filter((i) => i.photoId !== photoId),
+      );
     });
     queryClient.setQueryData<number>(['cart-count'], (n = 0) => Math.max(0, n - 1));
     setRemovingId(photoId);
@@ -228,13 +261,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
           queryClient.setQueryData<CartData>(['cart-data'], (curr) => {
             const current = curr ?? base;
             if (current.items.some((i) => i.photoId === photoId)) return current;
-            const items = [...current.items, removedItem];
-            return {
-              ...current,
-              items,
-              itemCount: items.length,
-              subtotalCents: items.reduce((sum, i) => sum + i.unitPriceCents, 0),
-            };
+            return repriced(current, [...current.items, removedItem]);
           });
         }
         queryClient.setQueryData<number>(['cart-count'], (n = 0) => n + 1);
@@ -271,12 +298,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
     // Abort any in-flight count refetch so it can't resolve late over the 0 (T-165).
     queryClient.cancelQueries({ queryKey: ['cart-data'] });
     queryClient.cancelQueries({ queryKey: ['cart-count'] });
-    queryClient.setQueryData<CartData>(['cart-data'], (curr) => ({
-      ...(curr ?? previousData),
-      items: [],
-      itemCount: 0,
-      subtotalCents: 0,
-    }));
+    queryClient.setQueryData<CartData>(['cart-data'], (curr) => repriced(curr ?? previousData, []));
     queryClient.setQueryData<number>(['cart-count'], 0);
     startTransition(async () => {
       try {
@@ -339,6 +361,12 @@ export function CartContent({ initialCartData }: CartContentProps) {
     serviceFee: t('serviceFee'),
     total: t('total'),
     free: t('free'),
+    bundleDiscount: t('bundleDiscount'),
+  };
+
+  const nextTierLabels = {
+    one: t('bundleNextTierOne'),
+    many: t('bundleNextTierMany'),
   };
 
   const view = cartView(isMerging, cartData.items.length);
@@ -459,7 +487,12 @@ export function CartContent({ initialCartData }: CartContentProps) {
           <div className="sticky top-[calc(var(--header-height)+1rem)] self-start rounded-lg border border-border bg-card p-6 shadow-lg">
             <div className="space-y-4">
               <div className="space-y-3">
-                <CartTotals subtotalCents={cartData.subtotalCents} labels={totalsLabels} />
+                <CartTotals
+                  subtotalCents={cartData.subtotalCents}
+                  bundleDiscountCents={cartData.bundleDiscountCents}
+                  labels={totalsLabels}
+                />
+                <CartNextTierPrompt nextTier={cartData.nextTier} labels={nextTierLabels} />
                 {cartData.subtotalCents === 0 && (
                   <p className="text-xs text-muted-foreground text-center">{t('allItemsFree')}</p>
                 )}
@@ -493,12 +526,14 @@ export function CartContent({ initialCartData }: CartContentProps) {
       {/* Mobile summary - sticky footer (stacked above BottomNav) */}
       <div className="md:hidden fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 z-50 border-t border-border bg-card shadow-lg">
         <div className="p-4">
-          <div className="mb-3">
+          <div className="mb-3 space-y-2">
             <CartTotals
               subtotalCents={cartData.subtotalCents}
+              bundleDiscountCents={cartData.bundleDiscountCents}
               labels={totalsLabels}
               variant="mobile"
             />
+            <CartNextTierPrompt nextTier={cartData.nextTier} labels={nextTierLabels} />
           </div>
           <Button
             className="w-full"

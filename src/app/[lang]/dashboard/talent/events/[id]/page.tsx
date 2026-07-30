@@ -187,6 +187,21 @@ export default async function ExploreEventDetailPage({
 
   const eventStatus = getEventStatus(event.date);
 
+  // Volume pricing (T-204), parsed ONCE for every surface on this page — meta
+  // line, pricing section and the viewer — so they cannot disagree about the
+  // same event's ladder, and so this view cannot disagree with the public page.
+  const bundleTiers = parseBundleTiers((event as unknown as Record<string, unknown>).bundle_tiers);
+  const bundleAllPhotosCents =
+    ((event as unknown as Record<string, unknown>).bundle_all_photos_cents as number | null) ??
+    null;
+  const bundleLabels = {
+    allPhotos: dict.bundlePricing.offerAllPhotos,
+    tier: dict.bundlePricing.offerTier,
+    selectionTotal: dict.bundlePricing.selectionTotal,
+    selectionNextTier: dict.bundlePricing.selectionNextTier,
+    addAllMyPhotos: dict.bundlePricing.addAllMyPhotos,
+  };
+
   const gated = isEventRevealGated(event);
   if (gated && eventStatus !== 'upcoming') {
     const provenIds = await getProvenRevealIds(event.id);
@@ -401,6 +416,8 @@ export default async function ExploreEventDetailPage({
           locale={lang}
           perPhotoLabel={dict.talentDashboard.perPhoto}
           pricePerPhoto={event.price_per_photo}
+          bundleTiers={bundleTiers}
+          bundleAllPhotosCents={bundleAllPhotosCents}
           photographerName={uploaderProfiles[event.user_id]?.username}
         />
         {/* Reveal gate (T-177): total near the header (worth searching); the
@@ -417,13 +434,15 @@ export default async function ExploreEventDetailPage({
       <EventPricingSection
         className="mb-6"
         pricePerPhoto={event.price_per_photo}
-        bundleTiers={parseBundleTiers((event as unknown as Record<string, unknown>).bundle_tiers)}
+        bundleTiers={bundleTiers}
+        bundleAllPhotosCents={bundleAllPhotosCents}
         labels={{
           heading: dict.bundlePricing.heading,
           singlePhoto: dict.bundlePricing.singlePhoto,
           photosOrMore: dict.bundlePricing.photosOrMore,
           eachSuffix: dict.bundlePricing.eachSuffix,
           ladderHint: dict.bundlePricing.ladderHint,
+          allPhotos: dict.bundlePricing.allPhotos,
         }}
       />
 
@@ -568,6 +587,9 @@ export default async function ExploreEventDetailPage({
                   loadMoreLabel={dict.events.loadMore}
                   loadMoreErrorLabel={dict.events.loadMoreFailed}
                   pricePerPhoto={event.price_per_photo}
+                  bundleTiers={bundleTiers}
+                  bundleAllPhotosCents={bundleAllPhotosCents}
+                  bundleLabels={bundleLabels}
                   photoDetailLabels={dict.photoDetail}
                   locale={lang}
                   photographerName={uploaderProfiles[event.user_id]?.username}

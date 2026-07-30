@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import {
   type BundleTier,
   eventSupportsBundles,
+  getAllPhotosBreakEvenQuantity,
   getEffectivePerPhotoCents,
   MAX_BUNDLE_TIERS,
   MIN_BUNDLE_TIER_QUANTITY,
@@ -64,6 +65,12 @@ export function BundleTiersField({
   const tiers = value ?? [];
   const isOrganizerEvent = eventType === 'organizer';
   const supported = eventSupportsBundles({ type: eventType, price_per_photo: pricePerPhoto });
+  // Where the ceiling starts being the cheaper option. Derived, never stored, so
+  // it can't go stale when the unit price changes.
+  const allPhotosBreakEven = getAllPhotosBreakEvenQuantity(
+    allPhotosCents,
+    pricePerPhoto ? Math.round(pricePerPhoto * 100) : null,
+  );
 
   if (!supported) {
     return (
@@ -138,12 +145,9 @@ export function BundleTiersField({
             className="pl-7 text-sm"
           />
         </div>
-        {allPhotosCents !== null && pricePerPhoto ? (
+        {allPhotosBreakEven !== null ? (
           <p className="mt-2 text-xs text-muted-foreground">
-            {t.allPhotosBreakEven.replace(
-              '{n}',
-              String(Math.ceil(allPhotosCents / Math.round(pricePerPhoto * 100))),
-            )}
+            {t.allPhotosBreakEven.replace('{n}', String(allPhotosBreakEven))}
           </p>
         ) : null}
       </div>
