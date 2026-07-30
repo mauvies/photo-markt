@@ -28,6 +28,11 @@ export interface Event {
   require_upload_approval: boolean;
   type: 'solo' | 'collaborative' | 'organizer';
   organizer_fee_per_photo_cents: number | null;
+  /**
+   * Optional volume-pricing ladder (T-203). Raw jsonb as stored — run it
+   * through `parseBundleTiers` before use; never trust the shape here.
+   */
+  bundle_tiers?: unknown;
   created_at?: string;
   updated_at?: string;
   deleted_at?: string | null;
@@ -186,6 +191,8 @@ export async function createEvent(
     contains_minors?: boolean;
     bib_detection_enabled?: boolean;
     reveal_gate_enabled?: boolean;
+    /** Volume-pricing ladder (T-203). Already validated by the caller. */
+    bundle_tiers?: unknown;
   },
 ): Promise<{ id: string }> {
   // Only include the newer columns when they actually carry a value. Lets
@@ -201,6 +208,7 @@ export async function createEvent(
     reveal_gate_enabled,
     session_time,
     session_end_time,
+    bundle_tiers,
     ...rest
   } = eventData;
   const insertPayload: Record<string, unknown> = { user_id: userId, ...rest };
@@ -222,6 +230,12 @@ export async function createEvent(
     insertPayload.bib_detection_enabled = bib_detection_enabled;
   // Reveal gate (T-177) — migration-gated like the AI columns; only include when set.
   if (reveal_gate_enabled !== undefined) insertPayload.reveal_gate_enabled = reveal_gate_enabled;
+  // Bundle ladder (T-203) — migration-gated the same way. A null ladder is the
+  // default, so omitting the key entirely on create is exactly "no bundle";
+  // only a real ladder needs the column to exist.
+  if (bundle_tiers !== undefined && bundle_tiers !== null) {
+    insertPayload.bundle_tiers = bundle_tiers;
+  }
 
   const { data, error } = await supabase.from('events').insert(insertPayload).select('id').single();
 
@@ -553,6 +567,12 @@ export async function updateEvent(
     ai_matching_enabled?: boolean;
     bib_detection_enabled?: boolean;
     reveal_gate_enabled?: boolean;
+    /**
+     * Volume-pricing ladder (T-203). Already validated by the caller. Pass
+     * `null` to CLEAR an existing ladder — unlike create, an explicit null is
+     * meaningful here, so it is forwarded rather than stripped.
+     */
+    bundle_tiers?: unknown;
   },
 ): Promise<void> {
   // Verify event belongs to user and is not deleted

@@ -22,6 +22,7 @@ import { type AiMatchingStatus, getEventAiIndexingProgress } from '@/database/qu
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { redirectToLogin } from '@/lib/auth/redirect-to-login';
+import { parseBundleTiers } from '@/lib/bundle-pricing';
 import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
 import { eventUsesModerationQueue } from '@/lib/event-status';
 import { formatEventLocation } from '@/lib/format-location';
@@ -39,6 +40,7 @@ import { EventActionsMenu } from './event-actions-menu';
 import { EventInfoCard } from './event-info-card';
 import { EventModerationTabs } from './event-moderation-tabs';
 import { EventPhotoAlbum } from './event-photo-album';
+import { EventPricingTab } from './event-pricing-tab';
 import { EventSettingsCard } from './event-settings-card';
 import { EventShareTab } from './event-share-tab';
 import { parseEventTab } from './event-tab';
@@ -320,6 +322,20 @@ export default async function EventDetailPage({
       />
     ) : null;
 
+  // Pricing tab (T-203, D17): read-only ladder + a link to the scoped pricing
+  // editor, mirroring how the Details cards link to `?section=info`/`settings`.
+  const pricingTab = (
+    <EventPricingTab
+      t={dict.bundlePricing}
+      editLabel={dict.eventDetails.edit}
+      freeLabel={dict.eventDetails.free}
+      pricePerPhoto={event.price_per_photo}
+      bundleTiers={parseBundleTiers(eventRecord.bundle_tiers)}
+      isOrganizerEvent={event.type === 'organizer'}
+      editHref={localizedPath(lang, `/dashboard/photographer/events/${id}/edit?section=pricing`)}
+    />
+  );
+
   // The event's real shareable URL, resolved to the public route that actually
   // grants access (public → slug/id, private → share code, T-179) and prefixed
   // with the current locale. `getBaseUrl` uses the request host so the copied
@@ -514,10 +530,12 @@ export default async function EventDetailPage({
         labels={{
           photos: dict.events.tabPhotos,
           details: dict.events.tabDetails,
+          pricing: dict.bundlePricing.tabTitle,
           share: dict.events.tabShare,
         }}
         photos={photosTab}
         details={detailsTab}
+        pricing={pricingTab}
         share={shareTab}
       />
     </div>

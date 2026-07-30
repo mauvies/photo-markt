@@ -1,4 +1,4 @@
-export type EventTab = 'photos' | 'details' | 'share';
+export type EventTab = 'photos' | 'details' | 'pricing' | 'share';
 
 /**
  * Resolve the `?tab=` search param into a valid top-level tab, defaulting to
@@ -11,5 +11,5 @@ export type EventTab = 'photos' | 'details' | 'share';
  */
 export function parseEventTab(value: string | string[] | undefined): EventTab {
   const raw = Array.isArray(value) ? value[0] : value;
-  return raw === 'details' || raw === 'share' ? raw : 'photos';
+  return raw === 'details' || raw === 'pricing' || raw === 'share' ? raw : 'photos';
 }

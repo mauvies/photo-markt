@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-203 | Bundles A — schema `events.bundle_tiers`, kernel de precio + asignación, config del fotógrafo (tab `Pricing` + sección de precios). Shipea **dark** | — | todo |
+| 1 | P2 | T-203 | Bundles A — schema `events.bundle_tiers`, kernel de precio + asignación, config del fotógrafo (tab `Pricing` + sección de precios). Shipea **dark** | — | doing |
 | 2 | P2 | T-204 | Bundles B — carrito, ambos checkouts y webhook: **aquí cambia el dinero** | **T-203** | todo |
 | 3 | P2 | T-205 | Bundles C — Ventas/Ganancias reportan el bruto con descuento; cierra y archiva el OpenSpec change | **T-204** | todo |
 | 4 | P2 | T-202 | Podar las API routes muertas `api/billing/checkout` + `api/billing/cancel` (gate: verificar Stripe primero) | — | todo |

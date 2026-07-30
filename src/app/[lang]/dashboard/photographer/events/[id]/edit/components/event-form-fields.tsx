@@ -25,6 +25,7 @@ import { Switch } from '@/components/ui/switch';
 import { isValidSessionRange, SESSION_RANGE_ERROR } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
 import type { FormValues } from '../edit-event-schema';
+import { EventPriceField } from './event-price-field';
 
 // biome-ignore format: keep on one line so the single lint suppression below covers all type params
 // biome-ignore lint/suspicious/noExplicitAny: TanStack Form has invariant variance on all 12 generic params; using `any` avoids re-deriving exact param types from the call site
@@ -38,9 +39,11 @@ type EventFormFieldsProps = {
   /**
    * Which field group to render (T-179): `info` = name/activity/location/date/
    * price/visibility; `settings` = watermark/collaborative + guest/approval;
-   * `all` (default) = both, for the full edit page.
+   * `pricing` = the price field only, for the T-203 pricing section (the ladder
+   * editor is a separate component); `all` (default) = info + settings, for the
+   * full edit page.
    */
-  section?: 'all' | 'info' | 'settings';
+  section?: 'all' | 'info' | 'settings' | 'pricing';
 };
 
 export function EventFormFields({
@@ -293,76 +296,9 @@ export function EventFormFields({
               }}
             </form.Field>
 
-            <form.Field
-              name="price_per_photo"
-              validators={{
-                onChange: ({ value }) => {
-                  if (value === undefined || value === null) {
-                    return undefined;
-                  }
-                  const num = typeof value === 'string' ? Number.parseFloat(value) : value;
-                  if (Number.isNaN(num)) {
-                    return 'Price must be a valid number.';
-                  }
-                  if (num < 0) {
-                    return 'Price cannot be negative.';
-                  }
-                  return undefined;
-                },
-              }}
-            >
-              {(field) => {
-                const showFeedback = submitAttempted || field.state.meta.isTouched;
-                const error = showFeedback ? field.state.meta.errors?.[0] : null;
-                const isInvalid = showFeedback && !field.state.meta.isValid;
-                return (
-                  <div className="grid gap-2">
-                    <Label htmlFor="price_per_photo">Price per Photo (Optional)</Label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                        $
-                      </span>
-                      <Input
-                        id="price_per_photo"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={
-                          field.state.value === null || field.state.value === undefined
-                            ? ''
-                            : typeof field.state.value === 'string'
-                              ? field.state.value
-                              : field.state.value.toString()
-                        }
-                        onChange={(event) => {
-                          const val = event.target.value;
-                          if (val === '') {
-                            field.handleChange(null);
-                          } else {
-                            const num = Number.parseFloat(val);
-                            if (!Number.isNaN(num)) {
-                              field.handleChange(num);
-                            } else {
-                              field.handleChange(val as unknown as number);
-                            }
-                          }
-                        }}
-                        onBlur={field.handleBlur}
-                        placeholder="0.00"
-                        aria-invalid={isInvalid}
-                        // `text-sm` matches the create wizard's price input so the
-                        // `$` prefix and the value share one line-height (T-167).
-                        className="pl-7 text-sm"
-                        suppressHydrationWarning
-                      />
-                    </div>
-                    {isInvalid && error ? (
-                      <p className="text-xs text-destructive">{error}</p>
-                    ) : null}
-                  </div>
-                );
-              }}
-            </form.Field>
+            {/* Extracted (T-203) so the pricing section reuses this exact input
+                instead of a second copy. */}
+            <EventPriceField form={form} submitAttempted={submitAttempted} />
           </div>
 
           {/* Visibility Toggle */}

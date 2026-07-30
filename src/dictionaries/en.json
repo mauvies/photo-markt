@@ -1978,5 +1978,37 @@
         "description": "Buy all photos from an event at a discounted bundle price."
       }
     ]
+  },
+  "bundlePricing": {
+    "heading": "Pricing",
+    "singlePhoto": "Single photo",
+    "photosOrMore": "{n} photos or more",
+    "eachSuffix": "{price} each",
+    "ladderHint": "Add more photos to your cart and the better price applies automatically.",
+    "tabTitle": "Pricing",
+    "editTitle": "Edit pricing",
+    "editSubtitle": "Set a single-photo price and optional volume packs for this event.",
+    "laddersHeading": "Volume packs",
+    "laddersDescription": "Offer a better price when someone takes several photos. Each pack is a flat total from that many photos upward.",
+    "addTier": "Add a pack",
+    "removeTier": "Remove",
+    "minQuantityLabel": "From this many photos",
+    "totalPriceLabel": "Total price",
+    "effectivePerPhoto": "{price} per photo",
+    "noLadder": "No volume packs yet.",
+    "unavailableFree": "Volume packs need a photo price. Set one first.",
+    "unavailableOrganizer": "Volume packs are not available on organizer events yet.",
+    "errors": {
+      "fallback": "That pricing isn't valid. Check the packs and try again.",
+      "empty": "Add at least one pack, or remove volume pricing entirely.",
+      "too_many_tiers": "That's too many packs. Keep the ladder short.",
+      "quantity_not_integer": "The photo count for a pack must be a whole number.",
+      "quantity_too_low": "A pack must start at 2 photos or more.",
+      "quantity_not_increasing": "Each pack must start at a higher photo count than the one before it.",
+      "total_not_integer": "Each pack needs a valid total price.",
+      "total_below_floor": "Each pack must cost at least {min}.",
+      "total_not_increasing": "Each pack must cost more than the one before it — otherwise the cheaper pack would apply to every larger order.",
+      "total_not_a_discount": "A pack must cost less than buying that many photos one by one."
+    }
   }
 }

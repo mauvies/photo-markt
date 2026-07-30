@@ -25,7 +25,7 @@ export default async function NewEventPage({ params }: { params: Promise<{ lang:
 
   return (
     <TranslationsProvider translations={dict.newEvent}>
-      <NewEventWizard shareEventLabels={dict.shareEvent} />
+      <NewEventWizard shareEventLabels={dict.shareEvent} bundlePricingLabels={dict.bundlePricing} />
     </TranslationsProvider>
   );
 }

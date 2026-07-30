@@ -16,31 +16,31 @@ Groups 0 and 4 are OWNER gates, not code.
 
 ## 1. Ticket A — schema, kernel, allocation, photographer configuration (ships dark)
 
-- [ ] 1.1 Migration: additive nullable `events.bundle_tiers jsonb`; no constraint (the rules are app-level, per
+- [x] 1.1 Migration: additive nullable `events.bundle_tiers jsonb`; no constraint (the rules are app-level, per
       design D14). ⚠️ Apply to prod by hand via MCP after merge — `migrate.yml` is blocked on Actions billing
-- [ ] 1.2 New client-safe `src/lib/bundle-pricing.ts`: `getBundlePriceCents(quantity, unitPriceCents, tiers)`
+- [x] 1.2 New client-safe `src/lib/bundle-pricing.ts`: `getBundlePriceCents(quantity, unitPriceCents, tiers)`
       selecting the rung with the **greatest** `minQuantity ≤ quantity` then taking
       `min(quantity × unit, rungTotal)` — never the cheapest applicable rung, which would shadow every rung
       above it; plus the disable constant and a `parseBundleTiers` that fails closed to "no tiers" on anything
       it cannot validate
-- [ ] 1.3 Allocation kernel in the same module: largest-remainder split of a total across N photos with
+- [x] 1.3 Allocation kernel in the same module: largest-remainder split of a total across N photos with
       `sum(allocated) === total` exactly and deterministic ordering
-- [ ] 1.4 Validation predicate (`isValidBundleSchedule`): thresholds integer ≥ 2, strictly increasing, no
+- [x] 1.4 Validation predicate (`isValidBundleSchedule`): thresholds integer ≥ 2, strictly increasing, no
       duplicates; totals positive integers ≥ `MIN_PHOTO_PRICE_CENTS`; **totals strictly increasing with
       threshold** (without this the ladder collapses to one rung); every total strictly below
       `minQuantity × price_per_photo`; rung count capped
-- [ ] 1.5 Query layer: read/write `bundle_tiers` in `src/database/queries/events.ts`, migration-gated on write
+- [x] 1.5 Query layer: read/write `bundle_tiers` in `src/database/queries/events.ts`, migration-gated on write
       the way `session_end_time` / `organizer_fee_per_photo_cents` are
-- [ ] 1.6 Event create + edit actions: `superRefine` on the schedule; reject on `organizer` events; reject when
+- [x] 1.6 Event create + edit actions: `superRefine` on the schedule; reject on `organizer` events; reject when
       the event is free (`price_per_photo` null/0); rejection travels as a parseable sentinel like
       `MIN_PHOTO_PRICE:<cents>` and is localized client-side
-- [ ] 1.7 Ladder editor in the **create wizard** (`events/new/steps/step-3-details.tsx`, beside the price field,
+- [x] 1.7 Ladder editor in the **create wizard** (`events/new/steps/step-3-details.tsx`, beside the price field,
       plus `wizard-storage.ts` / `wizard-types.ts` / `wizard.schema.ts`) — add, reorder and remove rungs; hidden
       for organizer and free events; shows the effective per-photo price at each threshold as the photographer
       types; strings in `en.json` + `es.json`
-- [ ] 1.8 Wizard **review step** (`step-5-review.tsx`) shows every rung — nobody confirms a price they were
+- [x] 1.8 Wizard **review step** (`step-5-review.tsx`) shows every rung — nobody confirms a price they were
       never shown
-- [ ] 1.9 **New `Pricing` top-level tab** on the photographer's event detail page
+- [x] 1.9 **New `Pricing` top-level tab** on the photographer's event detail page
       (`dashboard/photographer/events/[id]/page.tsx`), positioned between `Details` and `Share`:
       - `EventTab` (`event-tab.ts`) extends to `'photos' | 'details' | 'pricing' | 'share'`; `parseEventTab` and
         `EventTabs` (`event-tabs.tsx`) add the fourth trigger + content pair in that order
@@ -51,22 +51,22 @@ Groups 0 and 4 are OWNER gates, not code.
         (`edit/page.tsx`) accepts `'pricing'`; `?section=pricing` renders just the ladder editor — `/edit`
         remains the only surface that writes a field, same as `info`/`settings` today
       - strings in `en.json` + `es.json` (`tabPricing`, edit-section title/subtitle)
-- [ ] 1.10 **New shared `src/components/event-pricing-section.tsx`** (a `Card`-based panel, matching the visual
+- [x] 1.10 **New shared `src/components/event-pricing-section.tsx`** (a `Card`-based panel, matching the visual
       language of other event cards): shows the unit price and, when the event has a ladder, the ladder table;
       renders exactly the unit price alone when there is no ladder. Mounted at the same position — directly
       under `EventMetaLine`, above the gallery/contribute affordances — on **both**
       `events/[shareCode]/page.tsx` (public) and `dashboard/talent/events/[id]/page.tsx` (talent dashboard), so
       the two views cannot disagree about the same event's price
-- [ ] 1.11 Unit tests: kernel (three-rung ladder charges each rung and the 8+ rung is not shadowed by a cheaper
+- [x] 1.11 Unit tests: kernel (three-rung ladder charges each rung and the 8+ rung is not shadowed by a cheaper
       3+ rung; below-threshold undiscounted; price non-decreasing in quantity across every valid schedule;
       misconfigured rung can never exceed singles; disable constant), allocation (sums exactly, indivisible
       totals, determinism), `parseBundleTiers` fail-closed, validation (each rule, the non-increasing-totals
       rejection, and the floor applied to the rung total not per photo), `parseEventTab`/`parseSection` accept
       the new values
-- [ ] 1.12 Integration tests against local Supabase: both event actions persist and clear a schedule, reject
+- [x] 1.12 Integration tests against local Supabase: both event actions persist and clear a schedule, reject
       below-floor / non-increasing / non-discount / organizer / free-event schedules without creating or
       mutating a row, and leave existing rows untouched
-- [ ] 1.13 Verify dark: with a ladder configured, no cart, checkout session, order row or payout differs from
+- [x] 1.13 Verify dark: with a ladder configured, no cart, checkout session, order row or payout differs from
       today (the four surfaces above are the only visible change, and they are read-only until ticket B)
 
 ## 2. Ticket B — buyer-facing pricing, both checkouts, webhook (the deploy where money changes)

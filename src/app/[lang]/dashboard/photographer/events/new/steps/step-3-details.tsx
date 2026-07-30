@@ -3,6 +3,7 @@
 import { format } from 'date-fns';
 import { ChevronDownIcon } from 'lucide-react';
 import { useId, useState } from 'react';
+import { BundleTiersField } from '@/components/bundle-tiers-field';
 import { EventCoverField } from '@/components/event-cover-field';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -17,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import { isValidSessionRange } from '@/lib/format-date';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
@@ -36,6 +38,10 @@ type Step3DetailsProps = {
   // owned by the wizard shell (the File isn't a serializable form field).
   coverPreviewUrl: string | null;
   onCoverChange: (file: File | null) => void;
+  /** Bundle-pricing copy for the volume-packs editor (T-203). */
+  bundleT: Dictionary['bundlePricing'];
+  /** Current event type — organizer events carry no per-photo price or ladder. */
+  eventType: 'solo' | 'collaborative' | 'organizer';
 };
 
 export function Step3Details({
@@ -43,6 +49,8 @@ export function Step3Details({
   submitAttempted,
   coverPreviewUrl,
   onCoverChange,
+  bundleT,
+  eventType,
 }: Step3DetailsProps) {
   const { t } = useTranslations<NewEventT>();
   const dateInputId = useId();
@@ -334,8 +342,10 @@ export function Step3Details({
                       <div className="grid gap-2">
                         <Label htmlFor="organizer_fee_per_photo">{t('organizerFeeLabel')}</Label>
                         <div className="relative">
+                          {/* T-203: was a hardcoded `$` while checkout charges in
+                              EUR — a leftover the T-193 currency migration missed. */}
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                            $
+                            {PLATFORM_CURRENCY_SYMBOL}
                           </span>
                           <Input
                             id="organizer_fee_per_photo"
@@ -398,8 +408,10 @@ export function Step3Details({
                       <div className="grid gap-2">
                         <Label htmlFor="price_per_photo">{t('priceLabel')}</Label>
                         <div className="relative">
+                          {/* T-203: was a hardcoded `$` while checkout charges in
+                              EUR — a leftover the T-193 currency migration missed. */}
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                            $
+                            {PLATFORM_CURRENCY_SYMBOL}
                           </span>
                           <Input
                             id="price_per_photo"
@@ -445,6 +457,36 @@ export function Step3Details({
           </form.Subscribe>
         </div>
       </div>
+
+      {/* Volume packs (T-203). Sits under the price it discounts. Nested Fields
+          so the editor sees the LIVE price as it is typed. Organizer events show
+          an organizer fee instead of a per-photo price and never carry a ladder. */}
+      {eventType === 'organizer' ? null : (
+        <form.Field name="price_per_photo">
+          {(priceField) => (
+            <form.Field name="bundle_tiers">
+              {(tiersField) => {
+                const raw: unknown = priceField.state.value;
+                const price =
+                  typeof raw === 'number' && Number.isFinite(raw)
+                    ? raw
+                    : typeof raw === 'string' && raw.trim() !== '' && !Number.isNaN(Number(raw))
+                      ? Number(raw)
+                      : null;
+                return (
+                  <BundleTiersField
+                    value={tiersField.state.value}
+                    onChange={tiersField.handleChange}
+                    pricePerPhoto={price}
+                    eventType={eventType}
+                    t={bundleT}
+                  />
+                );
+              }}
+            </form.Field>
+          )}
+        </form.Field>
+      )}
     </div>
   );
 }

@@ -6,10 +6,16 @@ import { EventTabs } from '@/app/[lang]/dashboard/photographer/events/[id]/event
 
 afterEach(cleanup);
 
-const labels = { photos: 'Photos', details: 'Details', share: 'Share' };
+const labels = {
+  photos: 'Photos',
+  details: 'Details',
+  pricing: 'Pricing',
+  share: 'Share',
+};
 const slots = {
   photos: <div>PHOTOS_SLOT</div>,
   details: <div>DETAILS_SLOT</div>,
+  pricing: <div>PRICING_SLOT</div>,
   share: <div>SHARE_SLOT</div>,
 };
 
@@ -23,6 +29,8 @@ describe('parseEventTab', () => {
   it('resolves the known top-level tabs', () => {
     expect(parseEventTab('photos')).toBe('photos');
     expect(parseEventTab('details')).toBe('details');
+    // T-203 added Pricing as a fourth top-level tab.
+    expect(parseEventTab('pricing')).toBe('pricing');
     expect(parseEventTab('share')).toBe('share');
   });
 
@@ -32,16 +40,34 @@ describe('parseEventTab', () => {
 });
 
 describe('EventTabs', () => {
-  it('renders all three top-level triggers and lands on Photos by default', () => {
+  it('renders all four top-level triggers and lands on Photos by default', () => {
     render(<EventTabs initialTab="photos" labels={labels} {...slots} />);
 
     expect(screen.getByRole('tab', { name: 'Photos' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Details' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Pricing' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Share' })).toBeTruthy();
 
     // Photos is the active panel; the other slots are not rendered/visible.
     expect(screen.getByText('PHOTOS_SLOT')).toBeTruthy();
     expect(screen.queryByText('DETAILS_SLOT')).toBeNull();
+    expect(screen.queryByText('PRICING_SLOT')).toBeNull();
+  });
+
+  it('places Pricing between Details and Share (T-203)', () => {
+    // The owner asked for it immediately left of Share; asserting the order
+    // stops a later refactor from quietly reshuffling the bar.
+    render(<EventTabs initialTab="photos" labels={labels} {...slots} />);
+
+    const tabNames = screen.getAllByRole('tab').map((tab) => tab.textContent);
+    expect(tabNames).toEqual(['Photos', 'Details', 'Pricing', 'Share']);
+  });
+
+  it('honours ?tab=pricing', () => {
+    render(<EventTabs initialTab="pricing" labels={labels} {...slots} />);
+
+    expect(screen.getByText('PRICING_SLOT')).toBeTruthy();
+    expect(screen.queryByText('PHOTOS_SLOT')).toBeNull();
   });
 
   it('honours the initial tab from the URL (?tab=details selects Details)', () => {

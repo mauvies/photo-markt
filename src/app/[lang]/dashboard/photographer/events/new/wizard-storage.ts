@@ -1,3 +1,4 @@
+import { parseBundleTiers } from '@/lib/bundle-pricing';
 import { activityValues } from './activity-options';
 import type { StepNumber } from './components/wizard-steps';
 import type { FormValues } from './wizard.schema';
@@ -44,6 +45,7 @@ function draftHasUserInput(v: FormValues): boolean {
     v.allow_guest_upload !== true ||
     v.require_upload_approval !== false ||
     v.price_per_photo !== null ||
+    v.bundle_tiers !== null ||
     v.organizer_fee_per_photo !== null ||
     v.ai_matching_enabled !== false ||
     v.contains_minors !== false ||
@@ -143,6 +145,9 @@ export function readStoredState(): StoredWizardState | null {
         typeof candidateValues.price_per_photo === 'number'
           ? candidateValues.price_per_photo
           : null,
+      // Restored through the shared fail-closed reader (T-203): a draft is
+      // localStorage, so it is untrusted input like any other.
+      bundle_tiers: parseBundleTiers(candidateValues.bundle_tiers),
       organizer_fee_per_photo:
         typeof candidateValues.organizer_fee_per_photo === 'number'
           ? candidateValues.organizer_fee_per_photo

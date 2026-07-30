@@ -6,9 +6,10 @@ import { type EventTab, parseEventTab } from './event-tab';
 
 type EventTabsProps = {
   initialTab: EventTab;
-  labels: { photos: string; details: string; share: string };
+  labels: { photos: string; details: string; pricing: string; share: string };
   photos: ReactNode;
   details: ReactNode;
+  pricing: ReactNode;
   share: ReactNode;
 };
 
@@ -27,7 +28,7 @@ type EventTabsProps = {
  * Favorites, and the inner moderation tabs — so the photographer page reads
  * consistently with the rest of the dashboard.
  */
-export function EventTabs({ initialTab, labels, photos, details, share }: EventTabsProps) {
+export function EventTabs({ initialTab, labels, photos, details, pricing, share }: EventTabsProps) {
   const [tab, setTab] = useState<EventTab>(initialTab);
 
   const handleChange = (value: string) => {
@@ -45,6 +46,8 @@ export function EventTabs({ initialTab, labels, photos, details, share }: EventT
       <TabsList>
         <TabsTrigger value="photos">{labels.photos}</TabsTrigger>
         <TabsTrigger value="details">{labels.details}</TabsTrigger>
+        {/* Pricing sits between Details and Share (T-203, design D17). */}
+        <TabsTrigger value="pricing">{labels.pricing}</TabsTrigger>
         <TabsTrigger value="share">{labels.share}</TabsTrigger>
       </TabsList>
       <TabsContent value="photos" className="mt-4">
@@ -52,6 +55,9 @@ export function EventTabs({ initialTab, labels, photos, details, share }: EventT
       </TabsContent>
       <TabsContent value="details" className="mt-4">
         {details}
+      </TabsContent>
+      <TabsContent value="pricing" className="mt-4">
+        {pricing}
       </TabsContent>
       <TabsContent value="share" className="mt-4">
         {share}

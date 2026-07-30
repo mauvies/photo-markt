@@ -26,6 +26,17 @@ const editSource = readFileSync(
   'utf8',
 );
 
+// T-203 extracted the price input into its own component so the `info` section
+// and the new pricing section render the same one. The row-layout guard still
+// belongs to the fields file; the input guard follows the input.
+const priceFieldSource = readFileSync(
+  resolve(
+    root,
+    'src/app/[lang]/dashboard/photographer/events/[id]/edit/components/event-price-field.tsx',
+  ),
+  'utf8',
+);
+
 describe('edit event price field layout (T-167)', () => {
   it('Row 3 (Date + Price) uses items-start so the Price cell does not stretch', () => {
     // The stretched grid was the large-offset cause; anchor the cells to the
@@ -36,8 +47,15 @@ describe('edit event price field layout (T-167)', () => {
   });
 
   it('the price input carries text-sm for line-height parity with the create wizard', () => {
-    expect(editSource).toContain('className="pl-7 text-sm"');
+    expect(priceFieldSource).toContain('className="pl-7 text-sm"');
     // The bare `pl-7` (no text-sm) must no longer be used on the price input.
-    expect(editSource).not.toContain('className="pl-7"');
+    expect(priceFieldSource).not.toContain('className="pl-7"');
+  });
+
+  it('the currency prefix comes from the platform currency, not a hardcoded $ (T-203)', () => {
+    // The prefix was a literal `$` while checkout charged in EUR — a leftover the
+    // T-193 currency migration missed because it lived in this one input.
+    expect(priceFieldSource).toContain('PLATFORM_CURRENCY_SYMBOL');
+    expect(priceFieldSource).not.toMatch(/>\s*\$\s*</);
   });
 });

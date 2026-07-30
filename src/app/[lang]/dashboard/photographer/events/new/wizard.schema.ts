@@ -49,6 +49,19 @@ export const eventSchema = z
     allow_guest_upload: z.boolean().default(true),
     require_upload_approval: z.boolean().default(false),
     price_per_photo: priceSchema,
+    // Volume-pricing ladder (T-203): rungs of {minQuantity, totalPriceCents},
+    // ascending. Shape only — the authoritative rules (ordering, monotonic
+    // totals, floor, "is it actually a discount") live server-side in
+    // `validateBundleSchedule`, so they can't drift between client and server.
+    bundle_tiers: z
+      .array(
+        z.object({
+          minQuantity: z.number().int(),
+          totalPriceCents: z.number().int(),
+        }),
+      )
+      .nullable()
+      .default(null),
     // Per-photo fee (in dollars; converted to cents in the server action) that
     // the organizer charges on top of the platform fee. Only applies when
     // event_type === 'organizer'.

@@ -1990,5 +1990,37 @@
         "description": "Compra todas las fotos de un evento a un precio de paquete con descuento."
       }
     ]
+  },
+  "bundlePricing": {
+    "heading": "Precios",
+    "singlePhoto": "Foto suelta",
+    "photosOrMore": "{n} fotos o más",
+    "eachSuffix": "{price} cada una",
+    "ladderHint": "Añade más fotos al carrito y el mejor precio se aplica automáticamente.",
+    "tabTitle": "Precios",
+    "editTitle": "Editar precios",
+    "editSubtitle": "Fija el precio por foto suelta y, si quieres, packs por volumen para este evento.",
+    "laddersHeading": "Packs por volumen",
+    "laddersDescription": "Ofrece un precio mejor a quien se lleve varias fotos. Cada pack es un total fijo a partir de esa cantidad de fotos.",
+    "addTier": "Añadir pack",
+    "removeTier": "Quitar",
+    "minQuantityLabel": "A partir de esta cantidad de fotos",
+    "totalPriceLabel": "Precio total",
+    "effectivePerPhoto": "{price} por foto",
+    "noLadder": "Todavía no hay packs por volumen.",
+    "unavailableFree": "Los packs por volumen necesitan un precio por foto. Fija uno primero.",
+    "unavailableOrganizer": "Los packs por volumen aún no están disponibles en eventos de organizador.",
+    "errors": {
+      "fallback": "Esos precios no son válidos. Revisa los packs e inténtalo de nuevo.",
+      "empty": "Añade al menos un pack, o quita del todo el precio por volumen.",
+      "too_many_tiers": "Son demasiados packs. Mantén la escalera corta.",
+      "quantity_not_integer": "La cantidad de fotos de un pack tiene que ser un número entero.",
+      "quantity_too_low": "Un pack tiene que empezar en 2 fotos o más.",
+      "quantity_not_increasing": "Cada pack tiene que empezar en más fotos que el anterior.",
+      "total_not_integer": "Cada pack necesita un precio total válido.",
+      "total_below_floor": "Cada pack tiene que costar al menos {min}.",
+      "total_not_increasing": "Cada pack tiene que costar más que el anterior — si no, el pack más barato se aplicaría a todos los pedidos mayores.",
+      "total_not_a_discount": "Un pack tiene que costar menos que comprar esas fotos una a una."
+    }
   }
 }
