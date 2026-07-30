@@ -30,9 +30,9 @@ import {
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { parseBundleTiers } from '@/lib/bundle-pricing';
-import { PLATFORM_CURRENCY_CODE } from '@/lib/currency';
 import { eventDetailCacheTags } from '@/lib/event-cache-tags';
 import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
+import { buildEventOffers } from '@/lib/event-offers-json-ld';
 import { overrideEventTotalPhotoCount } from '@/lib/event-photo-count-overrides';
 import { getEventStatus, isCollaborativeUploadOpen } from '@/lib/event-status';
 import { isFeatureEnabled } from '@/lib/feature-flags';
@@ -490,6 +490,21 @@ export default async function EventPage({
     viewCart: dict.events.viewCart,
   };
 
+  // Volume pricing (T-204), parsed ONCE for every surface on this page — meta
+  // line, pricing section, JSON-LD offers and the viewer — so they cannot
+  // disagree about the same event's ladder.
+  const bundleTiers = parseBundleTiers((event as unknown as Record<string, unknown>).bundle_tiers);
+  const bundleAllPhotosCents =
+    ((event as unknown as Record<string, unknown>).bundle_all_photos_cents as number | null) ??
+    null;
+  const bundleLabels = {
+    allPhotos: dict.bundlePricing.offerAllPhotos,
+    tier: dict.bundlePricing.offerTier,
+    selectionTotal: dict.bundlePricing.selectionTotal,
+    selectionNextTier: dict.bundlePricing.selectionNextTier,
+    addAllMyPhotos: dict.bundlePricing.addAllMyPhotos,
+  };
+
   const activityLabel =
     activityOptions.find((o) => o.value === event.activity)?.label ?? event.activity;
   const location = formatEventLocation(event);
@@ -541,15 +556,19 @@ export default async function EventPage({
           name: 'Photo Markt',
           url: siteUrl,
         },
+        // T-204: with a ladder configured, a single unit-price Offer under-quotes
+        // the event — a search result showing "€5.00" for an event where eight
+        // photos cost €20 is advertising a price that only holds for one photo.
+        // Each rung (and the "all photos" ceiling) becomes its own Offer, with
+        // `eligibleQuantity` carrying the threshold that makes it applicable.
         ...(event.price_per_photo !== null
           ? {
-              offers: {
-                '@type': 'Offer',
-                price: event.price_per_photo,
-                priceCurrency: PLATFORM_CURRENCY_CODE,
-                availability: 'https://schema.org/InStock',
-                url: eventUrl,
-              },
+              offers: buildEventOffers({
+                pricePerPhoto: event.price_per_photo,
+                bundleTiers,
+                bundleAllPhotosCents,
+                eventUrl,
+              }),
             }
           : {}),
       },
@@ -614,6 +633,9 @@ export default async function EventPage({
                 locale={lang}
                 perPhotoLabel={dict.events.perPhoto}
                 pricePerPhoto={event.price_per_photo}
+                bundleTiers={bundleTiers}
+                bundleAllPhotosCents={bundleAllPhotosCents}
+                bundleOfferLabels={bundleLabels}
                 photographerName={uploaderProfiles[event.user_id]?.username}
               />
               {/* Reveal gate (T-177): the total lives here (not above the
@@ -639,15 +661,15 @@ export default async function EventPage({
           <EventPricingSection
             className="mb-6"
             pricePerPhoto={event.price_per_photo}
-            bundleTiers={parseBundleTiers(
-              (event as unknown as Record<string, unknown>).bundle_tiers,
-            )}
+            bundleTiers={bundleTiers}
+            bundleAllPhotosCents={bundleAllPhotosCents}
             labels={{
               heading: dict.bundlePricing.heading,
               singlePhoto: dict.bundlePricing.singlePhoto,
               photosOrMore: dict.bundlePricing.photosOrMore,
               eachSuffix: dict.bundlePricing.eachSuffix,
               ladderHint: dict.bundlePricing.ladderHint,
+              allPhotos: dict.bundlePricing.allPhotos,
             }}
           />
 
@@ -741,6 +763,9 @@ export default async function EventPage({
                     eventName={event.name}
                     eventDate={event.date}
                     pricePerPhoto={event.price_per_photo}
+                    bundleTiers={bundleTiers}
+                    bundleAllPhotosCents={bundleAllPhotosCents}
+                    bundleLabels={bundleLabels}
                     photographerId={event.user_id}
                     isAuthenticated={!!user}
                     currentUserId={user?.id ?? null}

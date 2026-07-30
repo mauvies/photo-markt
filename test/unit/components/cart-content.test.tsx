@@ -99,11 +99,17 @@ const initialCartData: CartData = {
       eventTitle: 'Surf Cup',
       eventDate: '2026-01-01',
       eventShareCode: 'ABC123',
+      eventId: 'event-1',
+      bundleTiers: null,
+      bundleAllPhotosCents: null,
+      bundleEligible: false,
     },
   ],
   subtotalCents: 1500,
   itemCount: 1,
   removedCount: 0,
+  bundleDiscountCents: 0,
+  nextTier: null,
 };
 
 function renderCart(data: CartData = initialCartData, queryClient?: QueryClient) {
@@ -210,7 +216,14 @@ describe('CartContent — typed checkout failure (T-189 / T-117)', () => {
   });
 });
 
-const EMPTY_CART: CartData = { items: [], subtotalCents: 0, itemCount: 0, removedCount: 0 };
+const EMPTY_CART: CartData = {
+  items: [],
+  subtotalCents: 0,
+  itemCount: 0,
+  removedCount: 0,
+  bundleDiscountCents: 0,
+  nextTier: null,
+};
 
 describe('CartContent — live sync with fresh server data (T-121)', () => {
   it('renders the fresh server snapshot even when a stale (empty) cart-data cache exists', () => {
@@ -270,6 +283,8 @@ describe('CartContent — successful delete is silent (T-163)', () => {
       subtotalCents: 0,
       itemCount: 0,
       removedCount: 0,
+      bundleDiscountCents: 0,
+      nextTier: null,
     });
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     queryClient.setQueryData<number>(['cart-count'], 1);
@@ -313,6 +328,10 @@ describe('CartContent — a delete does not reappear mid-removal (T-162)', () =>
     eventTitle: 'Event A',
     eventDate: '2026-01-01',
     eventShareCode: 'AAA',
+    eventId: 'event-1',
+    bundleTiers: null,
+    bundleAllPhotosCents: null,
+    bundleEligible: false,
   };
   const itemB: CartItemDetail = { ...itemA, photoId: 'photo-B', eventTitle: 'Event B' };
   const twoItems: CartData = {
@@ -320,6 +339,8 @@ describe('CartContent — a delete does not reappear mid-removal (T-162)', () =>
     subtotalCents: 3000,
     itemCount: 2,
     removedCount: 0,
+    bundleDiscountCents: 0,
+    nextTier: null,
   };
 
   // Symptom 2 of the report: removing items, some come back. The real mechanism
@@ -387,6 +408,10 @@ describe('CartContent — nav count stays 0 after deleting all items (T-165)', (
     eventTitle: title,
     eventDate: '2026-01-01',
     eventShareCode: 'AAA',
+    eventId: 'event-1',
+    bundleTiers: null,
+    bundleAllPhotosCents: null,
+    bundleEligible: false,
   });
   const fourItems = [
     mk('p1', 'Event 1'),
@@ -399,6 +424,8 @@ describe('CartContent — nav count stays 0 after deleting all items (T-165)', (
     subtotalCents: 4000,
     itemCount: 4,
     removedCount: 0,
+    bundleDiscountCents: 0,
+    nextTier: null,
   };
 
   it('a late, partial absolute count refetch cannot resurrect the nav count', async () => {
@@ -415,6 +442,8 @@ describe('CartContent — nav count stays 0 after deleting all items (T-165)', (
         itemCount: items.length,
         subtotalCents: items.reduce((s, i) => s + i.unitPriceCents, 0),
         removedCount: 0,
+        bundleDiscountCents: 0,
+        nextTier: null,
       };
     });
     // The absolute count SELECT is held open so the test controls when (and with

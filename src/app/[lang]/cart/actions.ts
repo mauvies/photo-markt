@@ -8,6 +8,8 @@ import {
 } from '@/database/queries/photos';
 import { getPhotographerConnectStatuses, getProfilesByIds } from '@/database/queries/profiles';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { type BundleTier, eventSupportsBundles, parseBundleTiers } from '@/lib/bundle-pricing';
+import { priceCartWithBundles } from '@/lib/cart-bundle-pricing';
 import type { CheckoutResult } from '@/lib/checkout-error';
 import { PLATFORM_CURRENCY } from '@/lib/currency';
 import { getBaseUrl } from '@/lib/get-base-url';
@@ -51,8 +53,17 @@ export async function loadGuestCartStateAction(
   removedPhotoIds: string[];
   previews: Record<string, string | null>;
   photographers: Record<string, { name: string | null; slug: string | null }>;
+  /**
+   * Bundle pricing per event id (T-204). The guest cart is a localStorage list
+   * with no ladder in it, so the ladder has to come from the server on this
+   * existing round trip — the client then prices the cart with the SAME kernel
+   * the checkout charges from, which is what keeps displayed and charged equal.
+   */
+  eventPricing: Record<string, GuestEventPricing>;
 }> {
-  if (photoIds.length === 0) return { removedPhotoIds: [], previews: {}, photographers: {} };
+  if (photoIds.length === 0) {
+    return { removedPhotoIds: [], previews: {}, photographers: {}, eventPricing: {} };
+  }
 
   // Unauthenticated endpoint doing service-role reads + bulk storage signing
   // — same abuse class as the guest checkout above, so same IP keying. More
@@ -65,7 +76,7 @@ export async function loadGuestCartStateAction(
     windowSec: 3600,
   });
   if (!rl.ok) {
-    return { removedPhotoIds: [], previews: {}, photographers: {} };
+    return { removedPhotoIds: [], previews: {}, photographers: {}, eventPricing: {} };
   }
 
   const cappedIds = photoIds.slice(0, GUEST_CART_MAX_IDS);
@@ -93,7 +104,56 @@ export async function loadGuestCartStateAction(
     ]),
   );
 
-  return { removedPhotoIds, previews, photographers };
+  // Ladder lookup for the surviving items only (T-204) — an item the guest is
+  // about to lose must not contribute pricing to the summary.
+  const eventPricing = await getGuestEventPricing(validPhotoIds);
+
+  return { removedPhotoIds, previews, photographers, eventPricing };
+}
+
+/** Per-event bundle pricing the guest cart client needs to price itself. */
+export interface GuestEventPricing {
+  bundleTiers: BundleTier[] | null;
+  bundleAllPhotosCents: number | null;
+  bundleEligible: boolean;
+}
+
+/**
+ * Read the bundle ladder of every event behind a set of photo ids (T-204).
+ *
+ * Service-role, but it exposes nothing sensitive: the ladder is public pricing —
+ * already rendered on the event page by `EventPricingSection` — and the ids were
+ * filtered through the purchasability + accessibility gates before reaching here.
+ */
+async function getGuestEventPricing(
+  photoIds: string[],
+): Promise<Record<string, GuestEventPricing>> {
+  if (photoIds.length === 0) return {};
+
+  const { data, error } = await supabaseAdmin
+    .from('photos')
+    .select('event_id, events(id, type, price_per_photo, bundle_tiers, bundle_all_photos_cents)')
+    .in('id', photoIds);
+
+  // A failed lookup degrades to "no ladders", i.e. list prices — the fail-closed
+  // direction: the cart may show a total higher than the checkout charges
+  // (visible, and corrected at checkout), never lower.
+  if (error || !data) return {};
+
+  const pricing: Record<string, GuestEventPricing> = {};
+  for (const row of data) {
+    const event = Array.isArray(row.events) ? row.events[0] : row.events;
+    if (!event?.id || pricing[event.id]) continue;
+    pricing[event.id] = {
+      bundleTiers: parseBundleTiers(event.bundle_tiers),
+      bundleAllPhotosCents: event.bundle_all_photos_cents ?? null,
+      bundleEligible: eventSupportsBundles({
+        type: event.type,
+        price_per_photo: event.price_per_photo,
+      }),
+    };
+  }
+  return pricing;
 }
 
 /**
@@ -120,11 +180,15 @@ export async function createGuestCheckoutSessionAction(
     return { ok: false, error: 'rate_limited' };
   }
 
-  // Re-validate photos and prices from DB (never trust client-side prices)
+  // Re-validate photos and prices from DB (never trust client-side prices).
+  // The bundle ladder is read here too (T-204) — the client sends no ladder and
+  // could not be believed if it did.
   const photoIds = items.map((i) => i.photoId);
   const { data: photos, error: photosError } = await supabaseAdmin
     .from('photos')
-    .select('id, user_id, event_id, events(id, price_per_photo, name)')
+    .select(
+      'id, user_id, event_id, events(id, price_per_photo, name, type, bundle_tiers, bundle_all_photos_cents)',
+    )
     .in('id', photoIds);
 
   if (photosError || !photos) {
@@ -159,8 +223,16 @@ export async function createGuestCheckoutSessionAction(
     return {
       photoId: item.photoId,
       photographerId: photo.user_id,
+      eventId: event?.id ?? photo.event_id ?? null,
       eventName: event?.name ?? item.eventName,
       unitPriceCents,
+      // Parsed at the edge, failing closed to "no ladder" (list price) on any
+      // inconsistency — the direction that can only overcharge vs. intent.
+      bundleTiers: parseBundleTiers(event?.bundle_tiers),
+      bundleAllPhotosCents: event?.bundle_all_photos_cents ?? null,
+      bundleEligible: event
+        ? eventSupportsBundles({ type: event.type, price_per_photo: event.price_per_photo })
+        : false,
     };
   });
 
@@ -172,16 +244,26 @@ export async function createGuestCheckoutSessionAction(
     return { ok: false, error: 'photographer_not_connected' };
   }
 
-  // Encode cart items in Stripe metadata (one key per item, no DB needed)
+  // T-204: price the server-validated set through the shared bundle kernel —
+  // the same call the cart page made to display the total.
+  const priced = priceCartWithBundles(validatedItems);
+
+  // Encode cart items in Stripe metadata (one key per item, no DB needed).
+  // T-204: the `c` field now carries the ALLOCATED cents rather than the list
+  // price. That is deliberately not a new mechanism — the webhook already
+  // rebuilds `guest_order_items` from this field, so committing the allocation
+  // here means the guest path needs no schema and no webhook recompute, and a
+  // ladder edited between the charge and the delivery cannot change the order.
   const cartMetadata: Record<string, string> = {
     is_guest: 'true',
     cart_count: String(validatedItems.length),
   };
   for (let i = 0; i < validatedItems.length; i++) {
+    const item = validatedItems[i];
     cartMetadata[`cart_${i}`] = JSON.stringify({
-      p: validatedItems[i].photoId,
-      g: validatedItems[i].photographerId,
-      c: validatedItems[i].unitPriceCents,
+      p: item.photoId,
+      g: item.photographerId,
+      c: priced.allocations[item.photoId] ?? item.unitPriceCents,
     });
   }
 
@@ -189,10 +271,11 @@ export async function createGuestCheckoutSessionAction(
 
   // T-196: the service fee rides on the SERVER-validated subtotal (what
   // survived the purchasability + accessibility gates above), never on
-  // anything the client sent. `buildServiceFeeLineItem` returns null while the
-  // fee is configured at 0, so the session stays identical to v1.
-  const subtotalCents = validatedItems.reduce((sum, item) => sum + item.unitPriceCents, 0);
-  const serviceFeeLineItem = buildServiceFeeLineItem(subtotalCents);
+  // anything the client sent — and since T-204 on the POST-DISCOUNT subtotal,
+  // so the buyer pays a percentage of what they are actually charged.
+  // `buildServiceFeeLineItem` returns null while the fee is configured at 0, so
+  // the session stays identical to v1.
+  const serviceFeeLineItem = buildServiceFeeLineItem(priced.subtotalCents);
 
   const session = await stripe.checkout.sessions.create({
     mode: 'payment',
@@ -205,7 +288,8 @@ export async function createGuestCheckoutSessionAction(
           product_data: {
             name: item.eventName ? `Photo from ${item.eventName}` : 'Photo',
           },
-          unit_amount: item.unitPriceCents,
+          // The allocated share, so the line items sum to the discounted total.
+          unit_amount: priced.allocations[item.photoId] ?? item.unitPriceCents,
         },
         quantity: 1,
       })),

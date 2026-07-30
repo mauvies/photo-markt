@@ -20,6 +20,8 @@ import { Button } from '@/components/ui/button';
 import { useCarouselNavigation } from '@/hooks/use-carousel-navigation';
 import { useImageLoad } from '@/hooks/use-image-load';
 import { useKeyboardNav } from '@/hooks/use-keyboard-nav';
+import { type BundleOfferLabels, resolveBundleOfferLabel } from '@/lib/bundle-offer-label';
+import type { BundleTier } from '@/lib/bundle-pricing';
 import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import { formatEventDate } from '@/lib/format-date';
 import { resolvePhotoCta } from '@/lib/photo-detail-cta';
@@ -71,6 +73,12 @@ interface PhotoDetailModalProps {
   photographerName?: string;
   /** Flat event price in dollars; `null`/omitted hides the price row. */
   pricePerPhoto?: number | null;
+  /** Volume-pricing ladder for the event (T-204); omitted ⇒ no bundle line. */
+  bundleTiers?: BundleTier[] | null;
+  /** The event's "all photos" flat price in cents, if set (T-204). */
+  bundleAllPhotosCents?: number | null;
+  /** Copy for the bundle line; omitted ⇒ no bundle line is rendered. */
+  bundleOfferLabels?: BundleOfferLabels;
   // Action matrix — the same flags/gates the viewer computes for the lightbox.
   showAddToCart?: boolean;
   showDownload?: boolean;
@@ -116,6 +124,9 @@ export function PhotoDetailModal({
   locale,
   photographerName,
   pricePerPhoto,
+  bundleTiers,
+  bundleAllPhotosCents,
+  bundleOfferLabels,
   showAddToCart = false,
   showDownload = false,
   canDownloadPhoto,
@@ -167,6 +178,12 @@ export function PhotoDetailModal({
     pricePerPhoto != null && pricePerPhoto > 0
       ? `${PLATFORM_CURRENCY_SYMBOL}${pricePerPhoto.toFixed(2)}`
       : undefined;
+  // T-204 — same shared formatter as the meta line and the selection toolbar, so
+  // the three cannot quote the same ladder differently.
+  const bundleOfferLabel =
+    bundleOfferLabels && priceLabel
+      ? resolveBundleOfferLabel(bundleTiers, bundleAllPhotosCents, bundleOfferLabels)
+      : null;
 
   const renderCta = () => {
     switch (cta) {
@@ -289,6 +306,13 @@ export function PhotoDetailModal({
                   <span className="text-sm text-neutral-500">{labels.pricePerPhoto}</span>
                   <span className="text-base font-bold text-neutral-900">{priceLabel}</span>
                 </div>
+              ) : null}
+              {/* The volume offer, right where the decision happens (T-204):
+                  showing only the unit price here would quote a price that is
+                  true for one photo and wrong for the set the buyer is about to
+                  assemble. Nothing renders on an event with no ladder. */}
+              {bundleOfferLabel ? (
+                <p className="mb-2 text-xs font-medium text-emerald-700">{bundleOfferLabel}</p>
               ) : null}
               {/* Favorites — a secondary, purchase-adjacent action sitting just
                   above the primary CTA. Never competes with "Add to Cart". */}

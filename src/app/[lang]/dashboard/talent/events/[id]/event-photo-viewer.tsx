@@ -17,6 +17,10 @@ import {
   type FaceSearchResultsLabels,
 } from '@/app/[lang]/events/[shareCode]/face-search-shared';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import {
+  type EventBundleLabels,
+  useBundleSelectionNote,
+} from '@/components/event-bundle-selection';
 import { useBibSearch, useFaceSearch } from '@/components/event-gallery-with-face-search';
 import { EventPhotoCountLabel } from '@/components/event-photo-count-label';
 import { type EventPhotoFilter, EventPhotoFilterTabs } from '@/components/event-photo-filter-tabs';
@@ -40,6 +44,7 @@ import { useLoadMorePhotos } from '@/hooks/use-load-more-photos';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
 import { filterNewIds } from '@/lib/bulk-select';
+import type { BundleTier } from '@/lib/bundle-pricing';
 import { showAddedToCartToast } from '@/lib/cart-toast';
 import { shouldShowBulkDownload } from '@/lib/event-bulk-actions';
 import {
@@ -122,6 +127,12 @@ type EventPhotoViewerProps = {
   loadMoreErrorLabel: string;
   /** Flat event price in dollars — shown in the paid-event purchase modal. */
   pricePerPhoto?: number | null;
+  /** Volume-pricing ladder for this event (T-204); null = no ladder. */
+  bundleTiers?: BundleTier[] | null;
+  /** The event's "all photos" flat price in cents, if set (T-204). */
+  bundleAllPhotosCents?: number | null;
+  /** Copy for every bundle affordance in this viewer (T-204). */
+  bundleLabels?: EventBundleLabels;
   /** Labels for the two-panel purchase detail modal (paid events). */
   photoDetailLabels: PhotoDetailModalLabels;
   /** Page locale (`lang`) for the purchase modal's date formatting. */
@@ -158,6 +169,9 @@ export function EventPhotoViewer({
   loadMoreLabel,
   loadMoreErrorLabel,
   pricePerPhoto,
+  bundleTiers,
+  bundleAllPhotosCents,
+  bundleLabels,
   photoDetailLabels,
   locale,
   photographerName,
@@ -604,6 +618,9 @@ export function EventPhotoViewer({
       // lightbox (bigger photo, no purchase moment).
       detailVariant: isFreeEvent ? ('lightbox' as const) : ('purchase' as const),
       pricePerPhoto,
+      bundleTiers,
+      bundleAllPhotosCents,
+      bundleOfferLabels: bundleLabels,
       locale,
       photographerName,
       purchaseLabels: photoDetailLabels,
@@ -626,6 +643,9 @@ export function EventPhotoViewer({
       imageUnavailableLabel,
       menuLabels,
       pricePerPhoto,
+      bundleTiers,
+      bundleAllPhotosCents,
+      bundleLabels,
       locale,
       photographerName,
       photoDetailLabels,
@@ -722,6 +742,30 @@ export function EventPhotoViewer({
   const gridClassName = '-mx-2.5 sm:mx-0';
   const selectionResetKey = `${filter}:${faceSearch.matches === null ? 'all' : 'search'}`;
 
+  // Running bundle price for the current selection (T-204) — undefined (so the
+  // toolbar renders unchanged) on an event with no ladder.
+  const renderSelectionNote = useBundleSelectionNote({
+    pricePerPhoto: pricePerPhoto ?? null,
+    bundleTiers,
+    bundleAllPhotosCents,
+    labels: bundleLabels,
+  });
+
+  // ── "Add all my photos" after a face search (T-204) ─────────────────────
+  // Ids come from the buyer's OWN match set (`faceSearch.matchedPhotos`, the
+  // server's response to their search), never a fresh query for the event's
+  // photos — which is what keeps the reveal gate intact: on a gated event that
+  // matched set IS the proven set the search minted the reveal token over.
+  const faceMatchIds = useMemo(
+    () => faceSearch.matchedPhotos.map((p) => p.id),
+    [faceSearch.matchedPhotos],
+  );
+  const addAllMatchedToCart = useCallback(() => {
+    handleBulkAddToCart(faceMatchIds);
+  }, [handleBulkAddToCart, faceMatchIds]);
+  const canAddAllMatched =
+    !isFreeEvent && showAddToCart && faceMatchIds.length > 0 && bundleLabels != null;
+
   // Shared across both render paths (full gallery + AI results) since the
   // delete bulk action is reachable from either.
   const deleteDialog = (
@@ -762,13 +806,27 @@ export function EventPhotoViewer({
               bulkActions={bulkActions}
               labels={selectionLabels}
               selectionResetKey={selectionResetKey}
+              renderSelectionNote={renderSelectionNote}
               toolbarClassName={toolbarClassName}
               gridClassName={gridClassName}
               toolbarLeading={
-                <Button type="button" variant="outline" size="sm" onClick={faceSearch.clearMatches}>
-                  <ArrowLeft className="mr-1.5 h-4 w-4" />
-                  {resultsLabels.viewAllPhotos}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={faceSearch.clearMatches}
+                  >
+                    <ArrowLeft className="mr-1.5 h-4 w-4" />
+                    {resultsLabels.viewAllPhotos}
+                  </Button>
+                  {canAddAllMatched ? (
+                    <Button type="button" size="sm" onClick={addAllMatchedToCart}>
+                      <ShoppingCart className="mr-1.5 h-4 w-4" />
+                      {bundleLabels?.addAllMyPhotos}
+                    </Button>
+                  ) : null}
+                </div>
               }
             />
           )}
@@ -788,6 +846,7 @@ export function EventPhotoViewer({
         bulkActions={bulkActions}
         labels={selectionLabels}
         selectionResetKey={selectionResetKey}
+        renderSelectionNote={renderSelectionNote}
         toolbarClassName={toolbarClassName}
         gridClassName={gridClassName}
         loadMore={

@@ -48,7 +48,14 @@ describe('loadGuestCartStateAction — preview resolution', () => {
 
   it('returns an empty state for an empty photo id list', async () => {
     const result = await loadGuestCartStateAction([]);
-    expect(result).toEqual({ removedPhotoIds: [], previews: {}, photographers: {} });
+    // `eventPricing` joined the payload in T-204 — the guest cart needs each
+    // event's bundle ladder to price itself with the same kernel checkout uses.
+    expect(result).toEqual({
+      removedPhotoIds: [],
+      previews: {},
+      photographers: {},
+      eventPricing: {},
+    });
   });
 
   it('resolves the baked thumbnail URL when the thumbnail is ready — never a stale signed URL', async () => {

@@ -246,6 +246,12 @@ export async function POST(request: Request) {
           for (let i = 0; i < cartCount; i++) {
             const raw = session.metadata?.[`cart_${i}`];
             if (raw) {
+              // `c` is the amount the checkout COMMITTED for this photo — its
+              // allocated share of a bundle-discounted total (T-204), or its
+              // list price when nothing was discounted. Read, never recomputed:
+              // the event's ladder is editable at any moment, so re-deriving a
+              // bundle price here could produce an order that disagrees with the
+              // buyer's card statement.
               const { p, g, c } = JSON.parse(raw);
               cartItems.push({
                 photoId: p,
@@ -391,6 +397,7 @@ export async function POST(request: Request) {
             photo_id,
             photographer_id,
             unit_price_cents,
+            allocated_price_cents,
             created_at,
             photos!inner(
               original_url,
@@ -415,6 +422,7 @@ export async function POST(request: Request) {
             photo_id: string;
             photographer_id: string;
             unit_price_cents: number;
+            allocated_price_cents: number | null;
             created_at: string;
             photos:
               | Array<{
@@ -444,7 +452,14 @@ export async function POST(request: Request) {
               cart_id: item.cart_id,
               photo_id: item.photo_id,
               photographer_id: item.photographer_id,
-              unit_price_cents: item.unit_price_cents,
+              // T-204: prefer the allocation the checkout COMMITTED before the
+              // session was created — this photo's share of a bundle-discounted
+              // total. Absent (null) means no bundle applied, or a session
+              // created before this deploy, and the list price is exactly right.
+              // Never recomputed from the event's tiers: they are editable at
+              // any moment, and a recompute between charge and delivery would
+              // build an order that disagrees with the buyer's card statement.
+              unit_price_cents: item.allocated_price_cents ?? item.unit_price_cents,
               created_at: item.created_at,
               photo_url: photo?.original_url ?? null,
               photographer_name: null,

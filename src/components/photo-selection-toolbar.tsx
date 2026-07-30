@@ -39,6 +39,13 @@ interface PhotoSelectionToolbarProps {
   selectLabel: string;
   /** aria-label for the exit (X) button shown while selecting. */
   exitLabel: string;
+  /**
+   * Running-price note shown next to the count while selecting (T-204) — what
+   * the current selection costs and what the next rung would cost. Rendered
+   * beside the count rather than as its own row so the toolbar height stays
+   * fixed and the grid below never shifts.
+   */
+  selectionNote?: ReactNode;
   onStartSelecting: () => void;
   onClear: () => void;
   /** View-specific bulk actions (Download, Delete, …) rendered while selecting. */
@@ -63,6 +70,7 @@ export function PhotoSelectionToolbar({
   countLabel,
   selectLabel,
   exitLabel,
+  selectionNote,
   onStartSelecting,
   onClear,
   children,
@@ -102,6 +110,11 @@ export function PhotoSelectionToolbar({
               <X className="h-5 w-5" />
             </Button>
             <div className="shrink-0 whitespace-nowrap text-sm font-medium">{countLabel}</div>
+            {selectionNote ? (
+              <div className="shrink-0 whitespace-nowrap pl-2 text-xs text-muted-foreground">
+                {selectionNote}
+              </div>
+            ) : null}
             <div className="ml-auto hidden shrink-0 items-center gap-2 md:flex">{children}</div>
           </>
         ) : (

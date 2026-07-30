@@ -37,6 +37,12 @@ interface PhotoGalleryProps {
   selectionResetKey?: string | number;
   /** Slot on the desktop toolbar — the filter tabs. */
   toolbarLeading?: ReactNode;
+  /**
+   * Running-price note for the current selection (T-204). Called with the
+   * selected count so the host can price it through the bundle kernel; the
+   * selection state lives here, so the host cannot compute it on its own.
+   */
+  renderSelectionNote?: (selectedCount: number) => ReactNode;
   toolbarClassName?: string;
   /** Extra classes on the grid wrapper — e.g. `-mx-3.5 sm:mx-0` to bleed the
    * grid near full-width on mobile while the padded toolbar stays put. */
@@ -84,6 +90,7 @@ export function PhotoGallery({
   bulkActions = [],
   selectionResetKey,
   toolbarLeading,
+  renderSelectionNote,
   toolbarClassName,
   gridClassName,
   labels = EMPTY_SELECTION_LABELS,
@@ -206,6 +213,7 @@ export function PhotoGallery({
           countLabel={countLabel}
           selectLabel={labels.select}
           exitLabel={labels.exitSelection}
+          selectionNote={renderSelectionNote?.(selection.selectedIds.length)}
           onStartSelecting={selection.startSelecting}
           onClear={selection.clear}
         >

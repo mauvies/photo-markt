@@ -13,6 +13,10 @@ import {
   removePhotoFromMyPhotosAction,
 } from '@/app/[lang]/dashboard/talent/events/[id]/actions';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import {
+  type EventBundleLabels,
+  useBundleSelectionNote,
+} from '@/components/event-bundle-selection';
 import { useBibSearch, useFaceSearch } from '@/components/event-gallery-with-face-search';
 import { EventPhotoCountLabel } from '@/components/event-photo-count-label';
 import { type EventPhotoFilter, EventPhotoFilterTabs } from '@/components/event-photo-filter-tabs';
@@ -35,6 +39,7 @@ import {
 import { useBulkPhotoDownload } from '@/hooks/use-bulk-photo-download';
 import { useLoadMorePhotos } from '@/hooks/use-load-more-photos';
 import { useOptimisticPhotosInCart } from '@/hooks/use-optimistic-photos-in-cart';
+import type { BundleTier } from '@/lib/bundle-pricing';
 import { showAddedToCartToast } from '@/lib/cart-toast';
 import { type EventBulkActionKey, eventBulkActionKeys } from '@/lib/event-bulk-actions';
 import { filterEventPhotoPages, filterEventPhotos } from '@/lib/event-photo-filter';
@@ -58,6 +63,12 @@ interface PublicEventPhotoViewerProps {
   eventName: string;
   eventDate: string;
   pricePerPhoto: number | null;
+  /** Volume-pricing ladder for this event (T-204); null = no ladder. */
+  bundleTiers?: BundleTier[] | null;
+  /** The event's "all photos" flat price in cents, if set (T-204). */
+  bundleAllPhotosCents?: number | null;
+  /** Copy for every bundle affordance in this viewer (T-204). */
+  bundleLabels?: EventBundleLabels;
   photographerId: string;
   isAuthenticated: boolean;
   /** auth.uid() of the current viewer, when signed in. */
@@ -147,6 +158,9 @@ export function PublicEventPhotoViewer({
   eventName,
   eventDate,
   pricePerPhoto,
+  bundleTiers,
+  bundleAllPhotosCents,
+  bundleLabels,
   photographerId,
   isAuthenticated,
   currentUserId,
@@ -649,6 +663,9 @@ export function PublicEventPhotoViewer({
       // lightbox (bigger photo, no purchase moment).
       detailVariant: isFreeEvent ? ('lightbox' as const) : ('purchase' as const),
       pricePerPhoto,
+      bundleTiers,
+      bundleAllPhotosCents,
+      bundleOfferLabels: bundleLabels,
       locale,
       photographerName,
       purchaseLabels: photoDetailLabels,
@@ -673,6 +690,9 @@ export function PublicEventPhotoViewer({
       imageUnavailableLabel,
       menuLabels,
       pricePerPhoto,
+      bundleTiers,
+      bundleAllPhotosCents,
+      bundleLabels,
       locale,
       photographerName,
       photoDetailLabels,
@@ -740,6 +760,31 @@ export function PublicEventPhotoViewer({
 
   const selectionResetKey = `${filter}:${faceSearch.matches === null ? 'all' : 'search'}`;
 
+  // Running bundle price for the current selection (T-204) — undefined (so the
+  // toolbar renders unchanged) on an event with no ladder.
+  const renderSelectionNote = useBundleSelectionNote({
+    pricePerPhoto,
+    bundleTiers,
+    bundleAllPhotosCents,
+    labels: bundleLabels,
+  });
+
+  // ── "Add all my photos" after a face search (T-204) ─────────────────────
+  // The ids come from what the buyer ALREADY HOLDS: `faceSearch.matchedPhotos`
+  // is the server's own response to their search, never a fresh query for the
+  // event's photos. That is what keeps the reveal gate intact — on a gated event
+  // the matched set IS the proven set (the search mints the reveal token over
+  // exactly these ids), so this button can no more surface an unrevealed photo
+  // than the results grid it sits above can.
+  const faceMatchIds = useMemo(
+    () => faceSearch.matchedPhotos.map((p) => p.id),
+    [faceSearch.matchedPhotos],
+  );
+  const addAllMatchedToCart = useCallback(() => {
+    handleBulkAddToCart(faceMatchIds);
+  }, [handleBulkAddToCart, faceMatchIds]);
+  const canAddAllMatched = canBulkAddToCart && faceMatchIds.length > 0 && bundleLabels != null;
+
   return (
     <div className="relative">
       {photos.length === 0 ? (
@@ -766,13 +811,30 @@ export function PublicEventPhotoViewer({
               selectable={canSelect}
               labels={selectionLabels}
               selectionResetKey={selectionResetKey}
+              renderSelectionNote={renderSelectionNote}
               toolbarClassName="sticky top-[var(--header-height)]"
               gridClassName="-mx-3.5 sm:mx-0"
               toolbarLeading={
-                <Button type="button" variant="outline" size="sm" onClick={faceSearch.clearMatches}>
-                  <ArrowLeft className="mr-1.5 h-4 w-4" />
-                  {resultsLabels.viewAllPhotos}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={faceSearch.clearMatches}
+                  >
+                    <ArrowLeft className="mr-1.5 h-4 w-4" />
+                    {resultsLabels.viewAllPhotos}
+                  </Button>
+                  {/* One tap from "these are my photos" to "buy them" — without
+                      it, an event advertising a price for eight photos has no
+                      interface path to that price (T-204, design D16). */}
+                  {canAddAllMatched ? (
+                    <Button type="button" size="sm" onClick={addAllMatchedToCart}>
+                      <ShoppingCart className="mr-1.5 h-4 w-4" />
+                      {bundleLabels?.addAllMyPhotos}
+                    </Button>
+                  ) : null}
+                </div>
               }
             />
           )}
@@ -786,6 +848,7 @@ export function PublicEventPhotoViewer({
           selectable={canSelect}
           labels={selectionLabels}
           selectionResetKey={selectionResetKey}
+          renderSelectionNote={renderSelectionNote}
           toolbarClassName=" sticky top-[var(--header-height)]"
           gridClassName=""
           loadMore={

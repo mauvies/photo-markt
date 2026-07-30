@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { type BundleOfferLabels, resolveBundleOfferLabel } from '@/lib/bundle-offer-label';
+import type { BundleTier } from '@/lib/bundle-pricing';
 import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import { formatEventDate, formatSessionTimeRange } from '@/lib/format-date';
 import { formatEventLocation } from '@/lib/format-location';
@@ -25,6 +27,17 @@ interface EventMetaLineProps {
   perPhotoLabel: string;
   /** Flat price in dollars; the price segment is omitted when null/undefined. */
   pricePerPhoto?: number | null;
+  /**
+   * Volume-pricing ladder (T-204). When present, the line appends the event's
+   * best bundle offer after the unit price — a card reading "€5.00 per photo"
+   * on an event where eight photos cost €20 is quoting a price that is only true
+   * for a buyer taking one photo.
+   */
+  bundleTiers?: BundleTier[] | null;
+  /** The event's "all photos" flat price in cents, if set (T-204). */
+  bundleAllPhotosCents?: number | null;
+  /** Copy for the bundle segment; omitted ⇒ no bundle segment is rendered. */
+  bundleOfferLabels?: BundleOfferLabels;
   /** Event photographer's username — rendered as a link to their public
    * profile, positioned just before the price. Omitted when absent. */
   photographerName?: string | null;
@@ -46,6 +59,9 @@ export function EventMetaLine({
   locale,
   perPhotoLabel,
   pricePerPhoto,
+  bundleTiers,
+  bundleAllPhotosCents,
+  bundleOfferLabels,
   photographerName,
   className,
 }: EventMetaLineProps) {
@@ -53,6 +69,11 @@ export function EventMetaLine({
   const formattedTime = formatSessionTimeRange(sessionTime, sessionEndTime, locale);
   const location = formatEventLocation({ city, state, country });
   const formattedCity = location ? location[0]?.toUpperCase() + location.slice(1) : '';
+  // Only meaningful next to a unit price — a free event has nothing to discount.
+  const bundleOffer =
+    bundleOfferLabels && pricePerPhoto != null && pricePerPhoto > 0
+      ? resolveBundleOfferLabel(bundleTiers, bundleAllPhotosCents, bundleOfferLabels)
+      : null;
 
   return (
     <div className={cn('text-sm leading-relaxed text-muted-foreground', className)}>
@@ -78,6 +99,7 @@ export function EventMetaLine({
           {pricePerPhoto.toFixed(2)} {perPhotoLabel}
         </>
       ) : null}
+      {bundleOffer ? <> • {bundleOffer}</> : null}
     </div>
   );
 }

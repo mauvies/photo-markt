@@ -16,6 +16,8 @@ import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCoarsePointer } from '@/hooks/use-coarse-pointer';
 import { usePhotoLightboxUrl } from '@/hooks/use-photo-lightbox-url';
+import type { BundleOfferLabels } from '@/lib/bundle-offer-label';
+import type { BundleTier } from '@/lib/bundle-pricing';
 import { resolveGalleryTileSrc } from '@/lib/gallery-tile-src';
 import { shouldSkipImageOptimization } from '@/lib/image-source';
 import { cn } from '@/lib/utils';
@@ -146,6 +148,12 @@ type PhotoAlbumViewerProps = {
   detailVariant?: 'lightbox' | 'purchase';
   /** Flat event price in dollars, shown in the purchase modal's price row. */
   pricePerPhoto?: number | null;
+  /** Volume-pricing ladder, forwarded to the purchase modal (T-204). */
+  bundleTiers?: BundleTier[] | null;
+  /** The event's "all photos" flat price in cents, if set (T-204). */
+  bundleAllPhotosCents?: number | null;
+  /** Copy for the purchase modal's bundle line (T-204). */
+  bundleOfferLabels?: BundleOfferLabels;
   /** Locale (page `lang`) for the purchase modal's date formatting. */
   locale?: string;
   /** Event photographer's display name — the purchase modal's attribution
@@ -195,6 +203,9 @@ export default function PhotoAlbumViewer({
   actionBarLabels,
   detailVariant = 'lightbox',
   pricePerPhoto,
+  bundleTiers,
+  bundleAllPhotosCents,
+  bundleOfferLabels,
   locale,
   photographerName,
   purchaseLabels,
@@ -534,6 +545,9 @@ export default function PhotoAlbumViewer({
             locale={locale}
             photographerName={photographerName}
             pricePerPhoto={pricePerPhoto}
+            bundleTiers={bundleTiers}
+            bundleAllPhotosCents={bundleAllPhotosCents}
+            bundleOfferLabels={bundleOfferLabels}
             showAddToCart={showAddToCart}
             showDownload={showDownload}
             canDownloadPhoto={isPhotoDownloadable}

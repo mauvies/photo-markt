@@ -429,6 +429,44 @@ export function serializeBundleTiers(tiers: readonly BundleTier[] | null): Bundl
 }
 
 /**
+ * The single most compelling offer on an event, for the surfaces that have room
+ * for one line and not a table (T-204): the meta line that feeds event cards,
+ * the purchase modal above add-to-cart, the selection toolbar.
+ *
+ * "Most compelling" is the deepest one: the "all photos" ceiling when set (it is
+ * strictly above every rung total by validation, and it is the offer that needs
+ * no threshold at all), otherwise the highest rung — the biggest saving per
+ * photo, and the one whose per-photo price reads lowest.
+ *
+ * Returns null when the event has no ladder, so an unbundled event's card and
+ * modal render exactly as they did before bundles existed.
+ */
+export type BundleOffer =
+  | { kind: 'all-photos'; totalCents: number }
+  | { kind: 'tier'; minQuantity: number; totalCents: number };
+
+export function getBestBundleOffer(
+  tiers: readonly BundleTier[] | null | undefined,
+  allPhotosCents?: number | null,
+): BundleOffer | null {
+  if (!BUNDLE_PRICING_ENABLED) return null;
+
+  if (isValidAllPhotosCap(allPhotosCents)) {
+    return { kind: 'all-photos', totalCents: allPhotosCents };
+  }
+
+  if (!tiers || tiers.length === 0) return null;
+
+  let best: BundleTier | null = null;
+  for (const tier of tiers) {
+    if (best === null || tier.minQuantity > best.minQuantity) best = tier;
+  }
+  if (best === null) return null;
+
+  return { kind: 'tier', minQuantity: best.minQuantity, totalCents: best.totalPriceCents };
+}
+
+/**
  * Effective per-photo price at a rung's own threshold, in cents — what the
  * editor shows as the photographer types and what the read-only ladder table
  * displays, so "8 for €20" reads as "€2.50 each".

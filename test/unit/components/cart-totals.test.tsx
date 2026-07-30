@@ -25,6 +25,7 @@ const labels = {
   serviceFee: 'Service fee',
   total: 'Total',
   free: 'Free',
+  bundleDiscount: 'Volume discount',
 };
 
 describe('CartTotals with the fee disabled (shipped state)', () => {
@@ -81,5 +82,57 @@ describe('CartTotals with the fee live', () => {
     expect(screen.getByText('Subtotal')).toBeDefined();
     expect(screen.getByText('Service fee')).toBeDefined();
     expect(screen.getByText('€5.30')).toBeDefined();
+  });
+});
+
+/**
+ * T-204: the volume-discount row. The ORDER of operations is the point — the fee
+ * rides on the post-discount subtotal, because that is what the buyer is actually
+ * charged for the photos.
+ */
+describe('CartTotals with a bundle discount', () => {
+  it('shows the discount as its own row and totals subtotal − discount + fee', () => {
+    getBuyerServiceFeeCentsMock.mockReturnValue(61);
+    render(<CartTotals subtotalCents={1500} bundleDiscountCents={300} labels={labels} />);
+
+    expect(screen.getByText('€15.00')).toBeDefined();
+    expect(screen.getByText('Volume discount')).toBeDefined();
+    expect(screen.getByText('−€3.00')).toBeDefined();
+    // 15.00 − 3.00 + 0.61
+    expect(screen.getByText('€12.61')).toBeDefined();
+  });
+
+  it('computes the fee on the DISCOUNTED subtotal, not the list subtotal', () => {
+    getBuyerServiceFeeCentsMock.mockReturnValue(61);
+    render(<CartTotals subtotalCents={1500} bundleDiscountCents={300} labels={labels} />);
+
+    expect(getBuyerServiceFeeCentsMock).toHaveBeenCalledWith(1200);
+  });
+
+  it('shows the discount and total even while the fee is disabled', () => {
+    getBuyerServiceFeeCentsMock.mockReturnValue(0);
+    render(<CartTotals subtotalCents={1500} bundleDiscountCents={300} labels={labels} />);
+
+    expect(screen.getByText('Volume discount')).toBeDefined();
+    expect(screen.queryByText('Service fee')).toBeNull();
+    expect(screen.getByText('€12.00')).toBeDefined();
+  });
+
+  it('renders exactly the pre-bundle single row when nothing is discounted', () => {
+    getBuyerServiceFeeCentsMock.mockReturnValue(0);
+    render(<CartTotals subtotalCents={1500} bundleDiscountCents={0} labels={labels} />);
+
+    expect(screen.queryByText('Volume discount')).toBeNull();
+    expect(screen.queryByText('Total')).toBeNull();
+    expect(screen.getByText('€15.00')).toBeDefined();
+  });
+
+  it('never lets a discount exceed the subtotal', () => {
+    // Defensive: the component also renders optimistic client state.
+    getBuyerServiceFeeCentsMock.mockReturnValue(0);
+    render(<CartTotals subtotalCents={1000} bundleDiscountCents={99_999} labels={labels} />);
+
+    expect(screen.getByText('−€10.00')).toBeDefined();
+    expect(screen.getByText('€0.00')).toBeDefined();
   });
 });
