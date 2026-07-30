@@ -17,6 +17,14 @@ import {
 import type { SupabaseServerClient } from '@/database/queries/types';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import {
+  eventSupportsBundles,
+  parseAllPhotosCents,
+  parseBundleTiersInput,
+  serializeBundleTiers,
+  validateBundleSchedule,
+} from '@/lib/bundle-pricing';
+import { bundleScheduleErrorMessage } from '@/lib/bundle-schedule-error';
 import { isValidSessionRange, normalizeSessionTime, SESSION_RANGE_ERROR } from '@/lib/format-date';
 import { inngest } from '@/lib/inngest/client';
 import { minPhotoPriceErrorMessage } from '@/lib/min-photo-price';
@@ -100,6 +108,19 @@ const eventSchema = z
       .string()
       .default('false')
       .transform((val) => val === 'true'),
+    // Volume-pricing ladder (T-203) — mirror of the create action. An absent
+    // field means "clear the ladder", which is what lets the scoped pricing
+    // editor remove every rung.
+    bundle_tiers: z
+      .string()
+      .optional()
+      .transform((val) => (val && val.trim() !== '' ? parseBundleTiersInput(val) : null)),
+    // "All photos" flat price in cents (T-203) — a ceiling, independent of the
+    // rungs. An absent field means "no flat price".
+    bundle_all_photos_cents: z
+      .string()
+      .optional()
+      .transform((val) => (val && val.trim() !== '' ? parseAllPhotosCents(val) : null)),
   })
   .superRefine((data, ctx) => {
     // T-180: an end time requires a start and must be after it.
@@ -122,6 +143,41 @@ const eventSchema = z
         message: minPhotoPriceErrorMessage(minCents),
         path: ['price_per_photo'],
       });
+    }
+    // T-203: mirror of the create action's ladder rules. The event type is not
+    // in this payload (it is immutable after creation), so the organizer
+    // exclusion is enforced against the stored row in the action body below;
+    // here we can still reject a ladder on an event being made free.
+    //
+    // A free event carries no bundle BY DEFINITION (`eventSupportsBundles`), so
+    // "no price + a ladder" is normalized away in the action body rather than
+    // rejected here. Rejecting it broke an unrelated edit: every section-scoped
+    // form echoes the whole event, so editing *settings* on an event whose price
+    // had been cleared threw `BUNDLE_TIERS:total_not_a_discount` and 500'd —
+    // pricing state blocking a save that never touched pricing. The body already
+    // forces the ladder off in exactly the way it forces `watermark_enabled` and
+    // `reveal_gate_enabled` off when their preconditions fail.
+    //
+    // What IS worth an error is a ladder that contradicts a price the
+    // photographer is actually setting — that is a real mistake with a fix.
+    if (
+      priceCents !== null &&
+      priceCents > 0 &&
+      (data.bundle_tiers !== null || data.bundle_all_photos_cents !== null)
+    ) {
+      const result = validateBundleSchedule(
+        data.bundle_tiers ?? [],
+        priceCents,
+        minCents,
+        data.bundle_all_photos_cents,
+      );
+      if (!result.ok && result.error) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: bundleScheduleErrorMessage(result.error, result.minCents),
+          path: ['bundle_tiers'],
+        });
+      }
     }
   });
 
@@ -206,6 +262,8 @@ export async function updateEventAction(
     bib_detection_enabled: formData.get('bib_detection_enabled')?.toString() ?? 'false',
     contains_minors: formData.get('contains_minors')?.toString() ?? 'false',
     reveal_gate_enabled: formData.get('reveal_gate_enabled')?.toString() ?? 'false',
+    bundle_tiers: formData.get('bundle_tiers')?.toString(),
+    bundle_all_photos_cents: formData.get('bundle_all_photos_cents')?.toString(),
   });
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? 'Invalid event data provided.');
@@ -253,6 +311,25 @@ export async function updateEventAction(
 
   const watermarkEnabled = isPublic && payload.watermark_enabled;
 
+  // T-203: the ladder's event-type gate can only be checked against the STORED
+  // row — `type` is immutable after creation and is not in this payload. An
+  // organizer event may never carry a ladder (several possible sellers, and no
+  // revenue split to charge a discount against), so drop it rather than
+  // erroring: the form never offers the field for those events, so a ladder
+  // arriving here is a hand-crafted POST, not a user mistake worth explaining.
+  const bundleTiers = eventSupportsBundles({
+    type: currentEvent.type,
+    price_per_photo: payload.price_per_photo ?? null,
+  })
+    ? payload.bundle_tiers
+    : null;
+  const bundleAllPhotosCents = eventSupportsBundles({
+    type: currentEvent.type,
+    price_per_photo: payload.price_per_photo ?? null,
+  })
+    ? payload.bundle_all_photos_cents
+    : null;
+
   const updateData: Parameters<typeof updateEvent>[3] = {
     name: payload.name,
     activity: payload.activity,
@@ -285,6 +362,16 @@ export async function updateEventAction(
     (currentEvent as { session_end_time?: string | null }).session_end_time != null
   ) {
     updateData.session_end_time = payload.session_end_time;
+  }
+  // Same migration-gating for the T-203 ladder: only touch the column when a
+  // ladder is being set or an existing one cleared, so a plain edit still works
+  // against a DB that hasn't applied the migration yet.
+  if (bundleTiers !== null || currentEvent.bundle_tiers != null) {
+    updateData.bundle_tiers = serializeBundleTiers(bundleTiers);
+  }
+  // Same migration-gating for the "all photos" ceiling.
+  if (bundleAllPhotosCents !== null || currentEvent.bundle_all_photos_cents != null) {
+    updateData.bundle_all_photos_cents = bundleAllPhotosCents;
   }
 
   await updateEvent(supabase, eventId, user.id, updateData);

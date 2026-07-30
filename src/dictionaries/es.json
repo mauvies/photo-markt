@@ -918,9 +918,9 @@
     "title": "Crear evento",
     "subtitle": "Completa los detalles y añade tus fotos.",
     "noPreview": "Sin vista previa",
-    "nameLabel": "Evento",
+    "nameLabel": "Nombre del evento",
     "namePlaceholder": "Nombre del evento",
-    "nameRequired": "El nombre es obligatorio.",
+    "nameRequired": "El nombre del evento es obligatorio.",
     "activityLabel": "Actividad",
     "activityPlaceholder": "Selecciona una actividad",
     "activityRequired": "La actividad es obligatoria.",
@@ -1990,5 +1990,46 @@
         "description": "Compra todas las fotos de un evento a un precio de paquete con descuento."
       }
     ]
+  },
+  "bundlePricing": {
+    "heading": "Precios",
+    "singlePhoto": "Foto suelta",
+    "photosOrMore": "{n} fotos o más",
+    "eachSuffix": "{price} cada una",
+    "ladderHint": "Añade más fotos al carrito y el mejor precio se aplica automáticamente.",
+    "tabTitle": "Precios",
+    "editTitle": "Editar precios",
+    "editSubtitle": "Fija el precio por foto suelta y, si quieres, packs por volumen para este evento.",
+    "laddersHeading": "Precio por volumen",
+    "laddersDescription": "Cobra menos a quien se lleve más de una foto.",
+    "allPhotosLabel": "Todas las fotos por un precio",
+    "allPhotosDescription": "Lo máximo que pagará un comprador por tus fotos de este evento, se lleve las que se lleve. Déjalo vacío si no quieres.",
+    "allPhotosPlaceholder": "p. ej. 20.00",
+    "allPhotosBreakEven": "Se aplica a partir de {n} fotos — por debajo pagan por foto.",
+    "packsHeading": "Packs (opcional)",
+    "packsDescription": "Escalones intermedios entre una foto suelta y el precio de todas. Cada pack es un total fijo a partir de esa cantidad de fotos.",
+    "addTier": "Añadir pack",
+    "removeTier": "Quitar",
+    "minQuantityLabel": "A partir de esta cantidad de fotos",
+    "totalPriceLabel": "Precio total",
+    "effectivePerPhoto": "{price} por foto",
+    "noLadder": "Todavía no hay packs por volumen.",
+    "unavailableFree": "Los packs por volumen necesitan un precio por foto. Fija uno primero.",
+    "unavailableOrganizer": "Los packs por volumen aún no están disponibles en eventos de organizador.",
+    "errors": {
+      "fallback": "Esos precios no son válidos. Revisa los packs e inténtalo de nuevo.",
+      "empty": "Añade al menos un pack, o quita del todo el precio por volumen.",
+      "too_many_tiers": "Son demasiados packs. Mantén la escalera corta.",
+      "quantity_not_integer": "La cantidad de fotos de un pack tiene que ser un número entero.",
+      "quantity_too_low": "Un pack tiene que empezar en 2 fotos o más.",
+      "quantity_not_increasing": "Cada pack tiene que empezar en más fotos que el anterior.",
+      "total_not_integer": "Cada pack necesita un precio total válido.",
+      "total_below_floor": "Cada pack tiene que costar al menos {min}.",
+      "total_not_increasing": "Cada pack tiene que costar más que el anterior — si no, el pack más barato se aplicaría a todos los pedidos mayores.",
+      "total_not_a_discount": "Un pack tiene que costar menos que comprar esas fotos una a una.",
+      "all_photos_below_floor": "El precio de todas las fotos tiene que ser al menos {min}.",
+      "all_photos_not_above_unit": "El precio de todas las fotos tiene que ser mayor que el de una foto suelta — si no, nadie pagaría nunca el precio por foto.",
+      "all_photos_below_a_pack": "Un pack cuesta igual o más que el precio de todas las fotos, así que nunca se aplicaría. Baja el pack o sube el precio de todas."
+    }
   }
 }

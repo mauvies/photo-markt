@@ -7,6 +7,7 @@ import { getActiveRole } from '@/app/[lang]/actions/roles';
 import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/activity-options';
 import { EventGalleryWithFaceSearch } from '@/components/event-gallery-with-face-search';
 import { EventMetaLine } from '@/components/event-meta-line';
+import { EventPricingSection } from '@/components/event-pricing-section';
 import { EventShareButton } from '@/components/event-share-button';
 import { GatedFaceSearchNotice } from '@/components/gated-face-search-notice';
 import {
@@ -28,6 +29,7 @@ import {
 } from '@/database/queries/rekognition';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { parseBundleTiers } from '@/lib/bundle-pricing';
 import { PLATFORM_CURRENCY_CODE } from '@/lib/currency';
 import { eventDetailCacheTags } from '@/lib/event-cache-tags';
 import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
@@ -629,6 +631,25 @@ export default async function EventPage({
               tooltip={dict.eventShare.tooltip}
             />
           </div>
+
+          {/* Volume pricing (T-203, D17). Mounted directly under the header and
+              above everything else, the SAME slot the talent-dashboard view uses,
+              so one event can never quote two different prices. Renders nothing
+              for a free event or one without a ladder. */}
+          <EventPricingSection
+            className="mb-6"
+            pricePerPhoto={event.price_per_photo}
+            bundleTiers={parseBundleTiers(
+              (event as unknown as Record<string, unknown>).bundle_tiers,
+            )}
+            labels={{
+              heading: dict.bundlePricing.heading,
+              singlePhoto: dict.bundlePricing.singlePhoto,
+              photosOrMore: dict.bundlePricing.photosOrMore,
+              eachSuffix: dict.bundlePricing.eachSuffix,
+              ladderHint: dict.bundlePricing.ladderHint,
+            }}
+          />
 
           {showContribute && event.share_code ? (
             <div className="mb-4">

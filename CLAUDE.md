@@ -154,12 +154,48 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
 ### Key Tables
 
 **events**
-`id, user_id, name, date, session_time, session_end_time, start_date, end_date, city, country, state, activity, is_public, share_code, price_per_photo, watermark_enabled, slug, lat, lng, time_offset, time_sync_enabled, deleted_at, created_at, updated_at`
+`id, user_id, name, date, session_time, session_end_time, start_date, end_date, city, country, state, activity, is_public, share_code, price_per_photo, bundle_tiers, watermark_enabled, slug, lat, lng, time_offset, time_sync_enabled, deleted_at, created_at, updated_at`
 - Soft delete via `deleted_at`
 - `state` field tracks event status (`upcoming` / `completed`) based on date
 - `time_sync_enabled` + `time_offset` support the camera time sync feature (when each *photo* was taken)
 - `session_time` (nullable `time`) is a **separate** concept — the manual session start time the photographer types, for display only; naive local time-of-day, not tied to `time_offset`/`time_sync_enabled` (T-106). `session_end_time` (nullable `time`, T-180) is its mirror — the manual session end; when both are set the UI shows a range ("09:30 – 12:00") via `formatSessionTimeRange`. App-level rule: an end requires a start and must be after it (`isValidSessionRange`); the column carries no constraint
 - `share_code` allows access to private events
+- **`bundle_tiers` (nullable `jsonb`, T-203) — volume pricing.** An optional **ladder** of rungs
+  `[{minQuantity, totalPriceCents}]`, ascending; null = no bundle. **A bundle is a PRICE, not a PRODUCT:** the
+  purchasable unit stays the photo and a sale still writes one `order_items` row per photo, so every
+  entitlement reader (ZIP route, talent library, orders history, guest download token, sold-photo soft delete)
+  is untouched — and a reveal-gated event has no whole-event product to unlock. Single calc point
+  `getBundlePriceCents(quantity, unitCents, tiers)` in **`src/lib/bundle-pricing.ts`** (client-safe, so the cart
+  displays what checkout charges): the applicable rung is the one with the **greatest** `minQuantity ≤ quantity`
+  — **never the cheapest applicable rung**, which would shadow every rung above it and let a 20-photo buyer pay
+  the 3-photo price — then `min(quantity × unit, rungTotal)`, which makes overcharging vs. singles structurally
+  impossible. Validated at **write time** in both event actions (`validateBundleSchedule`), not by a DB
+  constraint: thresholds integer ≥ 2 strictly increasing; totals positive, **strictly increasing with threshold**
+  (without this the ladder collapses to one rung), each ≥ `MIN_PHOTO_PRICE_CENTS` applied to the **rung total**
+  (not per photo — the floor governs what is being bought, and for a bundle that is the set) and strictly below
+  `minQuantity × price_per_photo`. **Two parsers, deliberately:** `parseBundleTiers` (READ) fails **closed** to
+  "no ladder" on any inconsistency — falling back to `quantity × unit` can only overcharge vs. intent (visible,
+  refundable), never undercharge; `parseBundleTiersInput` (WRITE) validates shape only, because failing closed on
+  a write would silently discard what the photographer typed and report success. Excluded from **organizer**
+  events (several possible sellers, and `organizer_fee_per_photo_cents` is written but read by no money path, so
+  there is no revenue split to charge a discount against) and from free events. **An ineligible event's ladder is
+  NORMALIZED AWAY, not rejected** — the same treatment `watermark_enabled` / `reveal_gate_enabled` get when their
+  preconditions fail. Rejecting was a bug: every section-scoped edit form echoes the whole event, so a stored
+  ladder plus a cleared price made editing *settings* throw `BUNDLE_TIERS:total_not_a_discount` and 500. Pricing
+  state must never block a save that isn't about pricing. Global kill switch `BUNDLE_PRICING_ENABLED`; stored
+  ladders survive it unread, so rollback needs no migration
+- **`bundle_all_photos_cents` (nullable `integer`, T-203) — "all photos for one price"** (Sportograf's
+  Foto-Flat). A **CEILING**, not another rung: `price = min(quantity × unit, applicable rung, cap)`. Deliberate,
+  because a rung needs a threshold the photographer would have to derive (`ceil(cap / price_per_photo)`) and that
+  derived number **goes stale when the unit price changes** — a rung at "4+ for €20" silently stops applying if
+  the price drops to €4, since €20 is then no longer a discount, and nobody is told. A ceiling keeps meaning what
+  was typed: it engages exactly where `quantity × unit` would exceed it, so a buyer with 3 matches still pays per
+  photo while one with 40 pays the flat price (which a threshold rung could not express). Independent of
+  `bundle_tiers` — a cap with no rungs is a complete configuration ("€5 a photo, or €20 for all of them").
+  Validated at write time: ≥ `MIN_PHOTO_PRICE_CENTS`, **strictly above** the unit price (at or below it the
+  per-photo price is unreachable), and **strictly above every rung total** (a rung at or above the cap can never
+  apply, so it is dead config). Consequence to know: once a buyer reaches the cap, adding their remaining photos
+  is free — that is the Foto-Flat bargain, not a bug
 
 **photos** (via `/src/database/queries/photos.ts`)
 - `face_index_status` (`pending`/`indexing`/`indexed`/`failed`/`no_faces`/`not_applicable`) and `thumbnail_status` track the Inngest jobs; `width`/`height` persisted for layout

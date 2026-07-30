@@ -5,22 +5,29 @@ import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { z } from 'zod';
+import { BundleTiersField } from '@/components/bundle-tiers-field';
 import { Button } from '@/components/ui/button';
 import type { Event } from '@/database/queries/events';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { parseAllPhotosCents, parseBundleTiers } from '@/lib/bundle-pricing';
+import { bundleScheduleErrorText } from '@/lib/bundle-schedule-error';
+import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { minPhotoPriceMessage } from '@/lib/min-photo-price';
 import { updateEventAction } from './actions';
 import { EventAiSettingsFields } from './components/event-ai-settings-fields';
 import { EventFormFields } from './components/event-form-fields';
+import { EventPriceField } from './components/event-price-field';
 import { eventSchema, type FormValues } from './edit-event-schema';
 import { buildEventUpdateFormData } from './event-form-data';
 
-type ScopedSection = 'info' | 'settings';
+type ScopedSection = 'info' | 'settings' | 'pricing';
 
 type ScopedEventEditFormProps = {
   event: Event;
   section: ScopedSection;
   labels: { save: string; saving: string; cancel: string };
+  /** Bundle-pricing copy — required for the `pricing` section (T-203). */
+  bundleT?: Dictionary['bundlePricing'];
 };
 
 /**
@@ -33,7 +40,7 @@ type ScopedEventEditFormProps = {
  * server-side cross-field invariants stay intact. Photos/cover are untouched
  * here (managed on the full edit page + the Photos tab).
  */
-export function ScopedEventEditForm({ event, section, labels }: ScopedEventEditFormProps) {
+export function ScopedEventEditForm({ event, section, labels, bundleT }: ScopedEventEditFormProps) {
   const router = useRouter();
   const lp = useLocalizedPath();
   const [isPending, startTransition] = useTransition();
@@ -65,6 +72,10 @@ export function ScopedEventEditForm({ event, section, labels }: ScopedEventEditF
     contains_minors: Boolean(record.contains_minors),
     bib_detection_enabled: Boolean(record.bib_detection_enabled),
     reveal_gate_enabled: Boolean(record.reveal_gate_enabled),
+    // T-203: echo the stored ladder so editing another section round-trips it
+    // unchanged instead of clearing it.
+    bundle_tiers: parseBundleTiers(record.bundle_tiers),
+    bundle_all_photos_cents: parseAllPhotosCents(record.bundle_all_photos_cents),
   };
 
   const form = useForm({
@@ -85,8 +96,19 @@ export function ScopedEventEditForm({ event, section, labels }: ScopedEventEditF
             // dictionary (like its sibling `event-form-fields`), so the copy is
             // English here — matching the file's existing convention.
             const minPrice = minPhotoPriceMessage(error, 'Price per photo must be at least {min}.');
+            // T-203: a rejected ladder arrives as the `BUNDLE_TIERS:` sentinel.
+            // Unlike the surrounding English strings this one IS localized —
+            // the pricing section receives the dictionary block, so there is no
+            // reason to degrade it.
+            const bundleError = bundleT
+              ? bundleScheduleErrorText(error, {
+                  ...bundleT.errors,
+                  fallback: bundleT.errors.fallback,
+                })
+              : null;
             setSubmitError(
               minPrice ??
+                bundleError ??
                 (error instanceof Error
                   ? error.message
                   : 'Something went wrong. Please try again.'),
@@ -119,15 +141,57 @@ export function ScopedEventEditForm({ event, section, labels }: ScopedEventEditF
         </div>
       )}
 
-      <EventFormFields
-        form={form}
-        submitAttempted={submitAttempted}
-        datePopoverOpen={datePopoverOpen}
-        setDatePopoverOpen={setDatePopoverOpen}
-        section={section}
-      />
+      {/* The pricing section renders only the price field + ladder editor, so it
+          skips the info/settings field groups entirely. */}
+      {section === 'pricing' ? null : (
+        <EventFormFields
+          form={form}
+          submitAttempted={submitAttempted}
+          datePopoverOpen={datePopoverOpen}
+          setDatePopoverOpen={setDatePopoverOpen}
+          section={section}
+        />
+      )}
 
       {section === 'settings' ? <EventAiSettingsFields form={form} /> : null}
+
+      {section === 'pricing' && bundleT ? (
+        <>
+          <EventPriceField form={form} submitAttempted={submitAttempted} />
+          {/* Nested Fields so the editor sees the LIVE price as it is typed:
+              eligibility and the per-photo readouts both depend on it. */}
+          <form.Field name="price_per_photo">
+            {(priceField) => (
+              <form.Field name="bundle_tiers">
+                {(tiersField) => {
+                  const raw: unknown = priceField.state.value;
+                  const price =
+                    typeof raw === 'number' && Number.isFinite(raw)
+                      ? raw
+                      : typeof raw === 'string' && raw.trim() !== '' && !Number.isNaN(Number(raw))
+                        ? Number(raw)
+                        : null;
+                  return (
+                    <form.Field name="bundle_all_photos_cents">
+                      {(capField) => (
+                        <BundleTiersField
+                          value={tiersField.state.value}
+                          onChange={tiersField.handleChange}
+                          allPhotosCents={capField.state.value}
+                          onAllPhotosChange={capField.handleChange}
+                          pricePerPhoto={price}
+                          eventType={event.type}
+                          t={bundleT}
+                        />
+                      )}
+                    </form.Field>
+                  );
+                }}
+              </form.Field>
+            )}
+          </form.Field>
+        </>
+      ) : null}
 
       <div className="flex justify-end gap-3 border-t pt-4">
         <Button type="button" variant="outline" onClick={() => router.back()} disabled={isPending}>

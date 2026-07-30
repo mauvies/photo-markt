@@ -21,6 +21,8 @@ const base: FormValues = {
   contains_minors: false,
   bib_detection_enabled: false,
   reveal_gate_enabled: true,
+  bundle_tiers: null,
+  bundle_all_photos_cents: null,
 };
 
 describe('buildEventUpdateFormData', () => {
@@ -62,5 +64,28 @@ describe('buildEventUpdateFormData', () => {
     // null server-side (T-106/T-180).
     expect(fd.get('session_time')).toBe('');
     expect(fd.get('session_end_time')).toBe('');
+  });
+
+  it('always sends the bundle ladder, so editing another section cannot wipe it (T-203)', () => {
+    // The server treats an absent `bundle_tiers` as "clear the ladder". A
+    // section-scoped form edits (say) the info card but still submits the whole
+    // event, so it MUST echo the stored ladder — otherwise renaming an event
+    // would silently delete its volume pricing.
+    const withLadder = buildEventUpdateFormData({
+      ...base,
+      bundle_tiers: [
+        { minQuantity: 3, totalPriceCents: 1200 },
+        { minQuantity: 8, totalPriceCents: 2000 },
+      ],
+    });
+    expect(JSON.parse(withLadder.get('bundle_tiers') as string)).toEqual([
+      { minQuantity: 3, totalPriceCents: 1200 },
+      { minQuantity: 8, totalPriceCents: 2000 },
+    ]);
+
+    // And a genuinely absent ladder is sent as empty rather than omitted, so
+    // clearing one persists.
+    const withoutLadder = buildEventUpdateFormData({ ...base, bundle_tiers: null });
+    expect(withoutLadder.get('bundle_tiers')).toBe('');
   });
 });

@@ -14,9 +14,11 @@ import { getEditEventPhotos } from './photo-data';
 import { ScopedEventEditForm } from './scoped-event-edit-form';
 
 /** Resolve the optional `?section=` param to a scoped edit section, or null. */
-function parseSection(value: string | string[] | undefined): 'info' | 'settings' | null {
+function parseSection(
+  value: string | string[] | undefined,
+): 'info' | 'settings' | 'pricing' | null {
   const raw = Array.isArray(value) ? value[0] : value;
-  return raw === 'info' || raw === 'settings' ? raw : null;
+  return raw === 'info' || raw === 'settings' || raw === 'pricing' ? raw : null;
 }
 
 export default async function EditEventPage({
@@ -47,16 +49,22 @@ export default async function EditEventPage({
     return null;
   }
 
-  // Section-scoped edit (T-179): a focused form for just the "info" or
-  // "settings" card — no photos/cover here. Reuses `updateEventAction`, so the
+  // Section-scoped edit (T-179): a focused form for just the "info", "settings"
+  // or "pricing" card — no photos/cover here. Reuses `updateEventAction`, so the
   // unedited fields ride along unchanged.
   if (section) {
     const title =
-      section === 'info' ? dict.eventDetails.editInfoTitle : dict.eventDetails.editSettingsTitle;
+      section === 'info'
+        ? dict.eventDetails.editInfoTitle
+        : section === 'pricing'
+          ? dict.bundlePricing.editTitle
+          : dict.eventDetails.editSettingsTitle;
     const subtitle =
       section === 'info'
         ? dict.eventDetails.editInfoSubtitle
-        : dict.eventDetails.editSettingsSubtitle;
+        : section === 'pricing'
+          ? dict.bundlePricing.editSubtitle
+          : dict.eventDetails.editSettingsSubtitle;
     return (
       <div>
         <DashboardHeader title={title} />
@@ -71,6 +79,7 @@ export default async function EditEventPage({
                 saving: dict.eventDetails.saving,
                 cancel: dict.eventDetails.cancel,
               }}
+              bundleT={dict.bundlePricing}
             />
           </TranslationsProvider>
         </div>

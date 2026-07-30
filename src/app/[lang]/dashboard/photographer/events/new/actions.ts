@@ -8,6 +8,15 @@ import { deleteStorageFiles, uploadFile } from '@/database/queries/storage';
 import type { SupabaseServerClient } from '@/database/queries/types';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import {
+  type BundleTier,
+  eventSupportsBundles,
+  parseAllPhotosCents,
+  parseBundleTiersInput,
+  serializeBundleTiers,
+  validateBundleSchedule,
+} from '@/lib/bundle-pricing';
+import { bundleScheduleErrorMessage } from '@/lib/bundle-schedule-error';
 import { isValidSessionRange, normalizeSessionTime, SESSION_RANGE_ERROR } from '@/lib/format-date';
 import { inngest } from '@/lib/inngest/client';
 import { minPhotoPriceErrorMessage } from '@/lib/min-photo-price';
@@ -104,6 +113,22 @@ const eventSchema = z
       .string()
       .default('false')
       .transform((val) => val === 'true'),
+    // Volume-pricing ladder (T-203), carried as JSON in the form payload.
+    // Uses the INPUT parser (shape only), not the strict read-path reader: the
+    // strict one fails closed to "no ladder", which on a write would silently
+    // discard what the photographer typed and report success. Shape-only parsing
+    // lets `validateBundleSchedule` in the superRefine below name the actual
+    // violation (ordering, floor, not-a-discount) so the form can explain it.
+    bundle_tiers: z
+      .string()
+      .optional()
+      .transform((val) => (val && val.trim() !== '' ? parseBundleTiersInput(val) : null)),
+    // "All photos" flat price in cents (T-203) — a ceiling, independent of the
+    // rungs. An absent field means "no flat price".
+    bundle_all_photos_cents: z
+      .string()
+      .optional()
+      .transform((val) => (val && val.trim() !== '' ? parseAllPhotosCents(val) : null)),
   })
   .superRefine((data, ctx) => {
     // T-180: an end time requires a start and must be after it.
@@ -126,6 +151,36 @@ const eventSchema = z
         message: minPhotoPriceErrorMessage(minCents),
         path: ['price_per_photo'],
       });
+    }
+    // T-203: a bundle ladder is only meaningful on a single-seller priced
+    // event, and must pass the write-time rules. `eventSupportsBundles` is the
+    // shared gate — organizer events (several possible sellers, no revenue
+    // split to charge a discount against) and free events (nothing to discount)
+    // may not carry one at all.
+    // Mirror of the edit action: an ineligible event (free, or organizer) has its
+    // ladder normalized away in the body via `eventSupportsBundles` rather than
+    // rejected here, so pricing state can never block a save that isn't about
+    // pricing. Only a ladder that contradicts a price actually being set is an
+    // error the photographer can act on.
+    if (
+      priceCents !== null &&
+      priceCents > 0 &&
+      data.event_type !== 'organizer' &&
+      (data.bundle_tiers !== null || data.bundle_all_photos_cents !== null)
+    ) {
+      const result = validateBundleSchedule(
+        data.bundle_tiers ?? [],
+        priceCents,
+        minCents,
+        data.bundle_all_photos_cents,
+      );
+      if (!result.ok && result.error) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: bundleScheduleErrorMessage(result.error, result.minCents),
+          path: ['bundle_tiers'],
+        });
+      }
     }
   });
 
@@ -232,6 +287,8 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     contains_minors: formData.get('contains_minors')?.toString() ?? 'false',
     bib_detection_enabled: formData.get('bib_detection_enabled')?.toString() ?? 'false',
     reveal_gate_enabled: formData.get('reveal_gate_enabled')?.toString() ?? 'false',
+    bundle_tiers: formData.get('bundle_tiers')?.toString(),
+    bundle_all_photos_cents: formData.get('bundle_all_photos_cents')?.toString(),
   });
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? 'Invalid event data provided.');
@@ -268,6 +325,23 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
   // above). Forced off otherwise — defense in depth if the UI is bypassed.
   const revealGateEnabled = aiMatchingEnabled ? payload.reveal_gate_enabled : false;
 
+  // T-203: an organizer event stores no price (see `price_per_photo` below), so
+  // it can carry no ladder either — re-derived here rather than trusted from the
+  // payload, matching how `watermarkEnabled` / `revealGateEnabled` are forced.
+  // Normalize rather than trust the payload: an organizer event stores no price
+  // (see `price_per_photo` below) and a free event has nothing to discount, so
+  // neither may carry a ladder. Same shape as the forced `watermarkEnabled` /
+  // `revealGateEnabled` above — and it is what lets the schema stay silent about
+  // ineligible events instead of failing a save.
+  const bundleEligible = eventSupportsBundles({
+    type: eventType,
+    price_per_photo: eventType === 'organizer' ? null : (payload.price_per_photo ?? null),
+  });
+  const bundleTiers: BundleTier[] | null = bundleEligible ? payload.bundle_tiers : null;
+  const bundleAllPhotosCents: number | null = bundleEligible
+    ? payload.bundle_all_photos_cents
+    : null;
+
   const event = await dbCreateEvent(supabase, user.id, {
     name: payload.name,
     activity: payload.activity,
@@ -291,6 +365,8 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     contains_minors: containsMinors,
     bib_detection_enabled: bibDetectionEnabled,
     reveal_gate_enabled: revealGateEnabled,
+    bundle_tiers: serializeBundleTiers(bundleTiers),
+    bundle_all_photos_cents: bundleAllPhotosCents,
   });
 
   if (isPublic) {

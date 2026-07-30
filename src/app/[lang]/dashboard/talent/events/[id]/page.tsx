@@ -8,6 +8,7 @@ import { UploadProgressProvider } from '@/app/[lang]/events/[shareCode]/upload-p
 import { DashboardHeader } from '@/components/dashboard-header';
 import { EventGalleryWithFaceSearch } from '@/components/event-gallery-with-face-search';
 import { EventMetaLine } from '@/components/event-meta-line';
+import { EventPricingSection } from '@/components/event-pricing-section';
 import { EventSaveButton } from '@/components/event-save-button';
 import { EventShareButton } from '@/components/event-share-button';
 import { GatedFaceSearchNotice } from '@/components/gated-face-search-notice';
@@ -34,6 +35,7 @@ import { getClaimedPhotoIdsForTalent } from '@/database/queries/talent-library';
 import type { SupabaseServerClient } from '@/database/queries/types';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { parseBundleTiers } from '@/lib/bundle-pricing';
 import { eventDetailCacheTags } from '@/lib/event-cache-tags';
 import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
 import { getEventStatus, isCollaborativeUploadOpen } from '@/lib/event-status';
@@ -409,6 +411,21 @@ export default async function ExploreEventDetailPage({
           </p>
         ) : null}
       </div>
+
+      {/* Volume pricing (T-203, D17) — the SAME slot the public event page
+          uses, so the two views can't quote different prices for one event. */}
+      <EventPricingSection
+        className="mb-6"
+        pricePerPhoto={event.price_per_photo}
+        bundleTiers={parseBundleTiers((event as unknown as Record<string, unknown>).bundle_tiers)}
+        labels={{
+          heading: dict.bundlePricing.heading,
+          singlePhoto: dict.bundlePricing.singlePhoto,
+          photosOrMore: dict.bundlePricing.photosOrMore,
+          eachSuffix: dict.bundlePricing.eachSuffix,
+          ladderHint: dict.bundlePricing.ladderHint,
+        }}
+      />
 
       {/* Contribute affordance — collaborative events with guest-upload on,
           the day-of-event window open, and a share code in hand. Lives

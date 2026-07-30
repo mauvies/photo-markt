@@ -46,6 +46,21 @@ export const eventSchema = z
     // Reveal gate (T-177): mutable post-creation. Requires ai_matching_enabled;
     // the server forces it off otherwise and on minors events.
     reveal_gate_enabled: z.boolean().default(false),
+    // Volume-pricing ladder (T-203). Every form (full and section-scoped)
+    // initializes this from the stored event and echoes it back, so editing an
+    // unrelated section round-trips the ladder instead of clearing it. The
+    // authoritative rules live server-side; this is shape only.
+    bundle_tiers: z
+      .array(
+        z.object({
+          minQuantity: z.number().int(),
+          totalPriceCents: z.number().int(),
+        }),
+      )
+      .nullable()
+      .default(null),
+    /** "All photos" flat price in cents (T-203), echoed like the ladder. */
+    bundle_all_photos_cents: z.number().int().nullable().default(null),
   })
   .superRefine((data, ctx) => {
     // T-180 backstop: block a submit with an invalid session range (the end-time

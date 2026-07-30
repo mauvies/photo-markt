@@ -1,11 +1,11 @@
 # T-203 · Bundles · Ticket A — schema, kernel, asignación y configuración del fotógrafo
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno (gate de diseño de T-200 **aprobado** — PR #263 mergeado 2026-07-29)
 - **Rama:** `feat/bundle-pricing-config`
 - **OpenSpec change:** `photo-bundles` — **activo**; ejecutar con `/opsx:apply` (grupo 1 de `tasks.md`)
-- **PR:** —
+- **PR:** #265 (draft — gate: `/code-review ultra` + revisión visual)
 
 ## Requerimiento
 Primer hijo de **T-200**. Sienta la base del precio por volumen **shipeando dark**: el kernel de precio

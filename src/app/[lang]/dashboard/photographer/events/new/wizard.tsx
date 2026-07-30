@@ -8,6 +8,7 @@ import { DashboardHeader } from '@/components/dashboard-header';
 import { Button } from '@/components/ui/button';
 import { UploadProgressDialog } from '@/components/upload-progress-dialog';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { getEffectivePerPhotoCents } from '@/lib/bundle-pricing';
 import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
@@ -61,8 +62,11 @@ function parseStepParam(value: string | null): StepNumber {
 
 export default function NewEventForm({
   shareEventLabels,
+  bundlePricingLabels,
 }: {
   shareEventLabels: Dictionary['shareEvent'];
+  /** Bundle-pricing copy (T-203) — the wizard's namespace is `newEvent`. */
+  bundlePricingLabels: Dictionary['bundlePricing'];
 }) {
   const { t } = useTranslations<NewEventT>();
   const router = useRouter();
@@ -394,6 +398,14 @@ export default function NewEventForm({
         formData.append('price_per_photo', price.toString());
       }
     }
+    // Volume-pricing ladder (T-203) as JSON. Only sent when there is one — on
+    // create, an absent field already means "no bundle".
+    if (parsed.bundle_tiers && parsed.bundle_tiers.length > 0) {
+      formData.append('bundle_tiers', JSON.stringify(parsed.bundle_tiers));
+    }
+    if (parsed.bundle_all_photos_cents !== null) {
+      formData.append('bundle_all_photos_cents', String(parsed.bundle_all_photos_cents));
+    }
     if (
       parsed.event_type === 'organizer' &&
       parsed.organizer_fee_per_photo !== null &&
@@ -601,6 +613,26 @@ export default function NewEventForm({
       });
     } else {
       detailsRows.push({ label: t('summaryPrice'), value: formatPrice(v.price_per_photo) });
+      // "All photos" flat price first — it is the headline offer; the rungs are
+      // steps on the way to it (T-203).
+      if (v.bundle_all_photos_cents !== null) {
+        detailsRows.push({
+          label: bundlePricingLabels.allPhotosLabel,
+          value: formatPrice(v.bundle_all_photos_cents / 100),
+        });
+      }
+      // Volume packs (T-203): every rung gets its own row, so nobody confirms a
+      // price they were never shown. Stated as the flat total plus what it works
+      // out to per photo, which is the part a photographer can't do in their head.
+      for (const tier of v.bundle_tiers ?? []) {
+        detailsRows.push({
+          label: bundlePricingLabels.photosOrMore.replace('{n}', String(tier.minQuantity)),
+          value: `${formatPrice(tier.totalPriceCents / 100)} · ${bundlePricingLabels.effectivePerPhoto.replace(
+            '{price}',
+            formatPrice(getEffectivePerPhotoCents(tier) / 100),
+          )}`,
+        });
+      }
     }
 
     return [
@@ -610,7 +642,10 @@ export default function NewEventForm({
       { title: t('reviewConfigSection'), editStep: 2, rows: configRows },
       { title: t('reviewDetailsSection'), editStep: DETAILS_STEP, rows: detailsRows },
     ];
-  }, [form.state.values, t]);
+    // `bundlePricingLabels` is the real dependency the linter is pointing at
+    // (it flags the `.replace` method references); it comes from the server
+    // dictionary and is stable per-locale, but listing it keeps the memo honest.
+  }, [form.state.values, t, bundlePricingLabels]);
 
   const eventType = form.state.values.event_type;
   const submitDisabledOnReview = eventType === 'solo' && (photosLost || files.length === 0);
@@ -639,6 +674,8 @@ export default function NewEventForm({
               submitAttempted={submitAttemptedDetails}
               coverPreviewUrl={coverPreviewUrl}
               onCoverChange={handleCoverChange}
+              bundleT={bundlePricingLabels}
+              eventType={eventType}
             />
           )}
           {currentStep === 4 && (

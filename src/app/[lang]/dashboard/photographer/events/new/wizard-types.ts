@@ -19,6 +19,8 @@ const EMPTY_DEFAULTS: FormValues = {
   allow_guest_upload: true,
   require_upload_approval: false,
   price_per_photo: null,
+  bundle_tiers: null,
+  bundle_all_photos_cents: null,
   organizer_fee_per_photo: null,
   ai_matching_enabled: false,
   contains_minors: false,
