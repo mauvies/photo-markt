@@ -1,4 +1,6 @@
 /** @vitest-environment happy-dom */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import HomeLoading from '@/app/[lang]/(home)/loading';
@@ -21,13 +23,51 @@ afterEach(cleanup);
 // both, so those blocks still shifted on load. The home page also had no
 // `loading.tsx` at all.
 
+// The shell class is READ from the home page rather than hardcoded here: what
+// must hold is that each loading.tsx agrees with the page it stands in for, not
+// that the padding is any particular value. A hardcoded literal is what made
+// this test red for days after a restyle changed page + loading together (px-4
+// → px-3) — the skeletons were right and only the assertion was stale.
+const SHELL_ROUTES = {
+  home: 'src/app/[lang]/(home)/page.tsx',
+  homeLoading: 'src/app/[lang]/(home)/loading.tsx',
+  events: 'src/app/[lang]/events/page.tsx',
+  eventsLoading: 'src/app/[lang]/events/loading.tsx',
+} as const;
+
+/** The `mx-auto w-full max-w-[1300px] …` container class declared in a route file. */
+function shellClassOf(relativePath: string): string {
+  const source = readFileSync(join(process.cwd(), relativePath), 'utf8');
+  const match = source.match(/className="(mx-auto w-full max-w-\[1300px\][^"]*)"/);
+  if (!match) throw new Error(`no page-shell container found in ${relativePath}`);
+  return match[1];
+}
+
+const SHELL_CLASS = shellClassOf(SHELL_ROUTES.home);
+
+describe('the home and /events page shells stay identical (T-157)', () => {
+  it('declares the same container class in all four route files', () => {
+    // /events renders the same EventsExploreView as the home, so the two are
+    // meant to be pixel-identical. Restyling one side only (which is how the
+    // home reached px-3 while /events stayed px-4) makes the alias claim false
+    // and nothing else in the suite notices.
+    const shells = Object.fromEntries(
+      Object.entries(SHELL_ROUTES).map(([key, path]) => [key, shellClassOf(path)]),
+    );
+    expect(shells).toEqual({
+      home: SHELL_CLASS,
+      homeLoading: SHELL_CLASS,
+      events: SHELL_CLASS,
+      eventsLoading: SHELL_CLASS,
+    });
+  });
+});
+
 describe('/events loading.tsx (T-157: now mirrors the home)', () => {
   it('matches the home shell exactly — /events became an alias of the home explore view', () => {
     const { container } = render(<EventsListingLoading />);
     // Same wrapper the home loading uses (T-156), not the old bar+grid shell.
-    expect(container.innerHTML).toContain(
-      'mx-auto w-full max-w-[1300px] px-4 pb-10 pt-4 sm:pt-6 sm:px-6 lg:px-8',
-    );
+    expect(container.innerHTML).toContain(SHELL_CLASS);
     // Full EventsExploreView skeleton: hero (sm:h-12/sm:h-6), heading (sm:h-7), grid.
     expect(container.innerHTML).toContain('sm:h-12');
     expect(container.innerHTML).toContain('sm:h-7');
@@ -40,9 +80,7 @@ describe('/events loading.tsx (T-157: now mirrors the home)', () => {
 describe('/[lang]/(home) loading.tsx (T-156; scoped to the (home) group in T-171)', () => {
   it('matches the page shell margins, the hero + heading placeholders, and the real card grid', () => {
     const { container } = render(<HomeLoading />);
-    expect(container.innerHTML).toContain(
-      'mx-auto w-full max-w-[1300px] px-4 pb-10 pt-4 sm:pt-6 sm:px-6 lg:px-8',
-    );
+    expect(container.innerHTML).toContain(SHELL_CLASS);
     // Hero title + subtitle placeholders (previously omitted entirely).
     expect(container.innerHTML).toContain('sm:h-12');
     expect(container.innerHTML).toContain('sm:h-6');

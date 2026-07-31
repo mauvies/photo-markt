@@ -18,10 +18,15 @@ export function EventCardSkeleton() {
         </div>
         <Skeleton className="mt-1.5 h-3.5 w-2/3" />
         <Skeleton className="mt-1.5 h-3.5 w-1/3" />
-        {/* <div className="mt-2.5 flex items-center gap-2 border-t pt-2.5">
+        {/* The real card renders this row (PhotographerRow, event-card.tsx) for
+            every event that has a photographer and isn't owned by the viewer —
+            i.e. essentially every card on home/explore. Commenting it out made
+            the skeleton ~33px shorter than the card replacing it, which is the
+            layout shift T-128 removed. */}
+        <div className="mt-2.5 flex items-center gap-2 border-t pt-2.5">
           <Skeleton className="h-5 w-5 shrink-0 rounded-full" />
           <Skeleton className="h-3.5 w-24" />
-        </div> */}
+        </div>
       </div>
     </div>
   );

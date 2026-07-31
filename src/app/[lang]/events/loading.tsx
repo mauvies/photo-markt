@@ -6,7 +6,7 @@ import { EventsExploreViewSkeleton } from '@/components/events-explore-view-skel
 // no drift from the home skeleton.
 export default function Loading() {
   return (
-    <div className="mx-auto w-full max-w-[1300px] px-4 pb-10 pt-4 sm:pt-6 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-[1300px] px-3 pb-10 pt-4 sm:pt-6 sm:px-6 lg:px-8">
       <EventsExploreViewSkeleton />
     </div>
   );

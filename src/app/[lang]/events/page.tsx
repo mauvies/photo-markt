@@ -80,7 +80,7 @@ export default async function PublicEventsPage({
   // `basePath` stays on /events so a search from here doesn't bounce the user
   // to the home; cards resolve to the public `/events/<code>` detail route.
   return (
-    <div className="mx-auto w-full max-w-[1300px] px-4 pb-10 pt-4 sm:pt-6 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-[1300px] px-3 pb-10 pt-4 sm:pt-6 sm:px-6 lg:px-8">
       <EventsExploreView
         dict={dict}
         filterOptions={filterOptions}
