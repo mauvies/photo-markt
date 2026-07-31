@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { UploadProgressDialog } from '@/components/upload-progress-dialog';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { eventAcceptsBundleConfig, getEffectivePerPhotoCents } from '@/lib/bundle-pricing';
+import { bundleScheduleErrorText } from '@/lib/bundle-schedule-error';
 import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
@@ -528,10 +529,33 @@ export default function NewEventForm({
           toast.error(minPrice);
           return;
         }
+        // T-213: this wizard RENDERS the ladder editor (step 3), so a rejected
+        // ladder is fully reachable here — and without this it toasted the raw
+        // `BUNDLE_TIERS:<code>` sentinel at the photographer while the localized
+        // copy for that exact code sat unused in both dictionaries.
+        const bundleError = bundleScheduleErrorText(error, {
+          ...bundlePricingLabels.errors,
+          fallback: bundlePricingLabels.errors.fallback,
+        });
+        if (bundleError !== null) {
+          toast.error(bundleError);
+          return;
+        }
         toast.error(error instanceof Error ? error.message : t('submitError'));
       }
     });
-  }, [coverFile, files, form.state.values, goToStep, isPending, lp, router, t, upload]);
+  }, [
+    bundlePricingLabels,
+    coverFile,
+    files,
+    form.state.values,
+    goToStep,
+    isPending,
+    lp,
+    router,
+    t,
+    upload,
+  ]);
 
   const reviewSections: ReviewSection[] = useMemo(() => {
     const v = form.state.values;

@@ -122,6 +122,7 @@ export default async function EditEventPage({
             event={event}
             initialPhotos={photosWithUrls}
             initialCoverUrl={initialCoverUrl}
+            bundleT={dict.bundlePricing}
           />
         </TranslationsProvider>
       </div>

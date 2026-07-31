@@ -4,6 +4,8 @@ import type { ReactFormExtendedApi } from '@tanstack/react-form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
+import type { Dictionary } from '@/lib/i18n/get-dictionary';
+import { useTranslations } from '@/lib/i18n/translations-provider';
 import type { FormValues } from '../edit-event-schema';
 
 // biome-ignore format: keep on one line so the single lint suppression below covers all type params
@@ -13,7 +15,6 @@ type FormInstance = ReactFormExtendedApi<FormValues, any, any, any, any, any, an
 interface EventPriceFieldProps {
   form: FormInstance;
   submitAttempted: boolean;
-  label?: string;
 }
 
 /**
@@ -28,8 +29,17 @@ interface EventPriceFieldProps {
  * `$` until this extraction, which contradicted the EUR migration (T-193) that
  * converted every other money surface — the input said `$` while checkout
  * charged in euros.
+ *
+ * The label reads from the dictionary (T-213). The extraction had left it as a
+ * hardcoded English string behind an optional `label` prop that no call site
+ * passed, so a Spanish photographer saw "Price per Photo (Optional)" sitting
+ * next to fully translated `bundlePricing` copy. Both call sites render inside
+ * the `dict.newEvent` provider, which already owns this exact string for the
+ * create wizard's price input — so the two surfaces now share one source
+ * instead of a translated one and an English one.
  */
-export function EventPriceField({ form, submitAttempted, label }: EventPriceFieldProps) {
+export function EventPriceField({ form, submitAttempted }: EventPriceFieldProps) {
+  const { t } = useTranslations<Dictionary['newEvent']>();
   return (
     <form.Field
       name="price_per_photo"
@@ -62,7 +72,7 @@ export function EventPriceField({ form, submitAttempted, label }: EventPriceFiel
         const isInvalid = showFeedback && !field.state.meta.isValid;
         return (
           <div className="grid gap-2">
-            <Label htmlFor="price_per_photo">{label ?? 'Price per Photo (Optional)'}</Label>
+            <Label htmlFor="price_per_photo">{t('priceLabel')}</Label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                 {PLATFORM_CURRENCY_SYMBOL}

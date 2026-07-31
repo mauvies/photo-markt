@@ -13,6 +13,7 @@ import { parseAllPhotosCents, parseBundleTiers } from '@/lib/bundle-pricing';
 import { bundleScheduleErrorText } from '@/lib/bundle-schedule-error';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { minPhotoPriceMessage } from '@/lib/min-photo-price';
+import { eventTabForScopedSection, type ScopedEditSection } from '../event-tab';
 import { updateEventAction } from './actions';
 import { EventAiSettingsFields } from './components/event-ai-settings-fields';
 import { EventFormFields } from './components/event-form-fields';
@@ -20,7 +21,7 @@ import { EventPriceField } from './components/event-price-field';
 import { eventSchema, type FormValues } from './edit-event-schema';
 import { buildEventUpdateFormData } from './event-form-data';
 
-type ScopedSection = 'info' | 'settings' | 'pricing';
+type ScopedSection = ScopedEditSection;
 
 type ScopedEventEditFormProps = {
   event: Event;
@@ -95,7 +96,11 @@ export function ScopedEventEditForm({ event, section, labels, bundleT }: ScopedE
           try {
             const result = await updateEventAction(event.id, formData);
             if (!result?.success) return;
-            router.push(lp(`/dashboard/photographer/events/${event.id}?tab=details`));
+            // Land on the tab that DISPLAYS what was just edited (T-213) —
+            // `details` renders no price, so a pricing save used to look like
+            // it had done nothing.
+            const tab = eventTabForScopedSection(section);
+            router.push(lp(`/dashboard/photographer/events/${event.id}?tab=${tab}`));
           } catch (error) {
             console.error(error);
             // T-195: render the price-floor sentinel as prose. This form has no
