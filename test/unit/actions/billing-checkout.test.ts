@@ -172,3 +172,75 @@ describe('createBillingCheckoutAction — Stripe failure handling', () => {
     });
   });
 });
+
+describe('createBillingCheckoutAction — plan change clears a pending cancellation (T-214)', () => {
+  it('sends cancel_at_period_end: false with the in-place plan change', async () => {
+    // A photographer who cancelled and then picked another paid plan. Without
+    // clearing the flag they'd land on the newly chosen plan already scheduled
+    // to end — a cancellation inherited from the plan they just left.
+    getSubscriptionMock.mockResolvedValue({
+      stripe_customer_id: 'cus_123',
+      stripe_subscription_id: 'sub_123',
+      status: 'active',
+      cancel_at_period_end: true,
+    });
+    stripeMock.subscriptions.retrieve.mockResolvedValue({
+      id: 'sub_123',
+      items: { data: [{ id: 'si_123' }] },
+    });
+    stripeMock.subscriptions.update.mockResolvedValue({ id: 'sub_123' });
+
+    await expect(createBillingCheckoutAction('pro')).resolves.toEqual({ updated: true });
+
+    expect(stripeMock.subscriptions.update).toHaveBeenCalledWith(
+      'sub_123',
+      expect.objectContaining({ cancel_at_period_end: false }),
+    );
+    // The new price still goes out — clearing the flag must not replace the
+    // actual plan change.
+    expect(stripeMock.subscriptions.update).toHaveBeenCalledWith(
+      'sub_123',
+      expect.objectContaining({ items: [{ id: 'si_123', price: 'price_test_pro' }] }),
+    );
+  });
+
+  it('sends it unconditionally, so an uncancelled subscription is unaffected', async () => {
+    getSubscriptionMock.mockResolvedValue({
+      stripe_customer_id: 'cus_123',
+      stripe_subscription_id: 'sub_123',
+      status: 'active',
+      cancel_at_period_end: false,
+    });
+    stripeMock.subscriptions.retrieve.mockResolvedValue({
+      id: 'sub_123',
+      items: { data: [{ id: 'si_123' }] },
+    });
+    stripeMock.subscriptions.update.mockResolvedValue({ id: 'sub_123' });
+
+    await createBillingCheckoutAction('starter');
+
+    expect(stripeMock.subscriptions.update).toHaveBeenCalledWith(
+      'sub_123',
+      expect.objectContaining({ cancel_at_period_end: false }),
+    );
+  });
+
+  it('still writes nothing to subscriptions — the webhook applies the change', async () => {
+    getSubscriptionMock.mockResolvedValue({
+      stripe_customer_id: 'cus_123',
+      stripe_subscription_id: 'sub_123',
+      status: 'active',
+      cancel_at_period_end: true,
+    });
+    stripeMock.subscriptions.retrieve.mockResolvedValue({
+      id: 'sub_123',
+      items: { data: [{ id: 'si_123' }] },
+    });
+    stripeMock.subscriptions.update.mockResolvedValue({ id: 'sub_123' });
+
+    await createBillingCheckoutAction('pro');
+
+    expect(adminMock.from).not.toHaveBeenCalled();
+    expect(supabaseMock.from).not.toHaveBeenCalled();
+  });
+});

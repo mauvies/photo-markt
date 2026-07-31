@@ -25,8 +25,27 @@ export interface Subscription {
     | 'unpaid'
     | 'paused';
   current_period_end: string | null;
+  /**
+   * Mirrors Stripe's `cancel_at_period_end`. Written only by the webhook — see
+   * {@link hasPendingCancellation} for the read-side rule (T-214).
+   */
+  cancel_at_period_end: boolean;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * Is this subscription cancelled but still running out its paid period?
+ *
+ * "Pending" needs BOTH halves: the flag set AND a status that is still
+ * active-equivalent. A row that already reached `canceled` is finished, not
+ * pending — offering to "reactivate" it would promise something Stripe can no
+ * longer do. Single exported predicate so the billing page and any future
+ * reader can't drift into two definitions (T-214).
+ */
+export function hasPendingCancellation(sub: Subscription | null | undefined): boolean {
+  if (!sub?.cancel_at_period_end) return false;
+  return (ACTIVE_SUBSCRIPTION_STATUSES as readonly string[]).includes(sub.status);
 }
 
 /**

@@ -6,6 +6,7 @@ import { supabaseAdmin } from '@/database/supabase-admin';
 import { env } from '@/env.mjs';
 import type { BillingPeriod, PlanId } from '@/lib/plans';
 import { stripe } from '@/lib/stripe/config';
+import { subscriptionPeriodEndISO } from '@/lib/stripe/subscription-period';
 
 /**
  * Domain error codes returned (never thrown as raw messages) by
@@ -19,6 +20,29 @@ export type BillingCheckoutResult =
   | { url: string }
   | { updated: boolean }
   | { error: BillingCheckoutError };
+
+/**
+ * Domain error codes for the cancel/reactivate actions (T-214). Same rationale
+ * as `BillingCheckoutError`: returned, never thrown, because Next redacts
+ * thrown Server Action messages in production.
+ */
+export type SubscriptionActionError =
+  | 'no_subscription'
+  | 'already_cancelled'
+  | 'not_cancelled'
+  | 'subscription_failed';
+
+/**
+ * `currentPeriodEnd` is relayed straight from Stripe's response so the client
+ * can state the real date immediately, without waiting for the webhook to land
+ * it in the DB. It is display data — the *state* still comes from the webhook.
+ */
+export type SubscriptionActionResult =
+  | { ok: true; currentPeriodEnd: string | null }
+  | { error: SubscriptionActionError };
+
+/** Statuses where a subscription is live enough to cancel or reactivate. */
+const CANCELLABLE_STATUSES = ['active', 'trialing', 'past_due'];
 
 /**
  * Resolve the Stripe Price ID for a (plan, period) pair. Yearly prices are
@@ -91,7 +115,7 @@ export async function createBillingCheckoutAction(
   if (
     subscription?.stripe_subscription_id &&
     subscription.status &&
-    ['active', 'trialing', 'past_due'].includes(subscription.status)
+    CANCELLABLE_STATUSES.includes(subscription.status)
   ) {
     // User already has an active subscription - update it
     try {
@@ -108,6 +132,12 @@ export async function createBillingCheckoutAction(
           },
         ],
         proration_behavior: 'always_invoice',
+        // Picking a paid plan is an affirmative act to keep paying, so a
+        // pending cancellation from the PREVIOUS plan must not be inherited by
+        // the new one — otherwise the photographer lands on a plan they just
+        // chose, already scheduled to end. Unconditional: Stripe accepts
+        // `false` on a subscription that was never cancelled (T-214).
+        cancel_at_period_end: false,
         metadata: {
           supabase_user_id: user.id,
           plan_id: planId,
@@ -219,12 +249,20 @@ export async function getSubscriptionStatusAction(): Promise<{ planId: PlanId; a
 }
 
 /**
- * Cancel subscription
+ * Shared preamble for the cancel/reactivate actions (T-214).
+ *
+ * Identity comes from the user-scoped client; the subscription read is
+ * elevated to `supabaseAdmin` because `subscriptions` is RLS-enabled with no
+ * policies (same rationale as `createBillingCheckoutAction`). `Unauthorized`
+ * stays a `throw` — the UI never lets a signed-in photographer reach it, so it
+ * signals tampering rather than a domain outcome.
+ *
+ * Returns the subscription only when it is live enough to act on; otherwise the
+ * caller's `no_subscription` branch applies. Note this reads but NEVER writes:
+ * the webhook owns every state change.
  */
-export async function cancelSubscriptionAction(): Promise<void> {
+async function loadActionableSubscription() {
   const supabase = await createClient();
-
-  // Get current user
   const {
     data: { user },
     error: authError,
@@ -234,26 +272,74 @@ export async function cancelSubscriptionAction(): Promise<void> {
     throw new Error('Unauthorized');
   }
 
-  // Get user's subscription — service-role read (system-managed table, see
-  // createBillingCheckoutAction). The user-scoped client is RLS-blocked here.
   const subscription = await getSubscription(supabaseAdmin, user.id);
+  if (
+    !subscription?.stripe_subscription_id ||
+    !subscription.status ||
+    !CANCELLABLE_STATUSES.includes(subscription.status)
+  ) {
+    return null;
+  }
+  return subscription;
+}
 
+/**
+ * Schedule cancellation at the end of the paid period (T-214).
+ *
+ * Sets `cancel_at_period_end` in Stripe and nothing else: no refund, no
+ * immediate termination, and deliberately **no write to `subscriptions`**. The
+ * `customer.subscription.updated` webhook is the sole writer of that state, so
+ * a Stripe call whose webhook is lost can never leave the DB asserting a
+ * cancellation Stripe doesn't have (and vice versa).
+ */
+export async function cancelSubscriptionAction(): Promise<SubscriptionActionResult> {
+  const subscription = await loadActionableSubscription();
   if (!subscription?.stripe_subscription_id) {
-    throw new Error('No active subscription found');
+    return { error: 'no_subscription' };
   }
 
-  // Check if subscription is already canceled
-  if (subscription.status === 'canceled') {
-    throw new Error('Subscription is already canceled');
+  if (subscription.cancel_at_period_end) {
+    return { error: 'already_cancelled' };
   }
 
   try {
-    // Cancel subscription at period end (so user keeps access until period ends)
-    await stripe.subscriptions.update(subscription.stripe_subscription_id, {
+    const updated = await stripe.subscriptions.update(subscription.stripe_subscription_id, {
       cancel_at_period_end: true,
     });
+    return { ok: true, currentPeriodEnd: subscriptionPeriodEndISO(updated) };
   } catch (error) {
     console.error('Error canceling subscription:', error);
-    throw new Error('Failed to cancel subscription');
+    return { error: 'subscription_failed' };
+  }
+}
+
+/**
+ * Undo a pending cancellation before the period ends (T-214).
+ *
+ * Named `reactivate`, never `resume`: `dashboard/photographer/billing/resume/`
+ * already exists and means "resume the *checkout* intent after signup/login" —
+ * two unrelated flows must not share a name.
+ *
+ * Restores the subscription exactly as it was (same plan, same period end, no
+ * new charge). Like cancel, it writes nothing locally.
+ */
+export async function reactivateSubscriptionAction(): Promise<SubscriptionActionResult> {
+  const subscription = await loadActionableSubscription();
+  if (!subscription?.stripe_subscription_id) {
+    return { error: 'no_subscription' };
+  }
+
+  if (!subscription.cancel_at_period_end) {
+    return { error: 'not_cancelled' };
+  }
+
+  try {
+    const updated = await stripe.subscriptions.update(subscription.stripe_subscription_id, {
+      cancel_at_period_end: false,
+    });
+    return { ok: true, currentPeriodEnd: subscriptionPeriodEndISO(updated) };
+  } catch (error) {
+    console.error('Error reactivating subscription:', error);
+    return { error: 'subscription_failed' };
   }
 }

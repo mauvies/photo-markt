@@ -918,6 +918,202 @@ describe('app/api/stripe/webhook — customer.subscription.* events', () => {
     expect(data?.status).toBe('canceled');
   });
 
+  // --- cancel_at_period_end (T-214) ---------------------------------------
+  //
+  // The webhook is the ONLY writer of this flag: the cancel/reactivate Server
+  // Actions ask Stripe and write nothing, so if these handlers don't persist
+  // it the pending-cancellation state simply never reaches the UI.
+
+  it('customer.subscription.updated persists a pending cancellation', async () => {
+    const sb = createServiceClient();
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    await stubCustomerRetrieve(photographer.id);
+    await sb.from('subscriptions').insert({
+      user_id: photographer.id,
+      stripe_customer_id: 'cus_test_mock',
+      stripe_subscription_id: 'sub_test_cape',
+      plan_id: 'pro',
+      status: 'active',
+    });
+
+    const req = signedWebhookRequest({
+      id: 'evt_sub_cape_true',
+      type: 'customer.subscription.updated',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: 'sub_test_cape',
+          object: 'subscription',
+          customer: 'cus_test_mock',
+          status: 'active',
+          cancel_at_period_end: true,
+          items: { data: [{ price: { id: 'price_test_pro' } }] },
+        },
+      },
+    });
+    expect((await POST(req)).status).toBe(200);
+
+    const { data } = await sb
+      .from('subscriptions')
+      .select('status, cancel_at_period_end')
+      .eq('user_id', photographer.id)
+      .single();
+    // Still active — cancelling schedules the end of the period, it does not
+    // terminate the subscription or downgrade the plan now.
+    expect(data?.status).toBe('active');
+    expect(data?.cancel_at_period_end).toBe(true);
+  });
+
+  it('customer.subscription.updated clears the flag again on reactivation', async () => {
+    const sb = createServiceClient();
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    await stubCustomerRetrieve(photographer.id);
+    await sb.from('subscriptions').insert({
+      user_id: photographer.id,
+      stripe_customer_id: 'cus_test_mock',
+      stripe_subscription_id: 'sub_test_reactivate',
+      plan_id: 'pro',
+      status: 'active',
+      cancel_at_period_end: true,
+    });
+
+    const req = signedWebhookRequest({
+      id: 'evt_sub_cape_false',
+      type: 'customer.subscription.updated',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: 'sub_test_reactivate',
+          object: 'subscription',
+          customer: 'cus_test_mock',
+          status: 'active',
+          cancel_at_period_end: false,
+          items: { data: [{ price: { id: 'price_test_pro' } }] },
+        },
+      },
+    });
+    expect((await POST(req)).status).toBe(200);
+
+    const { data } = await sb
+      .from('subscriptions')
+      .select('plan_id, status, cancel_at_period_end')
+      .eq('user_id', photographer.id)
+      .single();
+    expect(data?.cancel_at_period_end).toBe(false);
+    // Reactivating leaves the subscription exactly as it was.
+    expect(data?.plan_id).toBe('pro');
+    expect(data?.status).toBe('active');
+  });
+
+  it('treats a missing cancel_at_period_end as false rather than null', async () => {
+    const sb = createServiceClient();
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    await stubCustomerRetrieve(photographer.id);
+
+    const req = signedWebhookRequest({
+      id: 'evt_sub_cape_absent',
+      type: 'customer.subscription.created',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: 'sub_test_cape_absent',
+          object: 'subscription',
+          customer: 'cus_test_mock',
+          status: 'active',
+          // No `cancel_at_period_end` at all — the column is NOT NULL, so the
+          // handler must default rather than send undefined/null.
+          items: { data: [{ price: { id: 'price_test_pro' } }] },
+        },
+      },
+    });
+    expect((await POST(req)).status).toBe(200);
+
+    const { data } = await sb
+      .from('subscriptions')
+      .select('cancel_at_period_end')
+      .eq('user_id', photographer.id)
+      .single();
+    expect(data?.cancel_at_period_end).toBe(false);
+  });
+
+  it('persists the flag and the yearly period end together', async () => {
+    const sb = createServiceClient();
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    await stubCustomerRetrieve(photographer.id);
+
+    // A yearly plan: same flow, the period end is just a year out. No special
+    // branch exists and this pins that none is needed.
+    const periodEnd = 1_924_992_000; // 2031-01-01T00:00:00Z
+    const req = signedWebhookRequest({
+      id: 'evt_sub_yearly_cancel',
+      type: 'customer.subscription.updated',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: 'sub_test_yearly_cancel',
+          object: 'subscription',
+          customer: 'cus_test_mock',
+          status: 'active',
+          cancel_at_period_end: true,
+          items: {
+            data: [{ price: { id: 'price_test_pro_yearly' }, current_period_end: periodEnd }],
+          },
+        },
+      },
+    });
+    expect((await POST(req)).status).toBe(200);
+
+    const { data } = await sb
+      .from('subscriptions')
+      .select('plan_id, cancel_at_period_end, current_period_end')
+      .eq('user_id', photographer.id)
+      .single();
+    expect(data?.plan_id).toBe('pro');
+    expect(data?.cancel_at_period_end).toBe(true);
+    expect(new Date(data?.current_period_end as string).getTime()).toBe(periodEnd * 1000);
+  });
+
+  it('customer.subscription.deleted clears the pending flag along with the status', async () => {
+    const sb = createServiceClient();
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    await stubCustomerRetrieve(photographer.id);
+    await sb.from('subscriptions').insert({
+      user_id: photographer.id,
+      stripe_customer_id: 'cus_test_mock',
+      stripe_subscription_id: 'sub_test_cape_deleted',
+      plan_id: 'pro',
+      status: 'active',
+      cancel_at_period_end: true,
+    });
+
+    const req = signedWebhookRequest({
+      id: 'evt_sub_deleted_cape',
+      type: 'customer.subscription.deleted',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: 'sub_test_cape_deleted',
+          object: 'subscription',
+          customer: 'cus_test_mock',
+          status: 'canceled',
+          cancel_at_period_end: true,
+          items: { data: [{ price: { id: 'price_test_pro' } }] },
+        },
+      },
+    });
+    expect((await POST(req)).status).toBe(200);
+
+    const { data } = await sb
+      .from('subscriptions')
+      .select('status, cancel_at_period_end')
+      .eq('user_id', photographer.id)
+      .single();
+    expect(data?.status).toBe('canceled');
+    // The subscription is over: there is no cancellation still *pending*, so a
+    // finished row must not offer a reactivate Stripe can no longer honour.
+    expect(data?.cancel_at_period_end).toBe(false);
+  });
+
   it('falls back to stripe_customer_id lookup when customer metadata lacks supabase_user_id', async () => {
     // Defense path: real Stripe customers occasionally lose metadata (e.g.
     // ones provisioned outside our normal flow). The handler can still

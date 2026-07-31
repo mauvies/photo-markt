@@ -1,7 +1,7 @@
 # T-214 · Cancelar la suscripción de pago (cancel-at-period-end + reanudar)
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** alto — pagos + webhook de Stripe + RLS + migración de BD
 - **Blockers:** ninguno
 - **Rama:** `feat/cancel-subscription`

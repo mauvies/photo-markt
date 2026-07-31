@@ -16,7 +16,14 @@ interface ConfirmDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  description: string;
+  /**
+   * `ReactNode` rather than `string` so a caller can add a second, visually
+   * separated line (e.g. the Free-limit warning on subscription cancellation).
+   * `string` is a `ReactNode`, so existing call sites are unaffected. Use
+   * `<span className="block">` for extra lines — `AlertDialogDescription`
+   * already renders a `<p>` and nesting one is invalid HTML.
+   */
+  description: React.ReactNode;
   confirmText?: string;
   cancelText?: string;
   /** Shown on the confirm button while the async action runs. Falls back to confirmText. */
