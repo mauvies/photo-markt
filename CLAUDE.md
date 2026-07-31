@@ -34,6 +34,10 @@ pnpm db:seed      # Re-run supabase/seed.sql via psql
 pnpm spell        # Spell check .ts/.tsx files
 ```
 
+**`pnpm build` is not optional** when touching `src/lib/` or `src/database/queries/`: typecheck,
+lint and test do not bundle, so only the build catches server-only code (e.g. `sharp`) pulled into
+the client graph.
+
 ## Bash command style
 
 To keep commands auto-approvable and avoid manual permission prompts:
@@ -75,7 +79,7 @@ When a shell command IS needed:
 ```
 src/app/
   [lang]/               # i18n prefix — always /es/... or /en/...
-    page.tsx            # Home page (static)
+    (home)/page.tsx     # Home page
     events/             # Public events listing and detail
     photographer/[slug] # Public photographer profiles
     cart/               # Guest and authenticated cart
@@ -88,8 +92,14 @@ src/app/
   auth/
     callback/           # Google OAuth callback — handles code exchange
   api/
-    stripe/             # Stripe webhook and checkout handlers
-    watermark/          # Watermarked image serving
+    stripe/webhook/     # Stripe webhook (orders, transfers, subscriptions)
+    billing/            # checkout/ + cancel/ — subscription Stripe sessions
+    watermark/[...path] # Protected preview serving
+    thumb/[...path]     # Baked thumbnail serving
+    events/[id]/download # Purchased-photo ZIP
+    inngest/            # Background-job worker — every function registered here
+    admin/payouts/[id]  # Vestigial manual payout approval
+    health/             # + health/ready (token-gated)
 ```
 
 ### Role-Based System
@@ -104,6 +114,8 @@ Role is stored in `profiles.active_role`. Users can switch roles. Initial role a
 
 **Server Actions for mutations**
 All data mutations use `"use server"` actions in `actions.ts` files colocated next to their page components. Do not create new API routes for mutations — use server actions instead.
+**Existing exceptions, do not "fix" them:** `api/billing/{checkout,cancel}` (Stripe needs a redirect
+URL from a plain fetch) and `api/admin/payouts/[id]` (admin, no page).
 
 **Database query layer**
 All Supabase queries live in `/src/database/queries/`. Each domain has its own file. Always add new queries here — never inline in components or actions.
@@ -111,21 +123,29 @@ All Supabase queries live in `/src/database/queries/`. Each domain has its own f
 ```
 src/database/queries/
   events.ts           # Event CRUD and search
-  photos.ts           # Photo management and embedding
+  photos.ts           # Photo management, sold-set + accessibility predicates
   profiles.ts         # User profiles
   orders.ts           # Purchase orders
+  guest-orders.ts     # Guest checkout orders
+  download-tokens.ts  # Guest download tokens
   carts.ts            # Cart management
   sales.ts            # Photographer sales data
   earnings.ts         # Photographer earnings
   photographers.ts    # Photographer-specific queries
+  event-photographers.ts # Contributors + invitations (collaborative/organizer)
+  event-covers.ts     # Cover / og:image signing chokepoints
   talent-library.ts   # Talent saved photos
+  talent-photo-tags.ts # Talent "this is me" tags
+  saved-events.ts     # Talent saved events
   subscriptions.ts    # Stripe subscription data
-  payment-accounts.ts # Photographer payout accounts
+  payment-accounts.ts # LEGACY — superseded by Stripe Connect
   payouts.ts          # Payout requests
   storage.ts          # Supabase Storage helpers
-  ai-search-profiles.ts
-  ai-search-usage.ts
-  ai-similarity-search.ts
+  rekognition.ts      # photo_faces read/write
+  bib-numbers.ts      # photo_bib_numbers read/write
+  user-roles.ts       # Role context
+  feedback.ts         # In-app feedback
+  types.ts            # Shared client/error types
   index.ts            # Central export
 ```
 
@@ -135,7 +155,7 @@ src/database/queries/
 - Admin (service role, bypasses RLS): `src/database/supabase-admin.ts`
 
 **Middleware**
-`src/proxy.ts` (Next.js middleware) refreshes Supabase auth sessions on every request and handles locale detection.
+`src/proxy.ts` — Next 16 renamed middleware to `proxy` (there is no `middleware.ts`). Refreshes Supabase auth sessions on every request and handles locale detection.
 
 **i18n**
 - Dictionaries: `/src/dictionaries/en.json` and `/src/dictionaries/es.json`
@@ -154,10 +174,16 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
 ### Key Tables
 
 **events**
-`id, user_id, name, date, session_time, session_end_time, start_date, end_date, city, country, state, activity, is_public, share_code, price_per_photo, bundle_tiers, watermark_enabled, slug, lat, lng, time_offset, time_sync_enabled, deleted_at, created_at, updated_at`
+`id, user_id, name, date, session_time, session_end_time, city, country, state, activity, is_public, share_code, slug, price_per_photo, bundle_tiers, bundle_all_photos_cents, watermark_enabled, reveal_gate_enabled, cover_path, is_collaborative, allow_guest_upload, require_upload_approval, type, organizer_fee_per_photo_cents, ai_matching_enabled, contains_minors, ai_matching_status, bib_detection_enabled, bib_detection_status, lat, lng, deleted_at, created_at, updated_at`
+(canonical shape: the `Event` interface, `src/database/queries/events.ts:8`)
 - Soft delete via `deleted_at`
-- `state` field tracks event status (`upcoming` / `completed`) based on date
-- `time_sync_enabled` + `time_offset` support the camera time sync feature (when each *photo* was taken)
+- ⚠️ **`state` is the geographic region** (it pairs with `city`/`country`), NOT a status column.
+  `upcoming`/`completed` is **derived from `date`** by `getEventStatus()` (`src/lib/event-status.ts:3`) — nothing is stored
+- `start_date`, `end_date`, `time_offset`, `time_sync_enabled` exist in the DB but are **dead
+  columns** — no application code reads or writes them (camera time-sync is off)
+- `type` (`solo`/`collaborative`/`organizer`) + `require_upload_approval` decide whether uploads
+  route through a Pending queue — one predicate, `eventUsesModerationQueue` (`src/lib/event-status.ts`).
+  `organizer_fee_per_photo_cents` is written but read by **no** money path
 - `session_time` (nullable `time`) is a **separate** concept — the manual session start time the photographer types, for display only; naive local time-of-day, not tied to `time_offset`/`time_sync_enabled` (T-106). `session_end_time` (nullable `time`, T-180) is its mirror — the manual session end; when both are set the UI shows a range ("09:30 – 12:00") via `formatSessionTimeRange`. App-level rule: an end requires a start and must be after it (`isValidSessionRange`); the column carries no constraint
 - `share_code` allows access to private events
 - **`bundle_tiers` (nullable `jsonb`, T-203) — volume pricing.** An optional **ladder** of rungs
@@ -238,6 +264,8 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
   is free — that is the Foto-Flat bargain, not a bug
 
 **photos** (via `/src/database/queries/photos.ts`)
+- `upload_status` (`pending`/`approved`/`rejected`) — **galleries render approved only**; owner
+  uploads sit `pending` until the Inngest worker validates the bytes and promotes them
 - `face_index_status` (`pending`/`indexing`/`indexed`/`failed`/`no_faces`/`not_applicable`) and `thumbnail_status` track the Inngest jobs; `width`/`height` persisted for layout
 - Stored in Supabase Storage bucket: `photos`
 - Watermarked previews served via `/src/app/api/watermark/`
@@ -281,9 +309,9 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
 `id, photographer_id, amount_cents, status, paid_at`
 - Transfers fire **per order**, synchronously in the Stripe webhook on `payment_intent.succeeded` (one per `(order_item, photographer)`); this table is the historical record. There is no payout cron or minimum threshold. A manual admin-approval route exists at `/api/admin/payouts/[id]`, but is **currently vestigial** — nothing inserts `pending` payout rows (every payout is written straight to `paid` from the per-order transfer via `createPayoutFromTransfer`), so there is nothing to approve and no admin UI. Operational gaps in the transfer path: sub-50¢ net transfers are skipped with a warning (earnings stranded in the platform account), a non-active photographer's funds are held with only a `console.warn`, and refunds do **not** auto-reverse transfers. See `ARCHITECTURE.md` §4.3
 
-**ai_search_profiles**
+**ai_search_profiles** (legacy — unused)
 `id, user_id, activity_type, country, region, date_from, date_to`
-- Stores a talent's saved face-search filters. The old `selfie_embedding` column was dropped (migration `20260518000000_drop_legacy_ai_schema.sql`) — selfies are sent to AWS Rekognition per search and never stored. The Rekognition events table fields (`ai_matching_enabled`, `contains_minors`, `rekognition_collection_id`, `rekognition_region`, `ai_matching_status`) gate indexing per event
+- ⚠️ **No code references this table anywhere in `src/`** — vestigial like `payment_accounts`; do not build on it. The old `selfie_embedding` column was dropped (migration `20260518000000_drop_legacy_ai_schema.sql`) — selfies are sent to AWS Rekognition per search and never stored. The live per-event gating fields (`ai_matching_enabled`, `contains_minors`, `rekognition_collection_id`, `rekognition_region`, `ai_matching_status`) are on **`events`**, not here
 
 **admin_users**
 `user_id, granted_at, granted_by`
@@ -416,7 +444,7 @@ The `PhotoActionIcon` component (`src/components/ui/photo-action-icon.tsx`) is t
 - **States:** Outline icon = inactive, filled icon = active. No color changes — only outline vs filled.
 - **Visibility:** Always visible on mobile, visible on hover on desktop (handled by parent with `group` + `md:opacity-0 md:group-hover:opacity-100`)
 - **Tooltip:** Always included via Shadcn `Tooltip`
-- **Used in:** `/events/[slug]`, `/dashboard/photographer/events/[id]`, `/dashboard/talent/events/[id]`, `/dashboard/talent/photos`, `/dashboard/talent/profile`
+- **Consumed via** `photo-icon-buttons.tsx`, `photo-more-menu.tsx`, `event-save-button.tsx` — pages use those wrappers, not `PhotoActionIcon` directly (there is no `/events/[slug]` route; the public event route is `/events/[shareCode]`)
 
 ## Event Search
 
@@ -424,8 +452,10 @@ Search bar (`src/components/event-search-bar/`) queries Supabase directly — no
 ```sql
 events.name ILIKE '%query%'
 OR events.city ILIKE '%query%'
-OR profiles.display_name ILIKE '%query%'
+OR events.country ILIKE '%query%'
+-- photographers matched separately: profiles.username OR profiles.display_name
 ```
+(`src/database/queries/events.ts:415` and `:487`)
 - Results grouped by type: events and photographers
 - Filters (Activity, When) in a separate modal opened by a Filters button outside the input
 - Google Places API used **only** in location field of event create/edit forms — never in search
@@ -454,7 +484,7 @@ OR profiles.display_name ILIKE '%query%'
 
 Users change their avatar from `dashboard/{photographer,talent}/settings/profile` via the shared client component `src/components/avatar-upload.tsx` + the shared Server Action `src/app/[lang]/actions/avatar.ts` (`updateAvatarAction` / `removeAvatarAction`). This is the **second storage bucket**: `avatars` — **public** (migration `20260726000000_create_avatars_bucket.sql`), unlike the private `photos` bucket, because avatars render as plain `<img src>` on public pages.
 
-- **Write path:** the action authenticates the user, rate-limits (`avatar-upload:<userId>`, 20/h), validates via `validateAvatarUpload` (`src/lib/avatar-upload.ts` — magic bytes, **8 MB** cap `MAX_AVATAR_BYTES`, allow-list jpeg/png/webp/heif/avif; tighter than photos), re-encodes to a **square 256px WebP** (`resizeAvatar`, `fit:'cover'` — raw upload is never stored), and uploads to `avatars/<userId>/<uuid>.webp` via **`supabaseAdmin`** (RLS-bypass; path derived from the authed id). No per-object write RLS policy exists on `avatars` — anon/authenticated are default-denied, so the admin-backed action is the only writer.
+- **Write path:** the action authenticates the user, rate-limits (`avatar-upload:<userId>`, 20/h), validates via `validateAvatarUpload` (`src/lib/avatar-upload.ts` — magic bytes, **8 MB** cap `MAX_AVATAR_BYTES` from `src/lib/avatar-constants.ts`, allow-list jpeg/png/webp/heif/avif; tighter than photos), re-encodes to a **square 256px WebP** (`resizeAvatar`, `fit:'cover'` — raw upload is never stored), and uploads to `avatars/<userId>/<uuid>.webp` via **`supabaseAdmin`** (RLS-bypass; path derived from the authed id). No per-object write RLS policy exists on `avatars` — anon/authenticated are default-denied, so the admin-backed action is the only writer.
 - **`profiles.avatar_url` is the DURABLE source of truth.** It's the authoritative single write (public profile + event cards read it; the two dashboard layouts now also read it for the header/nav/bottom-nav chrome via `getProfileFields(..., ['display_name','avatar_url'])`, preferring it over auth metadata). The auth `user_metadata.avatar_url` write is a **best-effort, non-fatal** sync (via `syncAuthAvatarMetadata`, which checks the returned `{error}` — `updateUserById` does NOT throw) only so the **public-site** header (`user-avatar.tsx` via `useAuthUser`, which reads auth metadata) reflects the change immediately. **Why metadata is not authoritative:** this app is Google-OAuth-only and GoTrue re-syncs `user_metadata.avatar_url` from the Google identity on every sign-in, so a custom avatar written there reverts on next login — the durable render path must never depend on it. The client calls `router.refresh()` after success. **Ordering discipline in the action:** validate → throttle → read prior avatar/slug → upload → **authoritative `updateProfile` write** (on failure, delete the just-uploaded object) → best-effort metadata sync → delete-on-replace → revalidate. Validation runs before the throttle (a bad pick costs no quota); the profile read runs before the upload (a read error can't orphan a fresh object).
 - **Delete-on-replace:** the previous object is deleted in the same action — `avatarObjectPathToDelete(url, userId)` returns a path to remove ONLY when the URL is our `avatars` bucket AND under `<userId>/` (Google OAuth URLs and foreign paths return null, fail-closed). The `photos` orphan-cleanup cron does NOT cover `avatars`.
 - **Errors are returned, not thrown:** `AvatarActionResult` is a discriminated union (`{ok:true,avatarUrl} | {ok:false,error: AvatarErrorCode}`) so the reason survives the RSC boundary (thrown messages are redacted in prod); the client maps codes → localized `dict.avatarUpload.*` copy.
@@ -523,16 +553,21 @@ The project uses **Vitest** for tests and **Supabase local** (Docker) for integr
 
 ```
 test/
-  unit/                # Pure functions — no DB, no mocks
-    src/lib/               # Tests for helpers under src/lib/
+  unit/                # No Docker. Mostly pure functions; mocks used where needed
+    lib/               # Helpers under src/lib/ (largest group)
+    src/{lib,app}/     # Newer tests mirroring the src/ path
+    actions/ api/ components/  # Mocked Server Actions, route handlers, RTL components
   integration/         # Hit local Supabase via test helpers
     actions/           # Server Actions
     api/               # API route handlers (Stripe webhook, etc.)
     queries/           # src/database/queries/* layer
     security/          # RLS regression tests
+    inngest/           # Background-job handlers against the real DB
   helpers/
     supabase-test-client.ts   # createTestUser / createTestEvent / resetDatabase / ensurePhotosBucket
     server-action-mocks.ts    # shared mockSession for Server Action tests
+    database-server-mock.ts   # mocked Supabase server client for unit tests
+    image.ts                  # synthetic image buffers for upload tests
   setup.ts             # env-var defaults loaded before each test file
 ```
 
@@ -564,7 +599,7 @@ The goal is **60% on lines, branches, functions, and statements**. Thresholds ar
 - **Error safety:** every AWS/Sharp/Storage call in these flows is wrapped in `safeCall` (`src/lib/safe-call.ts`) so image buffers can't leak into Inngest step output or serverless error responses.
 - **Backfill de-duplication (T-089):** the two per-event backfill workers (`backfillEventIndexing`, `backfillEventBibDetection`) are cost gates — each fans out one AWS-billed job per photo. Both declare `debounce: { key: 'event.data.eventId', period: BACKFILL_DEBOUNCE_PERIOD }` (`src/lib/inngest/functions/backfill-config.ts`) so a double-click / double-submit / enable→re-index burst collapses into a single run, plus `concurrency: [{ limit: 1, key: 'event.data.eventId' }]` as a backstop that serializes any runs that still overlap. Debounce (a sliding window) is used deliberately over an event-`id` idempotency key, whose 24h dedup memory would silently drop a legitimate later re-index — or a disable→re-enable — that reused the same key. The trigger sends (`event.ai-matching-enabled` / `event.bib-detection-enabled`) and the per-photo `photo.uploaded` / `photo.bib-detect` fan-out sends carry **no** dedup key — a re-index must legitimately re-process each photo.
 - **Rate limits / cost controls (T-034)**: anonymous face search is gated by **three tiered atomic Postgres counters** (all keyed on the resolved `event.id`, incremented via `rate_limit_buckets` + `SECURITY DEFINER` RPCs, decided on the RETURNED count so a concurrent burst can't undercount): **(1)** per-`(event, IP)`/hour request throttle (10/h — the pre-existing limiter; it **is** Postgres-backed and atomic, not in-memory); **(2)** per-**event**/day cost cap; **(3)** global/day **circuit breaker**. Tiers 2 & 3 count **real billable AWS calls** — `AWS_CALLS_PER_FACE_SEARCH` in `src/lib/face-search-limits.ts`, which is **1**: a search issues exactly one billable `SearchFacesByImage` op (detection + search bundled — there is **no** separate `DetectFaces` call). Order matters: tier 1 and selfie validation run **before** the cost counters, so an IP-throttled or garbage-payload attacker can't inflate the global breaker (which would deny face search platform-wide for free); a per-event trip never touches the global counter. Caps are **env-configurable** (`FACE_SEARCH_GLOBAL_DAILY_CALLS` default 2000, `FACE_SEARCH_EVENT_DAILY_CALLS` default 1000) — never hardcoded — so they can be raised the day a real 300-runner event's athletes start searching. A **50%-of-global email alert** (Resend, `FACE_SEARCH_ALERT_EMAIL`; absent ⇒ no-op) fires once per day-window via an atomic claim bucket. On a breaker trip the SA throws `RATE_LIMIT:face-search:unavailable` → the modal shows a localized "temporarily unavailable" (`aiSearch.modal.errorUnavailable`); **bib search and the rest of the app are unaffected** (separate, non-AWS path). CAPTCHA is deliberately **not** built here (tripwire T-141). There is still **no per-plan monthly search quota** — a half-built version (`ai_search_usage` + `AI_SEARCH_RATE_LIMITS`) was removed in T-036 because the anonymous searcher isn't the plan owner; don't re-advertise a "N searches/month" number.
-- **Indexing-state reconciliation (T-099, T-183):** `reconcileIndexingState` (`src/lib/inngest/functions/reconcile-indexing.ts`) is an hourly cron (`15,45 * * * *`, offset from the storage-cleanup cron) that self-heals three silent wedges with no other recovery path: an event stuck in `ai_matching_status='indexing'` forever (a lost `photo.uploaded` or a missed `maybe-mark-event-ready` step), a thumbnail that never bakes (a swallowed best-effort `emit-processed`), and (T-183) an **owner upload stranded in `upload_status='pending'`** (a lost `photo.uploaded` or a run that died before the worker's `promote-upload-status` step — invisible on the approved-only galleries AND absent from the owner's Pending tab, so the dashboard count says N while only the approved subset renders). It (a) re-emits `photo.uploaded` for still-in-flight photos of wedged events, (b) flips events whose in-flight count is already 0 to `ready`, (c) re-emits `photo.processed` for terminally-indexed photos whose `thumbnail_status` is still `pending`, and (d) re-emits `photo.uploaded` for **owner uploads** stuck `upload_status='pending'` in events **not** wedged in `indexing` (branch (a) owns that case) — re-driving download → byte-validation → promotion via the real worker rather than flipping the row to `approved` here, so the byte-validation gate is never skipped. The owner-upload predicate is `photos.user_id = events.user_id` AND `guest_name IS NULL` AND `uploaded_by IS NULL` (`listStuckPendingOwnerUploads` in `photos.ts`; the column-to-column comparison is applied in JS after an inner-join fetch, since PostgREST can't express it). A **1-hour staleness gate** keyed on the trigger-maintained `events.updated_at` (for events) / `photos.created_at` (for thumbnails and owner uploads) keeps it from clobbering live re-indexes; `failed` photos are left alone (they exhausted retries — re-index is a manual action, no retry storm). Idempotent + the T-092 ready-guard stops any re-emit from re-baking an already-`ready` thumbnail.
+- **Indexing-state reconciliation (T-099, T-183):** `reconcileIndexingState` (`src/lib/inngest/functions/reconcile-indexing.ts`) runs **every 30 min** (`15,45 * * * *`, offset from the storage-cleanup cron at `0,30 * * * *`) and self-heals three silent wedges with no other recovery path: an event stuck in `ai_matching_status='indexing'` forever (a lost `photo.uploaded` or a missed `maybe-mark-event-ready` step), a thumbnail that never bakes (a swallowed best-effort `emit-processed`), and (T-183) an **owner upload stranded in `upload_status='pending'`** (a lost `photo.uploaded` or a run that died before the worker's `promote-upload-status` step — invisible on the approved-only galleries AND absent from the owner's Pending tab, so the dashboard count says N while only the approved subset renders). It (a) re-emits `photo.uploaded` for still-in-flight photos of wedged events, (b) flips events whose in-flight count is already 0 to `ready`, (c) re-emits `photo.processed` for terminally-indexed photos whose `thumbnail_status` is still `pending`, and (d) re-emits `photo.uploaded` for **owner uploads** stuck `upload_status='pending'` in events **not** wedged in `indexing` (branch (a) owns that case) — re-driving download → byte-validation → promotion via the real worker rather than flipping the row to `approved` here, so the byte-validation gate is never skipped. The owner-upload predicate is `photos.user_id = events.user_id` AND `guest_name IS NULL` AND `uploaded_by IS NULL` (`listStuckPendingOwnerUploads` in `photos.ts`; the column-to-column comparison is applied in JS after an inner-join fetch, since PostgREST can't express it). A **1-hour staleness gate** keyed on the trigger-maintained `events.updated_at` (for events) / `photos.created_at` (for thumbnails and owner uploads) keeps it from clobbering live re-indexes; `failed` photos are left alone (they exhausted retries — re-index is a manual action, no retry storm). Idempotent + the T-092 ready-guard stops any re-emit from re-baking an already-`ready` thumbnail.
 - **Worker route:** all Inngest functions are registered at `/src/app/api/inngest/route.ts`.
 
 ## BIB number recognition (T-032)
@@ -573,7 +608,7 @@ Race **bib-number** detection, **per-event opt-in** (the cost gate, mirroring `a
 
 - **Opt-in:** `events.bib_detection_enabled` (default false) + `bib_detection_status`. Photographer toggles it on the event detail page (`enable/disableBibDetectionForEvent`, owner-only); enabling fires `event.bib-detection-enabled` → `backfillEventBibDetection`. Disabled for `contains_minors` events (parity with face search). Disabling **keeps** existing bib rows.
 - **Detection (job):** `detectPhotoBibs` (`src/lib/inngest/functions/detect-photo-bibs.ts`) on `photo.uploaded` + `photo.bib-detect`; no-ops (status stays NULL) unless the event opted in. Downloads the image, calls Rekognition `DetectText` (`src/lib/aws/bib-detection.ts`), filters to plausible bibs (`extractBibCandidates` in `src/lib/bib-numbers.ts` — confidence floor + digit-dominant pattern + dedupe + cap), persists to `photo_bib_numbers`. Bytes never cross Inngest step boundaries; AWS/Storage/Sharp wrapped in `safeCall`. Backfill fans out a **bib-specific** `photo.bib-detect` event so it never re-runs the face/thumbnail jobs.
-- **Persistence:** `photo_bib_numbers` (`photo_id`, `bib_text`, `confidence`, `bounding_box`, unique `(photo_id, bib_text)`) — RLS read like `photo_faces`, service-role writes only. Per-photo `photos.bib_detection_status`. Queries in `src/database/queries/bib-numbers.ts`.
+- **Persistence:** `photo_bib_numbers` (`photo_id`, `bib_text`, `confidence`, `bounding_box`, unique `(photo_id, bib_text)`) — RLS read like `photo_faces`, service-role writes only. **This table is both the raw detection data and the search target: bib search matches on `bib_text`, one row per bib per photo.** `photos.bib_detection_status` is the per-photo **job status** only (nullable; `pending`/`detecting`/`detected`/`no_bibs`/`failed`/`not_applicable`) — it never holds bib values. Queries in `src/database/queries/bib-numbers.ts`.
 - **Search (talent):** `searchPhotosByBibInEvent(shareCode, bib)` (`events/[shareCode]/actions.ts`) — exact normalized match, rate-limited `(shareCode, IP)` 30/h, returns matching **public** photo ids. Surfaced via the unified `FindMyPhotosBanner` (`src/components/find-my-photos-banner.tsx` — the face + bib "Find my photos" card; bib input opens in a modal) on both the public event gallery (`/events/[shareCode]`) and the talent-dashboard event view (`/dashboard/talent/events/[id]`), gated on `bib_detection_enabled`; results filter the grid client-side on **both** surfaces (symmetric wiring — the old talent-dashboard grid-filter gap is fixed). Enabling/disabling bib detection busts the public/talent event cache tags (`revalidateEventPhotoCacheTags`) so the bar appears/disappears immediately (T-064).
 - **Privacy:** bib numbers are low-sensitivity race identifiers (not PII); selfies/faces unaffected. `contains_minors` parity keeps minors' photos no more exposed than face search already allows.
 - **Cost:** `DetectText` is billed per image on opted-in events — the per-event opt-in is the only throttle (no per-event cap yet). No new env vars (reuses `AWS_*`/`REKOGNITION_*`).
@@ -585,7 +620,6 @@ Race **bib-number** detection, **per-event opt-in** (the cost gate, mirroring `a
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-SUPABASE_JWT_SECRET=
 
 # Stripe
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
@@ -595,7 +629,6 @@ STRIPE_PRICE_AMATEUR=        # Starter plan monthly price ID
 STRIPE_PRICE_PRO=            # Pro plan monthly price ID
 STRIPE_PRICE_AMATEUR_YEARLY= # Starter yearly price ID (optional; required only once yearly checkout is enabled)
 STRIPE_PRICE_PRO_YEARLY=     # Pro yearly price ID (optional; same as above)
-PLATFORM_FEE_BPS=            # Platform fee in basis points
 
 # Google
 NEXT_PUBLIC_GOOGLE_PLACES_API_KEY=   # Places API — event location forms only
@@ -611,13 +644,20 @@ FACE_SEARCH_GLOBAL_DAILY_CALLS=      # global/day circuit breaker, default 2000 
 FACE_SEARCH_EVENT_DAILY_CALLS=       # per-event/day cap, default 1000
 FACE_SEARCH_ALERT_EMAIL=             # 50%-of-global alert recipient; absent ⇒ no alert
 
+# Reveal gate (T-177)
+REVEAL_TOKEN_SECRET=                 # optional; falls back to the service-role key
+
+# Ops
+HEALTH_CHECK_TOKEN=                  # optional; /api/health/ready 401s until set
+NEXT_PUBLIC_VERCEL_URL=              # optional; base-URL resolution on previews
+
 # Inngest (background-processing worker for face indexing)
 INNGEST_EVENT_KEY=                   # signs outbound inngest.send() calls
 INNGEST_SIGNING_KEY=                 # verifies inbound webhook payloads at /api/inngest
 
 # Email
 RESEND_API_KEY=
-RESEND_FROM_EMAIL=
+# Sender is hardcoded ('Photo Markt <noreply@photomarkt.com>') in src/lib/email/*.ts
 
 # Sentry error monitoring (all optional — SDK is a no-op without a DSN)
 SENTRY_DSN=                          # server/edge DSN; absent ⇒ no server error capture
@@ -630,26 +670,11 @@ SENTRY_AUTH_TOKEN=                   # build-time only; source maps upload only 
 SITE_URL=
 ```
 
-## Active Feature Branches
+## Branches
 
-Check these branches before touching related code:
-
-| Branch | Description |
-|--------|-------------|
-| `feature/stripe-connect` | Photographer payouts via Stripe Connect |
-| `feature/event-status` | upcoming/completed event states |
-| `feature/guest-cart-merge` | Guest cart persistence and merge on login |
-| `feature/home-top-events` | Featured events section on home page |
-| `feature/photographer-profiles` | Public photographer profile pages |
-| `feature/location-autocomplete` | Google Places in event forms |
-| `feature/search-bar-refactor` | Airbnb-style search bar with filter modal |
-| `feature/i18n-localization` | i18n routing and locale detection |
-| `feature/i18n-client-translations` | Client-side translations provider |
-| `feature/seo-overhaul` | Metadata, JSON-LD, sitemap |
-| `feature/refactor-backend` | Backend code cleanup |
-| `feature/refactor-shared-components` | Shared component cleanup |
-| `feature/time-sync-filtering` | Camera time sync for events |
-| `feature/ai-matching-rewrite` | AI photo matching — now shipped on `main` (AWS Rekognition + Inngest); branch is historical |
+One branch = one ticket = one draft PR. Prefixes in use: `feat/`, `fix/`, `chore/`, `design/`.
+~140 merged remote branches exist; `main` is the only source of truth for what shipped — never
+read a branch name as a feature's status.
 
 ## Working with Claude
 
