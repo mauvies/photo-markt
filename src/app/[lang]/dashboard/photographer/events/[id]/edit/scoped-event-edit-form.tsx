@@ -161,6 +161,7 @@ export function ScopedEventEditForm({ event, section, labels, bundleT }: ScopedE
           datePopoverOpen={datePopoverOpen}
           setDatePopoverOpen={setDatePopoverOpen}
           section={section}
+          eventType={event.type}
         />
       )}
 

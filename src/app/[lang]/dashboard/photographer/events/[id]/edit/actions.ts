@@ -29,6 +29,7 @@ import { isValidSessionRange, normalizeSessionTime, SESSION_RANGE_ERROR } from '
 import { inngest } from '@/lib/inngest/client';
 import { minPhotoPriceErrorMessage } from '@/lib/min-photo-price';
 import { isPhotoPriceAboveFloor, MIN_PHOTO_PRICE_CENTS } from '@/lib/plans';
+import { resolveWatermarkEnabled } from '@/lib/watermark-policy';
 
 // --- Constants ---
 
@@ -331,7 +332,18 @@ export async function updateEventAction(
     shareCode = null;
   }
 
-  const watermarkEnabled = isPublic && payload.watermark_enabled;
+  // T-211: this used to be `isPublic && payload.watermark_enabled`, missing the
+  // organizer branch `createEvent` has always had. Organizer events are ALWAYS
+  // private (membership-gated, no public URL), so without the exception a
+  // private organizer event created WITH a watermark lost it the first time any
+  // edit was saved — including an edit that never touched the field. `type` is
+  // immutable post-creation and absent from this payload, so it comes from the
+  // stored row. One rule, one place: `watermark-policy.ts`.
+  const watermarkEnabled = resolveWatermarkEnabled({
+    eventType: currentEvent.type,
+    isPublic,
+    requested: payload.watermark_enabled,
+  });
 
   // T-203: the ladder's event-type gate can only be checked against the STORED
   // row — `type` is immutable after creation and is not in this payload. An

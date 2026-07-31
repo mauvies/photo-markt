@@ -4,6 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
+import { isWatermarkConfigurable } from '@/lib/watermark-policy';
 import type { EventForm } from '../wizard-types';
 
 type NewEventT = Dictionary['newEvent'];
@@ -55,29 +56,45 @@ export function Step2Config({ form }: Step2ConfigProps) {
             </form.Field>
           )}
 
-          <form.Field name="watermark_enabled">
-            {(field) => (
-              <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
-                <div className="grid gap-1">
-                  <Label htmlFor="watermark_enabled">{t('watermarkLabel')}</Label>
-                  <p className="text-xs text-muted-foreground">{t('watermarkDesc')}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">
-                    {field.state.value ? t('watermarkEnabled') : t('watermarkDisabled')}
-                  </span>
-                  <Switch
-                    id="watermark_enabled"
-                    checked={field.state.value}
-                    onCheckedChange={(checked) => {
-                      field.handleChange(checked);
-                      field.handleBlur();
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-          </form.Field>
+          {/* Same rule as the edit form (T-211): on a private non-organizer
+              event the save forces the watermark off, so the switch says so
+              instead of offering a preference that vanishes on create. */}
+          <form.Subscribe selector={(state) => state.values.is_public}>
+            {(isPublic) => {
+              const configurable = isWatermarkConfigurable({ eventType, isPublic });
+              return (
+                <form.Field name="watermark_enabled">
+                  {(field) => {
+                    const shown = configurable && field.state.value;
+                    return (
+                      <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
+                        <div className="grid gap-1">
+                          <Label htmlFor="watermark_enabled">{t('watermarkLabel')}</Label>
+                          <p className="text-xs text-muted-foreground">
+                            {configurable ? t('watermarkDesc') : t('watermarkPrivateNote')}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {shown ? t('watermarkEnabled') : t('watermarkDisabled')}
+                          </span>
+                          <Switch
+                            id="watermark_enabled"
+                            checked={shown}
+                            disabled={!configurable}
+                            onCheckedChange={(checked) => {
+                              field.handleChange(checked);
+                              field.handleBlur();
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  }}
+                </form.Field>
+              );
+            }}
+          </form.Subscribe>
 
           {eventType === 'collaborative' && (
             <>

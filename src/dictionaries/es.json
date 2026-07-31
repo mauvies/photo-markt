@@ -951,6 +951,7 @@
     "visibilityPrivate": "Privado",
     "watermarkLabel": "Marca de agua en fotos",
     "watermarkDesc": "Añadir marca de agua para usuarios talent (los fotógrafos ven los originales)",
+    "watermarkPrivateNote": "Los eventos privados no llevan marca de agua: solo quien tiene el código puede ver las fotos, así que el código es la protección.",
     "watermarkEnabled": "Activada",
     "watermarkDisabled": "Desactivada",
     "photosRequired": "Añade al menos una foto para continuar.",

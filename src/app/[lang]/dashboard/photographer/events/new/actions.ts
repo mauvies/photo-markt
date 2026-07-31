@@ -24,6 +24,7 @@ import { validatePhotoUpload } from '@/lib/photo-upload';
 import { assertCanCreateEvent } from '@/lib/plan-limits';
 import { isPhotoPriceAboveFloor, MIN_PHOTO_PRICE_CENTS } from '@/lib/plans';
 import { generateEventSlug } from '@/lib/slugify';
+import { resolveWatermarkEnabled } from '@/lib/watermark-policy';
 import { activityValues } from './activity-options';
 
 // --- Constants ---
@@ -328,8 +329,13 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
   // (collaborative) or has no public access at all (organizer).
   const shareCode =
     eventType === 'organizer' ? null : isPublic && !isCollaborative ? null : generateShareCode();
-  const watermarkEnabled =
-    eventType === 'organizer' ? payload.watermark_enabled : isPublic && payload.watermark_enabled;
+  // Shared with `updateEventAction` and both forms (T-211) — see
+  // `watermark-policy.ts` for why this rule may only exist in one place.
+  const watermarkEnabled = resolveWatermarkEnabled({
+    eventType,
+    isPublic,
+    requested: payload.watermark_enabled,
+  });
 
   const organizerFeeCents =
     eventType === 'organizer' ? dollarsToCents(payload.organizer_fee_per_photo) : null;
