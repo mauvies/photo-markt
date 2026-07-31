@@ -13,6 +13,15 @@ interface AvailablePlansSectionProps {
   plans: Plan[];
   /** Per-plan feature lists (shared with the landing pricing cards). */
   featuresByPlan: Record<PlanId, PlanFeatureItem[]>;
+  /**
+   * Resolved CTA copy per target plan ("Upgrade to Pro" / "Switch to Starter"),
+   * built by the parent because only it knows the current plan AND the
+   * dictionary. Keyed by plan id so the direction is right for each card: from
+   * Pro the only other paid plan is Starter, which is a downgrade.
+   */
+  ctaLabelByPlan: Partial<Record<PlanId, string>>;
+  /** Which target plans are a move UP — drives the sparkle icon. */
+  isUpgradeByPlan: Partial<Record<PlanId, boolean>>;
   /** Labels — fed from the parent server component's dict so the
    * settings page stays mostly server-rendered. */
   labels: {
@@ -27,6 +36,8 @@ interface AvailablePlansSectionProps {
     /** Translated toasts for the upgrade buttons. */
     checkoutError: string;
     checkoutYearlyUnavailable: string;
+    planChangeProcessing: string;
+    subscriptionUpdated: string;
   };
 }
 
@@ -39,6 +50,8 @@ interface AvailablePlansSectionProps {
 export function AvailablePlansSection({
   plans,
   featuresByPlan,
+  ctaLabelByPlan,
+  isUpgradeByPlan,
   labels,
 }: AvailablePlansSectionProps) {
   const [billing, setBilling] = useState<BillingPeriod>('yearly');
@@ -114,6 +127,10 @@ export function AvailablePlansSection({
                 <UpgradePlanButton
                   planId={plan.id}
                   period={billing}
+                  ctaLabel={ctaLabelByPlan[plan.id] ?? plan.name}
+                  showUpgradeIcon={isUpgradeByPlan[plan.id] ?? true}
+                  processingLabel={labels.planChangeProcessing}
+                  updatedLabel={labels.subscriptionUpdated}
                   checkoutErrorLabel={labels.checkoutError}
                   yearlyUnavailableLabel={labels.checkoutYearlyUnavailable}
                   className={

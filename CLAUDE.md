@@ -331,12 +331,76 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
 ### Photographer Subscriptions
 Three plans: **Free** (8% commission), **Starter** (€9.99/mo, 4% commission), **Pro** (€29.99/mo, 0% commission).
 Price IDs in env: `STRIPE_PRICE_AMATEUR`, `STRIPE_PRICE_PRO`.
-Billing management in `/dashboard/photographer/settings/`.
+Billing management in `/dashboard/photographer/settings/billing` — plan card, available plans, and the
+cancel/reactivate actions (see **Subscription cancellation** below). There is **no Stripe billing
+portal**; cancelling from that page is the only route back to Free.
 `PLANS[].salesFeePercent` in `src/lib/plans.ts` is the single source of truth: `PLATFORM_FEE_RATES`
 derives from it, and `test/unit/lib/pricing-consistency.test.ts` fails if the advertised copy drifts
 from it. Rates were lowered from 12/8/5 in **billing v2** (T-194), deliberately in the *same* PR as
 the buyer fee line item (T-196): Pro at 0% is only solvent while that fee is live, because the webhook
 transfers `getPhotographerNetCents(gross)` and the platform absorbs Stripe's cost.
+
+### Subscription cancellation (T-214)
+Cancelling is **`cancel_at_period_end`**, never immediate termination: the photographer keeps the paid
+plan until the period they already paid for ends, then `customer.subscription.deleted` flips `status`
+to `canceled` and `getCurrentPlan` falls back to Free on its own. No refund logic anywhere.
+- **`subscriptions.cancel_at_period_end` (`boolean not null default false`, migration
+  `20260731000000`) is written by the WEBHOOK ONLY.** `cancelSubscriptionAction` /
+  `reactivateSubscriptionAction` (`dashboard/photographer/billing/actions.ts`) call Stripe and write
+  **nothing** — pinned by `test/unit/actions/subscription-cancel.test.ts`, which makes both Supabase
+  clients' `from()` throw. That is not style: an action that wrote the state optimistically could
+  leave the row asserting a cancellation Stripe doesn't have (successful call, lost webhook) or the
+  reverse. `.deleted` also clears the flag, so a finished row never reads as still-pending.
+- **Read it through `hasPendingCancellation(sub)`** (`queries/subscriptions.ts`), never
+  `sub.cancel_at_period_end` alone: "pending" needs the flag **and** an active-equivalent status, or a
+  `canceled` row would offer a reactivate Stripe can no longer honour.
+- **Naming:** the undo action is `reactivate`, **not `resume`** — `dashboard/photographer/billing/resume/`
+  already means "resume the *checkout* intent after signup/login".
+- **A plan change clears the flag.** `createBillingCheckoutAction`'s in-place `updated` branch sends
+  `cancel_at_period_end: false` with the new price, so a photographer who cancels and then switches
+  plans doesn't land on the new plan already scheduled to end.
+- **⚠️ The webhook revalidates `dashboard-photographer-<userId>` on every subscription write.**
+  `getCachedDashboardData` resolves the plan inside a `'use cache'` with `cacheLife('minutes')`, so
+  without this a downgrade stayed invisible — commission rates and plan limits kept reporting the old
+  plan until the TTL expired. Any new cached surface that reads the plan must be invalidated there too.
+- **The downgrade is contention, never destruction.** Free's limits live only in the write gates
+  (`assertCanUploadPhoto` / `assertCanCreateEvent`); nothing deletes photos or events. The
+  confirmation discloses that consequence only when the photographer already exceeds a Free cap
+  (`getFreePlanOverage`, `src/lib/plan-limits.ts`).
+- Feedback is a **direct toast**, not a `?status=` code: those exist for *redirect* returns (Stripe's
+  `cancel_url`, the `resume` route), and `status=cancelled` already means *checkout abandoned*.
+- **⚠️ A row can outlive its Stripe subscription** (deleted from the dashboard, wiped test data, an old
+  dump). Stripe then answers `resource_missing` **forever**, and treating that as a generic failure
+  left the photographer permanently stuck — unable to change plan *and* unable to cancel — while the
+  stale row still granted them a paid plan. `isStripeResourceMissing`
+  (`src/lib/stripe/resource-missing.ts`) separates "stale reference, recover" from "Stripe is having a
+  bad minute, retry": the plan change **falls through to a fresh checkout** (minting a replacement
+  customer if that is missing too), and cancel/reactivate return the distinct `subscription_missing`
+  code so the copy says what to do rather than "try again in a moment". **Recovery writes nothing
+  locally** — the webhook rewrites the row off the real subscription, so the webhook-only rule holds.
+- **The CTA that switches plans must not call every change an "upgrade".** `isPlanUpgrade`
+  (`src/lib/plans.ts`, ranked off `PLANS` order and pinned by `test/unit/plans.test.ts`) picks
+  `upgradeToPlan` vs `switchToPlan`; the copy is resolved in `settings/billing/page.tsx`, the only
+  place that knows both the current plan and the dictionary. `UpgradePlanButton` takes a finished
+  `ctaLabel` — it used to hardcode English keyed on the target plan alone, so a Pro subscriber was
+  offered an "Upgrade to Starter" for what is a downgrade.
+
+### ⚠️ Testing subscriptions locally requires the Stripe CLI
+Activation is **webhook-only** by design, so on `localhost` **nothing activates** unless a listener is
+forwarding events — Stripe cannot reach your machine, and the test account has no endpoint configured.
+The symptom is silent and looks like a bug: checkout succeeds, Stripe shows an `active` subscription,
+and the app still says Free because `subscriptions` is stuck on the `incomplete` bootstrap row that
+`createBillingCheckoutAction` writes before redirecting (and `incomplete` is not in
+`ACTIVE_SUBSCRIPTION_STATUSES`).
+
+```bash
+stripe listen --forward-to localhost:3000/api/stripe/webhook   # prints its OWN whsec_…
+# put that whsec_… in .env.local as STRIPE_WEBHOOK_SECRET, then restart pnpm dev
+stripe events resend <evt_id>   # replay an event that fired while nothing was listening
+```
+
+The CLI's `whsec_` is **not** the dashboard's — a mismatch fails signature verification with a 400 and
+the webhook stays dead just as silently. Same applies to Connect payouts and one-time purchases.
 
 ### Buyer service fee (billing v2 — T-194/T-195/T-196/T-197)
 The buyer pays a **fixed + percent** fee on top of the cart subtotal, as its own visible Stripe line

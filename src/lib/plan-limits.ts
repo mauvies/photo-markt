@@ -13,7 +13,7 @@ import { getEventsCreatedCount } from '@/database/queries/events';
 import { getStorageUsageBytes } from '@/database/queries/photos';
 import { getCurrentPlan } from '@/database/queries/subscriptions';
 import type { SupabaseServerClient } from '@/database/queries/types';
-import type { PlanId } from '@/lib/plans';
+import { getPlanById, type PlanId } from '@/lib/plans';
 
 const BYTES_PER_GB = 1024 ** 3;
 
@@ -125,6 +125,37 @@ export async function assertCanUploadPhoto(
       planId: plan.id,
     });
   }
+}
+
+export interface FreePlanOverage {
+  storage: boolean;
+  events: boolean;
+}
+
+/**
+ * Which Free-plan limits does this usage already exceed? (T-214)
+ *
+ * Used to decide whether the cancellation confirmation must disclose that
+ * dropping to Free will BLOCK further uploads / event creation. It never means
+ * anything is deleted: Free's limits are enforced only by the write gates
+ * above (`assertCanUploadPhoto` / `assertCanCreateEvent`), so an over-limit
+ * photographer keeps everything and is simply unable to add more.
+ *
+ * Limits are read from `PLANS` rather than hardcoded so the warning can't go
+ * stale when Free's caps change. Exactly AT a limit is not over it — the same
+ * boundary the write gates use (`count >= max` blocks the *next* one, and a
+ * photographer sitting on the line can still keep what they have). A plan with
+ * a `null` cap (unlimited) can never be exceeded.
+ */
+export function getFreePlanOverage(usage: {
+  storageUsedGB: number;
+  eventsCount: number;
+}): FreePlanOverage {
+  const free = getPlanById('free');
+  return {
+    storage: free?.storageGB != null && usage.storageUsedGB > free.storageGB,
+    events: free?.maxEvents != null && usage.eventsCount > free.maxEvents,
+  };
 }
 
 export interface UsageStats {

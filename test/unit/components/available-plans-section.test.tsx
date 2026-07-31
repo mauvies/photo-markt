@@ -7,8 +7,13 @@ import { getPlanFeatures } from '@/lib/plan-features';
 import { PLANS } from '@/lib/plans';
 
 // Stub the upgrade button (pulls in a server action) and the period toggle.
+// The stub renders `ctaLabel` so the direction-aware copy is observable here.
 vi.mock('@/app/[lang]/dashboard/photographer/settings/upgrade-plan-button', () => ({
-  UpgradePlanButton: ({ planId }: { planId: string }) => <button type="button">{planId}</button>,
+  UpgradePlanButton: ({ planId, ctaLabel }: { planId: string; ctaLabel: string }) => (
+    <button type="button" data-plan={planId}>
+      {ctaLabel}
+    </button>
+  ),
 }));
 vi.mock('@/components/billing-period-toggle', () => ({
   BillingPeriodToggle: () => <div data-testid="toggle" />,
@@ -26,6 +31,8 @@ const labels = {
   billedYearlySuffix: '',
   checkoutError: 'Checkout failed',
   checkoutYearlyUnavailable: 'Yearly not available',
+  planChangeProcessing: 'Processing…',
+  subscriptionUpdated: 'Subscription updated.',
 };
 
 describe('AvailablePlansSection', () => {
@@ -33,7 +40,15 @@ describe('AvailablePlansSection', () => {
     const featuresByPlan = getPlanFeatures(en.pricingSection);
     const plans = PLANS.filter((p) => p.id === 'starter' || p.id === 'pro');
 
-    render(<AvailablePlansSection plans={plans} featuresByPlan={featuresByPlan} labels={labels} />);
+    render(
+      <AvailablePlansSection
+        plans={plans}
+        featuresByPlan={featuresByPlan}
+        ctaLabelByPlan={{ starter: 'Switch to Starter', pro: 'Upgrade to Pro' }}
+        isUpgradeByPlan={{ starter: false, pro: true }}
+        labels={labels}
+      />,
+    );
 
     // Features unique to each plan surface in their cards (storage tiers differ).
     expect(screen.getByText(en.pricingSection.starterFeature2)).toBeTruthy(); // "50 GB storage"
@@ -41,5 +56,27 @@ describe('AvailablePlansSection', () => {
     // "Coming soon" badges render alongside the not-yet-built features
     // (outfit pattern) — at least one across the cards.
     expect(screen.getAllByText(en.pricingSection.comingSoon).length).toBeGreaterThan(0);
+  });
+
+  it('renders the CTA copy it was given per plan, without re-deriving it', () => {
+    // Regression: the button used to pick its own English copy from the TARGET
+    // plan alone, so a Pro subscriber was offered "Upgrade to Starter" for what
+    // is a downgrade. The direction is decided by the server component, which
+    // is the only place that knows the current plan and the dictionary.
+    const featuresByPlan = getPlanFeatures(en.pricingSection);
+    const plans = PLANS.filter((p) => p.id === 'starter');
+
+    render(
+      <AvailablePlansSection
+        plans={plans}
+        featuresByPlan={featuresByPlan}
+        ctaLabelByPlan={{ starter: 'Switch to Starter' }}
+        isUpgradeByPlan={{ starter: false }}
+        labels={labels}
+      />,
+    );
+
+    expect(screen.getByText('Switch to Starter')).toBeTruthy();
+    expect(screen.queryByText('Upgrade to Starter')).toBeNull();
   });
 });

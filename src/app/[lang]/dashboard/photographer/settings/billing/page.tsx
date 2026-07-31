@@ -9,16 +9,19 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { getCurrentPlan } from '@/database/queries';
+import { getCurrentPlan, getSubscription, hasPendingCancellation } from '@/database/queries';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { formatEventDate } from '@/lib/format-date';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { getPlanFeatures } from '@/lib/plan-features';
-import { formatPlanPrice, PLANS } from '@/lib/plans';
+import { getFreePlanOverage } from '@/lib/plan-limits';
+import { formatPlanPrice, getPlanById, isPlanUpgrade, PLANS, type PlanId } from '@/lib/plans';
 import { getDashboardData } from '../../actions';
 import { AvailablePlansSection } from '../available-plans-section';
 import { BillingStatusToast } from '../billing-status-toast';
+import { SubscriptionActions } from '../subscription-actions';
 import { UpgradePlanButton } from '../upgrade-plan-button';
 
 function formatStorage(gb: number): string {
@@ -26,6 +29,13 @@ function formatStorage(gb: number): string {
     return `${(gb * 1024).toFixed(0)} MB`;
   }
   return `${gb.toFixed(2)} GB`;
+}
+
+function interpolate(template: string, values: Record<string, string | number>): string {
+  return Object.entries(values).reduce(
+    (text, [key, value]) => text.replaceAll(`{${key}}`, String(value)),
+    template,
+  );
 }
 
 export default async function PhotographerSettingsBillingPage({
@@ -54,6 +64,94 @@ export default async function PhotographerSettingsBillingPage({
 
   // Shared, translated feature lists — same source as the landing pricing cards.
   const planFeatures = getPlanFeatures(dict.pricingSection);
+
+  // CTA copy per target plan. Built HERE because this is the only place that
+  // knows both the current plan and the dictionary — the button is a client
+  // component and can reach neither, which is why it used to hardcode English
+  // "Upgrade to X" keyed on the target alone and offered a Pro subscriber an
+  // "upgrade" to Starter.
+  const planCtaLabel = (targetPlanId: PlanId): string => {
+    const target = getPlanById(targetPlanId);
+    const template = isPlanUpgrade(currentPlanId, targetPlanId)
+      ? dict.photographerDashboard.upgradeToPlan
+      : dict.photographerDashboard.switchToPlan;
+    return interpolate(template, { planName: target?.name ?? targetPlanId });
+  };
+  const otherPaidPlans = PLANS.filter((plan) => plan.id !== currentPlanId && plan.id !== 'free');
+  const ctaLabelByPlan = Object.fromEntries(
+    otherPaidPlans.map((plan) => [plan.id, planCtaLabel(plan.id)]),
+  ) as Partial<Record<PlanId, string>>;
+  const isUpgradeByPlan = Object.fromEntries(
+    otherPaidPlans.map((plan) => [plan.id, isPlanUpgrade(currentPlanId, plan.id)]),
+  ) as Partial<Record<PlanId, boolean>>;
+
+  // --- Cancellation state (T-214) -------------------------------------------
+  // Only paid plans can be cancelled; on Free there is nothing to cancel. The
+  // row is read with the service-role client for the same RLS reason as the
+  // plan above. `current_period_end` is already persisted by the webhook, so
+  // the real date needs no Stripe round-trip.
+  const isPaidPlan = currentPlanId !== 'free';
+  const subscription =
+    isPaidPlan && user?.id ? await getSubscription(supabaseAdmin, user.id) : null;
+  const pendingCancellation = hasPendingCancellation(subscription);
+  const periodEndLabel = formatEventDate(subscription?.current_period_end ?? undefined, lang);
+
+  // Warn about Free's caps only where the photographer ALREADY exceeds them.
+  // Nothing is ever deleted on downgrade — the limits are write-time gates —
+  // so the warning is about being blocked from adding more, not losing work.
+  const freePlan = getPlanById('free');
+  const overage = getFreePlanOverage({
+    storageUsedGB: storage.usedGB,
+    eventsCount: totals.totalEvents,
+  });
+  const quotaWarnings: string[] = [];
+  if (overage.storage && freePlan?.storageGB != null) {
+    quotaWarnings.push(
+      interpolate(dict.photographerDashboard.cancelSubscriptionStorageWarning, {
+        usage: formatStorage(storage.usedGB),
+        limit: formatStorage(freePlan.storageGB),
+      }),
+    );
+  }
+  if (overage.events && freePlan?.maxEvents != null) {
+    quotaWarnings.push(
+      interpolate(dict.photographerDashboard.cancelSubscriptionEventsWarning, {
+        current: totals.totalEvents,
+        limit: freePlan.maxEvents,
+      }),
+    );
+  }
+
+  const planNameValues = { planName: currentPlan.name };
+  const subscriptionActionLabels = {
+    cancel: dict.photographerDashboard.cancelSubscription,
+    dialogTitle: interpolate(dict.photographerDashboard.cancelSubscriptionTitle, planNameValues),
+    // A legacy row can lack `current_period_end`; say so honestly rather than
+    // rendering "until undefined" on a screen about money.
+    dialogBody: periodEndLabel
+      ? interpolate(dict.photographerDashboard.cancelSubscriptionBody, {
+          ...planNameValues,
+          date: periodEndLabel,
+        })
+      : interpolate(dict.photographerDashboard.cancelSubscriptionBodyNoDate, planNameValues),
+    quotaWarnings,
+    dialogConfirm: dict.photographerDashboard.cancelSubscriptionConfirm,
+    dialogKeep: dict.photographerDashboard.cancelSubscriptionKeep,
+    dialogPending: dict.photographerDashboard.cancelSubscriptionPending,
+    cancelSuccess: dict.photographerDashboard.cancelSubscriptionSuccess,
+    cancelError: dict.photographerDashboard.cancelSubscriptionError,
+    subscriptionMissing: dict.photographerDashboard.subscriptionMissingError,
+    reactivate: dict.photographerDashboard.reactivateSubscription,
+    reactivateSuccess: dict.photographerDashboard.reactivateSubscriptionSuccess,
+    reactivateError: dict.photographerDashboard.reactivateSubscriptionError,
+  };
+
+  const pendingCancellationNotice = periodEndLabel
+    ? interpolate(dict.photographerDashboard.subscriptionEndsOn, {
+        ...planNameValues,
+        date: periodEndLabel,
+      })
+    : interpolate(dict.photographerDashboard.subscriptionEndsOnNoDate, planNameValues);
 
   return (
     <>
@@ -86,15 +184,40 @@ export default async function PhotographerSettingsBillingPage({
                   {currentPlan.pricing !== null && ` • ${formatPlanPrice(currentPlan)}`}
                 </p>
               </div>
-              {nextPlanId && (
-                <UpgradePlanButton
-                  planId={nextPlanId}
-                  checkoutErrorLabel={dict.photographerDashboard.checkoutError}
-                  yearlyUnavailableLabel={dict.photographerDashboard.checkoutYearlyUnavailable}
-                  className="w-full bg-gradient-starter border-0 text-white hover:opacity-90 sm:w-auto"
-                />
-              )}
+              {/* Actions live on the heading line, right-aligned: the cancel
+                  affordance is a quiet text link so it never competes with the
+                  upgrade CTA, which stays the rightmost, most prominent
+                  element. On Pro there is no upgrade left, so cancel sits at
+                  the far right on its own. Paid plans only — Free has nothing
+                  to cancel. */}
+              <div className="flex items-center gap-4 sm:justify-end">
+                {isPaidPlan && (
+                  <SubscriptionActions
+                    pendingCancellation={pendingCancellation}
+                    labels={subscriptionActionLabels}
+                  />
+                )}
+                {nextPlanId && (
+                  <UpgradePlanButton
+                    planId={nextPlanId}
+                    ctaLabel={planCtaLabel(nextPlanId)}
+                    showUpgradeIcon={isPlanUpgrade(currentPlanId, nextPlanId)}
+                    processingLabel={dict.photographerDashboard.planChangeProcessing}
+                    updatedLabel={dict.photographerDashboard.subscriptionUpdated}
+                    checkoutErrorLabel={dict.photographerDashboard.checkoutError}
+                    yearlyUnavailableLabel={dict.photographerDashboard.checkoutYearlyUnavailable}
+                    className="bg-gradient-starter border-0 text-white hover:opacity-90"
+                  />
+                )}
+              </div>
             </div>
+
+            {/* The pending-cancellation notice is a full sentence, so it stays
+                on its own line under the heading rather than crowding the
+                actions row. */}
+            {isPaidPlan && pendingCancellation && (
+              <p className="text-sm text-muted-foreground">{pendingCancellationNotice}</p>
+            )}
 
             <div className="space-y-2">
               <p className="text-sm font-medium">{dict.photographerDashboard.planFeatures}</p>
@@ -143,8 +266,10 @@ export default async function PhotographerSettingsBillingPage({
           </div>
 
           <AvailablePlansSection
-            plans={PLANS.filter((plan) => plan.id !== currentPlanId && plan.id !== 'free')}
+            plans={otherPaidPlans}
             featuresByPlan={planFeatures}
+            ctaLabelByPlan={ctaLabelByPlan}
+            isUpgradeByPlan={isUpgradeByPlan}
             labels={{
               sectionTitle: dict.photographerDashboard.availablePlans,
               popularBadge: dict.photographerDashboard.popular,
@@ -155,6 +280,8 @@ export default async function PhotographerSettingsBillingPage({
               billedYearlySuffix: dict.pricingSection.billedYearlySuffix,
               checkoutError: dict.photographerDashboard.checkoutError,
               checkoutYearlyUnavailable: dict.photographerDashboard.checkoutYearlyUnavailable,
+              planChangeProcessing: dict.photographerDashboard.planChangeProcessing,
+              subscriptionUpdated: dict.photographerDashboard.subscriptionUpdated,
             }}
           />
         </CardContent>

@@ -4,6 +4,7 @@ import {
   getPhotographerPlanIds,
   getSubscription,
   getSubscriptionByStripeId,
+  hasPendingCancellation,
 } from '@/database/queries/subscriptions';
 import {
   createServiceClient,
@@ -18,6 +19,7 @@ async function seedSubscription(
     stripe_subscription_id: string;
     plan_id: 'free' | 'amateur' | 'pro';
     status: string;
+    cancel_at_period_end: boolean;
   }>,
 ) {
   const sb = createServiceClient();
@@ -27,6 +29,7 @@ async function seedSubscription(
     stripe_subscription_id: overrides?.stripe_subscription_id ?? null,
     plan_id: overrides?.plan_id ?? 'pro',
     status: overrides?.status ?? 'active',
+    cancel_at_period_end: overrides?.cancel_at_period_end ?? false,
   });
   if (error) throw new Error(`seedSubscription: ${error.message}`);
 }
@@ -114,6 +117,53 @@ describe('database/queries/subscriptions', () => {
       expect(
         await getSubscriptionByStripeId(createServiceClient(), 'sub_does_not_exist'),
       ).toBeNull();
+    });
+  });
+
+  describe('hasPendingCancellation (T-214)', () => {
+    it('is true for a live subscription with the flag set', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      await seedSubscription(photographer.id, { status: 'active', cancel_at_period_end: true });
+      const sub = await getSubscription(createServiceClient(), photographer.id);
+      expect(hasPendingCancellation(sub)).toBe(true);
+    });
+
+    it('is false when the flag is not set', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      await seedSubscription(photographer.id, { status: 'active' });
+      const sub = await getSubscription(createServiceClient(), photographer.id);
+      expect(sub?.cancel_at_period_end).toBe(false);
+      expect(hasPendingCancellation(sub)).toBe(false);
+    });
+
+    it('is FALSE for an already-canceled row even with the flag still set', async () => {
+      // The period already ended: the cancellation is done, not pending.
+      // Reading this as "pending" would offer a reactivate Stripe can no longer
+      // honour, and would claim the paid plan is still active.
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      await seedSubscription(photographer.id, { status: 'canceled', cancel_at_period_end: true });
+      const sub = await getSubscription(createServiceClient(), photographer.id);
+      expect(hasPendingCancellation(sub)).toBe(false);
+    });
+
+    it('covers trialing and past_due, and excludes non-live statuses', async () => {
+      for (const status of ['trialing', 'past_due']) {
+        const user = await createTestUser('PHOTOGRAPHER');
+        await seedSubscription(user.id, { status, cancel_at_period_end: true });
+        const sub = await getSubscription(createServiceClient(), user.id);
+        expect(hasPendingCancellation(sub)).toBe(true);
+      }
+      for (const status of ['incomplete', 'unpaid', 'paused']) {
+        const user = await createTestUser('PHOTOGRAPHER');
+        await seedSubscription(user.id, { status, cancel_at_period_end: true });
+        const sub = await getSubscription(createServiceClient(), user.id);
+        expect(hasPendingCancellation(sub)).toBe(false);
+      }
+    });
+
+    it('is false for a missing subscription', () => {
+      expect(hasPendingCancellation(null)).toBe(false);
+      expect(hasPendingCancellation(undefined)).toBe(false);
     });
   });
 });

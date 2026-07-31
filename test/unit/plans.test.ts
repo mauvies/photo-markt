@@ -3,7 +3,9 @@ import {
   formatPlanPrice,
   getPhotographerNetCents,
   getPlanById,
+  getPlanRank,
   getPlatformFeeRate,
+  isPlanUpgrade,
   PLANS,
   PLATFORM_FEE_RATES,
 } from '@/lib/plans';
@@ -97,5 +99,33 @@ describe('formatPlanPrice', () => {
       (starter.pricing?.yearlyTotal ?? 0) / 12,
       2,
     );
+  });
+
+  describe('plan tier ordering', () => {
+    it('ranks free < starter < pro', () => {
+      // `getPlanRank` derives from PLANS order so there is one ordering to keep
+      // true. This pins that order: reshuffling PLANS for display reasons would
+      // otherwise silently invert every upgrade/downgrade label.
+      expect(getPlanRank('free')).toBeLessThan(getPlanRank('starter'));
+      expect(getPlanRank('starter')).toBeLessThan(getPlanRank('pro'));
+    });
+
+    it('calls a move up an upgrade and a move down not', () => {
+      expect(isPlanUpgrade('free', 'starter')).toBe(true);
+      expect(isPlanUpgrade('free', 'pro')).toBe(true);
+      expect(isPlanUpgrade('starter', 'pro')).toBe(true);
+
+      // The reported bug: from Pro the only other paid plan is Starter, and the
+      // CTA offered "Upgrade to Starter" for what is a downgrade.
+      expect(isPlanUpgrade('pro', 'starter')).toBe(false);
+      expect(isPlanUpgrade('pro', 'free')).toBe(false);
+      expect(isPlanUpgrade('starter', 'free')).toBe(false);
+    });
+
+    it('treats the same plan as not an upgrade', () => {
+      for (const plan of PLANS) {
+        expect(isPlanUpgrade(plan.id, plan.id)).toBe(false);
+      }
+    });
   });
 });

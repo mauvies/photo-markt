@@ -36,7 +36,7 @@
  * for refunded orders — Stripe does not auto-reverse transfers to connected accounts.
  */
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { NextResponse } from 'next/server';
 import type Stripe from 'stripe';
 import { clearCart } from '@/database/queries/carts';
@@ -72,6 +72,25 @@ import {
   reconcileAndPersistConnectStatus,
 } from '@/lib/stripe/connect';
 import { STRIPE_PRICE_TO_PLAN } from '@/lib/stripe/plans-stripe';
+import { subscriptionPeriodEndISO } from '@/lib/stripe/subscription-period';
+
+/**
+ * Drop the cached plan read after a subscription state change (T-214).
+ *
+ * `getCachedDashboardData` (dashboard/photographer/actions.ts) resolves the
+ * photographer's plan INSIDE a `'use cache'` tagged
+ * `dashboard-photographer-<userId>` with `cacheLife('minutes')`. Without this,
+ * a downgrade — including the automatic one when a cancelled period ends —
+ * stays invisible until that TTL expires, so commission rates and plan limits
+ * keep reporting the old plan.
+ *
+ * Only that tag is touched: `photographer-events-<userId>`, the other tag on
+ * the same entry, carries no plan data. `revalidateTag` (not `updateTag`)
+ * because this is a route handler, not a Server Action.
+ */
+function revalidatePhotographerPlanCache(userId: string): void {
+  revalidateTag(`dashboard-photographer-${userId}`, 'max');
+}
 
 /**
  * Create Stripe transfers for all active-connect photographers in an order.
@@ -620,16 +639,10 @@ export async function POST(request: Request) {
         const priceId = subscription.items.data[0]?.price?.id ?? null;
         const planId = priceId ? STRIPE_PRICE_TO_PLAN[priceId] : 'free';
 
-        // `current_period_end` moved off the subscription root onto each item
-        // in Stripe's `basil` API version (2025-03-31); our pinned version
-        // (dahlia) is well past it, so the root field is gone and the typed
-        // location is `items.data[].current_period_end`. We read `data[0]`, the
-        // same item the plan mapping above keys off: our subscriptions are
-        // always single-item (one plan → one price → one item), so every item
-        // shares one billing period. Epoch seconds, null if absent (T-159).
-        const itemPeriodEnd = subscription.items.data[0]?.current_period_end;
-        const currentPeriodEnd =
-          typeof itemPeriodEnd === 'number' ? new Date(itemPeriodEnd * 1000).toISOString() : null;
+        // Reads `items.data[0].current_period_end` — the root field is gone in
+        // our pinned API version (T-159). Shared with the cancel/reactivate
+        // actions so the rule lives in exactly one place.
+        const currentPeriodEnd = subscriptionPeriodEndISO(subscription);
 
         const { data: existingSubscription } = await supabaseAdmin
           .from('subscriptions')
@@ -644,6 +657,12 @@ export async function POST(request: Request) {
           plan_id: planId,
           status,
           current_period_end: currentPeriodEnd,
+          // The webhook is the ONLY writer of this flag — Stripe is the source
+          // of truth and this row follows. The cancel/reactivate Server Actions
+          // deliberately write nothing, so a Stripe call that succeeded without
+          // its webhook can never leave the DB asserting a state Stripe lacks
+          // (T-214).
+          cancel_at_period_end: subscription.cancel_at_period_end ?? false,
           updated_at: new Date().toISOString(),
         };
 
@@ -667,6 +686,7 @@ export async function POST(request: Request) {
           console.log(
             `Subscription ${existingSubscription ? 'updated' : 'created'} for user ${supabaseUserId} → ${planId} (${status})`,
           );
+          revalidatePhotographerPlanCache(supabaseUserId);
         }
 
         break;
@@ -704,6 +724,11 @@ export async function POST(request: Request) {
           .from('subscriptions')
           .update({
             status: 'canceled',
+            // The subscription is over, so there is no longer a cancellation
+            // *pending*. Leaving the flag set would make a finished row read as
+            // an unfulfilled pending cancellation and offer a "reactivate" that
+            // Stripe can no longer honour (T-214).
+            cancel_at_period_end: false,
             updated_at: new Date().toISOString(),
           })
           .eq('user_id', supabaseUserId)
@@ -713,6 +738,7 @@ export async function POST(request: Request) {
           console.error('Error canceling subscription:', error);
         } else {
           console.log(`Subscription canceled for user ${supabaseUserId}`);
+          revalidatePhotographerPlanCache(supabaseUserId);
         }
 
         break;

@@ -172,3 +172,155 @@ describe('createBillingCheckoutAction — Stripe failure handling', () => {
     });
   });
 });
+
+describe('createBillingCheckoutAction — plan change clears a pending cancellation (T-214)', () => {
+  it('sends cancel_at_period_end: false with the in-place plan change', async () => {
+    // A photographer who cancelled and then picked another paid plan. Without
+    // clearing the flag they'd land on the newly chosen plan already scheduled
+    // to end — a cancellation inherited from the plan they just left.
+    getSubscriptionMock.mockResolvedValue({
+      stripe_customer_id: 'cus_123',
+      stripe_subscription_id: 'sub_123',
+      status: 'active',
+      cancel_at_period_end: true,
+    });
+    stripeMock.subscriptions.retrieve.mockResolvedValue({
+      id: 'sub_123',
+      items: { data: [{ id: 'si_123' }] },
+    });
+    stripeMock.subscriptions.update.mockResolvedValue({ id: 'sub_123' });
+
+    await expect(createBillingCheckoutAction('pro')).resolves.toEqual({ updated: true });
+
+    expect(stripeMock.subscriptions.update).toHaveBeenCalledWith(
+      'sub_123',
+      expect.objectContaining({ cancel_at_period_end: false }),
+    );
+    // The new price still goes out — clearing the flag must not replace the
+    // actual plan change.
+    expect(stripeMock.subscriptions.update).toHaveBeenCalledWith(
+      'sub_123',
+      expect.objectContaining({ items: [{ id: 'si_123', price: 'price_test_pro' }] }),
+    );
+  });
+
+  it('sends it unconditionally, so an uncancelled subscription is unaffected', async () => {
+    getSubscriptionMock.mockResolvedValue({
+      stripe_customer_id: 'cus_123',
+      stripe_subscription_id: 'sub_123',
+      status: 'active',
+      cancel_at_period_end: false,
+    });
+    stripeMock.subscriptions.retrieve.mockResolvedValue({
+      id: 'sub_123',
+      items: { data: [{ id: 'si_123' }] },
+    });
+    stripeMock.subscriptions.update.mockResolvedValue({ id: 'sub_123' });
+
+    await createBillingCheckoutAction('starter');
+
+    expect(stripeMock.subscriptions.update).toHaveBeenCalledWith(
+      'sub_123',
+      expect.objectContaining({ cancel_at_period_end: false }),
+    );
+  });
+
+  it('falls through to a fresh checkout when Stripe no longer has the subscription', async () => {
+    // The reported failure: "No such subscription: 'sub_...'" from a row whose
+    // Stripe subscription is gone. Returning checkout_failed left the
+    // photographer permanently stuck — unable to change plan AND unable to
+    // cancel — while the stale row still granted them a paid plan.
+    getSubscriptionMock.mockResolvedValue({
+      stripe_customer_id: 'cus_123',
+      stripe_subscription_id: 'sub_gone',
+      status: 'active',
+      cancel_at_period_end: false,
+    });
+    stripeMock.subscriptions.retrieve.mockRejectedValue(
+      Object.assign(new Error("No such subscription: 'sub_gone'"), {
+        code: 'resource_missing',
+        statusCode: 404,
+      }),
+    );
+    stripeMock.checkout.sessions.create.mockResolvedValue({
+      url: 'https://checkout.stripe.com/recovered',
+    });
+
+    await expect(createBillingCheckoutAction('starter')).resolves.toEqual({
+      url: 'https://checkout.stripe.com/recovered',
+    });
+
+    // Recovery writes nothing locally — the webhook rewrites the row off the
+    // real subscription, so Stripe stays the source of truth.
+    expect(adminMock.from).not.toHaveBeenCalled();
+    expect(supabaseMock.from).not.toHaveBeenCalled();
+  });
+
+  it('mints a replacement customer when that is missing in Stripe too', async () => {
+    // The same staleness that orphans the subscription id takes the customer
+    // with it, so without this the recovery above dead-ends one call later.
+    getSubscriptionMock.mockResolvedValue({
+      stripe_customer_id: 'cus_gone',
+      stripe_subscription_id: null,
+      status: 'incomplete',
+    });
+    stripeMock.checkout.sessions.create
+      .mockRejectedValueOnce(
+        Object.assign(new Error("No such customer: 'cus_gone'"), {
+          code: 'resource_missing',
+          statusCode: 404,
+        }),
+      )
+      .mockResolvedValueOnce({ url: 'https://checkout.stripe.com/recovered' });
+    stripeMock.customers.create.mockResolvedValue({ id: 'cus_fresh' });
+
+    await expect(createBillingCheckoutAction('starter')).resolves.toEqual({
+      url: 'https://checkout.stripe.com/recovered',
+    });
+
+    // The replacement carries the metadata the webhook resolves the user by.
+    expect(stripeMock.customers.create).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: { supabase_user_id: 'user-1' } }),
+    );
+    expect(stripeMock.checkout.sessions.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ customer: 'cus_fresh' }),
+    );
+  });
+
+  it('still reports a non-missing Stripe failure as checkout_failed', async () => {
+    // Only `resource_missing` means "stale reference, recover". A bad API key
+    // or a network blip must keep degrading to the controlled domain error.
+    getSubscriptionMock.mockResolvedValue({
+      stripe_customer_id: 'cus_123',
+      stripe_subscription_id: 'sub_123',
+      status: 'active',
+    });
+    stripeMock.subscriptions.retrieve.mockRejectedValue(
+      Object.assign(new Error('Expired API Key provided'), { code: 'api_key_expired' }),
+    );
+
+    await expect(createBillingCheckoutAction('pro')).resolves.toEqual({
+      error: 'checkout_failed',
+    });
+    expect(stripeMock.checkout.sessions.create).not.toHaveBeenCalled();
+  });
+
+  it('still writes nothing to subscriptions — the webhook applies the change', async () => {
+    getSubscriptionMock.mockResolvedValue({
+      stripe_customer_id: 'cus_123',
+      stripe_subscription_id: 'sub_123',
+      status: 'active',
+      cancel_at_period_end: true,
+    });
+    stripeMock.subscriptions.retrieve.mockResolvedValue({
+      id: 'sub_123',
+      items: { data: [{ id: 'si_123' }] },
+    });
+    stripeMock.subscriptions.update.mockResolvedValue({ id: 'sub_123' });
+
+    await createBillingCheckoutAction('pro');
+
+    expect(adminMock.from).not.toHaveBeenCalled();
+    expect(supabaseMock.from).not.toHaveBeenCalled();
+  });
+});

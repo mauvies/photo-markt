@@ -1,12 +1,12 @@
 # T-214 · Cancelar la suscripción de pago (cancel-at-period-end + reanudar)
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Riesgo:** alto — pagos + webhook de Stripe + RLS + migración de BD
 - **Blockers:** ninguno
 - **Rama:** `feat/cancel-subscription`
 - **OpenSpec change:** sí — toca migración de BD, webhook de Stripe y pagos (criterio de CLAUDE.md)
-- **PR:** —
+- **PR:** #272
 
 ## Requerimiento
 Hoy un fotógrafo con plan **Starter** o **Pro** no tiene **ninguna** forma de cancelar desde la app.
