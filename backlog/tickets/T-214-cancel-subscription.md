@@ -2,6 +2,7 @@
 
 - **Prioridad:** P1
 - **Estado:** todo
+- **Riesgo:** alto — pagos + webhook de Stripe + RLS + migración de BD
 - **Blockers:** ninguno
 - **Rama:** `feat/cancel-subscription`
 - **OpenSpec change:** sí — toca migración de BD, webhook de Stripe y pagos (criterio de CLAUDE.md)
@@ -105,9 +106,11 @@ Añadir cancelación con el flujo SaaS estándar, **no** terminación inmediata:
    distinto o se pisan dos significados.
 
 ## Notas
-- **RUN MODE: plan mode, no autónomo.** Toca ciclo de vida de suscripciones, webhook y RLS: el revisor
-  tiene que verificar a mano que los cambios de estado son webhook-driven y que el downgrade no
-  destruye fotos. Correr **`/code-review ultra`** (criterio del repo para pagos).
+- **`Riesgo: alto` → el paso 3 de `/work-next` entra en `EnterPlanMode` y espera tu aprobación antes
+  de escribir una línea.** Solo después `/opsx:propose` transcribe el plan aprobado y `/opsx:apply`
+  implementa. Antes de commitear, **`/code-review ultra`** (criterio del repo para pagos). El revisor
+  tiene que verificar a mano dos cosas: que los cambios de estado son webhook-driven, y que el
+  downgrade no destruye fotos.
 - **Caso "por encima del límite de Free" — hoy NO es destructivo, y así debe quedarse.** El enforcement
   vive solo en gates de escritura: `assertCanUploadPhoto` / `assertCanCreateEvent`
   (`src/lib/plan-limits.ts:83,108`). No hay ninguna ruta que borre fotos por exceder cuota. Consecuencia

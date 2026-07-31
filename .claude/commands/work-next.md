@@ -8,16 +8,36 @@ si no, toma la fila de **más arriba en `backlog/BACKLOG.md` con estado `todo` y
 Antes de empezar:
 - Confirma que estás en un árbol limpio (`git status`). Si hay cambios sin commitear, para y avisa.
 - Si no hay ningún ticket ejecutable (todos done/blocked), dilo y termina — no inventes trabajo.
+- Lee el campo **`Riesgo:`** del ticket (`alto` = pagos · BD/migraciones · auth · seguridad · genuinamente
+  ambiguo; `normal` = el resto). **Decide los pasos 3 y 6 con ese campo, no con tu criterio sobre la
+  marcha.** Si el ticket no lo trae, dedúcelo **una sola vez** del contenido, dilo en voz alta, y mantén
+  ese valor todo el ticket.
+- **Recomienda modelo y esfuerzo antes de empezar** (informativo: tú no puedes cambiarlos).
+  `Riesgo: alto` → Opus con esfuerzo alto. `Riesgo: normal` → el modelo de sesión basta.
+  Si hace falta cambiarlo, dilo y espera a que el usuario lo haga con `/model`; no sigas asumiendo que sí.
 
 Flujo (no te saltes pasos):
 1. Marca el ticket `doing` en `backlog/BACKLOG.md` y en `backlog/tickets/T-XXX-*.md`.
 2. `git checkout main && git pull --ff-only`, luego crea la rama `<tipo>/<slug>` del ticket.
-3. **OpenSpec solo cuando lo amerita:** usa `/opsx:propose` → `/opsx:apply` si el ticket toca **base de datos/migraciones, auth/seguridad, pagos, o es genuinamente ambiguo** (hay diseño/spec que capturar antes). Para **UI, i18n y bug-fixes** con requerimiento claro, implementa directo aunque toque varios archivos — el ticket ya captura el "qué" y el PR draft es el punto de revisión. Mira el campo "OpenSpec change" del ticket.
+3. **Diseño antes de implementar — lo decide el campo `Riesgo:`, no tú:**
+   - **`Riesgo: alto`** (pagos · BD/migraciones · auth · seguridad · ambiguo de verdad):
+     1. **`EnterPlanMode`** → explora el código, escribe el plan, **`ExitPlanMode`** y **espera la
+        aprobación del usuario**. Esta es la **única puerta real** del flujo — OpenSpec no lo es. No la saltes.
+     2. Ya aprobado: `/opsx:propose` para **transcribir el plan aprobado** a los artefactos
+        (`proposal.md` / `design.md` / `tasks.md`) — **no para volver a diseñar**. Si al escribirlos
+        aparece una decisión que el plan aprobado no cubría, **para y pregunta**; no la resuelvas dentro
+        del artefacto (así es como el diseño acaba divergiendo de lo que se implementa).
+     3. `/opsx:apply` para implementar.
+     ⚠️ **El orden es obligatorio:** plan mode bloquea escrituras y `/opsx:propose` escribe archivos, así
+     que OpenSpec **no puede correr dentro de plan mode**. Primero se aprueba, después se registra.
+   - **`Riesgo: normal`** (UI, i18n, bug-fixes con requerimiento claro): implementa directo aunque toque
+     varios archivos — el ticket ya captura el "qué" y el PR draft es el punto de revisión.
+   Mira también el campo "OpenSpec change" del ticket.
 4. Añade un test que falle antes y pase después (regla de CLAUDE.md). Strings nuevos → `en.json` y `es.json`.
    Si el ticket mueve/renombra rutas documentadas o cambia un patrón de arquitectura, actualiza
    `CLAUDE.md`/`ARCHITECTURE.md` en el mismo PR (si no toca nada documentado, no los toques).
 5. `pnpm typecheck && pnpm lint && pnpm test`. Si algo falla, arréglalo antes de seguir.
-6. **Revisión IA solo en PRs riesgosos:** si el ticket tocó **pagos/auth/BD-migraciones/seguridad** (mismo criterio que OpenSpec en el paso 3), corre `/code-review` sobre el diff antes de commitear (`/code-review ultra` para pagos) y arregla los findings reales. Para **UI/i18n/bug-fixes**, sáltalo — la revisión humana en el merge del draft alcanza.
+6. **Revisión IA solo en PRs riesgosos:** si el ticket es **`Riesgo: alto`** (mismo campo del paso 3), corre `/code-review` sobre el diff antes de commitear (`/code-review ultra` para pagos) y arregla los findings reales. Para **UI/i18n/bug-fixes**, sáltalo — la revisión humana en el merge del draft alcanza.
 7. Commit con Conventional Commits. **NUNCA** añadas el trailer `Co-Authored-By` (rompe el plan Vercel Hobby; un hook `PreToolUse` lo bloquea, pero igual no lo escribas).
 8. `git push -u origin <rama>`.
 9. `gh pr create --draft --base main`. **Título y cuerpo del PR SIEMPRE en inglés** (aunque el ticket esté en español):

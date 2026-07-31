@@ -2,6 +2,7 @@
 
 - **Prioridad:** P2
 - **Estado:** todo
+- **Riesgo:** normal  (`alto` = pagos · BD/migraciones · auth · seguridad → `/work-next` entra en plan mode y espera aprobación antes de escribir, y corre `/code-review`)
 - **Blockers:** ninguno
 - **Rama:** `<tipo>/<slug>`  (tipo = feat | fix | chore | refactor)
 - **OpenSpec change:** —  (se crea al ejecutar, si el cambio toca >1 archivo o es ambiguo)

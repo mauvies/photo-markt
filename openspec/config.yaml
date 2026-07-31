@@ -1,20 +1,49 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+# Injected verbatim into EVERY artifact generation (proposal / design / tasks).
+# Keep it to what changes a design decision — it is re-sent every time, so this is not
+# the place to restate CLAUDE.md.
+context: |
+  Photo Markt — sports-event photography marketplace. Photographers create events and sell
+  photos; "talent" (athletes) find themselves via AI face search and buy. Two roles, two
+  dashboards, one shared public site. The locale prefix is always /es or /en.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  GROUND EVERY CLAIM IN THE CODE. Read the actual files before asserting how something works
+  today, and cite `path:line` for existing behavior. CLAUDE.md and ARCHITECTURE.md are the map,
+  not the territory — both have been wrong before. Where code and docs disagree, the code wins
+  and the doc gets corrected in the same change. A design built on a doc claim nobody verified
+  is the main failure mode here.
+
+  Stack: Next.js 16 App Router (React 19, TS 6), Supabase (raw SQL migrations, no ORM, RLS on),
+  Stripe (photographer subscriptions + Connect payouts, buyer one-time purchases), AWS
+  Rekognition + Inngest for face/bib background jobs, Tailwind v4 + shadcn/ui, Biome, Vitest.
+
+  Non-negotiable conventions — a design that breaks one of these is wrong, not innovative:
+  - All Supabase queries live in `src/database/queries/`; never inline in components or actions.
+  - Mutations are Server Actions, not new API routes.
+  - RLS is real. User-scoped client by default; `supabaseAdmin` (service-role) only where RLS
+    must legitimately be bypassed (Stripe webhook, admin endpoints, Inngest workers). Tables
+    that are system-managed are never written by a user-authored path.
+  - Money has exactly ONE calc point. `src/lib/plans.ts` owns fees and commissions; bundle
+    pricing owns its own kernel. Never re-derive a charged amount inline — what is displayed
+    and what is charged must come from the same function, or a receipt can contradict the cart.
+  - Ambiguity fails CLOSED, in the direction that cannot silently undercharge, leak a photo,
+    or destroy a buyer's or photographer's data.
+  - Every user-visible string exists in BOTH `src/dictionaries/en.json` and `es.json`.
+  - No `any`. Every bug fix ships a regression test that fails before and passes after.
+  - Migrations are additive and idempotent, and rollback must be inert — reverting the code
+    must not require a down-migration. They are applied by a GitHub Action on merge to main,
+    not by Vercel.
+
+  Always surface, never assume: any step that requires a manual Stripe or Supabase dashboard
+  action, and any place a plan tier / feature gate is read that might not react to a state
+  change (downgrade, cancellation, flag flip).
+
+rules:
+  design:
+    - State the rejected alternatives and why they lost, not only the chosen option.
+    - Every claim about current behavior carries a `path:line` reference.
+    - Include the rollback path explicitly; if it needs a migration or a deploy, say so.
+  tasks:
+    - Order tasks so each one can ship independently and green.
+    - Payments, auth, DB-migration or security work runs `/code-review` before commit.

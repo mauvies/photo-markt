@@ -680,12 +680,17 @@ read a branch name as a feature's status.
 ## Working with Claude
 
 ### When to use Planning Mode
-Only use planning mode when:
-- The feature touches more than 5 files
-- The architecture is genuinely unclear
-- It involves payments, auth, or security-sensitive code
+Two mechanisms, in this order — one is **not** a substitute for the other:
+1. **Plan mode** (`EnterPlanMode` → `ExitPlanMode`) is the only real gate: writes are blocked and the
+   user must approve. Use it when the work touches **payments, auth/security, or DB/migrations**, or
+   when the architecture is genuinely unclear.
+2. **OpenSpec** (`/opsx:propose` → `/opsx:apply`) then **records the already-approved plan** as
+   artifacts that travel in the PR. It writes files, so it **cannot run inside plan mode** — approve
+   first, record second. It is documentation, not a gate: nothing in it stops implementation.
 
-Skip planning mode for: bug fixes, UI tweaks, adding fields, isolated features, translations, refactoring individual files.
+Skip both for: bug fixes, UI tweaks, adding fields, isolated features, translations, refactoring
+individual files. Same threshold as `/work-next` step 3, which reads it off the ticket's `Riesgo:`
+field — keep the two in sync.
 
 ### Token Budget Guidelines
 - Bug fixes: 3–8k tokens
