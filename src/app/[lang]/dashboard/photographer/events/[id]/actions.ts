@@ -746,6 +746,10 @@ export interface EventIndexingProgress {
   status: AiMatchingStatus;
   indexedCount: number;
   totalCount: number;
+  /** Every non-deleted photo, queued or not — lets the card tell "no photos"
+   *  from "photos exist but none are queued" instead of showing "0 of 0"
+   *  for both (T-209). */
+  totalPhotoCount: number;
   failedCount: number;
   pendingCount: number;
   lastIndexedAt: string | null;
@@ -762,6 +766,7 @@ export async function getEventIndexingProgress(eventId: string): Promise<EventIn
     status: state?.status ?? 'idle',
     indexedCount: progress.indexed,
     totalCount: progress.totalApplicable,
+    totalPhotoCount: progress.totalPhotos,
     failedCount: progress.failed,
     pendingCount: progress.pending,
     lastIndexedAt: progress.lastIndexedAt,

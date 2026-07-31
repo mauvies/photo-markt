@@ -1,7 +1,7 @@
 # T-209 · [DIAGNÓSTICO] "0 de 0 fotos indexadas" tras subir una foto con Inngest local
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `fix/indexing-progress-zero-of-zero`
 - **OpenSpec change:** —  (empieza por diagnóstico)
