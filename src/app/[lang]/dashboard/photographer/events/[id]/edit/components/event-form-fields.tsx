@@ -81,7 +81,7 @@ export function EventFormFields({
               name="name"
               validators={{
                 onChange: ({ value }) =>
-                  value.trim().length === 0 ? 'Name is required.' : undefined,
+                  value.trim().length === 0 ? t('nameRequired') : undefined,
               }}
             >
               {(field) => {
@@ -90,14 +90,14 @@ export function EventFormFields({
                 const isInvalid = showFeedback && !field.state.meta.isValid;
                 return (
                   <div>
-                    <Label htmlFor="name">Name or place</Label>
+                    <Label htmlFor="name">{t('nameLabel')}</Label>
                     <Input
                       id="name"
                       className="mt-2"
                       value={field.state.value}
                       onChange={(event) => field.handleChange(event.target.value)}
                       onBlur={field.handleBlur}
-                      placeholder="Event name or place"
+                      placeholder={t('namePlaceholder')}
                       aria-invalid={isInvalid}
                       autoComplete="off"
                       suppressHydrationWarning
@@ -116,7 +116,7 @@ export function EventFormFields({
                 onChange: ({ value }) =>
                   value && activityValues.includes(value as (typeof activityValues)[number])
                     ? undefined
-                    : 'Activity is required.',
+                    : t('activityRequired'),
               }}
             >
               {(field) => {
@@ -125,7 +125,7 @@ export function EventFormFields({
                 const isInvalid = showFeedback && !field.state.meta.isValid;
                 return (
                   <div className="grid gap-2">
-                    <Label htmlFor="activity">Activity</Label>
+                    <Label htmlFor="activity">{t('activityLabel')}</Label>
                     <Select
                       value={field.state.value}
                       onValueChange={(value) => {
@@ -138,7 +138,7 @@ export function EventFormFields({
                         className="w-full rounded-md"
                         aria-invalid={isInvalid}
                       >
-                        <SelectValue placeholder="Select an activity" />
+                        <SelectValue placeholder={t('activityPlaceholder')} />
                       </SelectTrigger>
                       <SelectContent className="w-[--radix-select-trigger-width]">
                         {activityOptions.map((option) => (
@@ -161,7 +161,7 @@ export function EventFormFields({
           <form.Field name="city">
             {(field) => (
               <div className="grid gap-2">
-                <Label htmlFor="city">Location</Label>
+                <Label htmlFor="city">{t('locationLabel')}</Label>
                 <LocationAutocomplete
                   id="city"
                   value={field.state.value || ''}
@@ -172,8 +172,8 @@ export function EventFormFields({
                     form.setFieldValue('country', parts.country);
                   }}
                   onBlur={field.handleBlur}
-                  placeholder="Search for a location..."
-                  noResultsText="No locations found"
+                  placeholder={t('locationSearchPlaceholder')}
+                  noResultsText={t('locationNoResults')}
                 />
               </div>
             )}
@@ -189,7 +189,7 @@ export function EventFormFields({
               name="date"
               validators={{
                 onChange: ({ value }) =>
-                  value && value.length > 0 ? undefined : 'Date is required.',
+                  value && value.length > 0 ? undefined : t('dateRequired'),
               }}
             >
               {(field) => {
@@ -199,7 +199,7 @@ export function EventFormFields({
                 const parsedDate = field.state.value ? new Date(field.state.value) : undefined;
                 return (
                   <div className="grid gap-2">
-                    <Label htmlFor={dateInputId}>Date</Label>
+                    <Label htmlFor={dateInputId}>{t('dateLabel')}</Label>
                     <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
                       <PopoverTrigger asChild>
                         <Button
@@ -211,7 +211,7 @@ export function EventFormFields({
                           )}
                           aria-invalid={isInvalid}
                         >
-                          {parsedDate ? format(parsedDate, 'PPP') : 'Select date'}
+                          {parsedDate ? format(parsedDate, 'PPP') : t('dateSelectPlaceholder')}
                           <ChevronDownIcon className="size-4 opacity-60" />
                         </Button>
                       </PopoverTrigger>
@@ -252,7 +252,7 @@ export function EventFormFields({
                               htmlFor={sessionTimeId}
                               className="text-xs text-muted-foreground"
                             >
-                              Session time (optional)
+                              {t('sessionTimeLabel')}
                             </Label>
                             <Input
                               id={sessionTimeId}
@@ -285,7 +285,7 @@ export function EventFormFields({
                                 htmlFor={sessionEndTimeId}
                                 className="text-xs text-muted-foreground"
                               >
-                                Session end time (optional)
+                                {t('sessionEndTimeLabel')}
                               </Label>
                               <Input
                                 id={sessionEndTimeId}
@@ -318,16 +318,14 @@ export function EventFormFields({
             {(field) => (
               <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
                 <div className="grid gap-1">
-                  <Label htmlFor="is_public">Event Visibility</Label>
+                  <Label htmlFor="is_public">{t('visibilityLabel')}</Label>
                   <p className="text-xs text-muted-foreground">
-                    {field.state.value
-                      ? 'Anyone can access this event'
-                      : 'Only people with the share code can access'}
+                    {field.state.value ? t('visibilityPublicDesc') : t('visibilityPrivateDesc')}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">
-                    {field.state.value ? 'Public' : 'Private'}
+                    {field.state.value ? t('visibilityPublic') : t('visibilityPrivate')}
                   </span>
                   <Switch
                     id="is_public"
@@ -367,16 +365,14 @@ export function EventFormFields({
                     return (
                       <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
                         <div className="grid gap-1">
-                          <Label htmlFor="watermark_enabled">Watermark on Photos</Label>
+                          <Label htmlFor="watermark_enabled">{t('watermarkLabel')}</Label>
                           <p className="text-xs text-muted-foreground">
-                            {configurable
-                              ? 'Add watermark for talent users (photographers see originals)'
-                              : t('watermarkPrivateNote')}
+                            {configurable ? t('watermarkDesc') : t('watermarkPrivateNote')}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-muted-foreground">
-                            {shown ? 'Enabled' : 'Disabled'}
+                            {shown ? t('watermarkEnabled') : t('watermarkDisabled')}
                           </span>
                           <Switch
                             id="watermark_enabled"
@@ -401,14 +397,12 @@ export function EventFormFields({
             {(field) => (
               <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
                 <div className="grid gap-1">
-                  <Label htmlFor="is_collaborative">Collaborative Event</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Let anyone with the share link contribute photos
-                  </p>
+                  <Label htmlFor="is_collaborative">{t('collaborativeLabel')}</Label>
+                  <p className="text-xs text-muted-foreground">{t('collaborativeDesc')}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">
-                    {field.state.value ? 'Enabled' : 'Disabled'}
+                    {field.state.value ? t('collaborativeEnabled') : t('collaborativeDisabled')}
                   </span>
                   <Switch
                     id="is_collaborative"
@@ -437,9 +431,9 @@ export function EventFormFields({
                     {(field) => (
                       <div className="flex items-center justify-between gap-4">
                         <div className="grid gap-1">
-                          <Label htmlFor="allow_guest_upload">Allow guest uploads</Label>
+                          <Label htmlFor="allow_guest_upload">{t('allowGuestUploadLabel')}</Label>
                           <p className="text-xs text-muted-foreground">
-                            Visitors without an account can contribute photos
+                            {t('allowGuestUploadDesc')}
                           </p>
                         </div>
                         <Switch
@@ -457,9 +451,11 @@ export function EventFormFields({
                     {(field) => (
                       <div className="flex items-center justify-between gap-4">
                         <div className="grid gap-1">
-                          <Label htmlFor="require_upload_approval">Require approval</Label>
+                          <Label htmlFor="require_upload_approval">
+                            {t('requireApprovalLabel')}
+                          </Label>
                           <p className="text-xs text-muted-foreground">
-                            Hold uploads as pending until you approve them
+                            {t('requireApprovalDesc')}
                           </p>
                         </div>
                         <Switch

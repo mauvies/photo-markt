@@ -1,7 +1,7 @@
 # T-206 · Reorganizar la página `/dashboard/photographer/events/[id]/edit` (está desordenada)
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno para empezar — **coordinar con T-204/T-205** (misma familia de bundles) y **no
   empezar antes de que mergee PR #265** (T-203), que ya toca este mismo form
 - **Rama:** `refactor/edit-event-page-ux`

@@ -112,10 +112,8 @@ export default async function EditEventPage({
 
   return (
     <div>
-      <DashboardHeader title="Edit Event" />
-      <p className="mt-1 text-sm text-muted-foreground">
-        Update your event details and manage photos.
-      </p>
+      <DashboardHeader title={dict.eventDetails.editEventTitle} />
+      <p className="mt-1 text-sm text-muted-foreground">{dict.eventDetails.editEventSubtitle}</p>
       <div className="mt-6">
         <TranslationsProvider translations={dict.newEvent}>
           <EditEventForm
@@ -123,6 +121,7 @@ export default async function EditEventPage({
             initialPhotos={photosWithUrls}
             initialCoverUrl={initialCoverUrl}
             bundleT={dict.bundlePricing}
+            detailsT={dict.eventDetails}
           />
         </TranslationsProvider>
       </div>
