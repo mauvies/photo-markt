@@ -258,6 +258,30 @@ export function getPlanById(id: PlanId): Plan | undefined {
 }
 
 /**
+ * Tier position of a plan, derived from `PLANS` order (free → starter → pro).
+ *
+ * Derived rather than a second hand-written table so there is one ordering to
+ * keep true; `test/unit/plans.test.ts` pins free < starter < pro so reordering
+ * `PLANS` for display reasons fails loudly instead of silently inverting
+ * upgrade/downgrade copy. Unknown ids sort first (treated as the lowest tier).
+ */
+export function getPlanRank(id: PlanId): number {
+  return PLANS.findIndex((plan) => plan.id === id);
+}
+
+/**
+ * Is moving from `currentId` to `targetId` a move UP the tiers?
+ *
+ * The CTA that switches plans must not call every change an "upgrade": from
+ * Pro, the only other paid plan is Starter, so the button was offering
+ * "Upgrade to Starter" for what is a downgrade. Equal tiers count as false —
+ * there is nothing to upgrade to.
+ */
+export function isPlanUpgrade(currentId: PlanId, targetId: PlanId): boolean {
+  return getPlanRank(targetId) > getPlanRank(currentId);
+}
+
+/**
  * Format a plan's price for display. Defaults to monthly. For yearly, shows
  * the per-month-equivalent (which is what the home page does) — the
  * "billed yearly: $X" subtitle is rendered separately by the calling UI.

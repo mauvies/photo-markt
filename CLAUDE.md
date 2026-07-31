@@ -369,6 +369,21 @@ to `canceled` and `getCurrentPlan` falls back to Free on its own. No refund logi
   (`getFreePlanOverage`, `src/lib/plan-limits.ts`).
 - Feedback is a **direct toast**, not a `?status=` code: those exist for *redirect* returns (Stripe's
   `cancel_url`, the `resume` route), and `status=cancelled` already means *checkout abandoned*.
+- **⚠️ A row can outlive its Stripe subscription** (deleted from the dashboard, wiped test data, an old
+  dump). Stripe then answers `resource_missing` **forever**, and treating that as a generic failure
+  left the photographer permanently stuck — unable to change plan *and* unable to cancel — while the
+  stale row still granted them a paid plan. `isStripeResourceMissing`
+  (`src/lib/stripe/resource-missing.ts`) separates "stale reference, recover" from "Stripe is having a
+  bad minute, retry": the plan change **falls through to a fresh checkout** (minting a replacement
+  customer if that is missing too), and cancel/reactivate return the distinct `subscription_missing`
+  code so the copy says what to do rather than "try again in a moment". **Recovery writes nothing
+  locally** — the webhook rewrites the row off the real subscription, so the webhook-only rule holds.
+- **The CTA that switches plans must not call every change an "upgrade".** `isPlanUpgrade`
+  (`src/lib/plans.ts`, ranked off `PLANS` order and pinned by `test/unit/plans.test.ts`) picks
+  `upgradeToPlan` vs `switchToPlan`; the copy is resolved in `settings/billing/page.tsx`, the only
+  place that knows both the current plan and the dictionary. `UpgradePlanButton` takes a finished
+  `ctaLabel` — it used to hardcode English keyed on the target plan alone, so a Pro subscriber was
+  offered an "Upgrade to Starter" for what is a downgrade.
 
 ### Buyer service fee (billing v2 — T-194/T-195/T-196/T-197)
 The buyer pays a **fixed + percent** fee on top of the cart subtotal, as its own visible Stripe line

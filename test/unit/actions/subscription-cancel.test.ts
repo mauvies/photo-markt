@@ -171,6 +171,24 @@ describe('cancelSubscriptionAction', () => {
     expect(JSON.stringify(result)).not.toContain('Expired API Key');
   });
 
+  it('returns subscription_missing when Stripe no longer has the subscription', async () => {
+    // A stale row (subscription deleted in Stripe, wiped test data, an old
+    // dump) answers `resource_missing` forever. Reporting the generic failure
+    // told the photographer to "try again in a moment" for something that can
+    // never succeed, leaving them stuck on a paid plan with no way out.
+    getSubscriptionMock.mockResolvedValue(activeSubscription());
+    stripeMock.subscriptions.update.mockRejectedValue(
+      Object.assign(new Error("No such subscription: 'sub_123'"), {
+        code: 'resource_missing',
+        statusCode: 404,
+      }),
+    );
+
+    await expect(cancelSubscriptionAction()).resolves.toEqual({
+      error: 'subscription_missing',
+    });
+  });
+
   it('throws for an unauthenticated caller without touching Stripe or the DB', async () => {
     supabaseMock.auth.getUser.mockResolvedValue({ data: { user: null }, error: null });
 
@@ -242,6 +260,20 @@ describe('reactivateSubscriptionAction', () => {
 
     await expect(reactivateSubscriptionAction()).resolves.toEqual({
       error: 'subscription_failed',
+    });
+  });
+
+  it('returns subscription_missing when Stripe no longer has the subscription', async () => {
+    getSubscriptionMock.mockResolvedValue(activeSubscription({ cancel_at_period_end: true }));
+    stripeMock.subscriptions.update.mockRejectedValue(
+      Object.assign(new Error("No such subscription: 'sub_123'"), {
+        code: 'resource_missing',
+        statusCode: 404,
+      }),
+    );
+
+    await expect(reactivateSubscriptionAction()).resolves.toEqual({
+      error: 'subscription_missing',
     });
   });
 

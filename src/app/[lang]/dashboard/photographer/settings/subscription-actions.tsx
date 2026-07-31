@@ -24,6 +24,8 @@ export interface SubscriptionActionLabels {
   dialogPending: string;
   cancelSuccess: string;
   cancelError: string;
+  /** Shown when the row points at a subscription Stripe no longer has. */
+  subscriptionMissing: string;
   reactivate: string;
   reactivateSuccess: string;
   reactivateError: string;
@@ -56,7 +58,11 @@ export function SubscriptionActions({
   const handleCancel = async () => {
     const result = await cancelSubscriptionAction();
     if ('error' in result) {
-      toast.error(labels.cancelError);
+      // A missing Stripe subscription can never be retried into working, so it
+      // gets copy that says what to do instead of "try again in a moment".
+      toast.error(
+        result.error === 'subscription_missing' ? labels.subscriptionMissing : labels.cancelError,
+      );
       return;
     }
     toast.success(labels.cancelSuccess);
@@ -68,7 +74,11 @@ export function SubscriptionActions({
       try {
         const result = await reactivateSubscriptionAction();
         if ('error' in result) {
-          toast.error(labels.reactivateError);
+          toast.error(
+            result.error === 'subscription_missing'
+              ? labels.subscriptionMissing
+              : labels.reactivateError,
+          );
           return;
         }
         toast.success(labels.reactivateSuccess);

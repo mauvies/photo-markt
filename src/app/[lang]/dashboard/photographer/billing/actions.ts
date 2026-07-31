@@ -6,6 +6,7 @@ import { supabaseAdmin } from '@/database/supabase-admin';
 import { env } from '@/env.mjs';
 import type { BillingPeriod, PlanId } from '@/lib/plans';
 import { stripe } from '@/lib/stripe/config';
+import { isStripeResourceMissing } from '@/lib/stripe/resource-missing';
 import { subscriptionPeriodEndISO } from '@/lib/stripe/subscription-period';
 
 /**
@@ -28,6 +29,13 @@ export type BillingCheckoutResult =
  */
 export type SubscriptionActionError =
   | 'no_subscription'
+  /**
+   * The row points at a Stripe subscription that no longer exists. Distinct
+   * from `subscription_failed` because retrying can NEVER succeed — telling the
+   * photographer to "try again in a moment" would be a lie, and they'd be stuck
+   * on a paid plan with no way out.
+   */
+  | 'subscription_missing'
   | 'already_cancelled'
   | 'not_cancelled'
   | 'subscription_failed';
@@ -150,11 +158,24 @@ export async function createBillingCheckoutAction(
         updated: true,
       };
     } catch (error) {
-      console.error('Error updating subscription:', error);
-      // Return (don't throw) a domain error — Next redacts thrown Server Action
-      // messages in prod, so returning lets the client show a controlled,
-      // translated toast instead of the opaque "Server Components" message.
-      return { error: 'checkout_failed' };
+      if (isStripeResourceMissing(error)) {
+        // The stored subscription no longer exists in Stripe (deleted from the
+        // dashboard, wiped test data, a row restored from an old dump). Failing
+        // here left the photographer permanently stuck — unable to change plan
+        // AND unable to cancel — while the stale row still granted them a paid
+        // plan. Fall through to a fresh checkout instead; the webhook then
+        // rewrites the row off the real subscription. Nothing is written here:
+        // Stripe stays the source of truth.
+        console.warn(
+          `Stored subscription ${subscription.stripe_subscription_id} is missing in Stripe — falling through to a new checkout for user ${user.id}`,
+        );
+      } else {
+        console.error('Error updating subscription:', error);
+        // Return (don't throw) a domain error — Next redacts thrown Server Action
+        // messages in prod, so returning lets the client show a controlled,
+        // translated toast instead of the opaque "Server Components" message.
+        return { error: 'checkout_failed' };
+      }
     }
   }
 
@@ -193,27 +214,49 @@ export async function createBillingCheckoutAction(
 
     const baseUrl = env.SITE_URL;
 
-    const sessionStripe = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      customer: stripeCustomerId,
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
+    const createSession = (customerId: string) =>
+      stripe.checkout.sessions.create({
+        mode: 'subscription',
+        customer: customerId,
+        line_items: [
+          {
+            price: priceId,
+            quantity: 1,
+          },
+        ],
+        // Success returns to the overview in a "confirming" state — activation is
+        // done exclusively by the Stripe webhook (customer.subscription.*), never
+        // here. Reaching this URL must not grant a plan. Cancel returns to the
+        // billing settings surface where the user can retry, with no partial state.
+        success_url: `${baseUrl}/dashboard/photographer?checkout=success`,
+        cancel_url: `${baseUrl}/dashboard/photographer/settings/billing?status=cancelled`,
+        metadata: {
+          supabase_user_id: user.id,
+          plan_id: planId,
+          billing_period: period,
         },
-      ],
-      // Success returns to the overview in a "confirming" state — activation is
-      // done exclusively by the Stripe webhook (customer.subscription.*), never
-      // here. Reaching this URL must not grant a plan. Cancel returns to the
-      // billing settings surface where the user can retry, with no partial state.
-      success_url: `${baseUrl}/dashboard/photographer?checkout=success`,
-      cancel_url: `${baseUrl}/dashboard/photographer/settings/billing?status=cancelled`,
-      metadata: {
-        supabase_user_id: user.id,
-        plan_id: planId,
-        billing_period: period,
-      },
-    });
+      });
+
+    let sessionStripe: Awaited<ReturnType<typeof createSession>>;
+    try {
+      sessionStripe = await createSession(stripeCustomerId);
+    } catch (error) {
+      if (!isStripeResourceMissing(error)) throw error;
+      // The stored customer is gone too — the same staleness that can orphan
+      // the subscription id (wiped test data, an old dump) takes the customer
+      // with it. Without this the recovery path above just dead-ends one call
+      // later. Mint a replacement carrying the same metadata and retry once;
+      // the webhook writes the new customer id onto the row from the real
+      // subscription event, so no local write is needed here either.
+      console.warn(
+        `Stored customer ${stripeCustomerId} is missing in Stripe — creating a replacement for user ${user.id}`,
+      );
+      const replacement = await stripe.customers.create({
+        email: user.email ?? undefined,
+        metadata: { supabase_user_id: user.id },
+      });
+      sessionStripe = await createSession(replacement.id);
+    }
 
     return { url: sessionStripe.url ?? '' };
   } catch (error) {
@@ -308,6 +351,12 @@ export async function cancelSubscriptionAction(): Promise<SubscriptionActionResu
     });
     return { ok: true, currentPeriodEnd: subscriptionPeriodEndISO(updated) };
   } catch (error) {
+    if (isStripeResourceMissing(error)) {
+      console.warn(
+        `Cannot cancel ${subscription.stripe_subscription_id}: missing in Stripe (stale local row)`,
+      );
+      return { error: 'subscription_missing' };
+    }
     console.error('Error canceling subscription:', error);
     return { error: 'subscription_failed' };
   }
@@ -339,6 +388,12 @@ export async function reactivateSubscriptionAction(): Promise<SubscriptionAction
     });
     return { ok: true, currentPeriodEnd: subscriptionPeriodEndISO(updated) };
   } catch (error) {
+    if (isStripeResourceMissing(error)) {
+      console.warn(
+        `Cannot reactivate ${subscription.stripe_subscription_id}: missing in Stripe (stale local row)`,
+      );
+      return { error: 'subscription_missing' };
+    }
     console.error('Error reactivating subscription:', error);
     return { error: 'subscription_failed' };
   }

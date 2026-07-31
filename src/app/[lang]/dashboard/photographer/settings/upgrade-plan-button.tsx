@@ -15,10 +15,22 @@ interface UpgradePlanButtonProps {
   variant?: 'default' | 'outline';
   size?: 'sm' | 'lg';
   className?: string;
-  /** Translated messages, fed from the parent server component's dict (this
-   * subtree has no TranslationsProvider). */
+  /**
+   * Fully resolved CTA copy, e.g. "Upgrade to Pro" or "Switch to Starter".
+   * Built by the parent server component, which is the only place that knows
+   * BOTH the current plan and the dictionary — this is a client component, so
+   * it can reach neither. It previously hardcoded English copy keyed on the
+   * target plan alone, which is why a Pro subscriber was offered an "upgrade"
+   * to Starter. Same shape `PricingPlanButton` already uses.
+   */
+  ctaLabel: string;
+  processingLabel: string;
+  updatedLabel: string;
+  /** Translated messages for the domain error codes the action returns. */
   checkoutErrorLabel: string;
   yearlyUnavailableLabel: string;
+  /** Hides the leading sparkle for a move that isn't an upgrade. */
+  showUpgradeIcon?: boolean;
 }
 
 export function UpgradePlanButton({
@@ -27,8 +39,12 @@ export function UpgradePlanButton({
   variant = 'default',
   size = 'sm',
   className,
+  ctaLabel,
+  processingLabel,
+  updatedLabel,
   checkoutErrorLabel,
   yearlyUnavailableLabel,
+  showUpgradeIcon = true,
 }: UpgradePlanButtonProps) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -49,7 +65,7 @@ export function UpgradePlanButton({
           window.location.href = result.url;
         } else if (result.updated) {
           // Subscription was updated directly
-          toast.success('Subscription updated successfully');
+          toast.success(updatedLabel);
           router.refresh();
         }
       } catch {
@@ -71,12 +87,12 @@ export function UpgradePlanButton({
       {isPending ? (
         <>
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Processing...
+          {processingLabel}
         </>
       ) : (
         <>
-          <Sparkles className="mr-2 h-4 w-4" />
-          {planId === 'pro' ? 'Upgrade to Pro' : 'Upgrade to Starter'}
+          {showUpgradeIcon && <Sparkles className="mr-2 h-4 w-4" />}
+          {ctaLabel}
         </>
       )}
     </Button>

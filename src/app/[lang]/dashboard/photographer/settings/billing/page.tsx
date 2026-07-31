@@ -17,7 +17,7 @@ import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { getPlanFeatures } from '@/lib/plan-features';
 import { getFreePlanOverage } from '@/lib/plan-limits';
-import { formatPlanPrice, getPlanById, PLANS } from '@/lib/plans';
+import { formatPlanPrice, getPlanById, isPlanUpgrade, PLANS, type PlanId } from '@/lib/plans';
 import { getDashboardData } from '../../actions';
 import { AvailablePlansSection } from '../available-plans-section';
 import { BillingStatusToast } from '../billing-status-toast';
@@ -64,6 +64,26 @@ export default async function PhotographerSettingsBillingPage({
 
   // Shared, translated feature lists — same source as the landing pricing cards.
   const planFeatures = getPlanFeatures(dict.pricingSection);
+
+  // CTA copy per target plan. Built HERE because this is the only place that
+  // knows both the current plan and the dictionary — the button is a client
+  // component and can reach neither, which is why it used to hardcode English
+  // "Upgrade to X" keyed on the target alone and offered a Pro subscriber an
+  // "upgrade" to Starter.
+  const planCtaLabel = (targetPlanId: PlanId): string => {
+    const target = getPlanById(targetPlanId);
+    const template = isPlanUpgrade(currentPlanId, targetPlanId)
+      ? dict.photographerDashboard.upgradeToPlan
+      : dict.photographerDashboard.switchToPlan;
+    return interpolate(template, { planName: target?.name ?? targetPlanId });
+  };
+  const otherPaidPlans = PLANS.filter((plan) => plan.id !== currentPlanId && plan.id !== 'free');
+  const ctaLabelByPlan = Object.fromEntries(
+    otherPaidPlans.map((plan) => [plan.id, planCtaLabel(plan.id)]),
+  ) as Partial<Record<PlanId, string>>;
+  const isUpgradeByPlan = Object.fromEntries(
+    otherPaidPlans.map((plan) => [plan.id, isPlanUpgrade(currentPlanId, plan.id)]),
+  ) as Partial<Record<PlanId, boolean>>;
 
   // --- Cancellation state (T-214) -------------------------------------------
   // Only paid plans can be cancelled; on Free there is nothing to cancel. The
@@ -120,6 +140,7 @@ export default async function PhotographerSettingsBillingPage({
     dialogPending: dict.photographerDashboard.cancelSubscriptionPending,
     cancelSuccess: dict.photographerDashboard.cancelSubscriptionSuccess,
     cancelError: dict.photographerDashboard.cancelSubscriptionError,
+    subscriptionMissing: dict.photographerDashboard.subscriptionMissingError,
     reactivate: dict.photographerDashboard.reactivateSubscription,
     reactivateSuccess: dict.photographerDashboard.reactivateSubscriptionSuccess,
     reactivateError: dict.photographerDashboard.reactivateSubscriptionError,
@@ -163,31 +184,39 @@ export default async function PhotographerSettingsBillingPage({
                   {currentPlan.pricing !== null && ` • ${formatPlanPrice(currentPlan)}`}
                 </p>
               </div>
-              {nextPlanId && (
-                <UpgradePlanButton
-                  planId={nextPlanId}
-                  checkoutErrorLabel={dict.photographerDashboard.checkoutError}
-                  yearlyUnavailableLabel={dict.photographerDashboard.checkoutYearlyUnavailable}
-                  className="w-full bg-gradient-starter border-0 text-white hover:opacity-90 sm:w-auto"
-                />
-              )}
+              {/* Actions live on the heading line, right-aligned: the cancel
+                  affordance is a quiet text link so it never competes with the
+                  upgrade CTA, which stays the rightmost, most prominent
+                  element. On Pro there is no upgrade left, so cancel sits at
+                  the far right on its own. Paid plans only — Free has nothing
+                  to cancel. */}
+              <div className="flex items-center gap-4 sm:justify-end">
+                {isPaidPlan && (
+                  <SubscriptionActions
+                    pendingCancellation={pendingCancellation}
+                    labels={subscriptionActionLabels}
+                  />
+                )}
+                {nextPlanId && (
+                  <UpgradePlanButton
+                    planId={nextPlanId}
+                    ctaLabel={planCtaLabel(nextPlanId)}
+                    showUpgradeIcon={isPlanUpgrade(currentPlanId, nextPlanId)}
+                    processingLabel={dict.photographerDashboard.planChangeProcessing}
+                    updatedLabel={dict.photographerDashboard.subscriptionUpdated}
+                    checkoutErrorLabel={dict.photographerDashboard.checkoutError}
+                    yearlyUnavailableLabel={dict.photographerDashboard.checkoutYearlyUnavailable}
+                    className="bg-gradient-starter border-0 text-white hover:opacity-90"
+                  />
+                )}
+              </div>
             </div>
 
-            {/* Cancellation (T-214). Paid plans only — Free has nothing to
-                cancel. When a cancellation is pending the card states the real
-                period-end date and offers the undo; otherwise the cancel action
-                stays deliberately quiet so it never competes with the upgrade
-                CTA above. */}
-            {isPaidPlan && (
-              <div className="flex flex-col gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
-                {pendingCancellation && (
-                  <p className="text-sm text-muted-foreground">{pendingCancellationNotice}</p>
-                )}
-                <SubscriptionActions
-                  pendingCancellation={pendingCancellation}
-                  labels={subscriptionActionLabels}
-                />
-              </div>
+            {/* The pending-cancellation notice is a full sentence, so it stays
+                on its own line under the heading rather than crowding the
+                actions row. */}
+            {isPaidPlan && pendingCancellation && (
+              <p className="text-sm text-muted-foreground">{pendingCancellationNotice}</p>
             )}
 
             <div className="space-y-2">
@@ -237,8 +266,10 @@ export default async function PhotographerSettingsBillingPage({
           </div>
 
           <AvailablePlansSection
-            plans={PLANS.filter((plan) => plan.id !== currentPlanId && plan.id !== 'free')}
+            plans={otherPaidPlans}
             featuresByPlan={planFeatures}
+            ctaLabelByPlan={ctaLabelByPlan}
+            isUpgradeByPlan={isUpgradeByPlan}
             labels={{
               sectionTitle: dict.photographerDashboard.availablePlans,
               popularBadge: dict.photographerDashboard.popular,
@@ -249,6 +280,8 @@ export default async function PhotographerSettingsBillingPage({
               billedYearlySuffix: dict.pricingSection.billedYearlySuffix,
               checkoutError: dict.photographerDashboard.checkoutError,
               checkoutYearlyUnavailable: dict.photographerDashboard.checkoutYearlyUnavailable,
+              planChangeProcessing: dict.photographerDashboard.planChangeProcessing,
+              subscriptionUpdated: dict.photographerDashboard.subscriptionUpdated,
             }}
           />
         </CardContent>
