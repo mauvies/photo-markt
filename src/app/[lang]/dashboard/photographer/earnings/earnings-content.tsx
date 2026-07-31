@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { CalendarClock, DollarSign, TrendingUp, Wallet } from 'lucide-react';
 import Link from 'next/link';
+import { BundleDiscountNote } from '@/components/bundle-discount-note';
 import { BuyerFeeNote } from '@/components/buyer-fee-note';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -16,6 +17,7 @@ import { cn } from '@/lib/utils';
 import {
   getConnectStatusForEarningsAction,
   getEarningsSummaryAction,
+  getHasBundlePricingAction,
   getPayoutsAction,
   getPhotographerEarningsAction,
   getStripeConnectBalanceAction,
@@ -200,13 +202,14 @@ export function EarningsContent() {
   const { data, isFetching } = useQuery({
     queryKey: ['earnings'] as const,
     queryFn: async () => {
-      const [summaryData, earningsData, payoutsData, connectStatus, stripeBalance] =
+      const [summaryData, earningsData, payoutsData, connectStatus, stripeBalance, bundlePricing] =
         await Promise.all([
           getEarningsSummaryAction(),
           getPhotographerEarningsAction(20),
           getPayoutsAction(),
           getConnectStatusForEarningsAction(),
           getStripeConnectBalanceAction(),
+          getHasBundlePricingAction(),
         ]);
       return {
         summary: summaryData,
@@ -214,6 +217,7 @@ export function EarningsContent() {
         payouts: payoutsData,
         connectStatus: connectStatus.stripe_connect_status,
         stripeBalance,
+        hasBundlePricing: bundlePricing,
       };
     },
     staleTime: 2 * 60 * 1000,
@@ -224,6 +228,7 @@ export function EarningsContent() {
   const payouts = data?.payouts ?? [];
   const connectStatus = data?.connectStatus ?? 'not_connected';
   const stripeBalance = data?.stripeBalance ?? null;
+  const hasBundlePricing = data?.hasBundlePricing ?? false;
   const isLoading = isFetching && !data;
 
   const feePercent = summary ? Math.round(summary.platformFeeRate * 100) : null;
@@ -294,8 +299,16 @@ export function EarningsContent() {
 
           {/* T-197: the buyer service fee is platform revenue — say so, so the
               figures above aren't misread as having it taken out of them.
-              Renders nothing while no buyer fee is charged. */}
-          <BuyerFeeNote>{t('buyerFeeNote')}</BuyerFeeNote>
+              Renders nothing while no buyer fee is charged.
+              T-205: and a bundled sale's gross is the discounted price the
+              photographer set, not a deduction — renders nothing unless they
+              have volume pricing configured somewhere. */}
+          <div className="space-y-1">
+            <BuyerFeeNote>{t('buyerFeeNote')}</BuyerFeeNote>
+            <BundleDiscountNote hasBundlePricing={hasBundlePricing}>
+              {t('bundleDiscountNote')}
+            </BundleDiscountNote>
+          </div>
 
           {/* Stripe Connect balance (live from Stripe API) */}
           {stripeBalance && (

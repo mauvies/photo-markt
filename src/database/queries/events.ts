@@ -118,6 +118,39 @@ export async function getEventsCreatedCount(
 }
 
 /**
+ * Whether the photographer has ever configured volume pricing on any of their
+ * events — a rung ladder (`bundle_tiers`) or an all-photos ceiling
+ * (`bundle_all_photos_cents`). T-205: it decides whether the Sales and Earnings
+ * tabs explain what a bundle discount is, following the `BuyerFeeNote` rule
+ * that a mechanism nobody is subject to should not be explained at all.
+ *
+ * Soft-deleted events are deliberately included: their sales still appear in
+ * both tabs, so the explanation is still owed.
+ *
+ * Fails **closed** (no note) on any error — the columns are migration-gated
+ * like the rest of the bundle schema, and a reporting footnote must never be
+ * able to break the money views on a database that has not applied them yet.
+ */
+export async function hasBundlePricingConfigured(
+  supabase: SupabaseServerClient,
+  photographerId: string,
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('events')
+      .select('id')
+      .eq('user_id', photographerId)
+      .or('bundle_tiers.not.is.null,bundle_all_photos_cents.not.is.null')
+      .limit(1);
+
+    if (error) return false;
+    return (data ?? []).length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Get a single event by ID (with ownership check)
  */
 export async function getEvent(

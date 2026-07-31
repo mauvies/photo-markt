@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { DollarSign, Image, ShoppingCart, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
+import { BundleDiscountNote } from '@/components/bundle-discount-note';
 import { BuyerFeeNote } from '@/components/buyer-fee-note';
 import {
   Select,
@@ -105,9 +106,10 @@ function TopEvents({ events }: TopEventsProps) {
 interface RecentSalesProps {
   sales: Sale[];
   lang: string;
+  hasBundlePricing: boolean;
 }
 
-function RecentSales({ sales, lang }: RecentSalesProps) {
+function RecentSales({ sales, lang, hasBundlePricing }: RecentSalesProps) {
   const { t } = useTranslations<PhotographerDashboardT>();
 
   if (sales.length === 0) {
@@ -182,8 +184,16 @@ function RecentSales({ sales, lang }: RecentSalesProps) {
       </div>
       {/* T-197: the Commission column is the platform's cut of the price; the
           buyer's service fee is separate and not the photographer's money.
-          Renders nothing while no buyer fee is charged. */}
-      <BuyerFeeNote className="mt-4">{t('buyerFeeNote')}</BuyerFeeNote>
+          Renders nothing while no buyer fee is charged.
+          T-205: the Amount column is what the buyer was charged, so on a
+          bundled sale it is the package price the photographer set — not a
+          further deduction. Renders nothing without volume pricing. */}
+      <div className="mt-4 space-y-1">
+        <BuyerFeeNote>{t('buyerFeeNote')}</BuyerFeeNote>
+        <BundleDiscountNote hasBundlePricing={hasBundlePricing}>
+          {t('bundleDiscountNote')}
+        </BundleDiscountNote>
+      </div>
     </div>
   );
 }
@@ -272,7 +282,11 @@ export function SalesContent({ lang }: { lang: string }) {
               there's enough data to make it useful. */}
           {salesData.summary.totalSales > 0 ? (
             <>
-              <RecentSales sales={salesData.recentSales} lang={lang} />
+              <RecentSales
+                sales={salesData.recentSales}
+                lang={lang}
+                hasBundlePricing={salesData.hasBundlePricing}
+              />
               <TopEvents events={salesData.topEvents} />
             </>
           ) : (

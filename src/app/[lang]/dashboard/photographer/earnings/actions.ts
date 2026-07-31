@@ -6,6 +6,7 @@ import {
   getPhotographerEarnings,
   type PhotographerEarning,
 } from '@/database/queries/earnings';
+import { hasBundlePricingConfigured } from '@/database/queries/events';
 import { getPayouts, type Payout } from '@/database/queries/payouts';
 import { getProfileStripeConnect } from '@/database/queries/profiles';
 import { createClient } from '@/database/server';
@@ -39,6 +40,21 @@ export async function getPhotographerEarningsAction(
   }
 
   return getPhotographerEarnings(supabase, user.id, limit, startDate, endDate);
+}
+
+/**
+ * Whether this photographer has volume pricing configured anywhere — decides
+ * whether the Earnings tab explains what a bundle discount is (T-205).
+ */
+export async function getHasBundlePricingAction(): Promise<boolean> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return false;
+
+  return hasBundlePricingConfigured(supabase, user.id);
 }
 
 export async function getPayoutsAction(

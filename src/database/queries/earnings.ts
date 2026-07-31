@@ -37,6 +37,14 @@ export function calculatePlatformFee(
  * Net earnings after commission — the photographer's payout. The buyer service
  * fee (billing v2) is NOT part of this in either direction: it is charged to
  * the buyer on top of the price and is platform revenue.
+ *
+ * Applied per **line item** by the Sales and Earnings tables, which is what
+ * makes the two tabs report identical figures for the same sale. The transfer
+ * itself is made per order, so a multi-item order's rows can sum to a cent less
+ * than its payout (a sum of floors vs the floor of the sum). That is a rounding
+ * artefact of the per-photo breakdown, not a discrepancy in the balance: the
+ * totals shown at the top of the Earnings tab are netted per order — see
+ * `aggregateEarningsByOrder` — so they match the transfers exactly.
  */
 export function calculateNetEarnings(
   grossEarningsCents: number,
@@ -48,6 +56,11 @@ export function calculateNetEarnings(
 /**
  * Get total gross earnings for a photographer from completed orders
  * (authenticated + guest purchases).
+ *
+ * Gross is the **charged** amount: `total_price_cents` carries the allocated
+ * share of a bundle-discounted total (T-204) when one applied, and the list
+ * price when none did. A discounted sale therefore reports the money that
+ * actually came in, never the undiscounted list total.
  */
 export async function getTotalGrossEarnings(
   supabase: SupabaseServerClient,
@@ -57,6 +70,52 @@ export async function getTotalGrossEarnings(
     includePhotoDetails: false,
   });
   return items.reduce((sum, item) => sum + item.totalPriceCents, 0);
+}
+
+export interface EarningsAggregate {
+  grossCents: number;
+  platformFeeCents: number;
+  netCents: number;
+}
+
+/**
+ * Aggregate a photographer's earnings from the gross of each **order** (T-205).
+ *
+ * The unit of aggregation is the order, because that is the unit the money
+ * moves in: the webhook creates one transfer per `(order, photographer)` for
+ * `getPhotographerNetCents(orderGross)`. `getPhotographerNetCents` floors, and
+ * a sum of floors is not the floor of a sum — netting the whole period's gross
+ * in one call reported up to one cent per order MORE than was ever transferred,
+ * which surfaced as a withdrawable balance the photographer could never
+ * withdraw. Bundles make the drift likelier, not rarer: an allocated share of a
+ * discounted total lands on arbitrary cents far more often than a list price
+ * does.
+ *
+ * Summing per order makes the reported net **equal the transfers by
+ * construction**, and `gross = fee + net` still holds because the fee is again
+ * derived as the remainder rather than independently rounded (the T-197 rule).
+ */
+export function aggregateEarningsByOrder(
+  orderGrossCents: readonly number[],
+  planId: string | null | undefined,
+): EarningsAggregate {
+  const grossCents = orderGrossCents.reduce((sum, gross) => sum + gross, 0);
+  const netCents = orderGrossCents.reduce(
+    (sum, gross) => sum + getPhotographerNetCents(gross, planId),
+    0,
+  );
+  return { grossCents, platformFeeCents: grossCents - netCents, netCents };
+}
+
+/** Sum each order's gross from a normalized list of sale line items. */
+export function sumGrossByOrder(
+  items: ReadonlyArray<{ orderId: string; totalPriceCents: number }>,
+): number[] {
+  const byOrder = new Map<string, number>();
+  for (const item of items) {
+    byOrder.set(item.orderId, (byOrder.get(item.orderId) ?? 0) + item.totalPriceCents);
+  }
+  return [...byOrder.values()];
 }
 
 /**
@@ -76,18 +135,22 @@ export async function getEarningsSummary(
   supabase: SupabaseServerClient,
   photographerId: string,
 ): Promise<EarningsSummary> {
-  const [totalGrossEarningsCents, totalPaidOutCents, pendingPayoutsCents, planIds] =
-    await Promise.all([
-      getTotalGrossEarnings(supabase, photographerId),
-      getTotalPaidOut(supabase, photographerId),
-      getTotalPendingPayouts(supabase, photographerId),
-      getPhotographerPlanIds(supabase, [photographerId]),
-    ]);
+  const [items, totalPaidOutCents, pendingPayoutsCents, planIds] = await Promise.all([
+    getCompletedSaleItems(supabase, photographerId, { includePhotoDetails: false }),
+    getTotalPaidOut(supabase, photographerId),
+    getTotalPendingPayouts(supabase, photographerId),
+    getPhotographerPlanIds(supabase, [photographerId]),
+  ]);
 
   const planId = planIds.get(photographerId);
   const feeRate = getPlatformFeeRate(planId);
-  const platformFeeCents = calculatePlatformFee(totalGrossEarningsCents, planId);
-  const totalNetEarningsCents = calculateNetEarnings(totalGrossEarningsCents, planId);
+  // Netted per order, the unit the transfers are made in — see
+  // `aggregateEarningsByOrder`.
+  const {
+    grossCents: totalGrossEarningsCents,
+    platformFeeCents,
+    netCents: totalNetEarningsCents,
+  } = aggregateEarningsByOrder(sumGrossByOrder(items), planId);
   const withdrawableBalanceCents = totalNetEarningsCents - totalPaidOutCents - pendingPayoutsCents;
 
   return {
