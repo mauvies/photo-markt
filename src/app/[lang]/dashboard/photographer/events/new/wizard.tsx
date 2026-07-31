@@ -710,8 +710,6 @@ export default function NewEventForm({
             <Step3Details
               form={form}
               submitAttempted={submitAttemptedDetails}
-              coverPreviewUrl={coverPreviewUrl}
-              onCoverChange={handleCoverChange}
               bundleT={bundlePricingLabels}
               eventType={eventType}
             />
@@ -722,6 +720,8 @@ export default function NewEventForm({
               error={photosError}
               photosLost={photosLost}
               eventType={eventType}
+              coverPreviewUrl={coverPreviewUrl}
+              onCoverChange={handleCoverChange}
               onFiles={handleFiles}
               onRemove={removeFile}
             />
@@ -730,6 +730,7 @@ export default function NewEventForm({
             <Step5Review
               sections={reviewSections}
               previews={filePreviews}
+              coverPreviewUrl={coverPreviewUrl}
               photosLost={photosLost && eventType === 'solo'}
               eventType={eventType}
               goToStep={goToStep}

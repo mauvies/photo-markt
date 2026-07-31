@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-210 | Mover la portada del evento al paso de subir fotos del wizard (más espacio a las fotos que a la portada; ⚠️ organizer no debe perderla) | ~~T-203~~ (PR #265 mergeado) | todo |
+| 1 | P2 | T-210 | Mover la portada del evento al paso de subir fotos del wizard (más espacio a las fotos que a la portada; ⚠️ organizer no debe perderla) | ~~T-203~~ (PR #265 mergeado) | doing |
 | 2 | P2 | T-209 | [DIAGNÓSTICO] "0 de 0 fotos indexadas" tras subir foto — `not_applicable` vs worker que no corrió, y la card no distingue los casos | — | todo |
 | 3 | P2 | T-208 | Estado vacío en el tab Photos del evento del fotógrafo (hoy queda en blanco sin fotos) | — | todo |
 | 4 | P2 | T-202 | Podar las API routes muertas `api/billing/checkout` + `api/billing/cancel` (gate: verificar Stripe primero) | — | todo |

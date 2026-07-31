@@ -1067,6 +1067,8 @@
     "reviewConfigSection": "Configuración",
     "reviewDetailsSection": "Detalles",
     "reviewPhotosSection": "Fotos",
+    "reviewCoverLabel": "Imagen de portada",
+    "reviewNoCover": "Sin portada — se usará la primera foto.",
     "reviewNoPhotos": "No has seleccionado fotos.",
     "reviewEditPhotos": "Añadir fotos",
     "photosLostBanner": "La selección de fotos se perdió al refrescar. Vuelve a seleccionarlas antes de continuar.",

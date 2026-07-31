@@ -20,6 +20,9 @@ export type ReviewSection = {
 type Step5ReviewProps = {
   sections: ReviewSection[];
   previews: FilePreview[];
+  // Object-URL preview of the optional dedicated cover image. Reviewed here
+  // alongside the photos because both are picked on step 4 (T-210).
+  coverPreviewUrl: string | null;
   // Shown when previews are empty due to a refresh wiping File[] state.
   // Disables the final submit by way of the parent (we just render the banner).
   photosLost: boolean;
@@ -33,6 +36,7 @@ type Step5ReviewProps = {
 export function Step5Review({
   sections,
   previews,
+  coverPreviewUrl,
   photosLost,
   eventType,
   goToStep,
@@ -94,19 +98,43 @@ export function Step5Review({
       <section className="rounded-lg border bg-card p-4">
         <header className="mb-3 flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold">{t('reviewPhotosSection')}</h3>
-          {!isOrganizer && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => goToStep(4, { remember: REVIEW_STEP })}
-              className="h-8 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <Pencil className="h-3 w-3" />
-              {t('wizardEdit')}
-            </Button>
-          )}
+          {/* Shown for organizer events too since T-210: they upload no photos
+              of their own, but the cover on this step is theirs to edit. */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => goToStep(4, { remember: REVIEW_STEP })}
+            className="h-8 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Pencil className="h-3 w-3" />
+            {t('wizardEdit')}
+          </Button>
         </header>
+
+        {/* Cover image (T-210) — picked on the same step as the photos, so it
+            is reviewed here rather than with the event details. */}
+        <div className="mb-4 flex items-center gap-3 border-b border-border/40 pb-4">
+          {coverPreviewUrl ? (
+            // biome-ignore lint/performance/noImgElement: blob: object-URL that next/image can't optimize
+            <img
+              src={coverPreviewUrl}
+              alt={t('reviewCoverLabel')}
+              className="h-14 w-20 shrink-0 rounded-md border border-border object-cover"
+            />
+          ) : (
+            <div className="flex h-14 w-20 shrink-0 items-center justify-center rounded-md border border-dashed border-input text-xs text-muted-foreground">
+              —
+            </div>
+          )}
+          <div className="grid gap-0.5">
+            <p className="text-sm font-medium">{t('reviewCoverLabel')}</p>
+            {!coverPreviewUrl && (
+              <p className="text-xs text-muted-foreground">{t('reviewNoCover')}</p>
+            )}
+          </div>
+        </div>
+
         {previews.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {isOrganizer ? t('organizerNoOwnPhotos') : t('reviewNoPhotos')}

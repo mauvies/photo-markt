@@ -1067,6 +1067,8 @@
     "reviewConfigSection": "Configuration",
     "reviewDetailsSection": "Details",
     "reviewPhotosSection": "Photos",
+    "reviewCoverLabel": "Cover image",
+    "reviewNoCover": "No cover chosen — the first photo will be used.",
     "reviewNoPhotos": "No photos selected.",
     "reviewEditPhotos": "Add photos",
     "photosLostBanner": "Your photo selection was lost on refresh. Please re-select your photos before continuing.",
