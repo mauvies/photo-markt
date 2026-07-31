@@ -1,12 +1,12 @@
 # T-206 · Reorganizar la página `/dashboard/photographer/events/[id]/edit` (está desordenada)
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno para empezar — **coordinar con T-204/T-205** (misma familia de bundles) y **no
   empezar antes de que mergee PR #265** (T-203), que ya toca este mismo form
 - **Rama:** `refactor/edit-event-page-ux`
 - **OpenSpec change:** —  (se crea al ejecutar, si el cambio toca >1 archivo o es ambiguo)
-- **PR:** —
+- **PR:** #271
 
 ## Requerimiento
 "page `/en/dashboard/photographer/events/<id>/edit` is very messy and price packages are not added yet,
@@ -53,21 +53,21 @@ Si se elige (a) o (b), **declararlo en el PR**; T-178 ya dejó escrito que `/edi
 superficie de escritura, y esa decisión no se revierte aquí.
 
 ## Criterio de aceptación (Definition of Done)
-- [ ] La página presenta la edición **agrupada en secciones legibles**, no una columna plana
-- [ ] **Cero strings hardcodeados**: `Add Photos`, `Cancel`, `Save Changes`, `Saving...` salen del
+- [x] La página presenta la edición **agrupada en secciones legibles**, no una columna plana
+- [x] **Cero strings hardcodeados**: `Add Photos`, `Cancel`, `Save Changes`, `Saving...` salen del
       diccionario, con claves nuevas en `en.json` **y** `es.json`; `/es` no muestra inglés
-- [ ] Queda explícito en la UI qué se guarda al instante (portada) y qué requiere Save
-- [ ] JSX comentado muerto eliminado
-- [ ] Los casts `as keyof Dictionary['newEvent']` se reducen o se justifican (idealmente: claves propias
+- [x] Queda explícito en la UI qué se guarda al instante (portada) y qué requiere Save
+- [x] JSX comentado muerto eliminado
+- [x] Los casts `as keyof Dictionary['newEvent']` se reducen o se justifican (idealmente: claves propias
       del form de edición, para que un typo falle en typecheck)
-- [ ] La barra de acciones no tapa contenido ni colisiona con la bottom-nav en móvil (verificado en
+- [x] La barra de acciones no tapa contenido ni colisiona con la bottom-nav en móvil (verificado en
       móvil real o emulación, light + dark)
-- [ ] **Sin regresión funcional**: guardar metadatos, subir fotos, borrar fotos, portada, ajustes de IA y
+- [x] **Sin regresión funcional**: guardar metadatos, subir fotos, borrar fotos, portada, ajustes de IA y
       la escalera de precios de T-203 siguen funcionando exactamente igual
-- [ ] El editor de bundles de T-203 sigue montado y operativo tras la reorganización
-- [ ] strings nuevos en `en.json` y `es.json`
-- [ ] test de regresión que falla antes y pasa después
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] El editor de bundles de T-203 sigue montado y operativo tras la reorganización
+- [x] strings nuevos en `en.json` y `es.json`
+- [x] test de regresión que falla antes y pasa después
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Solape con tickets existentes (leer antes de empezar)
 - **T-203** (PR **#265**, draft, sin mergear) **ya toca `edit-event-form.tsx`** para montar el editor de
