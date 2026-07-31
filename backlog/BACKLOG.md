@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-208 | Estado vacío en el tab Photos del evento del fotógrafo (hoy queda en blanco sin fotos) | — | todo |
+| 1 | P2 | T-208 | Estado vacío en el tab Photos del evento del fotógrafo (hoy queda en blanco sin fotos) | — | doing |
 | 2 | P2 | T-202 | Podar las API routes muertas `api/billing/checkout` + `api/billing/cancel` (gate: verificar Stripe primero) | — | todo |
 | 3 | P3 | T-201 | Manifiesto PWA: `public/manifest.json` → `src/app/manifest.ts` (`MetadataRoute.Manifest`) | — | todo |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |

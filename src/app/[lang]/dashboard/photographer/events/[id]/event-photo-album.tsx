@@ -9,6 +9,7 @@ import { EventPhotoCountLabel } from '@/components/event-photo-count-label';
 import type { PhotoAlbumItem } from '@/components/photo-album-viewer';
 import { PhotoGallery, type PhotoGalleryBulkAction } from '@/components/photo-gallery';
 import type { PhotoIconTooltips, PhotoMoreMenuConfig } from '@/components/photo-icon-buttons';
+import { PhotoSelectionToolbar } from '@/components/photo-selection-toolbar';
 import { TagTalentDialog } from '@/components/tag-talent-dialog';
 import { useLoadMorePhotos } from '@/hooks/use-load-more-photos';
 import { downloadEventPhotosZip } from '@/lib/download-zip';
@@ -60,6 +61,10 @@ type EventPhotoAlbumProps = {
    * can't derive from `deletedIds` directly. Omitted in the tab-less view,
    * which renders its own count from `displayedCount` below. */
   onDisplayedCountChange?: (count: number) => void;
+  /** Rendered instead of the grid when the event has no photos at all (T-208).
+   * Composed by the server page (copy + upload link), so this component stays
+   * unaware of the dictionary and of which upload path the event type uses. */
+  emptyState?: ReactNode;
   /** Whether more photos exist beyond the first batch (drives "Load more"). */
   initialHasMore?: boolean;
   /** "Load more" button label. */
@@ -78,6 +83,7 @@ export function EventPhotoAlbum({
   totalCount,
   toolbarLeading,
   onDisplayedCountChange,
+  emptyState,
   initialHasMore = false,
   loadMoreLabel,
   loadMoreErrorLabel,
@@ -336,6 +342,33 @@ export function EventPhotoAlbum({
     }),
     [t],
   );
+
+  // Zero photos in the whole event (T-208) — the grid would otherwise render a
+  // blank panel with no copy at all. `displayedCount` is the server's whole-event
+  // total (minus optimistic deletes), so this never fires while uploads are still
+  // being validated: those count as visible and `PhotosProcessingNotice` already
+  // explains them. The toolbar's leading slot (the moderation tab switcher) stays
+  // on screen so the owner can switch to Pending; "Select" is hidden — there is
+  // nothing to select. Same shape as `PendingPhotosTab`'s empty queue.
+  if (emptyState && items.length === 0 && displayedCount === 0) {
+    return (
+      <div className="space-y-1">
+        {toolbarLeading ? (
+          <PhotoSelectionToolbar
+            isSelecting={false}
+            countLabel=""
+            selectLabel={selectionLabels.select}
+            exitLabel={selectionLabels.exitSelection}
+            onStartSelecting={() => {}}
+            onClear={() => {}}
+            selectable={false}
+            leading={toolbarLeading}
+          />
+        ) : null}
+        {emptyState}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">

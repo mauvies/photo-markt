@@ -1,7 +1,7 @@
 # T-208 · Estado vacío en el tab Photos del evento del fotógrafo
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno
 - **Rama:** `feat/photos-tab-empty-state`
 - **OpenSpec change:** —  (UI, requerimiento claro)

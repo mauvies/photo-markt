@@ -1,11 +1,12 @@
 'use client';
 
-import { Check, X } from 'lucide-react';
+import { Check, Inbox, X } from 'lucide-react';
 import Image from 'next/image';
 import { type ReactNode, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { PhotoSelectionToolbar } from '@/components/photo-selection-toolbar';
+import { PhotosEmptyState } from '@/components/photos-empty-state';
 import { Button } from '@/components/ui/button';
 import { usePhotoSelection } from '@/hooks/use-photo-selection';
 import { cn } from '@/lib/utils';
@@ -18,7 +19,10 @@ type PendingPhoto = {
 };
 
 export type PendingPhotosLabels = {
+  /** Empty-queue heading (T-208). */
   empty: string;
+  /** Empty-queue explanation shown under the heading (T-208). */
+  emptyDescription: string;
   approveAria: string;
   rejectAria: string;
   select: string;
@@ -76,7 +80,8 @@ export function PendingPhotosTab({
   if (visible.length === 0) {
     // Keep the tab switcher (toolbarLeading) on screen even with an empty queue,
     // so the owner can switch back to Approved. No Select here — nothing to
-    // select (T-113). Standalone usage (no switcher) keeps the plain message.
+    // select (T-113). The message itself uses the shared empty-state pattern
+    // (T-208) so an empty Pending tab reads like every other empty surface.
     return (
       <div className="space-y-1">
         {toolbarLeading ? (
@@ -91,9 +96,7 @@ export function PendingPhotosTab({
             leading={toolbarLeading}
           />
         ) : null}
-        <p className="rounded-lg border border-dashed border-input p-6 text-center text-sm text-muted-foreground">
-          {labels.empty}
-        </p>
+        <PhotosEmptyState icon={Inbox} title={labels.empty} description={labels.emptyDescription} />
       </div>
     );
   }
