@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 import { EventCoverField } from '@/components/event-cover-field';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { UploadProgressDialog } from '@/components/upload-progress-dialog';
 import { Dropzone } from '@/components/uploader/Dropzone';
@@ -45,6 +46,14 @@ interface EditEventFormProps {
    * `ScopedEventEditForm`.
    */
   bundleT: Dictionary['bundlePricing'];
+  /**
+   * Event-details copy (T-206) — section titles and the save/cancel labels, in
+   * the same `eventDetails` namespace the scoped editor's page already uses, so
+   * both routes name the same sections with the same words. Passed rather than
+   * read through the provider for the same reason as `bundleT`: the provider
+   * here carries `newEvent`.
+   */
+  detailsT: Dictionary['eventDetails'];
 }
 
 export function EditEventForm({
@@ -52,6 +61,7 @@ export function EditEventForm({
   initialPhotos,
   initialCoverUrl,
   bundleT,
+  detailsT,
 }: EditEventFormProps) {
   const router = useRouter();
   const { t } = useTranslations<Dictionary['newEvent']>();
@@ -165,7 +175,7 @@ export function EditEventForm({
           console.error(error);
           URL.revokeObjectURL(objectUrl);
           setCoverPreviewUrl(prior);
-          toast.error(t('coverUpdateFailed' as keyof Dictionary['newEvent']));
+          toast.error(t('coverUpdateFailed'));
         }
       });
     } else {
@@ -177,7 +187,7 @@ export function EditEventForm({
         } catch (error) {
           console.error(error);
           setCoverPreviewUrl(prior);
-          toast.error(t('coverUpdateFailed' as keyof Dictionary['newEvent']));
+          toast.error(t('coverUpdateFailed'));
         }
       });
     }
@@ -282,15 +292,13 @@ export function EditEventForm({
               setSubmitError(bundleError);
               return;
             }
-            setSubmitError(
-              error instanceof Error ? error.message : 'Something went wrong. Please try again.',
-            );
+            setSubmitError(error instanceof Error ? error.message : t('submitError'));
           }
         });
       } catch (error) {
         console.error(error);
         if (error instanceof z.ZodError) {
-          setSubmitError(error.issues[0]?.message ?? 'Invalid form data');
+          setSubmitError(error.issues[0]?.message ?? t('submitError'));
         }
       }
     },
@@ -299,7 +307,7 @@ export function EditEventForm({
   return (
     <div className="mx-auto w-full max-w-[1300px]">
       <form
-        className="flex flex-col gap-5 pb-24"
+        className="flex flex-col gap-5 pb-[calc(9rem+env(safe-area-inset-bottom))] md:pb-28"
         onSubmit={(event) => {
           event.preventDefault();
           setSubmitAttempted(true);
@@ -314,77 +322,119 @@ export function EditEventForm({
           </div>
         )}
 
-        {/* Dedicated cover image (T-166) — managed independently of Save, via the
-            standalone cover actions. Compact so it doesn't dominate the form. */}
-        <div className="max-w-sm">
-          <EventCoverField
-            previewUrl={coverPreviewUrl}
-            onCoverChange={handleCoverChange}
-            busy={isCoverPending}
-            inputId="edit-cover-image"
-            labels={{
-              label: t('coverLabel'),
-              desc: t('coverDesc'),
-              infoAria: t('coverInfoAria'),
-              select: t('coverSelect'),
-              remove: t('coverRemove'),
-            }}
-          />
-        </div>
+        {/* T-206: the page used to stack cover → (fields | dropzone) → AI → photo
+            grid in one flat column with no headings, so nothing said which group
+            a control belonged to — or, worse, which controls were already saved.
+            It is now grouped into the SAME sections the scoped editor uses
+            (`?section=info | settings`, T-179), so the mental model is identical
+            whichever way the photographer arrives. */}
+        <Card>
+          <CardHeader>
+            <CardTitle>{detailsT.infoTitle}</CardTitle>
+            <CardDescription>{detailsT.editInfoSubtitle}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {/* Dedicated cover image (T-166) — the ONLY control on this page that
+                persists on the spot, via its own actions. That asymmetry was
+                invisible before (T-206): everything looked like it was waiting
+                for Save, so the badge states which half of the page you are in. */}
+            <div className="max-w-sm space-y-2">
+              <span className="inline-flex items-center rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                {detailsT.editSavedInstantlyBadge}
+              </span>
+              <EventCoverField
+                previewUrl={coverPreviewUrl}
+                onCoverChange={handleCoverChange}
+                busy={isCoverPending}
+                inputId="edit-cover-image"
+                labels={{
+                  label: t('coverLabel'),
+                  desc: t('coverDesc'),
+                  infoAria: t('coverInfoAria'),
+                  select: t('coverSelect'),
+                  remove: t('coverRemove'),
+                }}
+              />
+              <p className="text-xs text-muted-foreground">{detailsT.editCoverSavedInstantly}</p>
+            </div>
 
-        {/* Top Row: Form and Upload Section */}
-        <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
-          <EventFormFields
-            form={form}
-            submitAttempted={submitAttempted}
-            datePopoverOpen={datePopoverOpen}
-            setDatePopoverOpen={setDatePopoverOpen}
-            eventType={event.type}
-          />
-
-          {/* Right Half: Upload Section */}
-          <div className="flex flex-col gap-2 lg:sticky lg:top-4">
-            <Label>Add Photos</Label>
-            {/* <p className="text-xs text-muted-foreground">
-              Photos will be added when you save changes
-            </p> */}
-            <Dropzone
-              accept=".jpg,.jpeg,.png,.heic"
-              onSelect={handleFiles}
-              className="flex-1 rounded-lg"
+            <EventFormFields
+              form={form}
+              submitAttempted={submitAttempted}
+              datePopoverOpen={datePopoverOpen}
+              setDatePopoverOpen={setDatePopoverOpen}
+              section="info"
+              eventType={event.type}
             />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{detailsT.settingsTitle}</CardTitle>
+            <CardDescription>{detailsT.editSettingsSubtitle}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <EventFormFields
+              form={form}
+              submitAttempted={submitAttempted}
+              datePopoverOpen={datePopoverOpen}
+              setDatePopoverOpen={setDatePopoverOpen}
+              section="settings"
+              eventType={event.type}
+            />
+            {/* AI matching + reveal gate + bib detection + minors block. */}
+            <EventAiSettingsFields form={form} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{detailsT.editPhotosTitle}</CardTitle>
+            <CardDescription>{detailsT.editPhotosSubtitle}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col gap-2">
+              <Label>{t('addPhotosLabel')}</Label>
+              <Dropzone
+                accept=".jpg,.jpeg,.png,.heic"
+                onSelect={handleFiles}
+                className="rounded-lg"
+              />
+            </div>
+
+            <EventPhotoGrid
+              visiblePhotos={visiblePhotos}
+              pendingDeletions={pendingDeletions}
+              newFiles={newFiles}
+              onDeletePhoto={handleDeletePhoto}
+              onRemoveFile={removeFile}
+              noPreviewLabel={t('noPreview')}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Action bar. T-206: it used to be `fixed bottom-0 inset-x-0`, which on
+            mobile sat UNDER the photographer bottom-nav (both at z-50) and
+            ignored the safe-area inset. These are the wizard's offsets — above
+            the mobile nav, aligned to the desktop sidebar. */}
+        <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 z-50 border-t border-border bg-background/95 shadow-lg backdrop-blur supports-backdrop-filter:bg-background/80 md:bottom-0 md:left-(--sidebar-width)">
+          <div className="flex flex-col items-stretch gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-end sm:gap-4 sm:px-6">
+            <p className="text-xs text-muted-foreground sm:mr-auto">{detailsT.editUnsavedHint}</p>
+            <div className="flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => router.back()}
+                disabled={isPending || upload.isActive}
+              >
+                {detailsT.cancel}
+              </Button>
+              <Button type="submit" disabled={isPending || upload.isActive}>
+                {isPending || upload.isActive ? detailsT.saving : detailsT.saveChanges}
+              </Button>
+            </div>
           </div>
-        </div>
-
-        {/* AI matching + reveal gate + bib detection + minors block. */}
-        <EventAiSettingsFields form={form} />
-
-        {/* Photos Section - Full Width */}
-        <div className="space-y-2">
-          {/* <h3 className="text-lg font-semibold">Event Photos</h3> */}
-          <EventPhotoGrid
-            visiblePhotos={visiblePhotos}
-            pendingDeletions={pendingDeletions}
-            newFiles={newFiles}
-            onDeletePhoto={handleDeletePhoto}
-            onRemoveFile={removeFile}
-            noPreviewLabel={t('noPreview' as keyof Dictionary['newEvent'])}
-          />
-        </div>
-
-        {/* Action Buttons */}
-        <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-end gap-4 border-t bg-background px-6 py-3">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.back()}
-            disabled={isPending || upload.isActive}
-          >
-            Cancel
-          </Button>
-          <Button type="submit" disabled={isPending || upload.isActive}>
-            {isPending || upload.isActive ? 'Saving...' : 'Save Changes'}
-          </Button>
         </div>
       </form>
 
@@ -397,16 +447,16 @@ export function EditEventForm({
         failedCount={upload.failedCount}
         errorMessage={upload.errorMessage}
         labels={{
-          title: t('uploadProgressTitle' as keyof Dictionary['newEvent']),
-          preparing: t('uploadStatePreparing' as keyof Dictionary['newEvent']),
-          uploading: t('uploadStateUploading' as keyof Dictionary['newEvent']),
-          finalizing: t('uploadStateFinalizing' as keyof Dictionary['newEvent']),
-          done: t('uploadStateDone' as keyof Dictionary['newEvent']),
-          partialFailed: t('uploadStatePartialFailed' as keyof Dictionary['newEvent']),
-          errorTitle: t('uploadStateError' as keyof Dictionary['newEvent']),
-          cancelButton: t('uploadCancelButton' as keyof Dictionary['newEvent']),
-          closeButton: t('uploadCloseButton' as keyof Dictionary['newEvent']),
-          retryFailedButton: t('uploadRetryFailedButton' as keyof Dictionary['newEvent']),
+          title: t('uploadProgressTitle'),
+          preparing: t('uploadStatePreparing'),
+          uploading: t('uploadStateUploading'),
+          finalizing: t('uploadStateFinalizing'),
+          done: t('uploadStateDone'),
+          partialFailed: t('uploadStatePartialFailed'),
+          errorTitle: t('uploadStateError'),
+          cancelButton: t('uploadCancelButton'),
+          closeButton: t('uploadCloseButton'),
+          retryFailedButton: t('uploadRetryFailedButton'),
         }}
         onCancel={() => void upload.cancel()}
         onRetryFailed={() => void upload.retryFailed()}

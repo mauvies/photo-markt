@@ -30,13 +30,9 @@ export function EventAiSettingsFields({ form }: { form: FormInstance }) {
               {(field) => (
                 <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
                   <div className="grid gap-1">
-                    <Label htmlFor="edit_ai_matching_enabled">
-                      {t('aiMatchingLabel' as keyof Dictionary['newEvent'])}
-                    </Label>
+                    <Label htmlFor="edit_ai_matching_enabled">{t('aiMatchingLabel')}</Label>
                     <p className="text-xs text-muted-foreground">
-                      {containsMinors
-                        ? t('aiMatchingDisabledByMinors' as keyof Dictionary['newEvent'])
-                        : t('aiMatchingDesc' as keyof Dictionary['newEvent'])}
+                      {containsMinors ? t('aiMatchingDisabledByMinors') : t('aiMatchingDesc')}
                     </p>
                   </div>
                   <Switch
@@ -60,15 +56,13 @@ export function EventAiSettingsFields({ form }: { form: FormInstance }) {
                     return (
                       <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
                         <div className="grid gap-1">
-                          <Label htmlFor="edit_reveal_gate_enabled">
-                            {t('revealGateLabel' as keyof Dictionary['newEvent'])}
-                          </Label>
+                          <Label htmlFor="edit_reveal_gate_enabled">{t('revealGateLabel')}</Label>
                           <p className="text-xs text-muted-foreground">
                             {containsMinors
-                              ? t('revealGateDisabledByMinors' as keyof Dictionary['newEvent'])
+                              ? t('revealGateDisabledByMinors')
                               : !aiEnabled
-                                ? t('revealGateRequiresAi' as keyof Dictionary['newEvent'])
-                                : t('revealGateDesc' as keyof Dictionary['newEvent'])}
+                                ? t('revealGateRequiresAi')
+                                : t('revealGateDesc')}
                           </p>
                         </div>
                         <Switch
@@ -90,13 +84,9 @@ export function EventAiSettingsFields({ form }: { form: FormInstance }) {
               {(field) => (
                 <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
                   <div className="grid gap-1">
-                    <Label htmlFor="edit_bib_detection_enabled">
-                      {t('bibDetectionLabel' as keyof Dictionary['newEvent'])}
-                    </Label>
+                    <Label htmlFor="edit_bib_detection_enabled">{t('bibDetectionLabel')}</Label>
                     <p className="text-xs text-muted-foreground">
-                      {containsMinors
-                        ? t('bibDetectionDisabledByMinors' as keyof Dictionary['newEvent'])
-                        : t('bibDetectionDesc' as keyof Dictionary['newEvent'])}
+                      {containsMinors ? t('bibDetectionDisabledByMinors') : t('bibDetectionDesc')}
                     </p>
                   </div>
                   <Switch
@@ -114,11 +104,9 @@ export function EventAiSettingsFields({ form }: { form: FormInstance }) {
             {/* `contains_minors` is read-only after event creation. */}
             <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3 opacity-90">
               <div className="grid gap-1">
-                <Label htmlFor="edit_contains_minors">
-                  {t('containsMinorsLabel' as keyof Dictionary['newEvent'])}
-                </Label>
+                <Label htmlFor="edit_contains_minors">{t('containsMinorsLabel')}</Label>
                 <p className="text-xs text-muted-foreground">
-                  {t('containsMinorsImmutableHelper' as keyof Dictionary['newEvent'])}
+                  {t('containsMinorsImmutableHelper')}
                 </p>
               </div>
               <Switch id="edit_contains_minors" checked={containsMinors} disabled />
