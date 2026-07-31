@@ -1,11 +1,11 @@
 # T-210 · Mover la portada del evento al paso de subir fotos del wizard
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno — **Dep T-203 resuelta** (PR #265 mergeado) y **T-206 cerrada** (PR #271: tocó la página de *edición*, no el wizard, así que no hay conflicto de archivo)
 - **Rama:** `refactor/wizard-cover-in-photos-step`
 - **OpenSpec change:** —  (UI del wizard, requerimiento claro)
-- **PR:** —
+- **PR:** #273 (draft)
 
 ## Requerimiento
 "Durante la creación del evento, creo que es mejor configurar la cover photo del evento en el paso de

@@ -6,7 +6,11 @@
 - **Rama:** `feat/event-autofill` (al desbloquear)
 - **OpenSpec change:** — (sí al ejecutar: feature nueva con dependencia externa)
 - **PR:** —
-- **Dep:** T-105 (la portada vive en el paso Detalles)
+- **Dep:** ~~T-105~~ — ⚠️ **premisa caducada (T-210):** la portada ya **no** vive en el paso Detalles; se
+  configura en el paso **4 (Fotos)**, es decir **después** de los detalles. El autofill "desde la portada"
+  ya no puede pre-rellenar los campos del paso 3 en el orden natural del wizard, así que este ticket debe
+  tirar del **EXIF de las fotos del evento** (que es de todas formas la señal recomendada abajo) o cambiar
+  de sitio la sugerencia.
 
 ## Requerimiento
 Idea del usuario: con la portada ya en el paso Detalles, integrar a futuro "algún modelo o algo que reconozca los

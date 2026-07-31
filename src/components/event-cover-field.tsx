@@ -25,9 +25,6 @@ interface EventCoverFieldProps {
   busy?: boolean;
   /** Unique id for the file input (distinct per surface if both mount at once). */
   inputId?: string;
-  /** When true, the box stretches to fill its column height on desktop (the
-   *  create wizard's two-column layout). Defaults to a compact fixed height. */
-  fill?: boolean;
 }
 
 /**
@@ -42,12 +39,14 @@ export function EventCoverField({
   labels,
   busy = false,
   inputId = 'cover-image',
-  fill = false,
 }: EventCoverFieldProps) {
-  const boxHeight = cn('h-40 w-full', fill && 'md:h-full md:flex-1');
+  // Compact fixed height on every surface. A `fill` flag used to stretch the
+  // box to match a neighbouring column — that existed only for the create
+  // wizard's cover-beside-details layout, which T-210 replaced.
+  const boxHeight = 'h-40 w-full';
 
   return (
-    <div className={cn('flex flex-col gap-2', fill && 'md:h-full')}>
+    <div className="flex flex-col gap-2">
       <div className="flex items-center gap-1">
         <Label htmlFor={inputId}>{labels.label}</Label>
         <Tooltip>

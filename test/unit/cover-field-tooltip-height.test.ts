@@ -18,8 +18,9 @@ function readComponent(): string {
 }
 
 function readCreateStep(): string {
+  // T-210 moved the cover out of the details step and into the photos step.
   return readFileSync(
-    resolve(root, 'src/app/[lang]/dashboard/photographer/events/new/steps/step-3-details.tsx'),
+    resolve(root, 'src/app/[lang]/dashboard/photographer/events/new/steps/step-4-photos.tsx'),
     'utf8',
   );
 }
@@ -40,23 +41,22 @@ describe('EventCoverField — tooltip + responsive height (T-149 / T-166)', () =
     expect(readComponent()).not.toContain('aspect-video');
   });
 
-  it('keeps a compact fixed height and stretches only when fill is set', () => {
+  it('keeps one compact fixed height on every surface', () => {
     const source = readComponent();
     expect(source).toContain('h-40');
-    // The stretch classes are gated behind the `fill` flag (create wizard only).
-    expect(source).toContain('md:h-full');
-    expect(source).toContain('md:flex-1');
+    // T-210 removed the `fill` escape hatch along with its only caller (the
+    // wizard's cover-beside-details column), so the stretch classes are gone.
+    expect(source).not.toContain('fill?: boolean');
+    expect(source).not.toContain('md:h-full');
+    expect(source).not.toContain('md:flex-1');
   });
 
-  it('the create wizard delegates to the shared EventCoverField with fill', () => {
+  it('the create wizard delegates to the shared EventCoverField', () => {
     const source = readCreateStep();
     expect(source).toContain("import { EventCoverField } from '@/components/event-cover-field';");
     expect(source).toContain('<EventCoverField');
-    expect(source).toContain('fill');
     // coverDesc/coverInfoAria copy is reused verbatim, not rewritten.
     expect(source).toContain("desc: t('coverDesc')");
     expect(source).toContain("infoAria: t('coverInfoAria')");
-    // The wizard's two-column stretch container is unchanged.
-    expect(source).toContain('md:items-stretch');
   });
 });
