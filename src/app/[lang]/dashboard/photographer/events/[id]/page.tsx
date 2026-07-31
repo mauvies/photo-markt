@@ -269,6 +269,7 @@ export default async function EventDetailPage({
         eventId={id}
         status={aiMatchingStatus}
         totalApplicable={aiProgress.totalApplicable}
+        totalPhotos={aiProgress.totalPhotos}
         indexed={aiProgress.indexed}
         pending={aiProgress.pending}
         failed={aiProgress.failed}
@@ -292,6 +293,8 @@ export default async function EventDetailPage({
           indexingComplete: dict.rekognition.indexingComplete,
           failedPhotosWarning: dict.rekognition.failedPhotosWarning,
           failedPhotosRetry: dict.rekognition.failedPhotosRetry,
+          noticeNoPhotos: dict.rekognition.noticeNoPhotos,
+          noticeNoneApplicable: dict.rekognition.noticeNoneApplicable,
         }}
       />
     ) : null;

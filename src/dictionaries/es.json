@@ -1382,7 +1382,9 @@
     "pollError": "No se pudo actualizar el progreso. Reintentando…",
     "indexingComplete": "Todas las fotos indexadas",
     "failedPhotosWarning": "{count} foto(s) no se pudieron indexar.",
-    "failedPhotosRetry": "Reintentar"
+    "failedPhotosRetry": "Reintentar",
+    "noticeNoPhotos": "Aún no has subido fotos, así que no hay nada que indexar.",
+    "noticeNoneApplicable": "{count} foto(s) subidas, pero ninguna está en la cola de reconocimiento facial: se procesaron cuando este evento aún no tenía la IA lista. Re-indexa el evento para encolarlas."
   },
   "bibStatus": {
     "cardTitle": "Detección de dorsal",

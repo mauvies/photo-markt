@@ -1,11 +1,11 @@
 # T-209 · [DIAGNÓSTICO] "0 de 0 fotos indexadas" tras subir una foto con Inngest local
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `fix/indexing-progress-zero-of-zero`
 - **OpenSpec change:** —  (empieza por diagnóstico)
-- **PR:** —
+- **PR:** #274 (draft)
 
 ## Requerimiento
 "Añadí una foto después de crear el evento y tengo la instancia de Inngest corriendo en local,

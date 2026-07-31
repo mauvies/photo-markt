@@ -1382,7 +1382,9 @@
     "pollError": "Couldn't refresh progress. Retrying…",
     "indexingComplete": "All photos indexed",
     "failedPhotosWarning": "{count} photo(s) failed to index.",
-    "failedPhotosRetry": "Retry"
+    "failedPhotosRetry": "Retry",
+    "noticeNoPhotos": "No photos uploaded yet — there's nothing to index.",
+    "noticeNoneApplicable": "{count} photo(s) uploaded, but none are queued for face matching: they were processed while this event had no AI setup ready. Re-index the event to queue them."
   },
   "bibStatus": {
     "cardTitle": "Bib number detection",

@@ -17,7 +17,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { AiMatchingStatus } from '@/database/queries/rekognition';
-import { displayedAiStatus, shouldPollAiStatus } from '@/lib/ai-indexing-status';
+import {
+  canReindexFromNotice,
+  displayedAiStatus,
+  resolveAiIndexingNotice,
+  shouldPollAiStatus,
+} from '@/lib/ai-indexing-status';
 import { getEventIndexingProgress, reindexEvent } from './actions';
 
 /**
@@ -43,6 +48,8 @@ interface AiStatusCardProps {
   eventId: string;
   status: AiMatchingStatus;
   totalApplicable: number;
+  /** Every non-deleted photo on the event, queued for indexing or not (T-209). */
+  totalPhotos: number;
   indexed: number;
   pending: number;
   failed: number;
@@ -67,6 +74,9 @@ interface AiStatusCardProps {
     /** Template — `{count}` is replaced with the failed photo count. */
     failedPhotosWarning: string;
     failedPhotosRetry: string;
+    /** T-209 — why the indexing queue is empty. `{count}` is the photo count. */
+    noticeNoPhotos: string;
+    noticeNoneApplicable: string;
   };
 }
 
@@ -74,6 +84,7 @@ interface IndexingState {
   status: AiMatchingStatus;
   indexed: number;
   totalApplicable: number;
+  totalPhotos: number;
   failed: number;
   pending: number;
   lastIndexedAt: string | null;
@@ -83,6 +94,7 @@ export function AiStatusCard({
   eventId,
   status,
   totalApplicable,
+  totalPhotos,
   indexed,
   pending,
   failed,
@@ -98,6 +110,7 @@ export function AiStatusCard({
     status,
     indexed,
     totalApplicable,
+    totalPhotos,
     failed,
     pending,
     lastIndexedAt,
@@ -118,12 +131,20 @@ export function AiStatusCard({
     // server-rendered props (e.g. after a `router.refresh()` or navigating
     // between events). Without this the counters would carry stale values
     // from a different event.
-    setState({ status, indexed, totalApplicable, failed, pending, lastIndexedAt });
+    setState({
+      status,
+      indexed,
+      totalApplicable,
+      totalPhotos,
+      failed,
+      pending,
+      lastIndexedAt,
+    });
     previousDisplayedStatus.current = displayedAiStatus({ status, pending });
     consecutiveErrors.current = 0;
     setHasPollError(false);
     setShowSuccessFlash(false);
-  }, [status, indexed, totalApplicable, failed, pending, lastIndexedAt]);
+  }, [status, indexed, totalApplicable, totalPhotos, failed, pending, lastIndexedAt]);
 
   useEffect(() => {
     if (!shouldPollAiStatus(state)) return;
@@ -153,6 +174,7 @@ export function AiStatusCard({
           status: next.status,
           indexed: next.indexedCount,
           totalApplicable: next.totalCount,
+          totalPhotos: next.totalPhotoCount,
           failed: next.failedCount,
           pending: next.pendingCount,
           lastIndexedAt: next.lastIndexedAt,
@@ -199,7 +221,21 @@ export function AiStatusCard({
           ? labels.statusReady
           : labels.statusFailed;
 
-  const reindexEnabled = displayed === 'ready' || displayed === 'failed';
+  // Why the queue is empty, when it is (T-209) — decides the counter line
+  // below and whether Re-index is the way out.
+  const notice = resolveAiIndexingNotice(state);
+  const noticeText =
+    notice === 'no-photos'
+      ? labels.noticeNoPhotos
+      : notice === 'none-applicable'
+        ? labels.noticeNoneApplicable.replace('{count}', String(state.totalPhotos))
+        : null;
+
+  // Re-index used to be gated on ready/failed alone, which greyed it out in
+  // exactly the state where it is the fix — leaving the photographer
+  // staring at "0 of 0" with nothing to click (T-209).
+  const reindexEnabled =
+    displayed === 'ready' || displayed === 'failed' || canReindexFromNotice(notice);
 
   const triggerReindex = () => {
     setDialogOpen(false);
@@ -256,10 +292,13 @@ export function AiStatusCard({
           </AlertDialogContent>
         </AlertDialog>
       </header>
+      {/* "0 of 0" is only an honest answer when there is a real queue. With an
+          empty one it says nothing about why, so the notice replaces it. */}
       <p className="mt-2 text-sm text-muted-foreground">
-        {labels.indexedCount
-          .replace('{count}', String(state.indexed))
-          .replace('{total}', String(state.totalApplicable))}
+        {noticeText ??
+          labels.indexedCount
+            .replace('{count}', String(state.indexed))
+            .replace('{total}', String(state.totalApplicable))}
       </p>
       {state.lastIndexedAt && (
         <p className="text-xs text-muted-foreground">

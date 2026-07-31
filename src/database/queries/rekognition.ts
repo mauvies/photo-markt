@@ -294,6 +294,13 @@ export async function updatePhotoFaceIndexStatus(
 export interface EventAiIndexingProgress {
   /** Photos eligible for indexing (everything not marked `not_applicable`). */
   totalApplicable: number;
+  /**
+   * Every non-deleted photo on the event, whatever its indexing status (T-209).
+   * `totalApplicable` alone can't tell "no photos yet" from "photos exist but
+   * every one is `not_applicable`" — both render as "0 of 0", which is what
+   * made the photographer ask why nothing was indexing.
+   */
+  totalPhotos: number;
   /** Photos in terminal success states: `indexed` or `no_faces`. */
   indexed: number;
   /** Photos still in `pending` or `indexing`. */
@@ -350,7 +357,7 @@ export async function getEventAiIndexingProgress(
     lastIndexedAt = ((data ?? [])[0]?.indexed_at as string | undefined) ?? null;
   }
 
-  return { totalApplicable, indexed, pending, failed, lastIndexedAt };
+  return { totalApplicable, totalPhotos: photoIds.length, indexed, pending, failed, lastIndexedAt };
 }
 
 /**
