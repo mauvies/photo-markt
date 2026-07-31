@@ -385,6 +385,23 @@ to `canceled` and `getCurrentPlan` falls back to Free on its own. No refund logi
   `ctaLabel` — it used to hardcode English keyed on the target plan alone, so a Pro subscriber was
   offered an "Upgrade to Starter" for what is a downgrade.
 
+### ⚠️ Testing subscriptions locally requires the Stripe CLI
+Activation is **webhook-only** by design, so on `localhost` **nothing activates** unless a listener is
+forwarding events — Stripe cannot reach your machine, and the test account has no endpoint configured.
+The symptom is silent and looks like a bug: checkout succeeds, Stripe shows an `active` subscription,
+and the app still says Free because `subscriptions` is stuck on the `incomplete` bootstrap row that
+`createBillingCheckoutAction` writes before redirecting (and `incomplete` is not in
+`ACTIVE_SUBSCRIPTION_STATUSES`).
+
+```bash
+stripe listen --forward-to localhost:3000/api/stripe/webhook   # prints its OWN whsec_…
+# put that whsec_… in .env.local as STRIPE_WEBHOOK_SECRET, then restart pnpm dev
+stripe events resend <evt_id>   # replay an event that fired while nothing was listening
+```
+
+The CLI's `whsec_` is **not** the dashboard's — a mismatch fails signature verification with a 400 and
+the webhook stays dead just as silently. Same applies to Connect payouts and one-time purchases.
+
 ### Buyer service fee (billing v2 — T-194/T-195/T-196/T-197)
 The buyer pays a **fixed + percent** fee on top of the cart subtotal, as its own visible Stripe line
 item. The fixed part is what structurally covers Stripe's own fixed per-charge cost — a percent-only
