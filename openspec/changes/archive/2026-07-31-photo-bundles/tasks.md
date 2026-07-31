@@ -140,12 +140,33 @@ Groups 0 and 4 are OWNER gates, not code.
 
 ## 3. Ticket C — photographer-facing truth (earnings and sales)
 
-- [ ] 3.1 Earnings and Sales report the discounted gross for a bundled sale, with commission still derived as
+- [x] 3.1 Earnings and Sales report the discounted gross for a bundled sale, with commission still derived as
       `gross − getPhotographerNetCents(gross)` so `gross = commission + net` holds (the T-197 invariant)
-- [ ] 3.2 Copy on both tabs explaining that a bundle discount is the photographer's own price reduction — not a
+- [x] 3.2 Copy on both tabs explaining that a bundle discount is the photographer's own price reduction — not a
       platform deduction and not related to the buyer service fee; strings in `en.json` + `es.json`
-- [ ] 3.3 Tests: a bundled sale shows the same gross/commission/net in both tabs; the sum over a mixed period of
+- [x] 3.3 Tests: a bundled sale shows the same gross/commission/net in both tabs; the sum over a mixed period of
       bundled and single sales matches the payouts actually transferred
+
+### Corrections found while executing group 3 (T-205)
+
+- **The discounted gross needed no new plumbing — the drift was in the TOTALS.** Ticket B already made
+  `order_items.total_price_cents` carry the allocated amount, so both tabs read the charged money from
+  day one. What did not hold was 3.3's second half: the Earnings summary netted the whole period's
+  gross in one `getPhotographerNetCents` call, while the webhook transfers once per
+  `(order, photographer)`. A sum of floors is not the floor of a sum, so the summary reported up to a
+  cent per order that was never transferred — visible as a withdrawable balance that could never be
+  withdrawn. `aggregateEarningsByOrder` now nets per order, which is the unit the money moves in.
+  Bundles did not cause this, but they aggravate it: an allocated share lands on arbitrary cents far
+  more often than a list price does.
+- **The Sales tab held a second copy of the commission formula.** It inlined
+  `gross − getPhotographerNetCents(gross)` instead of calling `calculatePlatformFee`. The two
+  expressions agreed, so nothing was wrong — but "both tabs report the same breakdown" was true by
+  coincidence rather than construction, which is exactly the arrangement T-197 exists to forbid. Both
+  tabs now call the same two functions.
+- **The explanatory copy is gated on the photographer actually having volume pricing**
+  (`hasBundlePricingConfigured`), following `BuyerFeeNote`'s rule that a mechanism nobody is subject to
+  should not be explained. The check fails **closed** on any error because the bundle columns are
+  migration-gated: a reporting footnote must never be able to break the money views.
 
 ## 4. Rollout (OWNER gate)
 

@@ -1,7 +1,7 @@
 # T-205 · Bundles · Ticket C — ganancias y ventas dicen la verdad sobre una venta con descuento
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** **Dep T-204** — necesita que las ventas con bundle existan para poder reportarlas
 - **Rama:** `feat/bundle-earnings-breakdown`
 - **OpenSpec change:** `photo-bundles` — activo; ejecutar con `/opsx:apply` (grupo 3). **Al cerrar este

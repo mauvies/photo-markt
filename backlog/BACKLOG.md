@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-205 | Bundles C — Ventas/Ganancias reportan el bruto con descuento; cierra y archiva el OpenSpec change | ~~T-204~~ (PR #266 mergeado) | todo |
+| 1 | P2 | T-205 | Bundles C — Ventas/Ganancias reportan el bruto con descuento; cierra y archiva el OpenSpec change | ~~T-204~~ (PR #266 mergeado) | doing |
 | 2 | P2 | T-211 | Bug: el toggle de watermark se revierte en silencio en eventos privados (+ edit pierde la excepción `organizer` que sí tiene create) | ~~T-203~~ (PR #265 mergeado) | todo |
 | 3 | P2 | T-206 | Reorganizar/UX de `events/[id]/edit` (columna plana, strings hardcodeados en inglés) | ~~T-203~~ (PR #265 mergeado) · ⚠️ coordinar con **T-212**/**T-213** (mismos formularios) | todo |
 | 4 | P2 | T-210 | Mover la portada del evento al paso de subir fotos del wizard (más espacio a las fotos que a la portada; ⚠️ organizer no debe perderla) | ~~T-203~~ (PR #265 mergeado) | todo |

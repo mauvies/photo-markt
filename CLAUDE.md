@@ -352,9 +352,27 @@ commission cannot, which is why small sales used to sell at a loss.
   as **`gross − getPhotographerNetCents(gross)`**, never `round(gross × rate)` — an independently
   rounded commission disagreed with the floored payout by a cent, so the breakdown didn't add up and
   the Earnings tab could contradict the Sales tab for the same sale. `gross = commission + net` is now
-  true by construction. `<BuyerFeeNote>` (`src/components/buyer-fee-note.tsx`) states this on both
-  tabs and renders **nothing** while `isBuyerServiceFeeEnabled()` is false, so a fee nobody pays is
-  never explained.
+  true by construction. Both tabs now call the **same** `calculatePlatformFee`/`calculateNetEarnings`
+  per line item (T-205 — the Sales action used to inline its own copy of the formula), so they cannot
+  report different figures for one sale. `<BuyerFeeNote>` (`src/components/buyer-fee-note.tsx`) states
+  this on both tabs and renders **nothing** while `isBuyerServiceFeeEnabled()` is false, so a fee
+  nobody pays is never explained.
+- **Earnings TOTALS are netted per order, not per period (T-205).** `aggregateEarningsByOrder`
+  (`queries/earnings.ts`) sums `getPhotographerNetCents(orderGross)` over each order because that is
+  the unit the money moves in — the webhook makes one transfer per `(order, photographer)`. Netting
+  the whole period's gross in a single call reported up to a cent per order MORE than was ever
+  transferred (a sum of floors is not the floor of a sum), which showed as a withdrawable balance that
+  could never be withdrawn; bundle allocations land on arbitrary cents, so they make the drift more
+  likely, not less. The per-**row** breakdown stays per line item (that is what keeps the two tabs
+  identical), so a multi-item order's rows can sum to a cent under its payout — a display artefact of
+  the per-photo split, not a discrepancy in the balance.
+- **A bundled sale reports the CHARGED amount as gross.** `order_items.total_price_cents` carries the
+  allocated share of the discounted total (T-204), so every sales/earnings surface already reads the
+  money that came in, never `quantity × price_per_photo`. `<BundleDiscountNote>`
+  (`src/components/bundle-discount-note.tsx`) says so on both tabs — the discount is the
+  photographer's own price reduction, not a platform deduction and unrelated to the buyer fee — and
+  renders **nothing** unless `hasBundlePricingConfigured` (`queries/events.ts`, fails **closed** on
+  error since the bundle columns are migration-gated) finds a ladder or cap on one of their events.
 - **Minimum photo price:** `MIN_PHOTO_PRICE_CENTS` is a floor on a *priced* event, enforced at write
   time in both event actions via `isPhotoPriceAboveFloor` (create + edit `superRefine`), **not** as a
   DB constraint — so an event priced below a later-raised floor keeps working until its price is next
