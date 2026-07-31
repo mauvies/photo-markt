@@ -62,9 +62,10 @@ Un usuario que la golpee directo obtiene un flujo de suscripción viejo y roto c
   haga fetch a la ruta no sirve: en unit no hay servidor.
 - **Hallazgo colateral, decidir en el PR:** `cancelSubscriptionAction` (`billing/actions.ts:224`) **también
   tiene cero callers** — no hay UI de cancelación en ninguna parte. Borrar la route no quita ninguna
-  capacidad que el usuario tenga hoy (no la tiene). **No borrar la action en este ticket**: la pregunta
-  "¿debe haber botón de cancelar suscripción?" es de producto y merece su propio ticket. Solo dejarlo
-  anotado.
+  capacidad que el usuario tenga hoy (no la tiene). **No borrar la action**: la pregunta "¿debe haber
+  botón de cancelar suscripción?" **ya tiene ticket propio — T-214**, que precisamente cablea esa
+  action a la UI de billing. Si T-214 se ejecuta antes, esta nota de "cero callers" queda obsoleta
+  (pero borrar las routes sigue siendo correcto: T-214 usa la Server Action, no la route).
 - Si el gate de Stripe revela que **sí** hay algo apuntando a esas URLs: **parar y no borrar** —
   convertirlo en un ticket de migración de ese consumidor primero.
 - Sin OpenSpec. **Sí correr `/code-review`** pese a ser un borrado: toca superficie de pagos, y el

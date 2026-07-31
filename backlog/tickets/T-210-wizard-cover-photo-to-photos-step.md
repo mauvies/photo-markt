@@ -2,7 +2,7 @@
 
 - **Prioridad:** P2
 - **Estado:** todo
-- **Blockers:** ninguno para diseñar; **Dep T-203** (PR #265 sin mergear reescribe `step-3-details.tsx`) y **Dep T-206** si se ejecutan cerca — mismo archivo
+- **Blockers:** ninguno — **Dep T-203 resuelta** (PR #265 mergeado) y **T-206 cerrada** (PR #271: tocó la página de *edición*, no el wizard, así que no hay conflicto de archivo)
 - **Rama:** `refactor/wizard-cover-in-photos-step`
 - **OpenSpec change:** —  (UI del wizard, requerimiento claro)
 - **PR:** —

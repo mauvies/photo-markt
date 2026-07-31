@@ -114,8 +114,9 @@ Role is stored in `profiles.active_role`. Users can switch roles. Initial role a
 
 **Server Actions for mutations**
 All data mutations use `"use server"` actions in `actions.ts` files colocated next to their page components. Do not create new API routes for mutations — use server actions instead.
-**Existing exceptions, do not "fix" them:** `api/billing/{checkout,cancel}` (Stripe needs a redirect
-URL from a plain fetch) and `api/admin/payouts/[id]` (admin, no page).
+**Exception:** `api/admin/payouts/[id]` (admin, no page). ⚠️ `api/billing/{checkout,cancel}` are **dead
+remnants** with zero callers — live billing is `dashboard/photographer/billing/actions.ts`; slated for
+deletion (T-202), don't build on them.
 
 **Database query layer**
 All Supabase queries live in `/src/database/queries/`. Each domain has its own file. Always add new queries here — never inline in components or actions.
