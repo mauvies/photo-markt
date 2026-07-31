@@ -158,9 +158,13 @@ the direction of keeping the photographer paying, which is the dark pattern the 
 
 1. Land the additive migration `20260731000000_add_cancel_at_period_end_to_subscriptions.sql`; it is
    `if not exists` + defaulted, so it is idempotent and safe to re-run.
-2. Merge the code. Order relative to the migration does not matter: before the column exists the
-   webhook write would fail on that field, so the migration goes to production **first** — apply it
-   **by hand via the Supabase MCP** immediately after merge, before the deploy finishes propagating.
+2. **The migration MUST reach production BEFORE the code — the order is not interchangeable.**
+   `subscriptionData` includes `cancel_at_period_end`, so against a database without the column
+   PostgREST rejects the **whole** update (`PGRST204`, unknown column), the handler logs it and still
+   returns 200, and Stripe never retries — meaning any subscription created in that window **silently
+   never activates**. Verified 2026-07-31: production does not have the column
+   (`migration_registered = 0`) and has zero subscription rows, so the window is small today but real.
+   Apply `20260731000000` **by hand via the Supabase MCP** before merging the code.
 3. Rollback is inert: revert the code and the column simply stops being read. No down-migration.
 4. Post-merge verification in Stripe test mode: cancel → webhook writes the flag → the card shows the
    real date → reactivate clears it → at period end the account is Free and the dashboard reflects it

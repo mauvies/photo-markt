@@ -71,8 +71,11 @@ the column unread, so no down-migration is needed.
 - **Database**: new migration `supabase/migrations/20260731000000_add_cancel_at_period_end_to_subscriptions.sql`.
   RLS unchanged — `subscriptions` stays RLS-enabled with zero policies (service-role only), the
   invariant pinned by `test/integration/security/subscriptions-rls.test.ts`.
-  ⚠️ **Must be applied to production by hand via the Supabase MCP after merge** — `migrate.yml` is red
-  on GitHub Actions billing (same as T-203/T-204).
+  ⚠️ **Must be applied to production by hand via the Supabase MCP BEFORE the code merges** —
+  `migrate.yml` only targets production on push to `main` and is red on GitHub Actions billing (same as
+  T-203/T-204). The order is **not** interchangeable: the webhook sends `cancel_at_period_end` in its
+  update payload, so against a database without the column PostgREST rejects the whole write, the
+  handler logs it and still returns 200, and the subscription silently never activates.
 - **Stripe**: no new API surface; `subscriptions.update` with `cancel_at_period_end` only. No refund
   logic. No new webhook event types — the existing `customer.subscription.*` handlers carry it.
 - **Code**: `src/database/queries/subscriptions.ts`, `src/app/api/stripe/webhook/route.ts`,
