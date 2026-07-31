@@ -278,8 +278,10 @@ safe. Backend pluggable via `RateLimitBackend` (`rate-limit.ts:29,76`).
 - **F-20 · RISK — fail-open is unmonitored.** Any backend error ⇒ `ok:true` with only a
   `console.error` (`rate-limit.ts:83`). A sustained DB outage silently disables every limiter
   (including the AWS-cost face-search one) with no Sentry event/metric.
-- **RISK (consistency) — `api/billing/checkout/route.ts:11`** (Stripe customer + subscription
-  create, authed) has no limiter while its sibling `stripe/checkout` does. **RISK (low):**
+- **RESOLVED (was: consistency risk) — `api/billing/checkout/route.ts`** (Stripe customer +
+  subscription create, authed) had no limiter while its sibling `stripe/checkout` did. Fixed by
+  **deletion**, not by adding a limiter: the route had zero callers and was superseded by
+  `createBillingCheckoutAction` — see T-202. **RISK (low):**
   password-reset/login/signup rely solely on Supabase Auth's built-in throttles
   (`login/actions.ts:16`); authed feedback submit is unbounded (`actions/feedback.ts:15`).
 - **F-26 · OPTIMIZATION — `rate_limit_buckets` has no pruning.** One row per (key, window),

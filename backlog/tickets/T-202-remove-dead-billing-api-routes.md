@@ -1,7 +1,7 @@
 # T-202 · Podar las API routes muertas `api/billing/checkout` y `api/billing/cancel`
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno para empezar — **gate de verificación en Stripe antes de borrar** (ver DoD)
 - **Rama:** `chore/remove-dead-billing-api-routes`
 - **OpenSpec change:** —  (se crea al ejecutar, si el cambio toca >1 archivo o es ambiguo)

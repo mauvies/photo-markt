@@ -93,7 +93,6 @@ src/app/
     callback/           # Google OAuth callback — handles code exchange
   api/
     stripe/webhook/     # Stripe webhook (orders, transfers, subscriptions)
-    billing/            # checkout/ + cancel/ — subscription Stripe sessions
     watermark/[...path] # Protected preview serving
     thumb/[...path]     # Baked thumbnail serving
     events/[id]/download # Purchased-photo ZIP
@@ -114,9 +113,12 @@ Role is stored in `profiles.active_role`. Users can switch roles. Initial role a
 
 **Server Actions for mutations**
 All data mutations use `"use server"` actions in `actions.ts` files colocated next to their page components. Do not create new API routes for mutations — use server actions instead.
-**Exception:** `api/admin/payouts/[id]` (admin, no page). ⚠️ `api/billing/{checkout,cancel}` are **dead
-remnants** with zero callers — live billing is `dashboard/photographer/billing/actions.ts`; slated for
-deletion (T-202), don't build on them.
+**Exception:** `api/admin/payouts/[id]` (admin, no page). There is **no `api/billing/*`** — the
+pre-Server-Actions `checkout`/`cancel` routes were deleted in T-202 (zero callers, but live `POST`
+endpoints any authed user could hit to create a Stripe customer + `subscriptions` row through a flow
+that had drifted from the action replacing it). Live billing is
+`dashboard/photographer/billing/actions.ts`; `test/unit/api/dead-billing-routes-removed.test.ts` keeps
+the routes from coming back.
 
 **Database query layer**
 All Supabase queries live in `/src/database/queries/`. Each domain has its own file. Always add new queries here — never inline in components or actions.
