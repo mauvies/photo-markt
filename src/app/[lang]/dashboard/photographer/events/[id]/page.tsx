@@ -1,6 +1,7 @@
-import { ScanFace } from 'lucide-react';
+import { Images, ScanFace } from 'lucide-react';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { EventMetaLine } from '@/components/event-meta-line';
+import { PhotosEmptyState } from '@/components/photos-empty-state';
 import { Badge } from '@/components/ui/badge';
 import {
   countEventPhotos,
@@ -388,6 +389,22 @@ export default async function EventDetailPage({
   // Tab slots — the existing sections, regrouped. Photos: the processing notice
   // + moderation/album grid (behaviour identical). Details: the info + status
   // cards + organizer photographers. Share: the shareable-URL card (T-179).
+  // Empty Photos tab (T-208) — a brand-new event used to render a blank panel.
+  // The CTA points at the owner's own upload path (the full `/edit` form), never
+  // at the contributor upload flow: this branch is owner-only, and on
+  // collaborative/organizer events contributors upload from their own screen.
+  const photosEmptyState = (
+    <PhotosEmptyState
+      icon={Images}
+      title={dict.events.photosEmptyTitle}
+      description={dict.events.photosEmptyDescription}
+      action={{
+        href: localizedPath(lang, `/dashboard/photographer/events/${id}/edit`),
+        label: dict.events.photosEmptyCta,
+      }}
+    />
+  );
+
   const photosTab = (
     <TranslationsProvider translations={dict.events}>
       {!showPendingTab ? (
@@ -419,6 +436,7 @@ export default async function EventDetailPage({
               iconTooltips: dict.photoIconButtons,
               items: albumItems,
               imageUnavailableLabel: dict.eventCard.imageUnavailable,
+              emptyState: photosEmptyState,
               totalCount: visibleCount,
               initialHasMore: hasMore,
               loadMoreLabel: dict.events.loadMore,
@@ -429,6 +447,7 @@ export default async function EventDetailPage({
               photos: pendingItems,
               labels: {
                 empty: dict.collaborativeEvent.pendingEmpty,
+                emptyDescription: dict.collaborativeEvent.pendingEmptyDescription,
                 approveAria: dict.collaborativeEvent.approveAria,
                 rejectAria: dict.collaborativeEvent.rejectAria,
                 select: dict.collaborativeEvent.pendingSelect,
@@ -466,6 +485,7 @@ export default async function EventDetailPage({
             iconTooltips={dict.photoIconButtons}
             items={albumItems}
             imageUnavailableLabel={dict.eventCard.imageUnavailable}
+            emptyState={photosEmptyState}
             totalCount={visibleCount}
             initialHasMore={hasMore}
             loadMoreLabel={dict.events.loadMore}

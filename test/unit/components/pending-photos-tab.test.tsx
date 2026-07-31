@@ -35,7 +35,8 @@ vi.mock('@/app/[lang]/dashboard/photographer/events/[id]/actions', () => ({
 import { PendingPhotosTab } from '@/app/[lang]/dashboard/photographer/events/[id]/pending-photos-tab';
 
 const labels = {
-  empty: 'No pending photos to review.',
+  empty: 'Nothing to review',
+  emptyDescription: 'Photos uploaded by contributors land here for your approval.',
   approveAria: 'Approve photo',
   rejectAria: 'Reject photo',
   select: 'Select',
