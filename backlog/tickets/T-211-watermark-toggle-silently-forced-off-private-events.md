@@ -1,7 +1,7 @@
 # T-211 · El toggle de watermark se revierte en silencio en eventos privados
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Blockers:** ninguno para empezar — **coordinar con T-203 (PR #265) y T-206**, que tocan los mismos
   archivos del form de edición
 - **Rama:** `fix/watermark-toggle-private-events`

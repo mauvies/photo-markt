@@ -436,6 +436,17 @@ OR profiles.display_name ILIKE '%query%'
 - Previews: protected via `/src/app/api/watermark/` — the route picks the treatment server-side from the photo's event (never from the caller, and only from a photos row whose `event_id` matches the path's event segment): tiled watermark + degraded quality for `watermark_enabled` events, the clean baked-medium-thumbnail treatment for events selling without a visible mark (T-133). Unknown policy fails closed to the watermark treatment
 - Purchased photos: short-lived signed URLs — never expose original storage path publicly
 - Watermark: tiled repeating pattern, server-side via Sharp
+- **Who may set `watermark_enabled` is one shared rule (T-211): `src/lib/watermark-policy.ts`.** A **private
+  non-organizer** event is already protected by its share code, so the visible watermark is forced **off**
+  whatever the form sent; **organizer** events are exempt because they are *always* private (access is the
+  membership join table, so without the carve-out none could ever be watermarked). `resolveWatermarkEnabled`
+  is called by both event actions and `isWatermarkConfigurable` by both forms + the wizard review, so the
+  switch renders **disabled and off** exactly where the save would override it. The rule had drifted into four
+  hand-written copies and two disagreed: `updateEventAction` had lost the organizer branch (any edit — even a
+  rename — stripped an organizer event's watermark), and the edit form had no copy at all, so a private event
+  offered a switch the save silently discarded. The server stays the authority; the disabled switch is UX.
+  ⚠️ Do **not** "simplify" by dropping the private-event rule — `needsProtectedPreview` reads
+  `watermark_enabled`, so flipping it changes how existing events' previews are served
 - For-sale photos (watermarked or not) must never resolve to a direct signed full-res original pre-purchase. Enforced via the shared predicate `needsProtectedPreview` (`src/lib/preview-protection.ts`, T-131/T-133/T-136) in the cart pre-bake fallback (`getPhotoPreviewUrls`), every gallery signing site (public event page + load-more, talent event view, talent dashboard, favorites), and the **event-card cover + `og:image` fallbacks** (T-140, via the shared chokepoints `signEventCoverUrls` / `resolveEventOgImageUrl` in `src/database/queries/event-covers.ts` — used by talent explore, saved events, photographer profile, and the public event page's `generateMetadata`): anything watermarked OR for-sale (`price_per_photo` non-null — 0 counts, matching `isForSale` and the download gates) routes through `/api/watermark/`; only an event positively known to be free (null price) AND un-watermarked keeps the direct signed original. A **dedicated cover image** (T-055, `events.cover_path`) is always direct-signed — it's a promotional presentation image, not a for-sale photo (and isn't a `photos` row, so the watermark route can't resolve a policy for it). New signing sites must use the predicate — never re-derive "is it watermarked?" locally
 - **Uploads:** all paths (photographer + guest collaborative) validate via `src/lib/photo-upload.ts` before writing to storage. Magic-byte check via Sharp, 50 MB per-file cap, content-type and extension are derived from the detected format — `file.type` and `file.name` are never trusted. `validatePhotoBuffer`/`validatePhotoUpload` accept a per-call `{ maxBytes, allowedFormats, tooLargeMessage }` override (defaults preserve photo behavior) so other upload paths reuse the exact magic-byte detection with tighter limits
 

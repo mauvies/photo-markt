@@ -951,6 +951,7 @@
     "visibilityPrivate": "Private",
     "watermarkLabel": "Watermark on Photos",
     "watermarkDesc": "Add watermark for talent users (photographers see originals)",
+    "watermarkPrivateNote": "Private events aren't watermarked — only people with the share code can reach the photos, so the share code is the protection.",
     "watermarkEnabled": "Enabled",
     "watermarkDisabled": "Disabled",
     "photosRequired": "Add at least one photo to continue.",

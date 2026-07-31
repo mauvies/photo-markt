@@ -339,6 +339,7 @@ export function EditEventForm({
             submitAttempted={submitAttempted}
             datePopoverOpen={datePopoverOpen}
             setDatePopoverOpen={setDatePopoverOpen}
+            eventType={event.type}
           />
 
           {/* Right Half: Upload Section */}

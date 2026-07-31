@@ -23,7 +23,10 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { isValidSessionRange, SESSION_RANGE_ERROR } from '@/lib/format-date';
+import type { Dictionary } from '@/lib/i18n/get-dictionary';
+import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
+import { isWatermarkConfigurable } from '@/lib/watermark-policy';
 import type { FormValues } from '../edit-event-schema';
 import { EventPriceField } from './event-price-field';
 
@@ -44,6 +47,13 @@ type EventFormFieldsProps = {
    * full edit page.
    */
   section?: 'all' | 'info' | 'settings' | 'pricing';
+  /**
+   * `events.type` — immutable post-creation, so it is a prop rather than a form
+   * field. Only the watermark rule reads it (T-211): organizer events are
+   * always private yet keep their watermark, so the switch must not be disabled
+   * for them.
+   */
+  eventType?: string | null;
 };
 
 export function EventFormFields({
@@ -52,7 +62,9 @@ export function EventFormFields({
   datePopoverOpen,
   setDatePopoverOpen,
   section = 'all',
+  eventType,
 }: EventFormFieldsProps) {
+  const { t } = useTranslations<Dictionary['newEvent']>();
   const dateInputId = useId();
   const sessionTimeId = useId();
   const sessionEndTimeId = useId();
@@ -335,32 +347,54 @@ export function EventFormFields({
 
       {showSettings && (
         <>
-          {/* Watermark Toggle */}
-          <form.Field name="watermark_enabled">
-            {(field) => (
-              <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
-                <div className="grid gap-1">
-                  <Label htmlFor="watermark_enabled">Watermark on Photos</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Add watermark for talent users (photographers see originals)
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">
-                    {field.state.value ? 'Enabled' : 'Disabled'}
-                  </span>
-                  <Switch
-                    id="watermark_enabled"
-                    checked={field.state.value}
-                    onCheckedChange={(checked) => {
-                      field.handleChange(checked);
-                      field.handleBlur();
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-          </form.Field>
+          {/* Watermark Toggle — subscribed to `is_public` (T-211) so the switch
+              obeys the same rule the save does. A private non-organizer event
+              is already protected by its share code, so the server forces the
+              watermark off; rendering an enabled switch there offered a
+              preference that silently disappeared on save. `Subscribe` rather
+              than the `is_public` toggle's side effect, because that side
+              effect never runs on an event that was ALREADY private when the
+              form opened — which is the reported case. */}
+          <form.Subscribe selector={(state) => state.values.is_public}>
+            {(isPublic) => {
+              const configurable = isWatermarkConfigurable({ eventType, isPublic });
+              return (
+                <form.Field name="watermark_enabled">
+                  {(field) => {
+                    // Show what will be persisted, not what is held in state:
+                    // the two differ exactly when the rule overrides the choice.
+                    const shown = configurable && field.state.value;
+                    return (
+                      <div className="flex items-center justify-between gap-4 rounded-lg border border-input p-3">
+                        <div className="grid gap-1">
+                          <Label htmlFor="watermark_enabled">Watermark on Photos</Label>
+                          <p className="text-xs text-muted-foreground">
+                            {configurable
+                              ? 'Add watermark for talent users (photographers see originals)'
+                              : t('watermarkPrivateNote')}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {shown ? 'Enabled' : 'Disabled'}
+                          </span>
+                          <Switch
+                            id="watermark_enabled"
+                            checked={shown}
+                            disabled={!configurable}
+                            onCheckedChange={(checked) => {
+                              field.handleChange(checked);
+                              field.handleBlur();
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  }}
+                </form.Field>
+              );
+            }}
+          </form.Subscribe>
 
           {/* Collaborative Toggle */}
           <form.Field name="is_collaborative">

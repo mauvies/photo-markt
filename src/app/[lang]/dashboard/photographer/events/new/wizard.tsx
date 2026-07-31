@@ -16,6 +16,7 @@ import { useTranslations } from '@/lib/i18n/translations-provider';
 import { minPhotoPriceMessage } from '@/lib/min-photo-price';
 import { getPlanLimitType, isPlanLimitError } from '@/lib/plan-limits';
 import { usePhotoUpload } from '@/lib/use-photo-upload';
+import { resolveWatermarkEnabled } from '@/lib/watermark-policy';
 import { deleteEventAction } from '../actions';
 import { createEvent, uploadEventCoverAction } from './actions';
 import { activityOptions } from './activity-options';
@@ -582,10 +583,15 @@ export default function NewEventForm({
     }
     configRows.push({
       label: t('summaryWatermark'),
-      value:
-        (v.event_type === 'organizer' || v.is_public) && v.watermark_enabled
-          ? t('summaryEnabled')
-          : t('summaryDisabled'),
+      // The review already stated the resolved value rather than the raw
+      // switch — it was just a fourth hand-written copy of the rule (T-211).
+      value: resolveWatermarkEnabled({
+        eventType: v.event_type,
+        isPublic: v.is_public,
+        requested: v.watermark_enabled,
+      })
+        ? t('summaryEnabled')
+        : t('summaryDisabled'),
     });
     if (v.event_type === 'collaborative') {
       configRows.push({
