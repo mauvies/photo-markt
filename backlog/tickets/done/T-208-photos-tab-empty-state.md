@@ -1,11 +1,11 @@
 # T-208 · Estado vacío en el tab Photos del evento del fotógrafo
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `feat/photos-tab-empty-state`
 - **OpenSpec change:** —  (UI, requerimiento claro)
-- **PR:** —
+- **PR:** #275
 
 ## Requerimiento
 "No hay estado vacío que mostrar en `/[lang]/dashboard/photographer/events/[id]?tab=photos`
