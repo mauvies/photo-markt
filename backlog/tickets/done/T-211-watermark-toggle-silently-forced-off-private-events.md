@@ -1,12 +1,12 @@
 # T-211 · El toggle de watermark se revierte en silencio en eventos privados
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Blockers:** ninguno para empezar — **coordinar con T-203 (PR #265) y T-206**, que tocan los mismos
   archivos del form de edición
 - **Rama:** `fix/watermark-toggle-private-events`
 - **OpenSpec change:** —  (se crea al ejecutar, si el cambio toca >1 archivo o es ambiguo)
-- **PR:** —
+- **PR:** #270
 
 ## Requerimiento
 "cuando trato de editar la config de un evento y activo watermarks, después de guardar cambios el
@@ -56,23 +56,23 @@ Create **exime** a los eventos `organizer` de la regla; edit **no**. Un evento o
 campo. No parece una decisión — parece un olvido al añadir la rama en create. Alinear edit con create.
 
 ## Criterio de aceptación (Definition of Done)
-- [ ] En un evento **privado** (no organizer) el switch de watermark aparece **deshabilitado**, con copy
+- [x] En un evento **privado** (no organizer) el switch de watermark aparece **deshabilitado**, con copy
       que explique que un evento privado ya está protegido por el share code — no un switch activable
       que el guardado revierte
-- [ ] Al pasar un evento de público a privado en el propio form, el estado del switch refleja la regla
+- [x] Al pasar un evento de público a privado en el propio form, el estado del switch refleja la regla
       inmediatamente (el acoplamiento de `:326` deja de ser el único camino)
-- [ ] Guardar un evento privado **no cambia** `watermark_enabled` respecto de lo que la UI mostraba:
+- [x] Guardar un evento privado **no cambia** `watermark_enabled` respecto de lo que la UI mostraba:
       lo mostrado y lo persistido coinciden
-- [ ] Un evento **público** sigue pudiendo activar/desactivar watermark exactamente como hoy
-- [ ] `edit/actions.ts` aplica la **misma** excepción `organizer` que `new/actions.ts`: un evento
+- [x] Un evento **público** sigue pudiendo activar/desactivar watermark exactamente como hoy
+- [x] `edit/actions.ts` aplica la **misma** excepción `organizer` que `new/actions.ts`: un evento
       organizer privado con watermark **conserva** el watermark al guardar una edición
-- [ ] La regla de servidor sigue siendo la autoridad (la UI deshabilitada es UX, no la garantía): un
+- [x] La regla de servidor sigue siendo la autoridad (la UI deshabilitada es UX, no la garantía): un
       POST hecho a mano con `watermark_enabled=true` sobre un evento privado no-organizer sigue
       guardando `false`
-- [ ] strings nuevos en `en.json` y `es.json` (la copy del estado deshabilitado; ⚠️ los strings de este
+- [x] strings nuevos en `en.json` y `es.json` (la copy del estado deshabilitado; ⚠️ los strings de este
       form están **hardcodeados en inglés** hoy — ver T-206)
-- [ ] test de regresión que falla antes y pasa después
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] test de regresión que falla antes y pasa después
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
 - **Tests sugeridos** (rojo antes / verde después):
