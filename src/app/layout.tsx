@@ -50,7 +50,9 @@ export const metadata: Metadata = {
     ],
     apple: '/favicon/apple-touch-icon.png',
   },
-  manifest: '/manifest.json',
+  // No `manifest` key on purpose: src/app/manifest.ts is a file convention, so
+  // Next injects <link rel="manifest" href="/manifest.webmanifest"> on its own.
+  // Setting it here would only re-point the link at a path we no longer serve. (T-201)
   openGraph: {
     siteName: 'Photo Markt',
     type: 'website',

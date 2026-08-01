@@ -1,11 +1,11 @@
 # T-201 · Manifiesto PWA: `public/manifest.json` → `src/app/manifest.ts` (MetadataRoute.Manifest)
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Blockers:** ninguno
 - **Rama:** `refactor/manifest-metadata-route`
 - **OpenSpec change:** —  (se crea al ejecutar, si el cambio toca >1 archivo o es ambiguo)
-- **PR:** —
+- **PR:** #277
 
 ## Requerimiento
 Refactorizar la configuración del manifiesto para seguir la práctica oficial de Next.js App Router:
@@ -69,16 +69,27 @@ efectos colaterales que el enunciado no cubre. Decidir en el PR, no silenciosame
    matcher.
 
 ## Criterio de aceptación (Definition of Done)
-- [ ] `public/manifest.json` eliminado; existe `src/app/manifest.ts` tipado con `MetadataRoute.Manifest`
-- [ ] `GET /manifest.webmanifest` devuelve 200 con `content-type: application/manifest+json` y el JSON
-      esperado (nombre, iconos, `start_url`, `scope`, `display`, colores)
-- [ ] Ninguna página emite ya un `<link rel="manifest">` apuntando a `/manifest.json` (404); el link
+- [x] `public/manifest.json` eliminado; existe `src/app/manifest.ts` tipado con `MetadataRoute.Manifest`
+- [x] `GET /manifest.webmanifest` devuelve 200 con `content-type: application/manifest+json` y el JSON
+      esperado (nombre, iconos, `start_url`, `scope`, `display`, colores) — verificado contra la salida
+      del build (`.next/server/app/manifest.webmanifest.{body,meta}`); la ruta prerenderiza estática
+- [x] Ninguna página emite ya un `<link rel="manifest">` apuntando a `/manifest.json` (404); el link
       inyectado por Next apunta a `/manifest.webmanifest`
-- [ ] Los dos iconos referenciados existen en `public/favicon/` (192 y 512) — sin 404 en el manifiesto
-- [ ] Decisión sobre `orientation` y sobre `public/site.webmanifest` declarada en el PR
-- [ ] strings nuevos en `en.json` y `es.json` (N/A — el manifiesto no pasa por el sistema de diccionarios)
-- [ ] test de regresión que falla antes y pasa después
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] Los dos iconos referenciados existen en `public/favicon/` (192 y 512) — asertado por el test
+- [x] Decisión sobre `orientation` y sobre `public/site.webmanifest` declarada en el PR
+- [x] strings nuevos en `en.json` y `es.json` (N/A — el manifiesto no pasa por el sistema de diccionarios)
+- [x] test de regresión que falla antes y pasa después (`test/unit/src/app/manifest.test.ts`, 2 rojos → 5 verdes)
+- [x] `pnpm typecheck && pnpm lint && pnpm build` en verde; unit verde salvo los 2 fallos preexistentes
+      ajenos de `main` (skeletons T-128/T-156). Integración no corrida: Docker no disponible y el
+      cambio no toca BD
+
+## Resolución
+1. **`orientation: 'portrait'` se conserva** — la config del enunciado lo omitía, pero perderlo cambia
+   cómo abre la PWA instalada; un refactor no debe cambiar comportamiento.
+2. **`public/site.webmanifest` borrado** — huérfano y roto, sin referencias en `src/`.
+3. `manifest` eliminado del objeto `metadata` en `src/app/layout.tsx` (opción preferida del enunciado):
+   Next inyecta el link solo si existe la convention.
+4. `src/proxy.ts` no se tocó (el matcher ya excluye paths con extensión).
 
 ## Notas
 - Test sugerido: unit sobre el default export de `src/app/manifest.ts` (campos requeridos + iconos con
