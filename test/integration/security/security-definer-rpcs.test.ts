@@ -68,6 +68,28 @@ async function resolveDbContainer(): Promise<string> {
   return name;
 }
 
+/**
+ * Run SQL for its side effect. Used to seed `auth.users` in bulk — the admin API
+ * needs one HTTP round-trip per user, which makes a 60-user roster too slow to
+ * assert the server-side limit ceiling against.
+ */
+async function execSql(sql: string): Promise<void> {
+  const container = await resolveDbContainer();
+  await execFileAsync('docker', [
+    'exec',
+    container,
+    'psql',
+    '-U',
+    'postgres',
+    '-d',
+    'postgres',
+    '-v',
+    'ON_ERROR_STOP=1',
+    '-c',
+    sql,
+  ]);
+}
+
 /** Run a scalar-returning query in the local DB and parse its JSON result. */
 async function queryJson<T>(sql: string): Promise<T> {
   const container = await resolveDbContainer();
@@ -93,11 +115,15 @@ async function queryJson<T>(sql: string): Promise<T> {
  * cannot protect. Each entry states who may execute it and why.
  */
 const EXPECTED_EXPOSURE: Record<string, { anon: boolean; authenticated: boolean; why: string }> = {
-  // Reads auth.users. Anon access was the vulnerability. Authenticated access is
-  // still broader than ideal (any signed-in user can enumerate the user table) —
-  // narrowing that is a tracked follow-up, not a regression.
-  search_users_by_text: { anon: false, authenticated: true, why: 'contributor invite search' },
-  search_user_by_email: { anon: false, authenticated: true, why: 'contributor invite by email' },
+  // Reads auth.users. Anon access was the vulnerability (20260803000000).
+  // Authenticated access stays — the tag-talent dialog needs it — but the
+  // function itself is now bounded by 20260804000000 (min 3 chars, escaped LIKE,
+  // limit capped at 50, email never returned); see the describe block below.
+  // Both were dropped and recreated by that migration, which resets grants and
+  // re-grants EXECUTE to PUBLIC by default: these two entries staying false for
+  // anon IS the assertion that the re-revoke was not forgotten.
+  search_users_by_text: { anon: false, authenticated: true, why: 'tag-talent search' },
+  search_user_by_email: { anon: false, authenticated: true, why: 'lookup by exact email' },
   get_user_emails_batch: { anon: false, authenticated: true, why: 'buyer emails on sales tab' },
 
   // Rate-limit counters: service-role only. These got the revoke right in
@@ -202,6 +228,259 @@ describe('SECURITY DEFINER RPCs — anon email enumeration regression', () => {
 
     expect(error).toBeNull();
     expect((data ?? [])[0]?.email).toBe(buyer.email);
+  });
+});
+
+/**
+ * T-226: revoking anon (20260803000000) stopped the anonymous dump, but any
+ * AUTHENTICATED user could still empty the roster — signing up is free Google
+ * OAuth, and the RPC is callable straight through PostgREST with a user JWT, so
+ * the Server Action wrapping it guards nothing. 20260804000000 bounds the
+ * function itself: min 3 chars, escaped LIKE pattern, server-side limit ceiling,
+ * and no email column at all.
+ */
+describe('search_users_by_text — bounded for authenticated callers (T-226)', () => {
+  /** Distinctive enough that only rows seeded by this file can match it. */
+  const ROSTER_PREFIX = 'bulkroster226';
+
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  /**
+   * Seed `n` users that the RPC can find. The match has to come from `username`,
+   * not from the email: email is matched by EXACT equality only (see the oracle
+   * test below), so a shared email prefix would find nobody.
+   */
+  async function seedRoster(n: number): Promise<void> {
+    await execSql(`
+      insert into auth.users (id, email)
+      select gen_random_uuid(), '${ROSTER_PREFIX}-' || g || '@photomarkt.test'
+      from generate_series(1, ${n}) g;
+
+      insert into public.profiles (id, username, active_role)
+      select u.id, '${ROSTER_PREFIX}_' || substr(u.id::text, 1, 8), 'TALENT'
+      from auth.users u
+      where u.email like '${ROSTER_PREFIX}%'
+      on conflict (id) do update set username = excluded.username;`);
+  }
+
+  async function deleteRoster(): Promise<void> {
+    await execSql(`delete from auth.users where email like '${ROSTER_PREFIX}%'`);
+  }
+
+  it('caps result_limit server-side — a caller asking for a million gets 50', async () => {
+    // 60 users via psql: the ceiling is only observable above it, and 60 admin
+    // API calls would dominate the runtime of this file.
+    await seedRoster(60);
+
+    try {
+      const caller = await createTestUser('PHOTOGRAPHER');
+      const client = await signInAs(caller.email);
+
+      const { data, error } = await client.rpc('search_users_by_text', {
+        search_text: ROSTER_PREFIX,
+        result_limit: 1000000,
+      });
+
+      expect(error).toBeNull();
+      // Before 20260804000000 this returned all 60.
+      expect((data ?? []).length).toBe(50);
+    } finally {
+      // Explicit, not left to resetDatabase: these rows were inserted behind the
+      // admin API's back, so the next beforeEach should never have to see them.
+      await deleteRoster();
+    }
+  });
+
+  it('a caller asking for fewer than the cap still gets what it asked for', async () => {
+    await seedRoster(5);
+
+    try {
+      const caller = await createTestUser('PHOTOGRAPHER');
+      const client = await signInAs(caller.email);
+
+      const { data, error } = await client.rpc('search_users_by_text', {
+        search_text: ROSTER_PREFIX,
+        result_limit: 3,
+      });
+
+      expect(error).toBeNull();
+      expect((data ?? []).length).toBe(3);
+    } finally {
+      await deleteRoster();
+    }
+  });
+
+  it('"@" returns nothing instead of every email on the platform', async () => {
+    await createTestUser('TALENT');
+    const caller = await createTestUser('PHOTOGRAPHER');
+    const client = await signInAs(caller.email);
+
+    const { data, error } = await client.rpc('search_users_by_text', {
+      search_text: '@',
+      result_limit: 1000000,
+    });
+
+    // Zero, not "at most 50": the 3-character floor rejects it before the cap
+    // ever applies. This is the exact payload from the original finding.
+    expect(error).toBeNull();
+    expect(data ?? []).toEqual([]);
+  });
+
+  it('treats "%" as a literal, not as a wildcard', async () => {
+    await createTestUser('TALENT');
+    const caller = await createTestUser('PHOTOGRAPHER');
+    const client = await signInAs(caller.email);
+
+    // 3 characters, so it clears the length floor and only the LIKE escaping can
+    // stop it. Unescaped, '%%%' matches every row.
+    const { data, error } = await client.rpc('search_users_by_text', {
+      search_text: '%%%',
+      result_limit: 1000000,
+    });
+
+    expect(error).toBeNull();
+    expect(data ?? []).toEqual([]);
+  });
+
+  it('treats "_" as a literal, not as a single-character wildcard', async () => {
+    const literal = await createTestUser('TALENT', {
+      username: 'escliteral',
+      display_name: 'a_b',
+    });
+    const wildcard = await createTestUser('TALENT', {
+      username: 'escwildcard',
+      display_name: 'axb',
+    });
+    const caller = await createTestUser('PHOTOGRAPHER');
+    const client = await signInAs(caller.email);
+
+    const { data, error } = await client.rpc('search_users_by_text', {
+      search_text: 'a_b',
+      result_limit: 50,
+    });
+
+    expect(error).toBeNull();
+    const ids = (data ?? []).map((r: { id: string }) => r.id);
+    expect(ids).toContain(literal.id);
+    expect(ids).not.toContain(wildcard.id);
+  });
+
+  it('returns nothing for searches shorter than 3 characters', async () => {
+    const target = await createTestUser('TALENT', {
+      username: 'shortsearch',
+      display_name: 'Zoe',
+    });
+    const caller = await createTestUser('PHOTOGRAPHER');
+    const client = await signInAs(caller.email);
+
+    // 'zo' would match the target's display name if the floor weren't there.
+    const { data, error } = await client.rpc('search_users_by_text', {
+      search_text: 'zo',
+      result_limit: 50,
+    });
+
+    expect(error).toBeNull();
+    expect((data ?? []).map((r: { id: string }) => r.id)).not.toContain(target.id);
+    expect(data ?? []).toEqual([]);
+  });
+
+  it('never returns an email column', async () => {
+    const target = await createTestUser('TALENT');
+    const caller = await createTestUser('PHOTOGRAPHER');
+    const client = await signInAs(caller.email);
+
+    const { data, error } = await client.rpc('search_users_by_text', {
+      search_text: target.email,
+      result_limit: 50,
+    });
+
+    expect(error).toBeNull();
+    const row = (data ?? [])[0];
+    expect(row).toBeDefined();
+    // The whole point of the T-226 narrowing: the column is gone, not filtered
+    // by the caller. The only consumer already discarded it.
+    expect(Object.keys(row as object)).not.toContain('email');
+  });
+
+  it('does not answer substring probes against an email — no character-by-character oracle', async () => {
+    // The finding that survived the first pass of this ticket: dropping the
+    // email COLUMN is not enough while the WHERE still matches a substring of it
+    // and the function returns a stable id. That pair is an oracle — an attacker
+    // holding a target's uuid (photographer ids are public via profile slugs)
+    // anchors on the domain and walks left one character at a time. Reproduced
+    // before the fix; these two probes are the exact shape of that attack.
+    const target = await createTestUser('TALENT', {
+      email: 'victim-secret-1987@photomarkt.test',
+      username: 'oracletarget',
+      display_name: 'Oracle Target',
+    });
+    const caller = await createTestUser('PHOTOGRAPHER');
+    const client = await signInAs(caller.email);
+
+    const domainProbe = await client.rpc('search_users_by_text', {
+      search_text: 'photomarkt.test',
+      result_limit: 50,
+    });
+    expect(domainProbe.error).toBeNull();
+    expect((domainProbe.data ?? []).map((r: { id: string }) => r.id)).not.toContain(target.id);
+
+    // An anchor being extended leftwards: a real suffix of the address, which a
+    // substring match would confirm.
+    const suffixProbe = await client.rpc('search_users_by_text', {
+      search_text: '7@photomarkt.test',
+      result_limit: 50,
+    });
+    expect(suffixProbe.error).toBeNull();
+    expect((suffixProbe.data ?? []).map((r: { id: string }) => r.id)).not.toContain(target.id);
+  });
+
+  it('still finds a user by their full email — the tag-talent flow keeps working', async () => {
+    const target = await createTestUser('TALENT');
+    const caller = await createTestUser('PHOTOGRAPHER');
+    const client = await signInAs(caller.email);
+
+    const { data, error } = await client.rpc('search_users_by_text', {
+      search_text: target.email,
+      result_limit: 10,
+    });
+
+    expect(error).toBeNull();
+    expect((data ?? []).some((r: { id: string }) => r.id === target.id)).toBe(true);
+  });
+
+  it('still finds a user by a partial display name', async () => {
+    const target = await createTestUser('TALENT', {
+      username: 'partialname',
+      display_name: 'Mariana Ruiz',
+    });
+    const caller = await createTestUser('PHOTOGRAPHER');
+    const client = await signInAs(caller.email);
+
+    const { data, error } = await client.rpc('search_users_by_text', {
+      search_text: 'rian',
+      result_limit: 10,
+    });
+
+    expect(error).toBeNull();
+    expect((data ?? []).some((r: { id: string }) => r.id === target.id)).toBe(true);
+  });
+
+  it('search_user_by_email inherits the bounds from its delegate', async () => {
+    const target = await createTestUser('TALENT');
+    const caller = await createTestUser('PHOTOGRAPHER');
+    const client = await signInAs(caller.email);
+
+    const dump = await client.rpc('search_user_by_email', { search_email: '@' });
+    expect(dump.error).toBeNull();
+    expect(dump.data ?? []).toEqual([]);
+
+    const exact = await client.rpc('search_user_by_email', { search_email: target.email });
+    expect(exact.error).toBeNull();
+    expect((exact.data ?? []).length).toBe(1);
+    expect((exact.data ?? [])[0]?.id).toBe(target.id);
+    expect(Object.keys((exact.data ?? [])[0] as object)).not.toContain('email');
   });
 });
 

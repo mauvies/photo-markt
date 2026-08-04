@@ -252,7 +252,9 @@ export async function searchTalentUsers(
     }
   }
 
-  return data.map((user: { id: string; email: string; display_name: string | null }) => ({
+  // No `email`: the RPC stopped returning it in 20260804000000 (T-226) precisely
+  // because this mapping already discarded it.
+  return data.map((user: { id: string; display_name: string | null }) => ({
     id: user.id,
     username: usernameMap[user.id] ?? 'unknown',
     display_name: user.display_name || null,
