@@ -1,12 +1,12 @@
 # T-226 · Acotar `search_users_by_text`: cualquier usuario autenticado puede volcar el padrón
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Riesgo:** alto  (seguridad · BD/migraciones)
 - **Blockers:** ninguno
 - **Rama:** `fix/cap-user-search-rpc`  (tipo = fix)
 - **OpenSpec change:** —  (una función, regla acotada; el "por qué" cabe en la migración)
-- **PR:** —
+- **PR:** #281
 
 ## Requerimiento
 
