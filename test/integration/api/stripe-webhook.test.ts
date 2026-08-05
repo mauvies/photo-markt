@@ -37,9 +37,12 @@ vi.mock('@/lib/stripe/connect', async () => {
   };
 });
 
-// Mock Resend so the guest-purchase path doesn't try to send real email.
+// Mock Resend so neither purchase path tries to send real email.
 vi.mock('@/lib/email/send-guest-purchase-email', () => ({
   sendGuestPurchaseEmail: vi.fn(async () => undefined),
+}));
+vi.mock('@/lib/email/send-purchase-confirmation-email', () => ({
+  sendPurchaseConfirmationEmail: vi.fn(async () => undefined),
 }));
 
 // `next/cache` helpers (revalidatePath, revalidateTag) require the Next.js

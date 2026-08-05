@@ -154,9 +154,10 @@ describe('guest checkout — service fee line item', () => {
   it('adds exactly one fee line item on top of the photo line items', async () => {
     const { photographer, event, photo } = await seedPhoto(10);
 
-    const result = await createGuestCheckoutSessionAction([
-      guestItem(photo.id, photographer.id, event.id),
-    ]);
+    const result = await createGuestCheckoutSessionAction(
+      [guestItem(photo.id, photographer.id, event.id)],
+      true,
+    );
 
     expect(result.ok).toBe(true);
     const items = lastLineItems();
@@ -169,7 +170,7 @@ describe('guest checkout — service fee line item', () => {
     const { photographer, event, photo } = await seedPhoto(10);
 
     // The guest item claims €9999.99; the event says €10.00.
-    await createGuestCheckoutSessionAction([guestItem(photo.id, photographer.id, event.id)]);
+    await createGuestCheckoutSessionAction([guestItem(photo.id, photographer.id, event.id)], true);
 
     // 30 + round(1000 * 150 / 10000) = 30 + 15 = 45
     expect(feeLineItems()[0].price_data.unit_amount).toBe(45);
@@ -179,10 +180,13 @@ describe('guest checkout — service fee line item', () => {
     const { photographer, event, photo } = await seedPhoto(10);
     const photo2 = await createTestPhoto(event.id, { user_id: photographer.id });
 
-    await createGuestCheckoutSessionAction([
-      guestItem(photo.id, photographer.id, event.id),
-      guestItem(photo2.id, photographer.id, event.id),
-    ]);
+    await createGuestCheckoutSessionAction(
+      [
+        guestItem(photo.id, photographer.id, event.id),
+        guestItem(photo2.id, photographer.id, event.id),
+      ],
+      true,
+    );
 
     const items = lastLineItems();
     expect(items).toHaveLength(3); // 2 photos + 1 fee
@@ -193,7 +197,7 @@ describe('guest checkout — service fee line item', () => {
   it('makes the session total equal subtotal + fee', async () => {
     const { photographer, event, photo } = await seedPhoto(10);
 
-    await createGuestCheckoutSessionAction([guestItem(photo.id, photographer.id, event.id)]);
+    await createGuestCheckoutSessionAction([guestItem(photo.id, photographer.id, event.id)], true);
 
     const total = lastLineItems().reduce(
       (sum, i) => sum + i.price_data.unit_amount * i.quantity,
@@ -205,7 +209,7 @@ describe('guest checkout — service fee line item', () => {
   it('bills the fee in the platform currency', async () => {
     const { photographer, event, photo } = await seedPhoto(10);
 
-    await createGuestCheckoutSessionAction([guestItem(photo.id, photographer.id, event.id)]);
+    await createGuestCheckoutSessionAction([guestItem(photo.id, photographer.id, event.id)], true);
 
     expect(feeLineItems()[0].price_data.currency).toBe('eur');
   });
@@ -214,7 +218,7 @@ describe('guest checkout — service fee line item', () => {
     // A free event has no charge at all, so it must not acquire a lone fee.
     const { photographer, event, photo } = await seedPhoto(0);
 
-    await createGuestCheckoutSessionAction([guestItem(photo.id, photographer.id, event.id)]);
+    await createGuestCheckoutSessionAction([guestItem(photo.id, photographer.id, event.id)], true);
 
     expect(feeLineItems()).toHaveLength(0);
   });
@@ -227,7 +231,7 @@ describe('authenticated checkout — service fee line item', () => {
     mockSession.userId = talent.id;
     await addPhotoToCartAction(photo.id);
 
-    const result = await createCheckoutSessionAction();
+    const result = await createCheckoutSessionAction(true);
 
     expect(result.ok).toBe(true);
     expect(lastLineItems()).toHaveLength(2);
@@ -241,12 +245,12 @@ describe('authenticated checkout — service fee line item', () => {
     mockSession.userId = talent.id;
     await addPhotoToCartAction(photo.id);
 
-    await createCheckoutSessionAction();
+    await createCheckoutSessionAction(true);
     const authedFee = feeLineItems()[0];
 
     mockSession.userId = null;
     createSessionMock.mockClear();
-    await createGuestCheckoutSessionAction([guestItem(photo.id, photographer.id, event.id)]);
+    await createGuestCheckoutSessionAction([guestItem(photo.id, photographer.id, event.id)], true);
     const guestFee = feeLineItems()[0];
 
     expect(authedFee).toEqual(guestFee);
@@ -260,7 +264,7 @@ describe('authenticated checkout — service fee line item', () => {
     await addPhotoToCartAction(photo.id);
     await addPhotoToCartAction(photo2.id);
 
-    await createCheckoutSessionAction();
+    await createCheckoutSessionAction(true);
 
     expect(lastLineItems()).toHaveLength(3);
     expect(feeLineItems()[0].price_data.unit_amount).toBe(60);
@@ -279,7 +283,7 @@ describe('kill-switch — a fee of 0 adds no line item', () => {
   it('guest checkout sends photo line items only', async () => {
     const { photographer, event, photo } = await seedPhoto(10);
 
-    await createGuestCheckoutSessionAction([guestItem(photo.id, photographer.id, event.id)]);
+    await createGuestCheckoutSessionAction([guestItem(photo.id, photographer.id, event.id)], true);
 
     expect(lastLineItems()).toHaveLength(1);
     expect(feeLineItems()).toHaveLength(0);
@@ -291,7 +295,7 @@ describe('kill-switch — a fee of 0 adds no line item', () => {
     mockSession.userId = talent.id;
     await addPhotoToCartAction(photo.id);
 
-    await createCheckoutSessionAction();
+    await createCheckoutSessionAction(true);
 
     expect(lastLineItems()).toHaveLength(1);
     expect(feeLineItems()).toHaveLength(0);

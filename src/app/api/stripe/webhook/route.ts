@@ -64,6 +64,7 @@ import { supabaseAdmin } from '@/database/supabase-admin';
 import { env } from '@/env.mjs';
 import { PLATFORM_CURRENCY } from '@/lib/currency';
 import { sendGuestPurchaseEmail } from '@/lib/email/send-guest-purchase-email';
+import { sendPurchaseConfirmationEmail } from '@/lib/email/send-purchase-confirmation-email';
 import { getPhotographerNetCents } from '@/lib/plans';
 import { stripe } from '@/lib/stripe/config';
 import {
@@ -73,6 +74,7 @@ import {
 } from '@/lib/stripe/connect';
 import { STRIPE_PRICE_TO_PLAN } from '@/lib/stripe/plans-stripe';
 import { subscriptionPeriodEndISO } from '@/lib/stripe/subscription-period';
+import { parseWithdrawalConsentMetadata } from '@/lib/withdrawal-consent';
 
 /**
  * Drop the cached plan read after a subscription state change (T-214).
@@ -286,6 +288,13 @@ export async function POST(request: Request) {
 
           const totalAmountCents = cartItems.reduce((sum, item) => sum + item.unitPriceCents, 0);
 
+          // T-228: the art. 16(m) consent stamped when the session was created.
+          // Fails OPEN — a session created before the gate shipped carries no
+          // consent, and the buyer has already paid, so the order is still
+          // created with NULL columns. Refusing delivery over a missing record
+          // would punish the buyer for our deploy timing.
+          const guestWithdrawalConsent = parseWithdrawalConsentMetadata(session.metadata);
+
           const guestOrder = await createGuestOrder(supabaseAdmin, {
             guest_email: guestEmail,
             stripe_checkout_session_id: session.id,
@@ -295,6 +304,7 @@ export async function POST(request: Request) {
             total_amount_cents: totalAmountCents,
             currency: session.currency ?? PLATFORM_CURRENCY,
             metadata: { stripe_session_id: session.id },
+            withdrawal_consent: guestWithdrawalConsent,
           });
 
           await addGuestOrderItems(
@@ -337,6 +347,9 @@ export async function POST(request: Request) {
               photoCount: cartItems.length,
               eventNames,
               baseUrl,
+              // Art. 8.7: the confirmation on a durable medium has to restate
+              // the consent that removed the right of withdrawal.
+              withdrawalConsent: guestWithdrawalConsent,
             });
           } catch (emailErr) {
             console.error('Failed to send guest purchase email:', emailErr);
@@ -490,6 +503,11 @@ export async function POST(request: Request) {
 
         const totalAmountCents = cartItems.reduce((sum, item) => sum + item.unit_price_cents, 0);
 
+        // T-228 — same fail-open rule as the guest branch above: a session
+        // created before the gate shipped carries no consent, and the buyer has
+        // already paid, so the order is created with NULL columns.
+        const withdrawalConsent = parseWithdrawalConsentMetadata(session.metadata);
+
         const order = await createOrder(supabaseAdmin, userId, {
           cart_id: cartId,
           stripe_checkout_session_id: session.id,
@@ -503,6 +521,7 @@ export async function POST(request: Request) {
             amount_total: session.amount_total,
             currency: session.currency,
           },
+          withdrawal_consent: withdrawalConsent,
         });
 
         await addOrderItems(
@@ -517,6 +536,37 @@ export async function POST(request: Request) {
         );
 
         await clearCart(supabaseAdmin, cartId);
+
+        // T-228 / art. 8.7: confirmation of the contract on a durable medium,
+        // restating the consent that removed the right of withdrawal. Until
+        // now only guests got an email — the signed-in buyer got nothing, so
+        // the confirmation obligation was unmet for half the purchases.
+        // Non-fatal, like the guest one: a Resend outage must not fail the
+        // webhook and lose the order.
+        const buyerEmail =
+          session.customer_details?.email ??
+          (typeof session.customer_email === 'string' ? session.customer_email : null);
+        if (buyerEmail) {
+          try {
+            await sendPurchaseConfirmationEmail({
+              to: buyerEmail,
+              photoCount: cartItems.length,
+              eventNames: [
+                ...new Set(
+                  cartItems
+                    .map((item) => item.event_name)
+                    .filter((name): name is string => name !== null),
+                ),
+              ],
+              baseUrl: env.SITE_URL,
+              withdrawalConsent,
+            });
+          } catch (emailErr) {
+            console.error('Failed to send purchase confirmation email:', emailErr);
+          }
+        } else {
+          console.error(`No buyer email on session ${session.id}; confirmation email skipped`);
+        }
 
         revalidatePath('/[lang]/dashboard/talent/cart', 'page');
         revalidatePath('/[lang]/dashboard/talent/orders', 'page');

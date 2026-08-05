@@ -156,7 +156,7 @@ describe('T-130 — authenticated cart preview resolution', () => {
   it('checkout sees the foreign item instead of rejecting the cart as empty', async () => {
     await seedCartWithForeignPhoto();
 
-    const result = await createCheckoutSessionAction();
+    const result = await createCheckoutSessionAction(true);
 
     // Before T-130, the user-scoped details read came back empty and checkout
     // threw 'Cart is empty' for a cart with a real purchasable item in it.

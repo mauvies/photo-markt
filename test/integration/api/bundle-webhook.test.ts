@@ -31,6 +31,10 @@ vi.mock('@/lib/email/send-guest-purchase-email', () => ({
   sendGuestPurchaseEmail: vi.fn(async () => undefined),
 }));
 
+vi.mock('@/lib/email/send-purchase-confirmation-email', () => ({
+  sendPurchaseConfirmationEmail: vi.fn(async () => undefined),
+}));
+
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
   revalidateTag: vi.fn(),

@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { WithdrawalConsentCheckbox } from '@/components/withdrawal-consent-checkbox';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { useLoginHref, useSignupHref } from '@/hooks/use-login-href';
 import { priceCartWithBundles } from '@/lib/cart-bundle-pricing';
@@ -98,6 +99,10 @@ export function GuestCartContent() {
   const canceled = searchParams.get('canceled') === 'true';
   const [isPending, startTransition] = useTransition();
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  // T-228: the art. 16(m) consent. One piece of state for both render sites
+  // (desktop panel + mobile sticky footer) so ticking either one is the same
+  // answer. The server re-checks it — this only gates the button.
+  const [consentAccepted, setConsentAccepted] = useState(false);
   // The guest cart item whose photo is open in the close-only lightbox.
   const [lightboxItem, setLightboxItem] = useState<GuestCartItem | null>(null);
   const { t } = useTranslations<{
@@ -135,6 +140,8 @@ export function GuestCartContent() {
     itemsUnavailableRemoved: string;
     checkoutPhotographerNotConnected: string;
     checkoutRateLimited: string;
+    withdrawalConsentLabel: string;
+    withdrawalConsentRequired: string;
   }>();
 
   // Drop unpurchasable entries and notify (T-117) — naturally one-shot: once
@@ -152,7 +159,7 @@ export function GuestCartContent() {
     setIsCheckingOut(true);
     startTransition(async () => {
       try {
-        const res = await createGuestCheckoutSessionAction(items);
+        const res = await createGuestCheckoutSessionAction(items, consentAccepted);
         // T-189: expected, user-facing failures come back as a typed code
         // (Next redacts thrown Server Action messages in prod), so the buyer
         // sees the localized reason — e.g. a photographer not payout-ready.
@@ -330,11 +337,18 @@ export function GuestCartContent() {
               <CartNextTierPrompt nextTier={priced.nextTier} labels={nextTierLabels} />
               <p className="text-xs text-muted-foreground">{t('emailNotice')}</p>
               <div className="pt-4 border-t border-border">
+                <WithdrawalConsentCheckbox
+                  id="withdrawal-consent-guest-desktop"
+                  checked={consentAccepted}
+                  onCheckedChange={setConsentAccepted}
+                  label={t('withdrawalConsentLabel')}
+                  disabled={isCheckingOut}
+                />
                 <Button
-                  className="w-full"
+                  className="mt-3 w-full"
                   size="lg"
                   onClick={handleCheckout}
-                  disabled={isPending || isCheckingOut}
+                  disabled={isPending || isCheckingOut || !consentAccepted}
                 >
                   {isCheckingOut ? (
                     <>
@@ -365,12 +379,19 @@ export function GuestCartContent() {
               variant="mobile"
             />
             <CartNextTierPrompt nextTier={priced.nextTier} labels={nextTierLabels} />
+            <WithdrawalConsentCheckbox
+              id="withdrawal-consent-guest-mobile"
+              checked={consentAccepted}
+              onCheckedChange={setConsentAccepted}
+              label={t('withdrawalConsentLabel')}
+              disabled={isCheckingOut}
+            />
           </div>
           <Button
             className="w-full"
             size="sm"
             onClick={handleCheckout}
-            disabled={isPending || isCheckingOut}
+            disabled={isPending || isCheckingOut || !consentAccepted}
           >
             {isCheckingOut ? (
               <>

@@ -482,6 +482,39 @@ commission cannot, which is why small sales used to sell at a loss.
 One-time Stripe payments. Webhook handler at `/src/app/api/stripe/webhook/route.ts`.
 After confirmed payment: order saved, cart cleared, photos available in talent profile and orders.
 
+### Right-of-withdrawal consent (T-228)
+Directive 2011/83/EU art. 16(m) (Spain: art. 103.m TRLGDCU) exempts digital content from the 14-day
+right of withdrawal **only** with the buyer's prior express consent to begin delivery **plus** their
+explicit acknowledgement that this loses the right. A clause in the Terms achieves nothing — consumer
+law is mandatory and cannot be waived by contract — so the consent is collected per purchase, in
+**both** checkouts, and stored as evidence.
+- **Single source of truth: `src/lib/withdrawal-consent.ts`** (client-safe, like `checkout-error.ts`).
+  The browser sends only a **boolean**; the timestamp and `WITHDRAWAL_CONSENT_VERSION` are stamped
+  **server-side** — a client-supplied timestamp is worthless as evidence. ⚠️ **Bump
+  `WITHDRAWAL_CONSENT_VERSION` whenever `cart.withdrawalConsentLabel` changes in either dictionary:**
+  in a dispute the question is *which sentence* was ticked, and the order row is the only answer.
+- **The gate is the server, not the checkbox.** Both actions take the consent as a **required**
+  parameter (`createGuestCheckoutSessionAction(items, accepted)` /
+  `createCheckoutSessionAction(accepted)`) so the typecheck — not a reviewer — catches a call site
+  that forgets it, and return `consent_required` (a `CheckoutErrorCode`) **before the rate limiter and
+  before any DB/Stripe work**: a client bug must not burn the buyer's 10/h quota on requests that do
+  nothing. The disabled button in both carts is UX only. No carve-out for free carts.
+- **Transport is Stripe session metadata** (`wd_consent_at` / `wd_consent_version`), the same
+  mechanism as the guest cart's `cart_<i>` — so the consent reaches the webhook by the same route as
+  the order it belongs to, with no window where a session exists but its consent does not.
+- **Persisted on `orders` AND `guest_orders`** (`withdrawal_consent_at`, `withdrawal_consent_version`,
+  migration `20260805000000`, both nullable). ⚠️ `createOrder`/`createGuestOrder` build their insert
+  from a **literal, not a spread** — a field not listed there is dropped silently.
+- **The webhook fails OPEN.** No consent in the metadata (a session created before this shipped) ⇒
+  the order is still created with NULL columns. The buyer has already paid; withholding photos over a
+  missing record is worse than an incomplete record. `parseWithdrawalConsentMetadata` itself fails
+  **closed** to `null` — null must never be read as "assume consent".
+- **Art. 8.7 needs the confirmation email**, which is why `sendPurchaseConfirmationEmail`
+  (`src/lib/email/`) now exists at all: before T-228 only guests got an email, so signed-in buyers had
+  no confirmation on a durable medium. Both templates share `withdrawalConsentEmailBlock` so the
+  wording can't drift, and both are English-only (neither receives the buyer's locale — localizing
+  them is a separate change).
+
 ### Photographer Payouts (Stripe Connect)
 - Photographers connect Stripe Express accounts in `/dashboard/photographer/settings/payout-profile/`
 - Photo Markt absorbs the Stripe Connect fee (0.5%) — photographer always receives exactly their promised net amount

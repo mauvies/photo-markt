@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-228 | Casilla de desistimiento en el checkout (contenido digital) | — | todo |
+| 1 | P1 | T-228 | Casilla de desistimiento en el checkout (contenido digital) | — | doing |
 | 2 | P1 | T-216 | Ganancias varadas: transferencias omitidas sin registro ni reintento | — | todo |
 | 3 | P1 | T-215 | Clawback: disputas y reembolsos deben revertir transferencia y acceso | Dep T-216 | todo |
 | 4 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | Dep T-216 | todo |

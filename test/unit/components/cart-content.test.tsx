@@ -179,6 +179,52 @@ describe('CartContent — removal notice (T-117)', () => {
   });
 });
 
+/**
+ * T-228: checkout is gated on the right-of-withdrawal consent, so every test
+ * that means to reach the action has to tick it first. Both render sites
+ * (desktop summary + mobile sticky footer) share one piece of state, so
+ * ticking either is the same answer.
+ */
+function tickWithdrawalConsent() {
+  fireEvent.click(screen.getAllByRole('checkbox')[0]);
+}
+
+describe('CartContent — withdrawal consent gate (T-228)', () => {
+  it('keeps checkout unreachable until the consent is ticked', async () => {
+    createCheckoutSessionActionMock.mockResolvedValue({
+      ok: true,
+      url: 'https://checkout.stripe.test/s',
+    });
+
+    renderCart();
+
+    for (const button of screen.getAllByText('proceedToCheckout')) {
+      expect(button.closest('button')?.disabled).toBe(true);
+    }
+    fireEvent.click(screen.getAllByText('proceedToCheckout')[0]);
+    expect(createCheckoutSessionActionMock).not.toHaveBeenCalled();
+
+    tickWithdrawalConsent();
+
+    for (const button of screen.getAllByText('proceedToCheckout')) {
+      expect(button.closest('button')?.disabled).toBe(false);
+    }
+  });
+
+  it('passes the consent through to the Server Action', async () => {
+    createCheckoutSessionActionMock.mockResolvedValue({
+      ok: true,
+      url: 'https://checkout.stripe.test/s',
+    });
+
+    renderCart();
+    tickWithdrawalConsent();
+    fireEvent.click(screen.getAllByText('proceedToCheckout')[0]);
+
+    await waitFor(() => expect(createCheckoutSessionActionMock).toHaveBeenCalledWith(true));
+  });
+});
+
 describe('CartContent — typed checkout failure (T-189 / T-117)', () => {
   it('shows the localized reason and re-fetches cart-data on items_unavailable (self-heal)', async () => {
     // T-189: the action now RETURNS a typed code instead of throwing (Next
@@ -188,6 +234,7 @@ describe('CartContent — typed checkout failure (T-189 / T-117)', () => {
     getCurrentCartMock.mockResolvedValue({ ...initialCartData, items: [], itemCount: 0 });
 
     renderCart();
+    tickWithdrawalConsent();
     // Two checkout buttons render (desktop summary + mobile sticky footer).
     fireEvent.click(screen.getAllByText('proceedToCheckout')[0]);
 
@@ -205,6 +252,7 @@ describe('CartContent — typed checkout failure (T-189 / T-117)', () => {
     });
 
     renderCart();
+    tickWithdrawalConsent();
     fireEvent.click(screen.getAllByText('proceedToCheckout')[0]);
 
     await waitFor(() =>

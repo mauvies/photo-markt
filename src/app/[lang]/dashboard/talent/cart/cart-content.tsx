@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { WithdrawalConsentCheckbox } from '@/components/withdrawal-consent-checkbox';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { priceCartWithBundles } from '@/lib/cart-bundle-pricing';
 import { cartView } from '@/lib/cart-view';
@@ -77,6 +78,10 @@ export function CartContent({ initialCartData }: CartContentProps) {
   const [isPending, startTransition] = useTransition();
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  // T-228: the art. 16(m) consent. One piece of state for both render sites
+  // (desktop panel + mobile sticky footer) so ticking either one is the same
+  // answer. The server re-checks it — this only gates the button.
+  const [consentAccepted, setConsentAccepted] = useState(false);
   // The cart item whose photo is open in the close-only lightbox (null = closed).
   const [lightboxItem, setLightboxItem] = useState<CartItemDetail | null>(null);
   const router = useRouter();
@@ -195,6 +200,8 @@ export function CartContent({ initialCartData }: CartContentProps) {
     itemsUnavailableRemoved: string;
     checkoutPhotographerNotConnected: string;
     checkoutRateLimited: string;
+    withdrawalConsentLabel: string;
+    withdrawalConsentRequired: string;
   }>();
 
   // T-117: getCurrentCart() self-heals cart_items whose photo has gone
@@ -330,7 +337,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
     setIsCheckingOut(true);
     startTransition(async () => {
       try {
-        const res = await createCheckoutSessionAction();
+        const res = await createCheckoutSessionAction(consentAccepted);
         // T-189: expected, user-facing failures come back as a typed code
         // (Next redacts thrown Server Action messages in prod), so the buyer
         // sees the localized reason — e.g. a photographer not payout-ready.
@@ -499,11 +506,18 @@ export function CartContent({ initialCartData }: CartContentProps) {
               </div>
 
               <div className="pt-4 border-t border-border">
+                <WithdrawalConsentCheckbox
+                  id="withdrawal-consent-talent-desktop"
+                  checked={consentAccepted}
+                  onCheckedChange={setConsentAccepted}
+                  label={t('withdrawalConsentLabel')}
+                  disabled={isCheckingOut}
+                />
                 <Button
-                  className="w-full"
+                  className="mt-3 w-full"
                   size="lg"
                   onClick={handleCheckout}
-                  disabled={cartData.items.length === 0 || isCheckingOut}
+                  disabled={cartData.items.length === 0 || isCheckingOut || !consentAccepted}
                 >
                   {isCheckingOut ? (
                     <>
@@ -534,12 +548,19 @@ export function CartContent({ initialCartData }: CartContentProps) {
               variant="mobile"
             />
             <CartNextTierPrompt nextTier={cartData.nextTier} labels={nextTierLabels} />
+            <WithdrawalConsentCheckbox
+              id="withdrawal-consent-talent-mobile"
+              checked={consentAccepted}
+              onCheckedChange={setConsentAccepted}
+              label={t('withdrawalConsentLabel')}
+              disabled={isCheckingOut}
+            />
           </div>
           <Button
             className="w-full"
             size="sm"
             onClick={handleCheckout}
-            disabled={cartData.items.length === 0 || isCheckingOut}
+            disabled={cartData.items.length === 0 || isCheckingOut || !consentAccepted}
           >
             {isCheckingOut ? (
               <>

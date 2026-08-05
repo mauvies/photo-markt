@@ -208,6 +208,7 @@ describe('guest checkout — bundle pricing', () => {
 
     const result = await createGuestCheckoutSessionAction(
       photos.map((p) => guestItem(p.id, photographer.id, event.id)),
+      true,
     );
 
     expect(result.ok).toBe(true);
@@ -222,6 +223,7 @@ describe('guest checkout — bundle pricing', () => {
 
     await createGuestCheckoutSessionAction(
       photos.map((p) => guestItem(p.id, photographer.id, event.id)),
+      true,
     );
 
     const allocations = guestMetadataAllocations();
@@ -238,6 +240,7 @@ describe('guest checkout — bundle pricing', () => {
 
     await createGuestCheckoutSessionAction(
       photos.map((p) => guestItem(p.id, photographer.id, event.id)),
+      true,
     );
 
     expect(photoTotal()).toBe(1200);
@@ -249,6 +252,7 @@ describe('guest checkout — bundle pricing', () => {
 
     await createGuestCheckoutSessionAction(
       photos.map((p) => guestItem(p.id, photographer.id, event.id)),
+      true,
     );
 
     // The guest items claimed €9,999.99 each.
@@ -260,6 +264,7 @@ describe('guest checkout — bundle pricing', () => {
 
     await createGuestCheckoutSessionAction(
       photos.map((p) => guestItem(p.id, photographer.id, event.id)),
+      true,
     );
 
     expect(photoTotal()).toBe(1000);
@@ -274,6 +279,7 @@ describe('guest checkout — bundle pricing', () => {
 
     await createGuestCheckoutSessionAction(
       photos.map((p) => guestItem(p.id, photographer.id, event.id)),
+      true,
     );
 
     // 6 × €5 = €30 at list, capped at the €20 Foto-Flat.
@@ -284,10 +290,13 @@ describe('guest checkout — bundle pricing', () => {
     const bundled = await seedBundledEvent(3);
     const other = await seedBundledEvent(1, { tiers: null });
 
-    await createGuestCheckoutSessionAction([
-      ...bundled.photos.map((p) => guestItem(p.id, bundled.photographer.id, bundled.event.id)),
-      guestItem(other.photos[0].id, other.photographer.id, other.event.id),
-    ]);
+    await createGuestCheckoutSessionAction(
+      [
+        ...bundled.photos.map((p) => guestItem(p.id, bundled.photographer.id, bundled.event.id)),
+        guestItem(other.photos[0].id, other.photographer.id, other.event.id),
+      ],
+      true,
+    );
 
     // €12 for the bundled group + €5 for the untouched single.
     expect(photoTotal()).toBe(1700);
@@ -300,6 +309,7 @@ describe('guest checkout — bundle pricing', () => {
 
     await createGuestCheckoutSessionAction(
       photos.map((p) => guestItem(p.id, photographer.id, event.id)),
+      true,
     );
 
     expect(feeLineItems()).toHaveLength(1);
@@ -312,6 +322,7 @@ describe('guest checkout — bundle pricing', () => {
 
     await createGuestCheckoutSessionAction(
       photos.map((p) => guestItem(p.id, photographer.id, event.id)),
+      true,
     );
 
     expect(photoTotal()).toBe(1500);
@@ -354,7 +365,7 @@ describe('authenticated checkout — bundle pricing', () => {
   it('charges the rung total and commits the allocation before the session exists', async () => {
     const { talent } = await seedTalentCart(3);
 
-    const result = await createCheckoutSessionAction();
+    const result = await createCheckoutSessionAction(true);
 
     expect(result.ok).toBe(true);
     expect(photoTotal()).toBe(1200);
@@ -369,13 +380,14 @@ describe('authenticated checkout — bundle pricing', () => {
     mockSession.userId = talent.id;
     for (const photo of photos) await addPhotoToCartAction(photo.id);
 
-    await createCheckoutSessionAction();
+    await createCheckoutSessionAction(true);
     const authedTotal = photoTotal();
 
     mockSession.userId = null;
     createSessionMock.mockClear();
     await createGuestCheckoutSessionAction(
       photos.map((p) => guestItem(p.id, photographer.id, event.id)),
+      true,
     );
 
     expect(authedTotal).toBe(photoTotal());
@@ -384,7 +396,7 @@ describe('authenticated checkout — bundle pricing', () => {
   it('commits NO allocation for an unbundled cart, leaving the pre-bundle order shape', async () => {
     const { talent } = await seedTalentCart(3, { tiers: null });
 
-    await createCheckoutSessionAction();
+    await createCheckoutSessionAction(true);
 
     expect(photoTotal()).toBe(1500);
     // Null throughout: every downstream reader falls back to unit_price_cents,
@@ -396,7 +408,7 @@ describe('authenticated checkout — bundle pricing', () => {
     const { talent, photos } = await seedTalentCart(3);
 
     // First checkout commits the 3-photo bundle allocation…
-    await createCheckoutSessionAction();
+    await createCheckoutSessionAction(true);
     expect((await storedAllocations(talent.id)).reduce<number>((s, c) => s + (c ?? 0), 0)).toBe(
       1200,
     );
@@ -405,7 +417,7 @@ describe('authenticated checkout — bundle pricing', () => {
     // NOT keep the discounted share, or a 2-photo cart would be charged as if it
     // were still a bundle.
     await removePhotoFromCartAction(photos[0].id);
-    await createCheckoutSessionAction();
+    await createCheckoutSessionAction(true);
 
     expect(photoTotal()).toBe(1000);
     expect(await storedAllocations(talent.id)).toEqual([null, null]);
@@ -416,7 +428,7 @@ describe('authenticated checkout — bundle pricing', () => {
     feeMock.bps = 300;
     await seedTalentCart(3);
 
-    await createCheckoutSessionAction();
+    await createCheckoutSessionAction(true);
 
     expect(feeLineItems()).toHaveLength(1);
     expect(feeLineItems()[0].price_data.unit_amount).toBe(61);
@@ -444,7 +456,7 @@ describe('authenticated checkout — bundle pricing', () => {
 
     expect(cart.itemCount).toBe(2);
     expect(cart.bundleDiscountCents).toBe(0);
-    await createCheckoutSessionAction();
+    await createCheckoutSessionAction(true);
     expect(photoTotal()).toBe(1000);
     expect(await storedAllocations(talent.id)).toEqual([null, null]);
   });
@@ -466,6 +478,7 @@ describe('organizer and free events are excluded', () => {
 
     await createGuestCheckoutSessionAction(
       photos.map((p) => guestItem(p.id, photographer.id, event.id)),
+      true,
     );
 
     // An organizer event can span several sellers and has no revenue split to
