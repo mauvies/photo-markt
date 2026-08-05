@@ -1,7 +1,7 @@
 # T-217 · Los tests de integración no corren por PR — una regresión puede mergear
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** normal
 - **Blockers:** ninguno
 - **Rama:** `chore/integration-tests-on-risky-paths`  (tipo = chore)

@@ -1,20 +1,53 @@
 name: test-integration
 
 # The integration suite boots local Supabase (Docker image pull) — the expensive
-# part of CI. It is deliberately NOT run per-PR: the /work-next flow runs the
-# full suite (with Supabase) locally before every push, so that is the real gate.
-# CI runs it nightly against main (catches anything that slipped the local net or
-# a flake) and on demand before a risky merge. This is why there is no per-path
-# allowlist to keep in sync — moving it off PRs removes that maintenance burden
-# and its silent-under-test failure mode. Run manually with:
+# part of CI. The /work-next flow runs the full suite locally before every push,
+# so that remains the real gate; this workflow is the net for what slips past it.
+#
+# WHY IT RUNS ON MERGE TO MAIN (T-217, chosen over a per-PR path allowlist):
+#   Nightly-only left a window of up to 24 h in which a PR merged without a green
+#   local run broke main and nobody knew until morning. The 83 integration files
+#   cover exactly what cannot be allowed to break: the Stripe webhook, RLS, the
+#   Inngest workers, bundle checkout, the reveal gate, and the SECURITY DEFINER
+#   inventory. `push: [main]` closes that window to ~9 minutes.
+#
+#   The alternative — running on PRs filtered by `paths` — was rejected for the
+#   reason this comment already gave, now with a concrete instance: any allowlist
+#   scoped to supabase/migrations + src/database + src/app/api + src/lib/{inngest,
+#   stripe} silently skips `test/integration/actions/`, because Server Actions
+#   live under src/app/[lang]/**. A net that quietly declines to run is worse than
+#   one that runs late. Merge-to-main needs no list and therefore has no gap.
+#
+#   Note this repo has no branch protection (Free + private), so a per-PR check
+#   could not have blocked the merge either — both options are advisory, and only
+#   this one is exhaustive.
+#
+# ACTIONS COST: one run per merge to main, ~8.5 min. At the current rate of ~19
+# merged PRs / 30 days that is ~160 min/month, ~8% of the 2000-minute Free
+# allowance — on top of the ~255 min/month the nightly already spends. Bounded by
+# MERGES, not by pushes, which is what keeps it cheaper than the per-PR option
+# (that one re-runs on every push to every qualifying branch). Re-measure here if
+# the merge rate changes; the budget was exhausted once already (2026-07).
+#
+# Run it on a branch before a risky merge with:
 #   gh workflow run test-integration.yml --ref <branch>
 on:
   workflow_dispatch:
+  push:
+    # Every merge, unfiltered — see the allowlist gap above.
+    branches:
+      - main
   schedule:
-    # 04:17 UTC daily. Scheduled runs always execute against the default branch
-    # (main). Odd minute to dodge the top-of-hour scheduler surge.
+    # 04:17 UTC daily. Kept as the flake net: it re-runs the same suite against an
+    # unchanged main, so a failure here with no merge in between is a flake or an
+    # external drift (an expired fixture, a bumped image), not a regression.
+    # Scheduled runs always execute against the default branch. Odd minute to
+    # dodge the top-of-hour scheduler surge.
     - cron: '17 4 * * *'
 
+# Two merges landing minutes apart cancel the older run. That loses no coverage —
+# the newer tree contains the older commit — and it is what keeps a burst of
+# merges from costing one full run each.
 concurrency:
   group: test-integration-${{ github.ref }}
   cancel-in-progress: true

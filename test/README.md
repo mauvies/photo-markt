@@ -162,6 +162,23 @@ sign in with the credentials returned by `createTestUser()` — its
 
 ## CI
 
-`.github/workflows/test.yml` runs the same `pnpm test:coverage` pipeline on
-every pull request and on push to `main`. The job sets up Supabase local
-and uploads the coverage report as a workflow artifact (no Codecov yet).
+Two workflows, split by cost (PR #256 — the Free Actions allowance was exhausted
+once by running everything everywhere):
+
+- **`test.yml`** — typecheck + lint + `pnpm test:unit` on every code PR. No
+  Docker, so it is fast and cheap. This is the per-PR gate.
+- **`test-integration.yml`** — boots local Supabase and runs `test/integration`
+  on **every merge to `main`** (unfiltered, T-217), nightly at 04:17 UTC as the
+  flake net, and on demand:
+  `gh workflow run test-integration.yml --ref <branch>`.
+
+The integration suite is deliberately *not* run per-PR: the `/work-next` flow
+runs the whole suite locally before every push, so that is the real gate. The
+merge run bounds how long a regression that slipped past it can sit in `main` —
+minutes rather than up to a day — without needing a `paths` allowlist, which
+would silently skip `test/integration/actions/` (Server Actions live under
+`src/app/[lang]/**`). Its trigger set is pinned by
+`test/unit/ci/integration-suite-trigger.test.ts`.
+
+No coverage artifact is uploaded (it was ~0.9 GB of storage for a report nothing
+enforces).
