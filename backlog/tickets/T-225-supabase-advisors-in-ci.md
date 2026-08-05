@@ -1,7 +1,7 @@
 # T-225 · Correr `get_advisors` de Supabase en CI
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** normal
 - **Blockers:** ninguno
 - **Rama:** `ci/supabase-security-advisors`  (tipo = ci → usar `chore`)

@@ -32,6 +32,7 @@ pnpm db:stop      # supabase stop
 pnpm db:reset     # supabase db reset (re-runs migrations + seed.sql)
 pnpm db:seed      # Re-run supabase/seed.sql via psql
 pnpm spell        # Spell check .ts/.tsx files
+pnpm advisors:check # Supabase security advisors vs. the accepted baseline (needs SUPABASE_ACCESS_TOKEN)
 ```
 
 **`pnpm build` is not optional** when touching `src/lib/` or `src/database/queries/`: typecheck,
@@ -792,3 +793,4 @@ field — keep the two in sync.
 - Tables with no public access pattern: enable RLS with no policies, use `supabaseAdmin` only — see `admin_users` and `rate_limit_buckets` for the pattern
 - Redirect destinations from user input must go through `safeNext()` from `src/lib/auth/safe-next.ts`
 - Permissive RLS policies (`USING (true)`) are forbidden on tables with sensitive writes — service-role bypasses RLS, so the webhook/admin paths still work after locking down user-facing roles
+- **Supabase's security advisors are a CI gate (T-225).** `.github/workflows/supabase-advisors.yml` runs on every PR touching `supabase/migrations/**` and fails on any `ERROR`/`WARN` finding not declared in `scripts/advisors-baseline.ts` — each accepted entry carries the one-line reason it is acceptable. It runs against **staging**, pinned by the `projectRef` in that file: a Supabase PAT is account-wide (there is no per-project management token), so the versioned ref, not the credential, is what keeps the job off production. It does **not** replace the `SECURITY DEFINER` inventory test — that one reads the schema rebuilt from `supabase/migrations/`, this one reads a real project and therefore catches drift the migrations don't describe (`sync_profile_avatar_url` is live in prod and created by no migration). Run it locally with `pnpm advisors:check`
