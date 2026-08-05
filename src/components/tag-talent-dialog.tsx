@@ -51,7 +51,10 @@ export function TagTalentDialog({ open, onOpenChange, photoIds, onSuccess }: Tag
 
   useEffect(() => {
     const performSearch = async () => {
-      if (!debouncedSearch.trim() || debouncedSearch.length < 2) {
+      // Mirrors the server-side floor in `search_users_by_text` (min 3 chars
+      // after trim, T-226): a shorter query would always come back empty, so
+      // firing it would only cost a round-trip and flash "no results".
+      if (debouncedSearch.trim().length < 3) {
         setSearchResults([]);
         setShowResults(false);
         return;
