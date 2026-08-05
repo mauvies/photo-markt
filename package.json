@@ -22,6 +22,7 @@
     "format:fix": "biome format --write",
     "typecheck": "tsc --noEmit",
     "spell": "cspell --quiet **/*.ts **/*.tsx",
+    "advisors:check": "tsx scripts/check-supabase-advisors.ts",
     "watermark:gen": "tsx scripts/gen-watermark.ts",
     "prepare": "git config core.hooksPath .githooks"
   },
