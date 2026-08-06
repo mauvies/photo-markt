@@ -1,7 +1,7 @@
 # T-216 · Ganancias varadas: transferencias omitidas sin registro ni reintento
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** alto  (pagos)
 - **Blockers:** ninguno
 - **Rama:** `fix/stranded-photographer-transfers`  (tipo = fix)

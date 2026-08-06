@@ -444,10 +444,20 @@ sequenceDiagram
 
 **Correction to CLAUDE.md:** there is no weekly payout cron. Transfers fire
 **synchronously** with `payment_intent.succeeded` in the Stripe webhook,
-one per (order_item, photographer) pair. The `payouts` table is the
-historical record. A separate manual workflow exists where photographers
-can request payouts and admins approve them via `/api/admin/payouts/[id]`,
-but that path is admin-driven, not scheduled.
+one per (order_item, photographer) pair. Since **T-216** there *is* a retry
+cron (`retry-pending-payouts`, `10,40 * * * *`), but it only drains money the
+synchronous path could not send — a recovery path, not the normal one.
+`/api/admin/payouts/[id]` still exists and now refuses ledger-managed rows;
+whether it survives at all is T-220's call.
+
+**The payout row is created BEFORE the Stripe call, and its id IS the
+idempotency key** (`payout_<row.id>`), used identically by the webhook and the
+retry worker. That ordering is what makes the
+`(stripe_charge_id, photographer_id)` unique index *prevent* a second payment
+rather than merely record that one happened. Before T-216 the row was written
+afterwards and the two writers had separate idempotency namespaces, so a
+redelivery past Stripe's 24-hour window paid twice — and the swallowed `23505`
+on the log insert erased the evidence.
 
 ```mermaid
 sequenceDiagram
@@ -463,16 +473,70 @@ sequenceDiagram
 
   App->>SB: SELECT photographer_id, total_price_cents FROM order_items WHERE order_id
   loop per photographer in this order
-    App->>SB: get photographer.stripe_connect_account_id
-    alt status == 'active'
-      App->>S: stripe.transfers.create({amount, destination, idempotency_key='transfer_<charge>_<order>'})
+    App->>App: netCents = getPhotographerNetCents(gross, plan)
+    App->>SB: openPayoutRow(charge, photographer, net, currency)
+    alt unique violation
+      App->>App: another writer owns this money - transfer NOTHING
+    else active and net >= 50c
+      App->>S: transfers.create(amount, destination, source_transaction=charge, idempotency_key=payout_ROWID)
       S-->>App: transfer.id
-      App->>SB: insert payouts(amount_cents, status='paid', stripe_transfer_id, paid_at=now)
-    else not active
-      App->>App: log + skip (recoverable via admin endpoint later)
+      App->>SB: settlePayoutPaid(row.id, transfer.id)
+    else held
+      App->>SB: row stays pending + hold_reason (connect_inactive / below_minimum / transfer_failed)
     end
   end
 ```
+
+**Recovery — `retry-pending-payouts`** (`src/lib/inngest/functions/`): ONE
+Inngest function with two triggers (cron `10,40` plus `payouts.retry-requested`,
+emitted by `account.updated` on activation) and `concurrency: {limit: 1}`.
+⚠️ One function, not two registrations — Inngest scopes concurrency per function
+id, so splitting them would allow concurrent runs for the same photographer.
+
+```mermaid
+flowchart TD
+  A["holds: pending + hold_reason + stripe_charge_id"] --> B{"Connect active? (live reconcile)"}
+  B -- no --> A
+  B -- yes --> C{"amount >= 50c?"}
+  C -- yes --> D["individual transfer<br/>source_transaction = charge<br/>key = payout_ROWID"]
+  C -- no --> E["group by (photographer, currency)"]
+  E --> F{"group >= 50c?"}
+  F -- no --> A
+  F -- yes --> G["claim rows: processing + batch id"]
+  G --> H{"claimed total still >= 50c?"}
+  H -- no --> I["release to pending<br/>(no Stripe call was made)"]
+  H -- yes --> J["source-less transfer<br/>key = transfer_group = payout_batch_ID"]
+  D --> K["settle: paid"]
+  J --> K
+```
+
+A batch left `processing` past 30 minutes is re-driven under the **same** batch
+id. Because an idempotency key only dedupes for 24 hours, the re-drive first
+probes `transfers.list({transfer_group})`, cross-checking destination *and*
+amount; a failed probe is **unknown → do not transfer**, never "none found".
+
+⚠️ **A shared idempotency key is worthless unless the parameters match too.**
+Stripe compares the *entire request body* against the one first stored under a
+key and 400s on any divergence, so both writers must build byte-identical
+`createTransfer` arguments for a row — which is why `transfer_group` is derived
+from the **payout id** (`payoutTransferGroup`) and not from the order id. Getting
+this wrong wedges every `transfer_failed` retry for the key's whole 24-hour life,
+logged indistinguishably from a Stripe outage, and then issues a real second
+transfer once the key expires. Pinned from both sides by
+`test/unit/lib/payout-batching.test.ts` and the two integration suites.
+
+Two independent guards stop a double payment, so neither has to be perfect: the
+shared idempotency key (24h), and `source_transaction`, which Stripe refuses to
+over-draw — and that one never expires. A `transfer_failed` hold gets a third:
+it is the only hold reason created *after* a Stripe call, so the worker probes
+`findTransferByGroup` before re-driving it. It is dropped only for the aggregated
+batch, which spans several charges and so cannot carry it; that path exists
+solely because a sub-50-cent net can never clear Stripe's floor alone, which
+keeps its amounts tiny by construction.
+
+**Refunds:** `charge.refunded` now voids any *outstanding* hold for that charge,
+so unsent money is never sent. A transfer already made still needs a manual
+reversal — T-215 owns automating that.
 
 **Connect API version — Accounts v1 (deliberate, T-164).** Our entire Connect
 surface uses **Accounts v1**: `accounts.retrieve/create`, `accountLinks.create`,

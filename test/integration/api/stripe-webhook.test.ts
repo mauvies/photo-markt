@@ -37,6 +37,13 @@ vi.mock('@/lib/stripe/connect', async () => {
   };
 });
 
+// T-216: `account.updated` now asks the retry worker to drain that
+// photographer's held payouts. Stub the client so no Inngest network call
+// happens; the emit itself is asserted in the ledger tests below.
+vi.mock('@/lib/inngest/client', () => ({
+  inngest: { send: vi.fn(async () => ({ ids: [] })) },
+}));
+
 // Mock Resend so neither purchase path tries to send real email.
 vi.mock('@/lib/email/send-guest-purchase-email', () => ({
   sendGuestPurchaseEmail: vi.fn(async () => undefined),
@@ -1166,5 +1173,410 @@ describe('app/api/stripe/webhook — customer.subscription.* events', () => {
       .eq('user_id', photographer.id)
       .single();
     expect(data?.status).toBe('past_due');
+  });
+});
+
+/**
+ * T-216 — the payout ledger.
+ *
+ * Before this, the three non-sending exits of `createTransfersForOrderItems`
+ * (inactive Connect, sub-50-cent net, transfer threw) did nothing but log. The
+ * money stayed in the platform balance with no record and nothing ever retried.
+ * These tests pin that each exit now leaves a durable, retryable debt — and,
+ * most importantly, that recording it did not open a way to pay twice.
+ */
+describe('app/api/stripe/webhook — payout ledger (T-216)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    vi.clearAllMocks();
+  });
+
+  /** Seed a completed-able order with one item and return its ids. */
+  async function seedOrder(opts: {
+    connectStatus: string;
+    connectAccountId: string | null;
+    totalPriceCents: number;
+    paymentIntentId: string;
+    currency?: string;
+  }) {
+    const sb = createServiceClient();
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(photographer.id);
+    const photo = await createTestPhoto(event.id);
+    const talent = await createTestUser('TALENT');
+
+    await sb
+      .from('profiles')
+      .update({
+        stripe_connect_account_id: opts.connectAccountId,
+        stripe_connect_status: opts.connectStatus,
+      })
+      .eq('id', photographer.id);
+
+    const { data: order } = await sb
+      .from('orders')
+      .insert({
+        user_id: talent.id,
+        status: 'pending',
+        total_amount_cents: opts.totalPriceCents,
+        currency: opts.currency ?? 'eur',
+        stripe_payment_intent_id: opts.paymentIntentId,
+      })
+      .select('id')
+      .single();
+    if (!order) throw new Error('order seed failed');
+
+    await sb.from('order_items').insert({
+      order_id: order.id,
+      photo_id: photo.id,
+      photographer_id: photographer.id,
+      unit_price_cents: opts.totalPriceCents,
+      total_price_cents: opts.totalPriceCents,
+    });
+
+    return { sb, photographer, order };
+  }
+
+  function paymentSucceededRequest(opts: { paymentIntentId: string; chargeId: string }) {
+    return signedWebhookRequest({
+      id: `evt_${opts.paymentIntentId}`,
+      type: 'payment_intent.succeeded',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: opts.paymentIntentId,
+          object: 'payment_intent',
+          latest_charge: opts.chargeId,
+          amount: 500,
+        },
+      },
+    });
+  }
+
+  it('records a hold instead of losing the money when Connect is not active', async () => {
+    const { sb, photographer } = await seedOrder({
+      connectStatus: 'pending',
+      connectAccountId: null,
+      totalPriceCents: 500,
+      paymentIntentId: 'pi_hold_inactive',
+    });
+
+    const res = await POST(
+      paymentSucceededRequest({
+        paymentIntentId: 'pi_hold_inactive',
+        chargeId: 'ch_hold_inactive',
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const { createTransfer } = await import('@/lib/stripe/connect');
+    expect(vi.mocked(createTransfer)).not.toHaveBeenCalled();
+
+    const { data: payouts } = await sb
+      .from('payouts')
+      .select('status, amount_cents, hold_reason, stripe_charge_id, currency, order_kind')
+      .eq('photographer_id', photographer.id);
+
+    expect(payouts).toHaveLength(1);
+    expect(payouts?.[0]?.status).toBe('pending');
+    expect(payouts?.[0]?.hold_reason).toBe('connect_inactive');
+    // Free plan = 8% commission, so 500 gross nets 460.
+    expect(payouts?.[0]?.amount_cents).toBe(460);
+    expect(payouts?.[0]?.stripe_charge_id).toBe('ch_hold_inactive');
+    expect(payouts?.[0]?.currency).toBe('eur');
+    expect(payouts?.[0]?.order_kind).toBe('order');
+  });
+
+  it('records a hold when the net is below the Stripe transfer minimum', async () => {
+    // 50 gross → 46 net, under Stripe's 50-cent floor. Before T-216 this was
+    // warned about and dropped, with no way for it to ever be paid.
+    const { sb, photographer } = await seedOrder({
+      connectStatus: 'active',
+      connectAccountId: 'acct_test',
+      totalPriceCents: 50,
+      paymentIntentId: 'pi_hold_small',
+    });
+
+    expect(
+      (
+        await POST(
+          paymentSucceededRequest({ paymentIntentId: 'pi_hold_small', chargeId: 'ch_hold_small' }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { createTransfer } = await import('@/lib/stripe/connect');
+    expect(vi.mocked(createTransfer)).not.toHaveBeenCalled();
+
+    const { data: payouts } = await sb
+      .from('payouts')
+      .select('status, amount_cents, hold_reason')
+      .eq('photographer_id', photographer.id);
+
+    expect(payouts).toHaveLength(1);
+    expect(payouts?.[0]?.hold_reason).toBe('below_minimum');
+    expect(payouts?.[0]?.amount_cents).toBe(46);
+  });
+
+  it('leaves one recoverable row (not a second one) when the transfer throws', async () => {
+    const { sb, photographer } = await seedOrder({
+      connectStatus: 'active',
+      connectAccountId: 'acct_test',
+      totalPriceCents: 500,
+      paymentIntentId: 'pi_throw',
+    });
+
+    const { createTransfer } = await import('@/lib/stripe/connect');
+    vi.mocked(createTransfer).mockRejectedValueOnce(new Error('stripe is down'));
+
+    expect(
+      (await POST(paymentSucceededRequest({ paymentIntentId: 'pi_throw', chargeId: 'ch_throw' })))
+        .status,
+    ).toBe(200);
+
+    const { data: payouts } = await sb
+      .from('payouts')
+      .select('status, hold_reason, amount_cents')
+      .eq('photographer_id', photographer.id);
+
+    // Exactly one row: the reservation, parked for the retry worker. A second
+    // row here would mean the same money could be transferred twice.
+    expect(payouts).toHaveLength(1);
+    expect(payouts?.[0]?.status).toBe('pending');
+    expect(payouts?.[0]?.hold_reason).toBe('transfer_failed');
+    expect(payouts?.[0]?.amount_cents).toBe(460);
+  });
+
+  it('writes exactly one paid row on the happy path, keyed to the charge', async () => {
+    const { sb, photographer } = await seedOrder({
+      connectStatus: 'active',
+      connectAccountId: 'acct_test',
+      totalPriceCents: 500,
+      paymentIntentId: 'pi_happy',
+    });
+
+    expect(
+      (await POST(paymentSucceededRequest({ paymentIntentId: 'pi_happy', chargeId: 'ch_happy' })))
+        .status,
+    ).toBe(200);
+
+    const { data: payouts } = await sb
+      .from('payouts')
+      .select('id, status, stripe_transfer_id, stripe_charge_id, amount_cents')
+      .eq('photographer_id', photographer.id);
+
+    expect(payouts).toHaveLength(1);
+    expect(payouts?.[0]?.status).toBe('paid');
+    expect(payouts?.[0]?.stripe_transfer_id).toBe('tr_test_mock');
+    expect(payouts?.[0]?.stripe_charge_id).toBe('ch_happy');
+    expect(payouts?.[0]?.amount_cents).toBe(460);
+
+    // ⚠️ Cross-writer regression. Stripe compares the WHOLE request body against
+    // the one stored under an idempotency key and 400s on divergence, so the key
+    // and the transfer_group must BOTH be derived from the payout id — otherwise
+    // the retry worker (which sends a payout-derived group) can never re-drive a
+    // `transfer_failed` hold. This used to send `transfer_group = orderId`.
+    // The worker asserts the identical shape in retry-pending-payouts.test.ts.
+    const { createTransfer } = await import('@/lib/stripe/connect');
+    expect(vi.mocked(createTransfer)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transferGroup: `payout_${payouts?.[0]?.id}`,
+        idempotencyKey: `payout_${payouts?.[0]?.id}`,
+        sourceTransaction: 'ch_happy',
+      }),
+    );
+  });
+
+  it('does NOT transfer again when Stripe redelivers a payment already paid out', async () => {
+    // ⚠️ The regression this whole design exists for. Stripe retries a failing
+    // delivery for up to 3 days — well past its 24h idempotency window — and an
+    // operator can resend by hand at any time. With the ledger row written
+    // AFTER the transfer, the redelivery would compute a fresh idempotency key
+    // and pay the photographer a second time; the unique index would then fire
+    // on the log insert and the swallowed 23505 would erase the evidence.
+    const { sb, photographer } = await seedOrder({
+      connectStatus: 'active',
+      connectAccountId: 'acct_test',
+      totalPriceCents: 500,
+      paymentIntentId: 'pi_redeliver',
+    });
+
+    const first = paymentSucceededRequest({
+      paymentIntentId: 'pi_redeliver',
+      chargeId: 'ch_redeliver',
+    });
+    expect((await POST(first)).status).toBe(200);
+
+    const { createTransfer } = await import('@/lib/stripe/connect');
+    expect(vi.mocked(createTransfer)).toHaveBeenCalledTimes(1);
+
+    // Same event, delivered again.
+    const second = paymentSucceededRequest({
+      paymentIntentId: 'pi_redeliver',
+      chargeId: 'ch_redeliver',
+    });
+    expect((await POST(second)).status).toBe(200);
+
+    expect(vi.mocked(createTransfer)).toHaveBeenCalledTimes(1);
+
+    const { data: payouts } = await sb
+      .from('payouts')
+      .select('id, status')
+      .eq('photographer_id', photographer.id);
+    expect(payouts).toHaveLength(1);
+    expect(payouts?.[0]?.status).toBe('paid');
+  });
+
+  it('does NOT transfer when a redelivery arrives after the account went active', async () => {
+    // The same race with the worse ending: the first delivery held the money
+    // because Connect was inactive. If the retry worker (or an admin) settles it
+    // and the account is active by the time Stripe redelivers, the old code
+    // would transfer under a key it had never used.
+    const { sb, photographer } = await seedOrder({
+      connectStatus: 'pending',
+      connectAccountId: null,
+      totalPriceCents: 500,
+      paymentIntentId: 'pi_activate',
+    });
+
+    expect(
+      (
+        await POST(
+          paymentSucceededRequest({ paymentIntentId: 'pi_activate', chargeId: 'ch_activate' }),
+        )
+      ).status,
+    ).toBe(200);
+
+    // The worker pays it and the account is now active.
+    await sb
+      .from('payouts')
+      .update({ status: 'paid', stripe_transfer_id: 'tr_by_worker', hold_reason: null })
+      .eq('photographer_id', photographer.id);
+    await sb
+      .from('profiles')
+      .update({ stripe_connect_account_id: 'acct_test', stripe_connect_status: 'active' })
+      .eq('id', photographer.id);
+
+    expect(
+      (
+        await POST(
+          paymentSucceededRequest({ paymentIntentId: 'pi_activate', chargeId: 'ch_activate' }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { createTransfer } = await import('@/lib/stripe/connect');
+    expect(vi.mocked(createTransfer)).not.toHaveBeenCalled();
+
+    const { data: payouts } = await sb
+      .from('payouts')
+      .select('status, stripe_transfer_id')
+      .eq('photographer_id', photographer.id);
+    expect(payouts).toHaveLength(1);
+    expect(payouts?.[0]?.stripe_transfer_id).toBe('tr_by_worker');
+  });
+
+  it('asks the retry worker to drain held payouts when an account goes active', async () => {
+    const sb = createServiceClient();
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    await sb
+      .from('profiles')
+      .update({ stripe_connect_account_id: 'acct_activate', stripe_connect_status: 'pending' })
+      .eq('id', photographer.id);
+
+    const req = signedWebhookRequest({
+      id: 'evt_acct_active',
+      type: 'account.updated',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: 'acct_activate',
+          object: 'account',
+          charges_enabled: true,
+          payouts_enabled: true,
+          details_submitted: true,
+        },
+      },
+    });
+    expect((await POST(req)).status).toBe(200);
+
+    const { inngest } = await import('@/lib/inngest/client');
+    expect(vi.mocked(inngest.send)).toHaveBeenCalledWith({
+      name: 'payouts.retry-requested',
+      data: { photographerId: photographer.id },
+    });
+  });
+
+  it('does not ask for a retry when the account is still not active', async () => {
+    const sb = createServiceClient();
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    await sb
+      .from('profiles')
+      .update({ stripe_connect_account_id: 'acct_still_pending', stripe_connect_status: 'pending' })
+      .eq('id', photographer.id);
+
+    const req = signedWebhookRequest({
+      id: 'evt_acct_pending',
+      type: 'account.updated',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: 'acct_still_pending',
+          object: 'account',
+          charges_enabled: false,
+          payouts_enabled: false,
+          details_submitted: true,
+        },
+      },
+    });
+    expect((await POST(req)).status).toBe(200);
+
+    const { inngest } = await import('@/lib/inngest/client');
+    expect(vi.mocked(inngest.send)).not.toHaveBeenCalled();
+  });
+
+  it('voids an outstanding hold when its charge is refunded', async () => {
+    // Without this, T-216 would CREATE a loss the old code did not have: the
+    // retry worker would send a refunded buyer's money to the photographer.
+    const { sb, photographer } = await seedOrder({
+      connectStatus: 'pending',
+      connectAccountId: null,
+      totalPriceCents: 500,
+      paymentIntentId: 'pi_refund',
+    });
+
+    expect(
+      (await POST(paymentSucceededRequest({ paymentIntentId: 'pi_refund', chargeId: 'ch_refund' })))
+        .status,
+    ).toBe(200);
+
+    const { data: held } = await sb
+      .from('payouts')
+      .select('status')
+      .eq('photographer_id', photographer.id)
+      .single();
+    expect(held?.status).toBe('pending');
+
+    const refundReq = signedWebhookRequest({
+      id: 'evt_refunded',
+      type: 'charge.refunded',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: 'ch_refund',
+          object: 'charge',
+          payment_intent: 'pi_refund',
+          amount_refunded: 500,
+        },
+      },
+    });
+    expect((await POST(refundReq)).status).toBe(200);
+
+    const { data: after } = await sb
+      .from('payouts')
+      .select('status')
+      .eq('photographer_id', photographer.id)
+      .single();
+    expect(after?.status).toBe('cancelled');
   });
 });

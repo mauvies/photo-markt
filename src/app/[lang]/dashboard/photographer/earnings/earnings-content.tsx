@@ -81,10 +81,27 @@ interface PayoutHistoryProps {
   className?: string;
 }
 
+/**
+ * T-216: a payout row is no longer always a completed transfer, so the status
+ * has to be rendered rather than assumed. `cancelled` rows are the one thing
+ * still filtered out — a voided hold (its charge was refunded) is not payout
+ * history, and showing it would only prompt "where did my money go?".
+ */
+const PAYOUT_STATUS_LABEL_KEYS = {
+  pending: 'payoutStatusPending',
+  approved: 'payoutStatusPending',
+  processing: 'payoutStatusProcessing',
+  paid: 'payoutStatusPaid',
+  cancelled: 'payoutStatusCancelled',
+} as const satisfies Record<Payout['status'], keyof EarningsT>;
+
 function PayoutHistory({ payouts, className }: PayoutHistoryProps) {
   const { t } = useTranslations<EarningsT>();
 
-  const stripPayouts = payouts.filter((p) => p.stripe_transfer_id);
+  // Was `payouts.filter((p) => p.stripe_transfer_id)`, which hid every row that
+  // had not been transferred — i.e. exactly the outstanding amounts T-216 exists
+  // to make visible.
+  const stripPayouts = payouts.filter((p) => p.status !== 'cancelled');
 
   if (stripPayouts.length === 0) {
     return (
@@ -107,13 +124,22 @@ function PayoutHistory({ payouts, className }: PayoutHistoryProps) {
             <div className="flex-1">
               <p className="font-semibold">{formatPrice(payout.amount_cents)}</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {t('paidLabel')}{' '}
-                {payout.paid_at
+                {payout.status === 'paid' ? t('paidLabel') : t('requestedLabel')}{' '}
+                {payout.status === 'paid' && payout.paid_at
                   ? formatDateTime(payout.paid_at)
                   : formatDateTime(payout.created_at)}
               </p>
             </div>
-            <span className="text-xs font-medium text-green-600 dark:text-green-400">Paid</span>
+            <span
+              className={cn(
+                'text-xs font-medium',
+                payout.status === 'paid'
+                  ? 'text-green-600 dark:text-green-400'
+                  : 'text-muted-foreground',
+              )}
+            >
+              {t(PAYOUT_STATUS_LABEL_KEYS[payout.status])}
+            </span>
           </div>
         ))}
       </div>
@@ -289,11 +315,22 @@ export function EarningsContent() {
               icon={<TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />}
               description={t('afterPlatformFees')}
             />
+            {/* T-216: this used to be "Available balance / Ready to withdraw",
+                reading `withdrawableBalanceCents`. That card was a promise the
+                system could not keep: the two silent transfer exits (inactive
+                Connect, sub-50-cent net) counted toward net earnings but never
+                produced a payout, so the figure was permanently positive money
+                that would never arrive — and there is no withdrawal UI behind
+                it either. Now that every euro is paid, pending or in flight,
+                that number is structurally ~0. What the photographer actually
+                needs to see is what is owed but not yet sent; the genuinely
+                available figure is the live Stripe balance card below, which is
+                money already in their own account. */}
             <SummaryCard
-              title={t('availableBalance')}
-              value={formatPrice(summary.withdrawableBalanceCents)}
+              title={t('pendingPayout')}
+              value={formatPrice(summary.pendingPayoutsCents)}
               icon={<Wallet className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />}
-              description={t('readyToWithdraw')}
+              description={t('pendingPayoutDesc')}
             />
           </div>
 

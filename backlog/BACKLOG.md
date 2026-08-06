@@ -11,20 +11,21 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-216 | Ganancias varadas: transferencias omitidas sin registro ni reintento | — | todo |
+| 1 | P1 | T-216 | Ganancias varadas: transferencias omitidas sin registro ni reintento | — | doing |
 | 2 | P1 | T-215 | Clawback: disputas y reembolsos deben revertir transferencia y acceso | Dep T-216 | todo |
-| 3 | P2 | T-229 | El conteo de fotos del event card ignora el override por ID de evento | — | todo |
-| 4 | P2 | T-230 | El estado previo a la búsqueda de un evento con reveal gate se ve vacío | — | todo |
-| 5 | P2 | T-232 | La edición de portada existe pero es inalcanzable desde los tabs del evento | Dep T-231 | todo |
-| 6 | P2 | T-233 | Alargar el event card: cambiar el aspect ratio del contenedor de la portada | Dep T-229 | todo |
-| 7 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | Dep T-216 | todo |
-| 8 | P2 | T-219 | Podar el esquema muerto (`payment_accounts`, `ai_search_profiles`, columnas fantasma, `profiles.is_admin`) | — | todo |
-| 9 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
-| 10 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
-| 11 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
-| 12 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
-| 13 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
-| 14 | P3 | T-223 | Carrito de invitado sin sincronización entre pestañas | — | todo |
+| 3 | P2 | T-236 | Barrido de órdenes sin payout: las varadas que T-216 no cubre | Dep T-216 | todo |
+| 4 | P2 | T-229 | El conteo de fotos del event card ignora el override por ID de evento | — | todo |
+| 5 | P2 | T-230 | El estado previo a la búsqueda de un evento con reveal gate se ve vacío | — | todo |
+| 6 | P2 | T-232 | La edición de portada existe pero es inalcanzable desde los tabs del evento | Dep T-231 | todo |
+| 7 | P2 | T-233 | Alargar el event card: cambiar el aspect ratio del contenedor de la portada | Dep T-229 | todo |
+| 8 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | Dep T-216 | todo |
+| 9 | P2 | T-219 | Podar el esquema muerto (`payment_accounts`, `ai_search_profiles`, columnas fantasma, `profiles.is_admin`) | — | todo |
+| 10 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
+| 11 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
+| 12 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
+| 13 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
+| 14 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
+| 15 | P3 | T-223 | Carrito de invitado sin sincronización entre pestañas | — | todo |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |

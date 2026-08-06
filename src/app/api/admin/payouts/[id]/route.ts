@@ -10,6 +10,11 @@ import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { rateLimit, retryAfterSeconds } from '@/lib/rate-limit';
 
+/**
+ * ⚠️ `processing` is deliberately absent (T-216). It is an internal state owned
+ * by the transfer path — a row sits there while a Stripe call is in flight — so
+ * it is never a valid destination for a human.
+ */
 const VALID_STATUSES: PayoutStatus[] = ['pending', 'approved', 'paid', 'cancelled'];
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -56,6 +61,38 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     if (!status || !VALID_STATUSES.includes(status)) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
+    }
+
+    // T-216: this route predates the automatic Connect transfer model and can
+    // set any status on any row. That is now dangerous for ledger-managed rows:
+    //
+    //   - a `processing` row may have a transfer in flight at Stripe, so
+    //     flipping it here desyncs the ledger from the money;
+    //   - cancelling a hold makes it permanently unpayable, because the
+    //     `(stripe_charge_id, photographer_id)` unique index then blocks ever
+    //     creating a replacement row for that charge.
+    //
+    // A row carrying a charge id belongs to the transfer path, not to a human.
+    // (Whether this route survives at all is T-220's decision; this only stops
+    // it corrupting live state in the meantime.)
+    const { data: existing } = await supabaseAdmin
+      .from('payouts')
+      .select('status, stripe_charge_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Payout not found' }, { status: 404 });
+    }
+
+    if (existing.status === 'processing' || existing.stripe_charge_id) {
+      return NextResponse.json(
+        {
+          error:
+            'This payout is managed by the automatic transfer ledger and cannot be changed here.',
+        },
+        { status: 409 },
+      );
     }
 
     const payout = await updatePayoutStatus(supabaseAdmin, id, status as PayoutStatus, admin_notes);
