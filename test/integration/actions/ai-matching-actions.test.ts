@@ -116,4 +116,31 @@ describe('AI-matching enqueue actions', () => {
     await expect(reindexEvent(event.id)).rejects.toThrow(/enabled/i);
     expect(inngestSend).not.toHaveBeenCalled();
   });
+
+  // T-235: the reported production failure. `requireEventOwner` reads the event
+  // with `getEvent`, which used to re-throw PostgREST's PGRST116 for a
+  // not-found/not-yours row — so its own `if (!event) throw 'Event not found.'`
+  // never ran and the photographer got "Cannot coerce the result to a single
+  // JSON object" instead of an explanation.
+  it('reindexEvent reports a plain "not found" for an event the caller does not own', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const stranger = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    await updateEventRekognitionState(createServiceClient(), event.id, { enabled: true });
+    mockSession.userId = stranger.id;
+
+    await expect(reindexEvent(event.id)).rejects.toThrow(/not found/i);
+    await expect(reindexEvent(event.id)).rejects.not.toThrow(/coerce/i);
+    expect(inngestSend).not.toHaveBeenCalled();
+  });
+
+  it('reindexEvent reports a plain "not found" for an event id that does not exist', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    mockSession.userId = owner.id;
+
+    await expect(reindexEvent('00000000-0000-0000-0000-000000000000')).rejects.toThrow(
+      /not found/i,
+    );
+    expect(inngestSend).not.toHaveBeenCalled();
+  });
 });

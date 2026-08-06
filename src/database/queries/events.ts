@@ -151,27 +151,39 @@ export async function hasBundlePricingConfigured(
 }
 
 /**
- * Get a single event by ID (with ownership check)
+ * Get a single event by ID (with ownership check).
+ *
+ * Returns `null` — genuinely, see below — when the event doesn't exist, was
+ * soft-deleted, or belongs to someone else. All three are ordinary outcomes a
+ * caller decides about, not database failures; only a real DB error throws.
  */
 export async function getEvent(
   supabase: SupabaseServerClient,
   eventId: string,
   userId: string,
 ): Promise<Event | null> {
+  // `maybeSingle`, NOT `single().throwOnError()` (T-235). With
+  // `single()`, "no such event" / "not yours" / "soft-deleted" came back as
+  // PostgREST's `PGRST116` and `.throwOnError()` re-threw it *before* the
+  // `if (error)` mapping below — so the declared `| null` was unreachable, the
+  // `if (!event) throw new Error('Event not found.')` guard in all eight
+  // callers was dead code, and the photographer saw "Cannot coerce the result
+  // to a single JSON object". Two of those dead guards were real behaviour:
+  // the event page falls back to the *contributor* view when the caller
+  // doesn't own the event, and the edit page bounces a non-owner out.
   const { data, error } = await supabase
     .from('events')
     .select('*')
     .eq('id', eventId)
     .eq('user_id', userId)
     .is('deleted_at', null)
-    .single()
-    .throwOnError();
+    .maybeSingle();
 
   if (error) {
     throw new Error(`Failed to get event: ${getErrorMessage(error)}`);
   }
 
-  return data as Event | null;
+  return (data as Event | null) ?? null;
 }
 
 /**

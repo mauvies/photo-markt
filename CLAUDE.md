@@ -147,6 +147,18 @@ the routes from coming back.
 **Database query layer**
 All Supabase queries live in `/src/database/queries/`. Each domain has its own file. Always add new queries here — never inline in components or actions.
 
+⚠️ **`.single()` / `.maybeSingle()` only when the row count is *guaranteed* (T-235).** PostgREST
+answers "0 rows" (`single`) and ">1 rows" (both) with the same opaque `PGRST116`, *"Cannot coerce the
+result to a single JSON object"* — which then reaches the user as-is. A query whose absence is an
+ordinary outcome ("no such event", "not yours", "soft-deleted") must return **`null`**, so the
+caller's `if (!x)` branch is the thing that decides. Two live bugs came from this in one day:
+`getEvent` used `.single().throwOnError()`, which re-threw *before* its own error-mapping branch and
+made the declared `Event | null` unreachable — killing the `if (!event)` guard in all eight callers,
+including the event page's fallback to the contributor view; and `getUserRole` used `.maybeSingle()`
+on `user_role_memberships`, which holds **one row per role**, so it threw for dual-role users at the
+onboarding gate. Prefer `maybeSingle()` for at-most-one, and `limit(1)` + `data[0]` for
+pick-any-of-several. Reserve `.throwOnError()` for queries where no row really is a broken invariant.
+
 ```
 src/database/queries/
   events.ts           # Event CRUD and search
