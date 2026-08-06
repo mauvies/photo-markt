@@ -82,7 +82,7 @@ export function PhotographerProfileHeader({
         <div className="flex items-center gap-4 md:contents">
           <div
             className={cn(
-              'relative h-24 w-24 shrink-0 overflow-hidden rounded-full bg-muted sm:h-24 sm:w-24 md:h-40 md:w-40',
+              'relative h-24 w-24 shrink-0 overflow-hidden rounded-full bg-muted md:h-36 md:w-36',
               !avatarUrl && 'ring-2 ring-border',
             )}
           >
@@ -124,10 +124,10 @@ export function PhotographerProfileHeader({
           <h1 className="text-2xl font-bold leading-tight tracking-tight sm:text-3xl md:text-4xl">
             {displayName}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground sm:text-base">@{username}</p>
+          <p className="text-sm text-muted-foreground sm:text-base">@{username}</p>
 
           {/* Desktop-only inline stats — flat Instagram-style row, no card chrome. */}
-          <div className="mt-4 hidden md:flex md:flex-wrap md:gap-x-8 md:gap-y-2">
+          <div className="hidden md:flex md:flex-wrap md:gap-x-8 md:gap-y-2">
             {stats.map((stat) => (
               <div key={stat.label} className="flex items-baseline gap-1.5">
                 <span className="text-xl font-semibold tracking-tight">{stat.value}</span>
