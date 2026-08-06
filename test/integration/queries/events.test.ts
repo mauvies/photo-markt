@@ -36,23 +36,29 @@ describe('database/queries/events', () => {
       expect(found?.id).toBe(event.id);
     });
 
-    it('throws when the caller does not own the event', async () => {
-      // Note: getEvent uses `.single().throwOnError()` so "not found" surfaces
-      // as a throw, not a null return — even though the type signature says
-      // `Event | null`. Documenting the real behaviour here keeps callers
-      // honest about needing try/catch.
+    // T-235. These three used to assert `rejects.toThrow()`, with a comment
+    // calling that "the real behaviour" callers must write try/catch around.
+    // It was the bug: `.single().throwOnError()` re-threw PostgREST's PGRST116
+    // before the error-mapping branch, so the declared `Event | null` could
+    // never be null and the `if (!event)` guard in all eight callers was dead
+    // code. In production a photographer re-indexing an event saw "Cannot
+    // coerce the result to a single JSON object".
+    it('returns null when the caller does not own the event', async () => {
       const owner = await createTestUser('PHOTOGRAPHER');
       const stranger = await createTestUser('PHOTOGRAPHER');
       const event = await createTestEvent(owner.id);
-      await expect(getEvent(createServiceClient(), event.id, stranger.id)).rejects.toThrow();
+      expect(await getEvent(createServiceClient(), event.id, stranger.id)).toBeNull();
     });
 
-    it('throws for a non-existent id', async () => {
+    it('returns null for a non-existent id', async () => {
       const owner = await createTestUser('PHOTOGRAPHER');
-      await expect(
-        getEvent(createServiceClient(), '00000000-0000-0000-0000-000000000000', owner.id),
-      ).rejects.toThrow();
+      expect(
+        await getEvent(createServiceClient(), '00000000-0000-0000-0000-000000000000', owner.id),
+      ).toBeNull();
     });
+
+    // The soft-deleted case is covered end-to-end through the real delete path
+    // in the `deleteEvent` block below, so it isn't repeated here.
   });
 
   describe('eventExists', () => {
@@ -230,8 +236,9 @@ describe('database/queries/events', () => {
 
       await deleteEvent(createServiceClient(), event.id, owner.id);
 
-      // getEvent filters by `deleted_at IS NULL` and throws on no-row.
-      await expect(getEvent(createServiceClient(), event.id, owner.id)).rejects.toThrow();
+      // getEvent filters by `deleted_at IS NULL`, so a soft-deleted event reads
+      // as absent — as `null`, since T-235, not as a thrown PGRST116.
+      expect(await getEvent(createServiceClient(), event.id, owner.id)).toBeNull();
 
       // But the row is still in the table (soft delete, not hard delete).
       const { data: rawRow } = await createServiceClient()
