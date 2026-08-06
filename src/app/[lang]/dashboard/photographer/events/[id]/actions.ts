@@ -15,6 +15,8 @@ import {
   getTagsForPhotos,
   inviteEventPhotographer,
   isPhotoTaggedForTalent,
+  listFailedEventUploads,
+  resetEventPhotosForRetry,
   revokeEventPhotographer,
   type SupabaseServerClient,
   searchPhotographers,
@@ -38,6 +40,7 @@ import { revalidateEventDetailTags, revalidateEventListingTags } from '@/lib/eve
 import { EVENT_GALLERY_PAGE_SIZE } from '@/lib/event-gallery';
 import { eventUsesModerationQueue } from '@/lib/event-status';
 import { inngest } from '@/lib/inngest/client';
+import { rateLimit } from '@/lib/rate-limit';
 import { buildOwnerPhotoAlbumItem } from './owner-album-item';
 
 // Invalidates the `event-${param}` cache tag for every param a viewer might
@@ -836,4 +839,114 @@ export async function getEventBibDetectionProgressAction(
     pendingCount: progress.pending,
     withBibsCount: progress.withBibs,
   };
+}
+
+// ─── Failed uploads: retry / discard (T-231) ─────────────────────────────────
+//
+// A photo lands in `upload_status='failed'` when the `photo.uploaded` worker
+// exhausted its retries before reaching a verdict — the bytes are still in
+// Storage but no automatic path will ever pick them up again (the reconcile
+// cron deliberately leaves exhausted photos alone; auto-requeuing them is the
+// retry storm T-231 removed). Recovery is therefore an explicit owner decision,
+// which is also the right shape for the incident that motivated this: once the
+// environment mismatch is fixed, one click re-drives every stranded photo.
+//
+// Both actions use the service-role client scoped to `event_id`, for the same
+// reason as the moderation bulk ops above: a contributor upload's `user_id` is
+// the contributor, so a user-scoped write would silently skip it.
+
+/** Photos per `inngest.send` call on retry — keeps a large batch under the
+ *  request payload limit instead of failing the whole retry as one oversized
+ *  send. Each event payload is ~150 B. */
+const RETRY_EMIT_CHUNK_SIZE = 500;
+
+/**
+ * Re-drive every `failed` upload of an event: reset the pipeline columns and
+ * re-emit `photo.uploaded` so the worker redoes download → byte validation →
+ * promotion. Deliberately re-runs the real pipeline instead of promoting the
+ * rows here — a photo whose bytes were never validated must not go live blind.
+ *
+ * Rate-limited per owner: each re-emitted photo can trigger billable AWS work
+ * (IndexFaces / DetectText), so a stuck-on-refresh retry button must not fan
+ * that out without bound.
+ */
+export async function retryFailedUploadsAction(
+  eventId: string,
+): Promise<{ success: true; count: number }> {
+  const supabase = await createClient();
+  const ownerId = await requireEventOwner(supabase, eventId);
+
+  const limit = await rateLimit({
+    key: `retry-failed-uploads:${ownerId}`,
+    limit: 20,
+    windowSec: 60 * 60,
+  });
+  if (!limit.ok) {
+    throw new Error('Too many retries. Please wait a few minutes and try again.');
+  }
+
+  const failed = await listFailedEventUploads(adminClient, eventId);
+  const retriable = failed.filter(
+    (photo): photo is { id: string; storagePath: string } => photo.storagePath !== null,
+  );
+  if (retriable.length === 0) return { success: true, count: 0 };
+
+  // Reset BEFORE the emit: if the send throws, the rows are already in the
+  // state the worker expects and the reconcile cron is allowed to pick them up
+  // (their `face_index_status` is no longer `failed`). The reverse order would
+  // leave a run racing a row that still reads `failed`.
+  await resetEventPhotosForRetry(
+    adminClient,
+    eventId,
+    retriable.map((photo) => photo.id),
+  );
+
+  try {
+    // Chunked: a whole failed bulk upload can be thousands of photos, and one
+    // `send` carrying all of them would push the request past Inngest's payload
+    // limit and fail the entire retry rather than part of it.
+    for (let i = 0; i < retriable.length; i += RETRY_EMIT_CHUNK_SIZE) {
+      await inngest.send(
+        retriable.slice(i, i + RETRY_EMIT_CHUNK_SIZE).map((photo) => ({
+          name: 'photo.uploaded' as const,
+          data: { photoId: photo.id, eventId, storagePath: photo.storagePath },
+        })),
+      );
+    }
+  } catch (err) {
+    console.error('[retryFailedUploadsAction] failed to enqueue photo.uploaded batch', err);
+    throw new Error("Couldn't start the retry. Please try again.");
+  }
+
+  await revalidateAfterPendingQueueMutation(eventId, ownerId);
+  return { success: true, count: retriable.length };
+}
+
+/**
+ * Discard every `failed` upload of an event: hard-delete the rows and their
+ * storage objects. No undo, and no soft-delete branch — a photo that never
+ * reached `approved` cannot have been sold, so the T-142 buyer-retention case
+ * doesn't apply. This is also what frees the bytes from the event's photo cap.
+ */
+export async function discardFailedUploadsAction(
+  eventId: string,
+): Promise<{ success: true; count: number }> {
+  const supabase = await createClient();
+  const ownerId = await requireEventOwner(supabase, eventId);
+
+  const failed = await listFailedEventUploads(adminClient, eventId);
+  if (failed.length === 0) return { success: true, count: 0 };
+
+  const ids = failed.map((photo) => photo.id);
+  const paths = failed
+    .map((photo) => photo.storagePath)
+    .filter((path): path is string => path !== null);
+
+  await deleteEventPhotosByIds(adminClient, eventId, ids);
+  if (paths.length > 0) {
+    await deleteStorageFiles(adminClient, 'photos', paths);
+  }
+
+  await revalidateAfterPendingQueueMutation(eventId, ownerId);
+  return { success: true, count: ids.length };
 }

@@ -11,7 +11,20 @@ import { createPhotoUrlMap } from './storage';
 import type { SupabaseServerClient } from './types';
 import { getErrorMessage } from './types';
 
-export type UploadStatus = 'approved' | 'pending' | 'rejected';
+/**
+ * `pending`  — uploaded, awaiting the worker's byte validation (or, for a
+ *              third-party upload on a moderation event, the owner's approval).
+ * `approved` — live: the only status any gallery renders.
+ * `rejected` — the bytes were bad; the worker deleted the storage object. Not
+ *              recoverable, and excluded from the per-event upload cap.
+ * `failed`   — T-231: the run exhausted its retries BEFORE reaching a verdict
+ *              (download never resolved, AWS kept throwing). Terminal, but the
+ *              bytes are still in Storage, so the owner can retry or discard it
+ *              from the event dashboard. Never leave such a photo `pending`:
+ *              that state is invisible everywhere AND re-driven forever by the
+ *              reconcile cron.
+ */
+export type UploadStatus = 'approved' | 'pending' | 'rejected' | 'failed';
 export type ThumbnailStatus = 'pending' | 'ready' | 'failed';
 
 export interface Photo {
@@ -212,6 +225,12 @@ export async function getStorageUsageBytes(
  * Pending photos DO count: a pending photo has bytes in Storage waiting on
  * worker validation. Treating it as 0 would let a caller race the worker
  * and exceed the cap.
+ *
+ * `failed` photos (T-231) also count, deliberately: the run never reached a
+ * verdict, so their bytes are still in Storage occupying the quota. The owner
+ * frees them by discarding from the event dashboard. This is why the event
+ * page's grid total is `countEventPhotosByStatus(['approved','pending'])`
+ * rather than this function — the two answer different questions.
  */
 export async function countEventPhotos(
   supabase: SupabaseServerClient,
@@ -803,6 +822,16 @@ export async function listPhotosWithStuckThumbnails(
  * cron's stuck-indexing branch already re-drives their in-flight photos, so this
  * branch owns the `idle`/`ready`/disabled cases (the exact gap that left the
  * reported `idle` event's owner uploads stranded).
+ *
+ * ⚠️ **`face_index_status='failed'` is excluded (T-231).** Those photos already
+ * exhausted their retries; re-emitting them is a retry storm that can never
+ * succeed — the cron was re-driving one such photo every 30 minutes
+ * indefinitely, contradicting the "failed photos are left alone" property this
+ * cron is documented to have. Since T-231 the worker also settles such a row to
+ * `upload_status='failed'`, which excludes it from this query on its own; this
+ * filter is what makes the property hold for rows ALREADY stranded as
+ * `(pending, failed)` before that shipped, and for any future path that lands
+ * there. Recovery for both is the owner's explicit Retry on the event page.
  */
 export async function listStuckPendingOwnerUploads(
   supabase: SupabaseServerClient,
@@ -813,6 +842,7 @@ export async function listStuckPendingOwnerUploads(
     .from('photos')
     .select('id, user_id, event_id, original_url, events!inner(user_id, ai_matching_status)')
     .eq('upload_status', 'pending')
+    .neq('face_index_status', 'failed')
     .is('deleted_at', null)
     .is('guest_name', null)
     .is('uploaded_by', null)
@@ -1116,6 +1146,68 @@ export async function deleteEventPhotosByIds(
   if (error) {
     throw new Error(`Failed to delete photos: ${getErrorMessage(error)}`);
   }
+}
+
+/**
+ * Put a set of `failed` photos back at the pipeline's starting line (T-231) so
+ * re-emitting `photo.uploaded` re-drives them through download → byte
+ * validation → promotion.
+ *
+ * Both columns move in ONE statement: `upload_status` is what makes the photo
+ * eligible for the worker again, `face_index_status` is what makes it eligible
+ * for the reconcile cron's re-drive if the emit is lost. Resetting them
+ * separately would leave a window where a photo is retriable by one path and
+ * not the other, and would cost a round trip per photo on a large batch.
+ *
+ * Event-scoped, service-role client, after the caller verified ownership.
+ */
+export async function resetEventPhotosForRetry(
+  supabase: SupabaseServerClient,
+  eventId: string,
+  photoIds: string[],
+): Promise<void> {
+  if (photoIds.length === 0) return;
+  const { error } = await supabase
+    .from('photos')
+    .update({ upload_status: 'pending', face_index_status: 'pending' })
+    .eq('event_id', eventId)
+    .in('id', photoIds);
+
+  if (error) {
+    throw new Error(`Failed to reset photos for retry: ${getErrorMessage(error)}`);
+  }
+}
+
+/**
+ * Every `upload_status='failed'` photo of one event, with its storage path
+ * (T-231). Backs the owner's "N uploads couldn't be processed" notice and its
+ * two recovery actions: Retry re-emits `photo.uploaded` for these ids, Discard
+ * hard-deletes them plus their storage objects.
+ *
+ * Event-scoped (not `user_id`-scoped) and meant for the service-role client
+ * after the caller has verified event ownership — same reasoning as the
+ * moderation bulk ops above: an organizer-contributor upload's `user_id` is the
+ * contributor, so a user-scoped filter would silently skip exactly the rows the
+ * owner needs to act on.
+ */
+export async function listFailedEventUploads(
+  supabase: SupabaseServerClient,
+  eventId: string,
+): Promise<Array<{ id: string; storagePath: string | null }>> {
+  const { data, error } = await supabase
+    .from('photos')
+    .select('id, original_url')
+    .eq('event_id', eventId)
+    .eq('upload_status', 'failed')
+    .is('deleted_at', null);
+
+  if (error) {
+    throw new Error(`Failed to list failed event uploads: ${getErrorMessage(error)}`);
+  }
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    storagePath: (row as { original_url: string | null }).original_url ?? null,
+  }));
 }
 
 /**

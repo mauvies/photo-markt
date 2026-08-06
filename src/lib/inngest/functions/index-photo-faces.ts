@@ -34,8 +34,10 @@
  * vs. splitting validation and indexing into two steps.
  *
  * Retries: 3× exponential. After the final retry, `onFailure` marks the
- * photo's `face_index_status='failed'`. `upload_status` is settled inside
- * step 2 or 3 — never touched by `onFailure`.
+ * photo's `face_index_status='failed'` and, if the run died before step 3 ever
+ * settled `upload_status`, flips that to `'failed'` too
+ * (`settleStrandedUploadStatus`, T-231) — a photo left `pending` there is
+ * invisible on every surface and re-driven by the reconcile cron forever.
  */
 
 import { NonRetriableError } from 'inngest';
@@ -52,12 +54,14 @@ import {
 } from '@/database/queries/rekognition';
 import type { SupabaseServerClient } from '@/database/queries/types';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { env } from '@/env.mjs';
 import { deleteFacesFromCollection, indexFaceForPhoto } from '@/lib/aws/face-indexing';
 import { prepareImageForRekognition } from '@/lib/aws/image-prep';
 import { revalidateEventDetailTags, revalidateEventListingTags } from '@/lib/event-cache-tags';
 import { validatePhotoBuffer } from '@/lib/photo-upload';
 import { safeCall } from '@/lib/safe-call';
 import { isStorageObjectNotFound } from '@/lib/storage-object-not-found';
+import { getSupabaseProjectRef } from '@/lib/supabase-project-ref';
 import { inngest } from '../client';
 
 const adminClient = supabaseAdmin as unknown as SupabaseServerClient;
@@ -108,6 +112,7 @@ const SIZE_MISMATCH_MARGIN_BYTES = 1024;
 interface PhotoRow {
   id: string;
   user_id: string;
+  upload_status: string | null;
   size_bytes: number | null;
   /** Non-null indicates a guest-collaborative upload (set by `uploadGuestPhoto`).
    *  Combined with the user_id-vs-owner check, this discriminates owner
@@ -139,7 +144,7 @@ type ProcessOutcome =
 async function loadPhotoRow(photoId: string): Promise<PhotoRow | null> {
   const { data, error } = await adminClient
     .from('photos')
-    .select('id, user_id, size_bytes, guest_name')
+    .select('id, user_id, upload_status, size_bytes, guest_name')
     .eq('id', photoId)
     .maybeSingle();
   if (error || !data) return null;
@@ -218,6 +223,55 @@ async function deleteStaleFaces(photoId: string): Promise<void> {
   await deletePhotoFacesByPhotoId(adminClient, photoId);
 }
 
+/**
+ * Settle a photo the run stranded (T-231). Called from `onFailure`, i.e. after
+ * the final retry, when we know no further attempt is coming.
+ *
+ * `upload_status` is normally settled inside step 2 (`rejected`) or step 3
+ * (`approved`). A run that dies BEFORE step 3 — a download that never resolves,
+ * an `IndexFaces` that keeps throwing — reaches neither, and the row stays
+ * `pending` forever: invisible on the approved-only galleries, absent from the
+ * owner's Pending tab (which excludes owner uploads), yet still counted by the
+ * dashboard, AND re-driven by the reconcile cron every 30 minutes with no
+ * possible outcome. `failed` is the terminal state that ends all of that; the
+ * bytes stay in Storage so the owner can retry it from the event page.
+ *
+ * Two deliberate no-ops:
+ *  - `upload_status !== 'pending'` — a failure in steps 4–7 happens AFTER the
+ *    promotion, so an already-`approved` (or `rejected`) photo must not be
+ *    degraded by a late AWS/thumbnail hiccup.
+ *  - a third-party upload on an approval-gated event — there `pending` IS the
+ *    moderation queue, a legitimate state the owner can see and act on. The
+ *    owner-vs-third-party discrimination mirrors step 3's `isOwnerUpload`
+ *    exactly rather than inventing a second predicate.
+ *
+ * Best-effort by design: it runs inside `onFailure`'s try/catch, and a write
+ * failure here must not mask the failure being reported.
+ */
+export async function settleStrandedUploadStatus(
+  photoId: string,
+  eventId: string,
+): Promise<'settled' | 'not-pending' | 'moderation-queue' | 'unknown-row'> {
+  const photo = await loadPhotoRow(photoId);
+  if (!photo) return 'unknown-row';
+  if (photo.upload_status !== 'pending') return 'not-pending';
+
+  const eventRow = await loadEventOwnerRow(eventId);
+  const isOwnerUpload =
+    eventRow?.user_id != null && photo.user_id === eventRow.user_id && photo.guest_name === null;
+  if (!isOwnerUpload && eventRow?.require_upload_approval) return 'moderation-queue';
+
+  const { error } = await adminClient
+    .from('photos')
+    .update({ upload_status: 'failed' })
+    .eq('id', photoId);
+  if (error) {
+    throw new Error(`Failed to mark photo upload failed: ${error.message}`);
+  }
+  console.warn('[index-photo-faces] stranded upload settled as failed', { photoId, eventId });
+  return 'settled';
+}
+
 async function promoteToApproved(photoId: string): Promise<void> {
   const { error } = await adminClient
     .from('photos')
@@ -279,13 +333,24 @@ export const indexPhotoFaces = inngest.createFunction(
       const photoId = failedPayload?.photoId;
       if (!photoId) return;
       try {
-        // On final-retry failure, mark only the indexing pipeline failed.
-        // upload_status was settled in step 2 (rejected) or step 3 (approved
-        // /pending) before we got here; leaving it untouched preserves whatever
-        // outcome was reached, so the owner can Re-index later.
+        // On final-retry failure, mark the indexing pipeline failed. When the
+        // run reached step 3, `upload_status` is already settled (approved /
+        // rejected / the moderation queue) and stays untouched, so the owner can
+        // Re-index later.
         await updatePhotoFaceIndexStatus(adminClient, photoId, 'failed');
       } catch (err) {
         console.error('[index-photo-faces] onFailure cleanup failed', err);
+      }
+      // T-231: a run that died BEFORE step 3 never settled `upload_status`, so
+      // without this the photo sits `pending` forever — invisible to everyone
+      // and re-driven by the reconcile cron on every tick. Settle it terminally
+      // so it becomes visible, retriable, and stops the sweep.
+      if (failedPayload?.eventId) {
+        try {
+          await settleStrandedUploadStatus(photoId, failedPayload.eventId);
+        } catch (err) {
+          console.error('[index-photo-faces] onFailure could not settle upload_status', err);
+        }
       }
       // Still chain thumbnail generation: a photo whose indexing failed must
       // not be left without a thumbnail. It just bakes tile-only (no boxes).
@@ -425,11 +490,20 @@ export async function runIndexPhotoFacesFlow(
     if (error || !data) {
       const message = `Failed to download photo ${storagePath}: ${error?.message ?? 'no data'}`;
       // "Object not found" is definitive — retrying won't make the object
-      // appear (the classic cause locally: an env mismatch between where the
-      // photo was uploaded and where this worker is running — see T-071).
-      // NonRetriableError skips the remaining automatic retries and goes
-      // straight to onFailure instead of wasting 3 identical download attempts.
-      if (isStorageObjectNotFound(error)) throw new NonRetriableError(message);
+      // appear. The classic cause is NOT a missing object but an env mismatch
+      // between where the photo was uploaded and where this worker is running
+      // (T-071 locally; T-231 in production, where a preview deployment served
+      // the production Inngest environment and read the staging database).
+      // Naming the project ref this worker actually read turns that diagnosis
+      // into one glance at the Inngest run instead of a cross-environment
+      // investigation. NonRetriableError skips the remaining automatic retries
+      // and goes straight to onFailure instead of wasting 3 identical attempts.
+      if (isStorageObjectNotFound(error)) {
+        const ref = getSupabaseProjectRef(env.NEXT_PUBLIC_SUPABASE_URL);
+        throw new NonRetriableError(
+          `${message} (worker read Supabase project '${ref}' — if the object exists elsewhere, this deployment is pointed at the wrong environment)`,
+        );
+      }
       throw new Error(message);
     }
     const buffer = Buffer.from(await data.arrayBuffer());

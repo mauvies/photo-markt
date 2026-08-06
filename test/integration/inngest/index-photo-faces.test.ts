@@ -31,6 +31,7 @@ import {
   type PhotoProcessedSender,
   type PhotoUploadStep,
   runIndexPhotoFacesFlow,
+  settleStrandedUploadStatus,
 } from '@/lib/inngest/functions/index-photo-faces';
 import {
   createServiceClient,
@@ -132,7 +133,7 @@ async function insertPhoto(args: {
   eventId: string;
   originalUrl: string;
   sizeBytes: number;
-  uploadStatus: 'pending' | 'approved' | 'rejected';
+  uploadStatus: 'pending' | 'approved' | 'rejected' | 'failed';
   /** Set non-null to simulate a guest-collaborative upload. The worker uses
    *  this as a signal to discriminate non-owner uploads from owner uploads
    *  during the promote-upload-status step. */
@@ -646,5 +647,100 @@ describe('runIndexPhotoFacesFlow — stale face cleanup on re-index (T-091)', ()
     );
     expect(recNoFace.events).toHaveLength(1);
     expect(recNoFace.events[0].data.force).toBe(false);
+  });
+});
+
+/**
+ * T-231: what `onFailure` does with a run that died BEFORE the promotion step.
+ *
+ * Such a run never settled `upload_status`, so before this the row stayed
+ * `pending` forever — invisible on the approved-only galleries, absent from the
+ * owner's Pending tab, and re-driven by the reconcile cron every 30 minutes
+ * with no possible outcome. `settleStrandedUploadStatus` is the terminal state
+ * that ends that; these tests pin both the settling and its two no-ops.
+ */
+describe('settleStrandedUploadStatus — T-231 terminal state', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    await ensurePhotosBucket();
+  });
+
+  it('settles a stranded OWNER upload to failed', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    const photo = await insertPhoto({
+      userId: owner.id,
+      eventId: event.id,
+      originalUrl: `${owner.id}/${event.id}/stranded.jpg`,
+      sizeBytes: 1024,
+      uploadStatus: 'pending',
+    });
+
+    expect(await settleStrandedUploadStatus(photo.id, event.id)).toBe('settled');
+    expect((await readPhoto(photo.id)).upload_status).toBe('failed');
+  });
+
+  it('settles a stranded third-party upload when the event does NOT moderate', async () => {
+    // No approval queue on this event, so the worker would have approved it —
+    // `pending` here is a stranded run, not a legitimate wait.
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    const photo = await insertPhoto({
+      userId: owner.id,
+      eventId: event.id,
+      originalUrl: `${owner.id}/${event.id}/stranded-guest.jpg`,
+      sizeBytes: 1024,
+      uploadStatus: 'pending',
+      guestName: 'Anonymous Contributor',
+    });
+
+    expect(await settleStrandedUploadStatus(photo.id, event.id)).toBe('settled');
+    expect((await readPhoto(photo.id)).upload_status).toBe('failed');
+  });
+
+  it('leaves a third-party upload alone when it is the legitimate moderation queue', async () => {
+    // Here `pending` IS a real state the owner can see and act on in the
+    // Pending tab. Stealing it into `failed` would empty the moderation queue.
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    const sb = createServiceClient();
+    const { error } = await sb
+      .from('events')
+      .update({ require_upload_approval: true, is_collaborative: true })
+      .eq('id', event.id);
+    if (error) throw new Error(error.message);
+
+    const photo = await insertPhoto({
+      userId: owner.id,
+      eventId: event.id,
+      originalUrl: `${owner.id}/${event.id}/queued-guest.jpg`,
+      sizeBytes: 1024,
+      uploadStatus: 'pending',
+      guestName: 'Anonymous Contributor',
+    });
+
+    expect(await settleStrandedUploadStatus(photo.id, event.id)).toBe('moderation-queue');
+    expect((await readPhoto(photo.id)).upload_status).toBe('pending');
+  });
+
+  it('never degrades an already-approved photo (a late step 4–7 failure)', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    const photo = await insertPhoto({
+      userId: owner.id,
+      eventId: event.id,
+      originalUrl: `${owner.id}/${event.id}/already-live.jpg`,
+      sizeBytes: 1024,
+      uploadStatus: 'approved',
+    });
+
+    expect(await settleStrandedUploadStatus(photo.id, event.id)).toBe('not-pending');
+    expect((await readPhoto(photo.id)).upload_status).toBe('approved');
+  });
+
+  it('is a no-op for a photo row that no longer exists', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    expect(await settleStrandedUploadStatus(crypto.randomUUID(), event.id)).toBe('unknown-row');
   });
 });

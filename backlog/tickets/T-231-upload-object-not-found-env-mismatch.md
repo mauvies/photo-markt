@@ -1,7 +1,7 @@
 # T-231 · La subida falla en prod con "Object not found" y la foto queda invisible para siempre
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** alto  (infra/entornos + estado de datos; la corrección de raíz es config de dashboards, no código)
 - **Blockers:** ninguno — pero el **paso 1 exige acceso a los dashboards de Inngest y Vercel** (solo el usuario los tiene)
 - **Rama:** `fix/stuck-pending-upload-recovery`  (tipo = fix)
