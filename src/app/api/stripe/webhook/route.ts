@@ -9,8 +9,8 @@
  * - customer.subscription.created: Create/update subscription
  * - customer.subscription.updated: Update subscription
  * - customer.subscription.deleted: Cancel subscription
- * - account.updated: Sync photographer Stripe Connect status
- * - charge.refunded: Mark order as refunded
+ * - account.updated: Sync photographer Stripe Connect status + release held payouts on activation
+ * - charge.refunded: Mark order as refunded + void outstanding payout holds for the charge
  *
  * Stripe Dashboard setup required:
  * - Enable Stripe Connect with Express accounts (Connect > Get started)
@@ -34,6 +34,9 @@
  *
  * NOTE: Transfer reversal on refund is NOT automatic. Reverse manually via Stripe Dashboard
  * for refunded orders — Stripe does not auto-reverse transfers to connected accounts.
+ * T-216 narrows the exposure but does not close it: a refund now VOIDS any payout still
+ * held for that charge, so unsent money is never sent. A transfer already made still needs
+ * a manual reversal (T-215 owns automating that).
  */
 
 import { revalidatePath, revalidateTag } from 'next/cache';
@@ -53,7 +56,14 @@ import {
   getOrderByPaymentIntentId,
   updateOrderStatus,
 } from '@/database/queries/orders';
-import { createPayoutFromTransfer } from '@/database/queries/payouts';
+import {
+  holdPayoutRow,
+  openPayoutRow,
+  type PayoutHoldReason,
+  type PayoutOrderKind,
+  settlePayoutPaid,
+  voidHoldsForCharge,
+} from '@/database/queries/payouts';
 import {
   getPhotographerConnectStatuses,
   getProfileByStripeConnectAccountId,
@@ -65,6 +75,12 @@ import { env } from '@/env.mjs';
 import { PLATFORM_CURRENCY } from '@/lib/currency';
 import { sendGuestPurchaseEmail } from '@/lib/email/send-guest-purchase-email';
 import { sendPurchaseConfirmationEmail } from '@/lib/email/send-purchase-confirmation-email';
+import { inngest } from '@/lib/inngest/client';
+import {
+  payoutIdempotencyKey,
+  payoutTransferGroup,
+  STRIPE_MIN_TRANSFER_CENTS,
+} from '@/lib/payouts/batching';
 import { getPhotographerNetCents } from '@/lib/plans';
 import { stripe } from '@/lib/stripe/config';
 import {
@@ -95,8 +111,24 @@ function revalidatePhotographerPlanCache(userId: string): void {
 }
 
 /**
- * Create Stripe transfers for all active-connect photographers in an order.
- * Called after payment succeeds to distribute photographer earnings.
+ * Create Stripe transfers for the photographers in an order, and record a
+ * durable debt for every euro that could not be sent (T-216).
+ *
+ * **The ledger row is opened BEFORE the Stripe call and its id IS the
+ * idempotency key.** That ordering is the whole design, not a detail: it turns
+ * the `(stripe_charge_id, photographer_id)` unique index into a mutual-exclusion
+ * primitive that *prevents* a second payment, instead of a constraint that fires
+ * on the log insert afterwards and can only record that one happened.
+ *
+ * The scenario it closes: a sale is held because Connect isn't active, the retry
+ * worker pays it, and then Stripe redelivers `payment_intent.succeeded` — it
+ * retries for up to 3 days, well past the 24-hour idempotency window, and an
+ * operator can resend by hand at any time. By then the account IS active, so the
+ * old code would transfer again under a key that had never been used. Now
+ * `openPayoutRow` returns null, and we transfer nothing.
+ *
+ * Every non-sending outcome writes a `pending` row with a `hold_reason` instead
+ * of a `console.warn` that nobody reads.
  */
 async function createTransfersForOrderItems(
   items: Array<{ photographer_id: string; total_price_cents: number }>,
@@ -106,6 +138,9 @@ async function createTransfersForOrderItems(
   // it (Stripe rejects a currency mismatch against `source_transaction`), so a
   // pre-T-193 USD charge's transfer stays USD instead of being forced to EUR.
   currency: string,
+  // Which table `orderId` points at — `orders` and `guest_orders` are separate,
+  // which is why the ledger's `order_id` carries no foreign key (T-216).
+  orderKind: PayoutOrderKind,
 ): Promise<void> {
   if (items.length === 0) return;
 
@@ -129,6 +164,15 @@ async function createTransfersForOrderItems(
     const grossCents = totals.get(status.id) ?? 0;
     if (grossCents === 0) continue;
 
+    // Net is computed FIRST, before any gate (T-216). A held transfer has to
+    // record the amount it would have paid, and the old order — gate, then
+    // compute — made that impossible on the inactive-Connect path.
+    const netCents = getPhotographerNetCents(grossCents, planIds.get(status.id));
+
+    // A net that rounds to zero is not a debt. The ledger's `amount_cents > 0`
+    // check would reject the row anyway.
+    if (netCents <= 0) continue;
+
     // The stored status can be stale (a lagged/missed `account.updated`
     // webhook). Before holding a transfer, reconcile a non-active cached value
     // against the live account so an actually-active photographer still gets
@@ -143,41 +187,80 @@ async function createTransfersForOrderItems(
       storedStatus: status.stripe_connect_status,
     });
 
-    if (effectiveStatus !== 'active' || !status.stripe_connect_account_id) {
-      console.warn(
-        `Photographer ${status.id} has no active Connect account — transfer of ${grossCents} cents held in platform account.`,
+    const payable = effectiveStatus === 'active' && Boolean(status.stripe_connect_account_id);
+    const holdReason: PayoutHoldReason | null = !payable
+      ? 'connect_inactive'
+      : netCents < STRIPE_MIN_TRANSFER_CENTS
+        ? 'below_minimum'
+        : null;
+
+    // Reserve the money before touching Stripe. `null` means another writer
+    // already owns this (charge, photographer) — a redelivery, or the retry
+    // worker mid-flight — so we must transfer nothing.
+    let payout: Awaited<ReturnType<typeof openPayoutRow>>;
+    try {
+      payout = await openPayoutRow(supabaseAdmin, {
+        photographer_id: status.id,
+        amount_cents: netCents,
+        currency,
+        stripe_charge_id: chargeId,
+        order_id: orderId,
+        order_kind: orderKind,
+        hold_reason: holdReason,
+      });
+    } catch (err) {
+      // The buyer has already paid; a ledger failure must not fail the webhook,
+      // or Stripe redelivers and we retry a payment we may have made.
+      console.error(`[payouts] failed to open payout row for photographer ${status.id}:`, err);
+      continue;
+    }
+
+    if (!payout) {
+      console.log(
+        `[payouts] charge ${chargeId} / photographer ${status.id} already has a payout row — skipping.`,
       );
       continue;
     }
 
-    const netCents = getPhotographerNetCents(grossCents, planIds.get(status.id));
-
-    if (netCents < 50) {
+    if (holdReason) {
       console.warn(
-        `Skipping transfer for photographer ${status.id}: net ${netCents} cents below Stripe minimum.`,
+        `[payouts] held ${netCents} cents for photographer ${status.id} (${holdReason}); payout ${payout.id} awaits retry.`,
       );
       continue;
     }
+
+    // `status.stripe_connect_account_id` is non-null here — `payable` proved it,
+    // but TypeScript can't carry that through the boolean.
+    const destination = status.stripe_connect_account_id as string;
 
     try {
       const transfer = await createTransfer({
         amountCents: netCents,
         currency,
-        destination: status.stripe_connect_account_id,
+        destination,
         sourceTransaction: chargeId,
-        transferGroup: orderId,
-        idempotencyKey: `transfer_${chargeId}_${status.id}`,
+        // ⚠️ Must match what the retry worker sends for this same row, byte for
+        // byte. Stripe compares the WHOLE request body against the one stored
+        // under an idempotency key and 400s on any divergence, so a shared key
+        // with a different `transfer_group` dedupes nothing — it just wedges the
+        // retry. Hence a payout-derived group here, not `orderId`.
+        transferGroup: payoutTransferGroup(payout.id),
+        idempotencyKey: payoutIdempotencyKey(payout.id),
       });
 
-      await createPayoutFromTransfer(supabaseAdmin, {
-        photographer_id: status.id,
-        amount_cents: netCents,
-        stripe_transfer_id: transfer.id,
-      });
+      await settlePayoutPaid(supabaseAdmin, payout.id, transfer.id);
 
       console.log(`Transfer ${transfer.id} created: ${netCents} cents → photographer ${status.id}`);
     } catch (err) {
       console.error(`Failed to create transfer for photographer ${status.id}:`, err);
+      // Park the reserved row instead of creating a second one. The retry worker
+      // re-drives it under the SAME idempotency key and the SAME parameters, so
+      // a transfer Stripe did make despite the thrown error is returned rather
+      // than duplicated — and once the key expires, the worker's probe catches
+      // it instead.
+      await holdPayoutRow(supabaseAdmin, payout.id, 'transfer_failed').catch((holdErr) =>
+        console.error(`[payouts] failed to hold payout ${payout?.id}:`, holdErr),
+      );
     }
   }
 }
@@ -376,6 +459,7 @@ export async function POST(request: Request) {
                   chargeId,
                   guestOrder.id,
                   guestOrder.currency,
+                  'guest_order',
                 );
               }
             } catch (transferErr) {
@@ -606,7 +690,13 @@ export async function POST(request: Request) {
             .select('photographer_id, total_price_cents')
             .eq('order_id', order.id);
 
-          await createTransfersForOrderItems(orderItems ?? [], chargeId, order.id, order.currency);
+          await createTransfersForOrderItems(
+            orderItems ?? [],
+            chargeId,
+            order.id,
+            order.currency,
+            'order',
+          );
         }
         break;
       }
@@ -634,12 +724,50 @@ export async function POST(request: Request) {
             stripe_connect_status: status,
           });
           console.log(`Connect status updated for account ${account.id}: ${status}`);
+
+          // T-216: activation is exactly the moment a photographer's held
+          // earnings became payable, so pay them now instead of making them wait
+          // up to 30 minutes for the cron. Emitted only when a profile actually
+          // resolved — an event for an account we don't know has nothing to pay.
+          // The worker debounces on photographerId because Stripe emits
+          // `account.updated` in bursts as capabilities flip.
+          if (status === 'active') {
+            try {
+              await inngest.send({
+                name: 'payouts.retry-requested',
+                data: { photographerId: profile.id },
+              });
+            } catch (err) {
+              // The cron is the backstop, so a failed emit costs latency, not
+              // money — never the webhook.
+              console.error('[payouts] failed to request payout retry:', err);
+            }
+          }
         }
         break;
       }
 
       case 'charge.refunded': {
         const charge = event.data.object as Stripe.Charge;
+
+        // T-216: kill any outstanding hold for this charge BEFORE the retry
+        // worker can pay it. Without this, adding the ledger would CREATE a loss
+        // the old code did not have — a stranded transfer used to be
+        // accidentally protected by being stranded, but a worker that pays holds
+        // would send a refunded buyer's money to the photographer.
+        //
+        // Only `pending` rows are voided (see `voidHoldsForCharge`): a
+        // `processing` row may already have a transfer in flight, and reversing
+        // that is a different operation (T-215).
+        try {
+          const voided = await voidHoldsForCharge(supabaseAdmin, charge.id);
+          if (voided > 0) {
+            console.log(`[payouts] voided ${voided} outstanding hold(s) for refunded ${charge.id}`);
+          }
+        } catch (err) {
+          console.error(`[payouts] failed to void holds for charge ${charge.id}:`, err);
+        }
+
         const piId = typeof charge.payment_intent === 'string' ? charge.payment_intent : null;
         if (piId) {
           const order = await getOrderByPaymentIntentId(supabaseAdmin, piId);

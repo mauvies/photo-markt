@@ -124,31 +124,45 @@ describe('database/queries/payouts', () => {
         photographer_id: photographer.id,
         amount_cents: 800,
         stripe_transfer_id: 'tr_abc123',
+        stripe_charge_id: 'ch_abc123',
+        currency: 'eur',
       });
 
       const { data } = await sb
         .from('payouts')
-        .select('status, amount_cents, stripe_transfer_id')
+        .select('status, amount_cents, stripe_transfer_id, stripe_charge_id')
         .eq('stripe_transfer_id', 'tr_abc123')
         .single();
       expect(data?.status).toBe('paid');
       expect(data?.amount_cents).toBe(800);
+      expect(data?.stripe_charge_id).toBe('ch_abc123');
     });
 
-    it('is idempotent — second call with same transfer_id swallows the unique violation', async () => {
+    // T-216 moved the uniqueness from `stripe_transfer_id` to
+    // `(stripe_charge_id, photographer_id)`, because one aggregated transfer now
+    // legitimately settles several rows. The dedupe still holds — but note it no
+    // longer keys on the transfer id, so a second call with a DIFFERENT transfer
+    // id for the same charge is also collapsed. That is the point: it means we
+    // paid twice, and the row must not be duplicated to hide it.
+    it('does not write a second row for the same (charge, photographer)', async () => {
       const photographer = await createTestUser('PHOTOGRAPHER');
       const sb = createServiceClient();
       const args = {
         photographer_id: photographer.id,
         amount_cents: 800,
         stripe_transfer_id: 'tr_dup',
+        stripe_charge_id: 'ch_dup',
+        currency: 'eur',
       };
       await createPayoutFromTransfer(sb, args);
-      await expect(createPayoutFromTransfer(sb, args)).resolves.not.toThrow();
+      await expect(
+        createPayoutFromTransfer(sb, { ...args, stripe_transfer_id: 'tr_dup_second' }),
+      ).resolves.not.toThrow();
+
       const { count } = await sb
         .from('payouts')
         .select('*', { count: 'exact', head: true })
-        .eq('stripe_transfer_id', 'tr_dup');
+        .eq('stripe_charge_id', 'ch_dup');
       expect(count).toBe(1);
     });
   });

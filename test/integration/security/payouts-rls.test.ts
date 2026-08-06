@@ -1,15 +1,30 @@
 /**
- * Regression tests for finding C2 from the May 2026 security audit:
- * "payouts UPDATE policy uses `USING (true) WITH CHECK (true)`" — any
- * authenticated user could PATCH any payout via PostgREST.
+ * RLS posture of `payouts` — photographer-read, service-role-write.
  *
- * The fix replaced the permissive policy with:
- *   for update
- *   using (auth.uid() = photographer_id and status = 'pending')
- *   with check (auth.uid() = photographer_id and status in ('pending', 'cancelled'))
+ * ## History, because the posture inverted
  *
- * Each test pins one property of that policy. If any of them ever loosens,
- * a real exploit is back; this suite fails loudly first.
+ * The May 2026 audit (finding C2) found the UPDATE policy was
+ * `using (true) with check (true)`, so any authenticated user could PATCH any
+ * payout. The fix narrowed it to "a photographer may cancel their OWN pending
+ * payout", and left the original "photographers can create their own payouts"
+ * INSERT policy in place. Both were tolerable only because `pending` was inert:
+ * every payout was written straight to `paid` by the Stripe webhook, and nothing
+ * anywhere acted on a `pending` row.
+ *
+ * T-216 changed exactly that. `pending` now means "a background worker will
+ * really send this money", which turns both policies into money paths:
+ *
+ *   - **INSERT** would be self-service theft — mint your own `pending` row and
+ *     wait for the retry worker to wire the funds.
+ *   - **UPDATE** (pending → cancelled) would let a photographer void a hold, and
+ *     the `(stripe_charge_id, photographer_id)` unique index then blocks ever
+ *     creating a replacement row for that charge. Their own money, unpayable
+ *     forever, by their own click.
+ *
+ * So both were dropped in `20260807000000_add_payout_ledger.sql`. Nothing
+ * user-facing regressed: `createPayout` has no caller in `src/`. Each test below
+ * pins one half of the new posture; if any of them loosens, a real exploit is
+ * back and this suite fails first.
  */
 
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -40,9 +55,66 @@ async function readPayout(id: string) {
   return data;
 }
 
-describe('payouts RLS — C2 regression', () => {
+describe('payouts RLS — writes are service-role only', () => {
   beforeEach(async () => {
     await resetDatabase();
+  });
+
+  it('blocks a photographer from inserting a payout for themselves', async () => {
+    // The T-216 regression. A row inserted here would be picked up by the retry
+    // worker and paid for real.
+    const alice = await createTestUser('PHOTOGRAPHER');
+    const aliceClient = await signInAs(alice.email);
+
+    const { data, error } = await aliceClient
+      .from('payouts')
+      .insert({ photographer_id: alice.id, amount_cents: 500_00, status: 'pending' })
+      .select();
+
+    // PostgREST surfaces a 42501 when no INSERT policy admits the row.
+    expect(error).not.toBeNull();
+    expect(error?.code).toBe('42501');
+    expect(data).toBeNull();
+
+    const { count } = await createServiceClient()
+      .from('payouts')
+      .select('*', { count: 'exact', head: true })
+      .eq('photographer_id', alice.id);
+    expect(count).toBe(0);
+  });
+
+  it('blocks a photographer from inserting a payout for someone else', async () => {
+    const alice = await createTestUser('PHOTOGRAPHER');
+    const bob = await createTestUser('PHOTOGRAPHER');
+    const aliceClient = await signInAs(alice.email);
+
+    const { error } = await aliceClient
+      .from('payouts')
+      .insert({ photographer_id: bob.id, amount_cents: 500_00, status: 'pending' })
+      .select();
+
+    expect(error?.code).toBe('42501');
+  });
+
+  it('blocks a photographer from cancelling their own pending payout', async () => {
+    // This WAS allowed before T-216. It is not any more: cancelling a hold makes
+    // it permanently unpayable, because the (charge, photographer) unique index
+    // then rejects a replacement row.
+    const alice = await createTestUser('PHOTOGRAPHER');
+    const payout = await createPendingPayout(alice.id);
+
+    const aliceClient = await signInAs(alice.email);
+    const { data, error } = await aliceClient
+      .from('payouts')
+      .update({ status: 'cancelled' })
+      .eq('id', payout.id)
+      .select();
+
+    // With no UPDATE policy at all, RLS filters the row out: the request
+    // succeeds HTTP-wise and touches nothing.
+    expect(error).toBeNull();
+    expect(data).toEqual([]);
+    expect((await readPayout(payout.id))?.status).toBe('pending');
   });
 
   it("blocks photographer A from updating photographer B's payout", async () => {
@@ -57,37 +129,13 @@ describe('payouts RLS — C2 regression', () => {
       .eq('id', bobsPayout.id)
       .select();
 
-    // PostgREST silently returns an empty array when RLS filters everything
-    // out — no error, just zero rows touched. That's the shape we want to
-    // assert: the request succeeded HTTP-wise but did nothing.
     expect(error).toBeNull();
     expect(data).toEqual([]);
-
-    // And the row in the DB is still pending — the canonical assertion.
-    const after = await readPayout(bobsPayout.id);
-    expect(after?.status).toBe('pending');
+    expect((await readPayout(bobsPayout.id))?.status).toBe('pending');
   });
 
-  it('allows photographer to cancel their own pending payout', async () => {
-    const alice = await createTestUser('PHOTOGRAPHER');
-    const payout = await createPendingPayout(alice.id);
-
-    const aliceClient = await signInAs(alice.email);
-    const { data, error } = await aliceClient
-      .from('payouts')
-      .update({ status: 'cancelled' })
-      .eq('id', payout.id)
-      .select();
-
-    expect(error).toBeNull();
-    expect(data).toHaveLength(1);
-    expect(data?.[0]?.status).toBe('cancelled');
-  });
-
-  it('blocks photographer from flipping their own pending payout to paid', async () => {
-    // 'paid' is not in the WITH CHECK allowlist; only photographers in
-    // (pending, cancelled) transitions are permitted. Approval/payment is
-    // an admin-only path that goes via the service-role client.
+  it('blocks a photographer from flipping their own payout to paid', async () => {
+    // The most direct attack: mark yourself paid, or mark yourself owed.
     const alice = await createTestUser('PHOTOGRAPHER');
     const payout = await createPendingPayout(alice.id);
 
@@ -98,47 +146,65 @@ describe('payouts RLS — C2 regression', () => {
       .eq('id', payout.id)
       .select();
 
-    // PostgREST surfaces a 42501 (RLS violation) on a WITH CHECK failure.
-    // We accept either the explicit error OR an empty data array — Supabase
-    // versions have varied; what matters is the row stays untouched.
-    if (error) {
-      expect(error.code).toBe('42501');
-    } else {
-      expect(data).toEqual([]);
-    }
-    const after = await readPayout(payout.id);
-    expect(after?.status).toBe('pending');
-  });
-
-  it('blocks photographer from updating their own non-pending payout (USING filter)', async () => {
-    // The USING clause requires `status = 'pending'`, so a payout already
-    // in 'paid' state is invisible to the photographer for UPDATE. They
-    // can't reopen it or change anything.
-    const alice = await createTestUser('PHOTOGRAPHER');
-    const sb = createServiceClient();
-    const { data: paidPayout } = await sb
-      .from('payouts')
-      .insert({ photographer_id: alice.id, amount_cents: 2000, status: 'paid' })
-      .select('id')
-      .single();
-    if (!paidPayout) throw new Error('seed failed');
-
-    const aliceClient = await signInAs(alice.email);
-    const { data, error } = await aliceClient
-      .from('payouts')
-      .update({ status: 'cancelled' })
-      .eq('id', paidPayout.id)
-      .select();
-
     expect(error).toBeNull();
     expect(data).toEqual([]);
-    const after = await readPayout(paidPayout.id);
-    expect(after?.status).toBe('paid');
+    expect((await readPayout(payout.id))?.status).toBe('pending');
   });
 
-  it('service role bypasses RLS and can mark any payout as paid', async () => {
-    // The Stripe webhook path uses service-role and must continue to work
-    // regardless of the user-facing policy.
+  it('blocks a photographer from inflating their own payout amount', async () => {
+    const alice = await createTestUser('PHOTOGRAPHER');
+    const payout = await createPendingPayout(alice.id, 100);
+
+    const aliceClient = await signInAs(alice.email);
+    await aliceClient
+      .from('payouts')
+      .update({ amount_cents: 100_000 })
+      .eq('id', payout.id)
+      .select();
+
+    expect((await readPayout(payout.id))?.amount_cents).toBe(100);
+  });
+
+  it('blocks a photographer from deleting a payout', async () => {
+    const alice = await createTestUser('PHOTOGRAPHER');
+    const payout = await createPendingPayout(alice.id);
+
+    const aliceClient = await signInAs(alice.email);
+    await aliceClient.from('payouts').delete().eq('id', payout.id);
+
+    expect(await readPayout(payout.id)).not.toBeNull();
+  });
+
+  it('still lets a photographer read their own payouts', async () => {
+    // The SELECT policy is deliberately kept — the earnings tab renders these,
+    // and keeping it also stops the table tripping the `rls_enabled_no_policy`
+    // advisor.
+    const alice = await createTestUser('PHOTOGRAPHER');
+    const payout = await createPendingPayout(alice.id, 2500);
+
+    const aliceClient = await signInAs(alice.email);
+    const { data, error } = await aliceClient.from('payouts').select('id, amount_cents');
+
+    expect(error).toBeNull();
+    expect(data).toHaveLength(1);
+    expect(data?.[0]?.id).toBe(payout.id);
+    expect(data?.[0]?.amount_cents).toBe(2500);
+  });
+
+  it("does not let a photographer read someone else's payouts", async () => {
+    const alice = await createTestUser('PHOTOGRAPHER');
+    const bob = await createTestUser('PHOTOGRAPHER');
+    await createPendingPayout(bob.id);
+
+    const aliceClient = await signInAs(alice.email);
+    const { data } = await aliceClient.from('payouts').select('id');
+
+    expect(data).toEqual([]);
+  });
+
+  it('service role bypasses RLS and can settle a payout', async () => {
+    // The Stripe webhook and the retry worker are the only writers, and both
+    // must keep working after the lockdown.
     const alice = await createTestUser('PHOTOGRAPHER');
     const payout = await createPendingPayout(alice.id);
 
