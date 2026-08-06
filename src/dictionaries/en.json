@@ -831,6 +831,7 @@
     "payoutStatusProcessing": "Sending",
     "payoutStatusPaid": "Paid",
     "payoutStatusCancelled": "Cancelled",
+    "payoutStatusReversed": "Reversed",
     "requestPayoutTitle": "Request Payout",
     "requestPayoutDesc": "Withdraw your available balance. Payouts are processed manually by our team.",
     "requestPayoutButton": "Request Payout",

@@ -50,6 +50,11 @@ export const env = createEnv({
     // Recipient of the 50%-of-global-cap alert. Optional: absent ⇒ the alert
     // is a safe no-op (like SENTRY_DSN / HEALTH_CHECK_TOKEN).
     FACE_SEARCH_ALERT_EMAIL: z.email().optional(),
+    // Recipient of money-incident alerts — a lost dispute, a failed transfer
+    // reversal, a payout that needs manual reconciliation (T-215). Optional for
+    // the same reason as the address above: absent ⇒ the email is a no-op, and
+    // the incident is still reported to Sentry and the logs.
+    OPS_ALERT_EMAIL: z.email().optional(),
     // HMAC key for the reveal-gate proof cookie (T-177). Optional: absent ⇒
     // `src/lib/reveal-token.ts` falls back to SUPABASE_SERVICE_ROLE_KEY, so the
     // feature works without a dedicated secret and the app still boots. Set a
@@ -106,6 +111,7 @@ export const env = createEnv({
     FACE_SEARCH_GLOBAL_DAILY_CALLS: process.env.FACE_SEARCH_GLOBAL_DAILY_CALLS,
     FACE_SEARCH_EVENT_DAILY_CALLS: process.env.FACE_SEARCH_EVENT_DAILY_CALLS,
     FACE_SEARCH_ALERT_EMAIL: process.env.FACE_SEARCH_ALERT_EMAIL,
+    OPS_ALERT_EMAIL: process.env.OPS_ALERT_EMAIL,
     REVEAL_TOKEN_SECRET: process.env.REVEAL_TOKEN_SECRET,
   },
 });

@@ -117,10 +117,11 @@ proportion to the reversed fraction, both for money already sent and for money s
 - **THEN** the hold survives with its amount reduced by approximately a quarter
 - **AND** the retry worker can still pay the reduced amount
 
-#### Scenario: The remaining amount is too small to be payable
+#### Scenario: A partial refund never wipes the hold entirely
 
-- **WHEN** a partial refund would reduce a hold to zero or less
-- **THEN** the hold is voided instead of being written with an invalid amount
+- **WHEN** a partial refund reduces a hold, however large the refunded fraction
+- **THEN** the hold retains at least the smallest payable amount rather than being voided
+- **AND** a hold reduced below the transfer minimum is still paid through the aggregation path
 
 ### Requirement: A clawback failure is recorded and alerted, never silent and never fatal
 

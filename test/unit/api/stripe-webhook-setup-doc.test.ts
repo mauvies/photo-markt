@@ -55,6 +55,12 @@ describe('stripe webhook setup doc (T-192)', () => {
         'customer.subscription.deleted',
         'account.updated',
         'charge.refunded',
+        // T-215: a dispute is the one reversal path the buyer can force
+        // unilaterally through their bank. An endpoint not subscribed to these
+        // two hears nothing about a chargeback — which is exactly the state
+        // this ticket found production in.
+        'charge.dispute.created',
+        'charge.dispute.closed',
       ]),
     );
   });

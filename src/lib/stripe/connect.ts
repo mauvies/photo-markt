@@ -202,6 +202,34 @@ export async function createTransfer(params: {
 }
 
 /**
+ * Pull money back out of a transfer already sent to a photographer (T-215).
+ *
+ * Used when a purchase is undone by a refund or a lost dispute. Stripe allows the
+ * reversal to take the connected account's balance NEGATIVE — that is deliberate
+ * and is the accepted product decision: the alternative is the platform funding a
+ * sale the buyer's bank has taken back. The shortfall is recovered from the
+ * photographer's future sales.
+ *
+ * Partial reversals are supported by amount, and a transfer may be reversed more
+ * than once as successive partial refunds arrive — which is why the caller keys
+ * each reversal on the CUMULATIVE refunded amount (`reversalIdempotencyKey` in
+ * `src/lib/payouts/clawback.ts`) rather than on the transfer alone.
+ */
+export async function createTransferReversal(params: {
+  /** The `tr_…` id recorded on the payout row when it was paid. */
+  transferId: string;
+  /** How much to take back NOW — the delta, not the cumulative target. */
+  amountCents: number;
+  idempotencyKey: string;
+}): Promise<Stripe.TransferReversal> {
+  return stripe.transfers.createReversal(
+    params.transferId,
+    { amount: params.amountCents },
+    { idempotencyKey: params.idempotencyKey },
+  );
+}
+
+/**
  * Look for a transfer already made under a given `transfer_group` (T-216).
  *
  * Recovery probe for a batch left mid-flight. An idempotency key only dedupes

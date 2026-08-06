@@ -93,6 +93,7 @@ const PAYOUT_STATUS_LABEL_KEYS = {
   processing: 'payoutStatusProcessing',
   paid: 'payoutStatusPaid',
   cancelled: 'payoutStatusCancelled',
+  reversed: 'payoutStatusReversed',
 } as const satisfies Record<Payout['status'], keyof EarningsT>;
 
 function PayoutHistory({ payouts, className }: PayoutHistoryProps) {

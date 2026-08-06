@@ -19,10 +19,11 @@ voiding it, so the photographer keeps their net on the part of the sale the buye
 - **THEN** the hold survives with its amount reduced in proportion to the refunded fraction
 - **AND** the retry worker may still pay the reduced amount
 
-#### Scenario: A partial refund leaves nothing payable
+#### Scenario: A partial refund never wipes a hold
 
-- **WHEN** the proportional reduction would leave a hold at zero or below
-- **THEN** the hold is voided instead, and the reason is recorded
+- **WHEN** a partial refund reduces a hold, however large the refunded fraction
+- **THEN** the hold retains at least the smallest payable amount
+- **AND** only a full refund voids it
 
 #### Scenario: The ledger records money taken back after it was sent
 
