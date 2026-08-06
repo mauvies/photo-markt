@@ -4,7 +4,6 @@ import { EventMetaLine } from '@/components/event-meta-line';
 import { PhotosEmptyState } from '@/components/photos-empty-state';
 import { Badge } from '@/components/ui/badge';
 import {
-  countEventPhotos,
   countEventPhotosByStatus,
   createPhotoUrlMap,
   getEvent,
@@ -46,6 +45,7 @@ import { EventSettingsCard } from './event-settings-card';
 import { EventShareTab } from './event-share-tab';
 import { parseEventTab } from './event-tab';
 import { EventTabs } from './event-tabs';
+import { FailedUploadsNotice } from './failed-uploads-notice';
 import { OrganizerUploadSection } from './organizer-upload-section';
 import { buildOwnerPhotoAlbumItem } from './owner-album-item';
 import { PhotographersSection } from './photographers-section';
@@ -132,33 +132,45 @@ export default async function EventDetailPage({
 
   // Round 1 — the first gallery page (only the first page is fetched + signed;
   // "Load more" fetches the rest via `loadMoreOwnerEventPhotos`), the small
-  // un-paginated pending queue, the organizer photographers list, and the true
-  // non-rejected total (for `RejectedToast`) are all independent.
-  const [{ photos, hasMore }, pendingPhotos, eventPhotographers, visibleCount, approvedCount] =
-    await Promise.all([
-      getEventPhotosPage(adminClient, id, user.id, {
-        skipUserIdFilter: true,
-        includePending: !showPendingTab,
-        limit: EVENT_GALLERY_PAGE_SIZE,
-        offset: 0,
-      }),
-      showPendingTab
-        ? getEventPhotos(adminClient, id, user.id, {
-            status: 'pending',
-            skipUserIdFilter: true,
-            // The owner's own uploads auto-approve and must never sit in the
-            // moderation queue — exclude them regardless of the worker's
-            // transient state (race window or a worker that never promoted them).
-            excludeOwnerUploads: true,
-          })
-        : Promise.resolve([]),
-      event.type === 'organizer' ? getEventPhotographers(supabase, id) : Promise.resolve([]),
-      countEventPhotos(adminClient, id),
-      // Approved-only total — only the tab-less (solo) view needs it, to spell
-      // out how many of `visibleCount` are actually public vs still processing
-      // (T-174). Moderation events already break this out via the Pending tab.
-      showPendingTab ? Promise.resolve(0) : countEventPhotosByStatus(adminClient, id, ['approved']),
-    ]);
+  // un-paginated pending queue, the organizer photographers list, and the
+  // rendered-photo total (for `RejectedToast`) are all independent.
+  const [
+    { photos, hasMore },
+    pendingPhotos,
+    eventPhotographers,
+    visibleCount,
+    approvedCount,
+    failedCount,
+  ] = await Promise.all([
+    getEventPhotosPage(adminClient, id, user.id, {
+      skipUserIdFilter: true,
+      includePending: !showPendingTab,
+      limit: EVENT_GALLERY_PAGE_SIZE,
+      offset: 0,
+    }),
+    showPendingTab
+      ? getEventPhotos(adminClient, id, user.id, {
+          status: 'pending',
+          skipUserIdFilter: true,
+          // The owner's own uploads auto-approve and must never sit in the
+          // moderation queue — exclude them regardless of the worker's
+          // transient state (race window or a worker that never promoted them).
+          excludeOwnerUploads: true,
+        })
+      : Promise.resolve([]),
+    event.type === 'organizer' ? getEventPhotographers(supabase, id) : Promise.resolve([]),
+    // What the grid actually renders. Spelled out as approved + pending rather
+    // than `countEventPhotos` (= everything but `rejected`) so a `failed` upload
+    // (T-231) doesn't inflate the toolbar count or get counted as "still
+    // processing" below — it has its own notice. `countEventPhotos` stays the
+    // upload-cap counter, where a failed photo's bytes DO still count.
+    countEventPhotosByStatus(adminClient, id, ['approved', 'pending']),
+    // Approved-only total — only the tab-less (solo) view needs it, to spell
+    // out how many of `visibleCount` are actually public vs still processing
+    // (T-174). Moderation events already break this out via the Pending tab.
+    showPendingTab ? Promise.resolve(0) : countEventPhotosByStatus(adminClient, id, ['approved']),
+    countEventPhotosByStatus(adminClient, id, ['failed']),
+  ]);
 
   // Round 2 — signing (approved + pending originals), talent tags, and uploader
   // profiles all depend only on the fetched photos, so run them together. Tags
@@ -407,16 +419,42 @@ export default async function EventDetailPage({
 
   const photosTab = (
     <TranslationsProvider translations={dict.events}>
-      {!showPendingTab ? (
-        <PhotosProcessingNotice
-          pendingCount={visibleCount - approvedCount}
-          approvedCount={approvedCount}
+      {/* Both notices self-hide, so this wrapper collapses to nothing when the
+          event is healthy. */}
+      <div className="space-y-2 empty:hidden">
+        {!showPendingTab ? (
+          <PhotosProcessingNotice
+            pendingCount={visibleCount - approvedCount}
+            approvedCount={approvedCount}
+            labels={{
+              processingOne: dict.events.photosProcessingOne,
+              processingMany: dict.events.photosProcessingMany,
+            }}
+          />
+        ) : null}
+        {/* Uploads the worker gave up on (T-231). Shown on BOTH views: a failed
+            upload belongs to neither the grid nor the moderation queue, so this
+            notice is the only place it surfaces at all. */}
+        <FailedUploadsNotice
+          eventId={id}
+          failedCount={failedCount}
           labels={{
-            processingOne: dict.events.photosProcessingOne,
-            processingMany: dict.events.photosProcessingMany,
+            failedOne: dict.events.photosFailedOne,
+            failedMany: dict.events.photosFailedMany,
+            retry: dict.events.photosFailedRetry,
+            retrying: dict.events.photosFailedRetrying,
+            discard: dict.events.photosFailedDiscard,
+            discardTitle: dict.events.photosFailedDiscardTitle,
+            discardDescription: dict.events.photosFailedDiscardDescription,
+            discardConfirm: dict.events.photosFailedDiscardConfirm,
+            discardCancel: dict.events.photosFailedDiscardCancel,
+            discardPending: dict.events.photosFailedDiscardPending,
+            retryToast: dict.events.photosFailedRetryToast,
+            discardToast: dict.events.photosFailedDiscardToast,
+            error: dict.events.photosFailedError,
           }}
         />
-      ) : null}
+      </div>
       <div>
         {showPendingTab ? (
           <EventModerationTabs

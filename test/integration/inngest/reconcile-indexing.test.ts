@@ -294,6 +294,40 @@ describe('runReconcileIndexingFlow', () => {
     expect(rec.sent).toHaveLength(0);
   });
 
+  // ── T-231: an exhausted owner upload must not be re-driven forever ────
+  it('does NOT re-drive an owner upload whose indexing already failed (T-231 retry storm)', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    await setAiStatus(event.id, 'idle');
+    const exhausted = await createTestPhoto(event.id);
+    // The shape a run that died before `promote-upload-status` leaves behind:
+    // upload_status never settled, face_index_status marked failed by onFailure.
+    // Before T-231 branch (d) matched on `pending` alone and re-emitted this
+    // photo on every tick — every 30 minutes, forever, with no way to succeed.
+    await setUploadStatus(exhausted.id, 'pending');
+    await setFaceStatus(exhausted.id, 'failed');
+
+    const rec = recordingSender();
+    const result = await runReconcileIndexingFlow(passthroughStep, FUTURE_NOW, rec.send);
+
+    expect(result.ownerUploadsRequeued).toBe(0);
+    expect(rec.sent.filter((e) => e.name === 'photo.uploaded')).toHaveLength(0);
+  });
+
+  it('still re-drives an owner upload whose indexing has NOT failed (T-231 scoping)', async () => {
+    const owner = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(owner.id);
+    await setAiStatus(event.id, 'idle');
+    const stuck = await createTestPhoto(event.id);
+    await setUploadStatus(stuck.id, 'pending');
+    await setFaceStatus(stuck.id, 'not_applicable'); // AI off: settled, but not failed
+
+    const rec = recordingSender();
+    const result = await runReconcileIndexingFlow(passthroughStep, FUTURE_NOW, rec.send);
+
+    expect(result.ownerUploadsRequeued).toBe(1);
+  });
+
   it('lets the stuck-indexing branch own owner uploads in an indexing event — no double re-emit (T-183)', async () => {
     const owner = await createTestUser('PHOTOGRAPHER');
     const event = await createTestEvent(owner.id);

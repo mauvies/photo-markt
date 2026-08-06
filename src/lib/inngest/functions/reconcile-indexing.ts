@@ -43,9 +43,17 @@
  * fighting live work (a normal index/re-index drains in seconds, and the T-092
  * ready-guard stops any re-emit from re-baking an already-`ready` thumbnail), so
  * a wedge that takes up to an hour to self-heal is preferred over a sweeper that
- * clobbers in-flight jobs. `failed` photos are deliberately left alone — they
- * already exhausted their retries; auto-requeuing them here would be a retry
- * storm (re-index is a manual action).
+ * clobbers in-flight jobs.
+ *
+ * `failed` photos are deliberately left alone — they already exhausted their
+ * retries; auto-requeuing them here would be a retry storm (recovery is a manual
+ * action: "Re-index event", or the owner's Retry on a `upload_status='failed'`
+ * upload). ⚠️ That property did NOT hold for branch (d) until T-231: it filtered
+ * on `upload_status='pending'` alone, so an owner upload whose run had died was
+ * re-emitted every 30 minutes forever. `listStuckPendingOwnerUploads` now
+ * excludes `face_index_status='failed'`, and the worker settles such a row to
+ * `upload_status='failed'` — either one is enough to stop the loop; both are in
+ * place so rows stranded before T-231 shipped are covered too.
  *
  * Why Inngest (not pg_cron): Supabase Free has no pg_cron; Inngest is already in
  * the stack with cron triggers on its free plan. No new infra.
