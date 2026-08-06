@@ -1,12 +1,12 @@
 # T-215 · Clawback: disputas y reembolsos deben revertir transferencia y acceso
 
 - **Prioridad:** P1
-- **Estado:** doing
+- **Estado:** done
 - **Riesgo:** alto  (pagos)
 - **Blockers:** ninguno
 - **Rama:** `fix/clawback-disputes-and-refunds`  (tipo = fix)
 - **OpenSpec change:** **sí** — hay una decisión de producto que el código no puede tomar (ver Notas)
-- **PR:** —
+- **PR:** #290
 - **Dep:** ejecutar junto a T-216 (comparten el modelo de estado de `payouts`)
 
 ## Requerimiento

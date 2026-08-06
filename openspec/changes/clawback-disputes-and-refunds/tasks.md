@@ -65,4 +65,4 @@
 - [x] 9.3 Add `payoutStatusReversed` copy to `en.json` and `es.json`
 - [x] 9.4 Run `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` (`src/lib/` is touched)
 - [x] 9.5 Run `/code-review ultra` on the diff and fix the real findings before committing
-- [ ] 9.6 Archive T-237 pointing at this PR instead of opening a separate branch, as its ticket instructs
+- [x] 9.6 Archive T-237 pointing at this PR instead of opening a separate branch, as its ticket instructs
