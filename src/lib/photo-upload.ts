@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer';
 import sharp from 'sharp';
+import { MAX_PHOTO_BYTES } from '@/lib/upload-limits';
 
 /**
  * Server-side validation for photo uploads.
@@ -18,7 +19,9 @@ import sharp from 'sharp';
  *     File and delegates.
  */
 
-export const MAX_PHOTO_BYTES = 50 * 1024 * 1024; // 50 MB
+// Re-exported (not defined) here: the number is shared with the browser pre-checks,
+// and this module pulls Sharp into whatever imports it. See `upload-limits.ts`.
+export { MAX_PHOTO_BYTES };
 
 const ALLOWED_FORMATS = new Set(['jpeg', 'png', 'webp', 'heif', 'avif', 'gif']);
 

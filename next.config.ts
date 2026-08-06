@@ -11,11 +11,24 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverActions: {
-      // Per-file size is enforced in lib/photo-upload.ts (50 MB); this is the
-      // aggregate request budget for bulk uploads (~10 photos at the per-file cap).
-      bodySizeLimit: '500mb',
+      // ⚠️ This number cannot buy headroom it doesn't have. **On Vercel a
+      // serverless function's request body is capped at 4.5 MB and that cap is
+      // not configurable** — anything larger is rejected by the platform with its
+      // own 413 (`FUNCTION_PAYLOAD_TOO_LARGE`) before Next, and therefore before
+      // any `try/catch` of ours, ever sees it. The previous '500mb' worked in local
+      // dev and lost in production, and that local↔prod divergence is exactly what
+      // hid T-238: covers uploaded fine on localhost and failed for photographers.
+      //
+      // So it is pinned AT the platform ceiling — honest in both environments —
+      // and no upload surface relies on it: photos and event covers PUT their bytes
+      // straight to Supabase Storage via signed upload URLs, while the two that
+      // still cross a Server Action (avatar, face-search selfie) cap themselves at
+      // MAX_SERVER_ACTION_UPLOAD_BYTES (4 MB) in `src/lib/upload-limits.ts`, below
+      // this, so the user meets OUR localized error instead of Vercel's page.
+      bodySizeLimit: '4.5mb',
     },
-    proxyClientMaxBodySize: '500mb',
+    // Same ceiling, same reason — the proxy fronts the same functions.
+    proxyClientMaxBodySize: '4.5mb',
     useCache: true,
     // Next 16's default Router Cache TTL for dynamic segments is 0 s, which
     // means back-navigation to any auth-coupled route re-fetches the RSC

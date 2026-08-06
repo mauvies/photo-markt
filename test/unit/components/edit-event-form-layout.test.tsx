@@ -43,8 +43,15 @@ vi.mock('sonner', () => ({
 }));
 
 vi.mock('@/app/[lang]/dashboard/photographer/events/new/actions', () => ({
-  uploadEventCoverAction: vi.fn(),
+  createEventCoverUploadUrlAction: vi.fn(),
+  attachEventCoverAction: vi.fn(),
   removeEventCoverAction: vi.fn(),
+}));
+
+vi.mock('@/lib/upload-event-cover', () => ({
+  uploadEventCover: vi.fn(),
+  MAX_COVER_BYTES: 50 * 1024 * 1024,
+  CoverUploadError: class extends Error {},
 }));
 
 vi.mock('@/app/[lang]/dashboard/photographer/events/[id]/edit/actions', () => ({

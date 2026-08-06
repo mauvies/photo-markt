@@ -80,8 +80,10 @@ describe('edit form cover wiring (T-166)', () => {
     expect(source).toContain('<EventCoverField');
   });
 
-  it('persists via the standalone cover actions (upload + remove)', () => {
-    expect(source).toContain('uploadEventCoverAction');
+  it('persists via the shared cover uploader + the standalone remove action', () => {
+    // T-238 replaced the byte-carrying `uploadEventCoverAction` with the
+    // direct-to-Storage `uploadEventCover` helper; remove has no bytes and stayed.
+    expect(source).toContain('uploadEventCover');
     expect(source).toContain('removeEventCoverAction');
   });
 

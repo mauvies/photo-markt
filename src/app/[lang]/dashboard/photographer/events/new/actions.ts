@@ -1,10 +1,11 @@
 'use server';
 
+import { Buffer } from 'node:buffer';
 import { revalidatePath, revalidateTag, updateTag } from 'next/cache';
 import { z } from 'zod';
 import { createEvent as dbCreateEvent } from '@/database/queries';
 import { setEventCoverPath } from '@/database/queries/events';
-import { deleteStorageFiles, uploadFile } from '@/database/queries/storage';
+import { createSignedUploadUrl, deleteStorageFiles } from '@/database/queries/storage';
 import type { SupabaseServerClient } from '@/database/queries/types';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
@@ -20,7 +21,7 @@ import { bundleScheduleErrorMessage } from '@/lib/bundle-schedule-error';
 import { isValidSessionRange, normalizeSessionTime, SESSION_RANGE_ERROR } from '@/lib/format-date';
 import { inngest } from '@/lib/inngest/client';
 import { minPhotoPriceErrorMessage } from '@/lib/min-photo-price';
-import { validatePhotoUpload } from '@/lib/photo-upload';
+import { validatePhotoBuffer } from '@/lib/photo-upload';
 import { assertCanCreateEvent } from '@/lib/plan-limits';
 import { isPhotoPriceAboveFloor, MIN_PHOTO_PRICE_CENTS } from '@/lib/plans';
 import { generateEventSlug } from '@/lib/slugify';
@@ -445,19 +446,17 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
 };
 
 /**
- * Upload (or replace) an event's dedicated cover/presentation image. Owner-only.
- *
- * The image is validated (magic bytes, 50 MB cap) and stored in the private
- * `photos` bucket under the event folder. It is a standalone presentation
- * image — NOT one of the for-sale photos — so it is served un-watermarked and
- * has no `photos` row. Because of that, its lifecycle is handled explicitly:
- * the orphan-cleanup cron skips paths referenced by `events.cover_path`, and
- * event deletion removes the object.
+ * Owner-only guard shared by the two halves of the cover upload. Resolves the
+ * event row (and its current cover) or throws — the mint step and the attach step
+ * must agree on who is allowed to touch which event, so neither re-derives it.
  */
-export const uploadEventCoverAction = async (
+const requireCoverOwner = async (
   eventId: string,
-  formData: FormData,
-): Promise<void> => {
+): Promise<{
+  supabase: SupabaseClient;
+  userId: string;
+  previousCoverPath: string | null;
+}> => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -475,34 +474,124 @@ export const uploadEventCoverAction = async (
     throw new Error('Event not found or access denied.');
   }
 
-  const file = formData.get('cover');
-  if (!(file instanceof File) || file.size === 0) {
-    throw new Error('No cover image provided.');
+  return {
+    supabase,
+    userId: user.id,
+    previousCoverPath: (eventRow as { cover_path: string | null }).cover_path,
+  };
+};
+
+/** Storage prefix every cover object of an event must live under. */
+const coverPathPrefix = (userId: string, eventId: string): string => `${userId}/${eventId}/`;
+
+/** Same defense-in-depth as the photo flow: the extension on the storage path is a
+ *  hint only (the real format is settled from the bytes at attach time), so anything
+ *  that isn't a short alphanumeric token becomes `jpg`. */
+const COVER_EXTENSION_REGEX = /^[a-z0-9]{1,8}$/;
+const sanitizeCoverExtension = (filename: string | undefined): string => {
+  if (!filename) return 'jpg';
+  const dot = filename.lastIndexOf('.');
+  if (dot < 0 || dot === filename.length - 1) return 'jpg';
+  const ext = filename.slice(dot + 1).toLowerCase();
+  return COVER_EXTENSION_REGEX.test(ext) ? ext : 'jpg';
+};
+
+/**
+ * Step 1 of the cover upload (T-238): mint a single-use signed upload URL the
+ * browser PUTs the cover bytes to **directly**, and return the storage path it
+ * will land on. Owner-only.
+ *
+ * The bytes deliberately never enter this function. Vercel caps a serverless
+ * request body at 4.5 MB and that cap cannot be configured away, so the previous
+ * `FormData`-carrying action answered a normal-sized cover with an un-catchable
+ * platform 413 (`FUNCTION_PAYLOAD_TOO_LARGE`) — the user saw Vercel's raw error
+ * page instead of the app's toast. This is the same signed-URL pattern the photo
+ * uploads have always used (`events/[id]/upload-urls/actions.ts`).
+ *
+ * The path — including its extension — is SERVER-generated; the client only
+ * contributes a filename we take the extension hint from, sanitized the same way
+ * the photo flow sanitizes it. The authoritative content type is settled later,
+ * in {@link attachEventCoverAction}, from the stored bytes.
+ */
+export const createEventCoverUploadUrlAction = async (
+  eventId: string,
+  filename?: string,
+): Promise<{ path: string; signedUrl: string }> => {
+  const { userId } = await requireCoverOwner(eventId);
+
+  const extension = sanitizeCoverExtension(filename);
+  const path = `${coverPathPrefix(userId, eventId)}cover-${crypto.randomUUID()}.${extension}`;
+  const adminClient = supabaseAdmin as unknown as SupabaseServerClient;
+  const minted = await createSignedUploadUrl(adminClient, 'photos', path);
+  return { path: minted.path, signedUrl: minted.signedUrl };
+};
+
+/**
+ * Step 2 of the cover upload (T-238): adopt an object the browser just PUT as the
+ * event's cover. Owner-only.
+ *
+ * ⚠️ **This is where the magic-byte validation moved to.** With the bytes no longer
+ * passing through the action, `validatePhotoUpload` can't run *before* the write —
+ * so the object is downloaded back from Storage and validated here, and **deleted
+ * again if it isn't a real image**. Same shape as the photo path, where the Inngest
+ * worker validates bytes post-upload and hard-deletes on a `rejected` verdict; a
+ * renamed `.exe` still never survives in the bucket, it just gets thrown out a
+ * moment later instead of a moment earlier.
+ *
+ * The path is checked against the caller's own `${userId}/${eventId}/` prefix, so a
+ * forged path can neither adopt another photographer's object as a cover nor point
+ * `cover_path` at something outside the event.
+ *
+ * The cover is a standalone presentation image — NOT a for-sale photo — so it is
+ * served un-watermarked and has no `photos` row. Its lifecycle stays explicit: the
+ * orphan-cleanup cron spares paths referenced by `events.cover_path` (and sweeps an
+ * abandoned upload that never got attached), and event deletion removes the object.
+ */
+export const attachEventCoverAction = async (eventId: string, path: string): Promise<void> => {
+  const { supabase, userId, previousCoverPath } = await requireCoverOwner(eventId);
+
+  if (!path?.startsWith(coverPathPrefix(userId, eventId))) {
+    throw new Error('Invalid cover path.');
   }
 
-  // Never trust the client MIME/extension — derive from magic bytes.
-  const { buffer, contentType, extension } = await validatePhotoUpload(file);
-  const path = `${user.id}/${eventId}/cover-${crypto.randomUUID()}.${extension}`;
-  // Use the admin client for the upload: the `photos` bucket has no user-level
-  // INSERT policy that covers direct uploads (only signed-URL uploads bypass
-  // RLS via the token). Ownership + file validation are already enforced above.
   const adminClient = supabaseAdmin as unknown as SupabaseServerClient;
-  await uploadFile(adminClient, 'photos', path, buffer, { contentType, upsert: false });
+  const dropUploaded = async () => {
+    try {
+      await deleteStorageFiles(adminClient, 'photos', [path]);
+    } catch (err) {
+      console.error('[attachEventCoverAction] failed to remove rejected cover', err);
+    }
+  };
 
-  await setEventCoverPath(supabase, eventId, user.id, path);
+  // Read the bytes back and run the same magic-byte validation the direct
+  // `FormData` upload used to run inline.
+  const { data: blob, error: downloadError } = await supabaseAdmin.storage
+    .from('photos')
+    .download(path);
+  if (downloadError || !blob) {
+    throw new Error('Cover image could not be read back from storage.');
+  }
+
+  try {
+    await validatePhotoBuffer(Buffer.from(await blob.arrayBuffer()));
+  } catch (err) {
+    await dropUploaded();
+    throw err instanceof Error ? err : new Error('File is not a valid image.');
+  }
+
+  await setEventCoverPath(supabase, eventId, userId, path);
 
   // Best-effort removal of the previous cover object on replace — the row now
   // points at the new one regardless.
-  const previous = (eventRow as { cover_path: string | null }).cover_path;
-  if (previous && previous !== path) {
+  if (previousCoverPath && previousCoverPath !== path) {
     try {
-      await deleteStorageFiles(supabase, 'photos', [previous]);
+      await deleteStorageFiles(supabase, 'photos', [previousCoverPath]);
     } catch (err) {
-      console.error('[uploadEventCoverAction] failed to remove previous cover', err);
+      console.error('[attachEventCoverAction] failed to remove previous cover', err);
     }
   }
 
-  await revalidateAfterEventCreate(supabase, user.id, eventId);
+  await revalidateAfterEventCreate(supabase, userId, eventId);
 };
 
 /**
@@ -510,33 +599,17 @@ export const uploadEventCoverAction = async (
  * fallback. Owner-only. Deletes the stored object best-effort.
  */
 export const removeEventCoverAction = async (eventId: string): Promise<void> => {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error('You must be signed in.');
-  if (!eventId) throw new Error('Missing event id.');
+  const { supabase, userId, previousCoverPath } = await requireCoverOwner(eventId);
 
-  const { data: eventRow } = await supabase
-    .from('events')
-    .select('id, user_id, cover_path')
-    .eq('id', eventId)
-    .is('deleted_at', null)
-    .maybeSingle();
-  if (!eventRow || eventRow.user_id !== user.id) {
-    throw new Error('Event not found or access denied.');
-  }
+  await setEventCoverPath(supabase, eventId, userId, null);
 
-  await setEventCoverPath(supabase, eventId, user.id, null);
-
-  const previous = (eventRow as { cover_path: string | null }).cover_path;
-  if (previous) {
+  if (previousCoverPath) {
     try {
-      await deleteStorageFiles(supabase, 'photos', [previous]);
+      await deleteStorageFiles(supabase, 'photos', [previousCoverPath]);
     } catch (err) {
       console.error('[removeEventCoverAction] failed to remove cover', err);
     }
   }
 
-  await revalidateAfterEventCreate(supabase, user.id, eventId);
+  await revalidateAfterEventCreate(supabase, userId, eventId);
 };
