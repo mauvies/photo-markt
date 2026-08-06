@@ -1,12 +1,12 @@
 # T-235 · `getEvent` filtra un PostgrestError crudo (PGRST116) en vez de "evento no encontrado"
 
 - **Prioridad:** P1
-- **Estado:** doing
+- **Estado:** done
 - **Riesgo:** normal  (capa de queries + manejo de errores; no toca pagos ni escribe nada)
 - **Blockers:** ninguno
 - **Rama:** `fix/get-event-null-instead-of-pgrst116`  (tipo = fix)
 - **OpenSpec change:** —
-- **PR:** —
+- **PR:** #287
 
 ## Requerimiento
 
