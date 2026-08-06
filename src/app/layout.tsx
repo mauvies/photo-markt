@@ -40,8 +40,7 @@ export const metadata: Metadata = {
     default: 'Photo Markt — Find Yourself in Every Photo',
     template: '%s | Photo Markt',
   },
-  description:
-    'Browse sports event photos from marathons, cycling races, triathlons, and more. Find yourself in high-resolution photos shot by professional event photographers.',
+  description: 'Find yourself in high-resolution photos shot by professional event photographers.',
   icons: {
     icon: [
       { url: '/favicon.ico' },
