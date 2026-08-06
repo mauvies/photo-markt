@@ -1,12 +1,12 @@
 # T-216 · Ganancias varadas: transferencias omitidas sin registro ni reintento
 
 - **Prioridad:** P1
-- **Estado:** doing
+- **Estado:** done
 - **Riesgo:** alto  (pagos)
 - **Blockers:** ninguno
 - **Rama:** `fix/stranded-photographer-transfers`  (tipo = fix)
 - **OpenSpec change:** **sí** — introduce estado persistente nuevo (cola/ledger de pendientes)
-- **PR:** —
+- **PR:** #288
 - **Dep:** ejecutar junto a T-215 y T-220 (comparten el modelo de estado de `payouts`)
 
 ## Requerimiento

@@ -67,4 +67,4 @@
 - [x] 8.3 Run `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` (this change touches `src/lib/` and `src/database/queries/`, which only the build fully checks)
 - [x] 8.4 Run `/code-review ultra` over the diff and fix real findings before committing
 - [x] 8.5 File the follow-up ticket for the order-level sweeper (no charge id on the PI, guest-order redelivery short-circuit, photographer with no `profiles` row)
-- [ ] 8.6 Note in the PR body that the new Inngest function must be confirmed in the Inngest dashboard after deploy, since production has silently drifted before
+- [x] 8.6 Note in the PR body that the new Inngest function must be confirmed in the Inngest dashboard after deploy, since production has silently drifted before
