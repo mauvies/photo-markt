@@ -12,7 +12,8 @@ import {
 } from '@/app/[lang]/actions/avatar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { AVATAR_ACCEPT, MAX_AVATAR_BYTES } from '@/lib/avatar-constants';
+import { AVATAR_ACCEPT, AVATAR_DOWNSCALE_MAX_EDGE, MAX_AVATAR_BYTES } from '@/lib/avatar-constants';
+import { downscaleImageFile } from '@/lib/image-downscale';
 
 export interface AvatarUploadLabels {
   changeButton: string;
@@ -58,37 +59,46 @@ export function AvatarUpload({ currentAvatarUrl, fallbackText, labels }: AvatarU
   }
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const picked = e.target.files?.[0];
     // Reset the input so selecting the same file again re-fires onChange.
     e.target.value = '';
-    if (!file) return;
+    if (!picked) return;
 
     // Client-side pre-checks for instant feedback. The Server Action re-validates
     // via magic bytes — this never replaces the server gate. Only reject a
     // NON-EMPTY, non-image MIME: browsers often report `''` for HEIC/HEIF, and
     // those are accepted server-side, so an empty type must fall through.
-    if (file.type && !file.type.startsWith('image/')) {
+    if (picked.type && !picked.type.startsWith('image/')) {
       toast.error(labels.errorInvalidType);
-      return;
-    }
-    if (file.size > MAX_AVATAR_BYTES) {
-      toast.error(labels.errorTooLarge);
       return;
     }
 
     const previousUrl = displayUrl;
-    const objectUrl = URL.createObjectURL(file);
+    const objectUrl = URL.createObjectURL(picked);
     setDisplayUrl(objectUrl);
 
-    const formData = new FormData();
-    formData.append('avatar', file);
-
     startTransition(async () => {
+      // Shrink before the size check (T-238): the avatar rides inside a Server
+      // Action, whose body Vercel caps at 4.5 MB, and the server re-encodes to a
+      // 256 px square anyway — so a 9 MB phone photo should be resized, not
+      // refused. Best-effort: a browser that can't decode the file (HEIC outside
+      // Safari) gets the original back and falls into the guard below.
+      const file = await downscaleImageFile(picked, {
+        maxEdge: AVATAR_DOWNSCALE_MAX_EDGE,
+        maxBytes: MAX_AVATAR_BYTES,
+      });
+
       let result: AvatarActionResult;
-      try {
-        result = await updateAvatarAction(formData);
-      } catch {
-        result = { ok: false, error: 'generic' };
+      if (file.size > MAX_AVATAR_BYTES) {
+        result = { ok: false, error: 'too-large' };
+      } else {
+        const formData = new FormData();
+        formData.append('avatar', file);
+        try {
+          result = await updateAvatarAction(formData);
+        } catch {
+          result = { ok: false, error: 'generic' };
+        }
       }
       URL.revokeObjectURL(objectUrl);
       if (result.ok) {

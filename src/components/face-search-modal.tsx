@@ -10,6 +10,8 @@ import {
 } from '@/app/[lang]/events/[shareCode]/face-search-shared';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { downscaleImageFile } from '@/lib/image-downscale';
+import { MAX_SERVER_ACTION_UPLOAD_BYTES } from '@/lib/upload-limits';
 
 export interface FaceSearchModalLabels {
   title: string;
@@ -48,6 +50,8 @@ export interface FaceSearchModalLabels {
   /** A cost breaker tripped — face search is temporarily unavailable (T-034). */
   errorUnavailable: string;
   errorInvalidSelfie: string;
+  /** The picked photo is still over the transport cap after downscaling (T-238). */
+  errorTooLarge: string;
   errorCollectionMissing: string;
   errorGeneric: string;
   cancelButton: string;
@@ -68,7 +72,17 @@ interface FaceSearchModalProps {
   onResult: (result: SearchFacesInEventResult) => void;
 }
 
-const MAX_SELFIE_BYTES = 10 * 1024 * 1024;
+/**
+ * Transport cap for the selfie (T-238). The selfie rides inside a Server Action and
+ * Vercel refuses any function body over 4.5 MB with an un-catchable platform 413 —
+ * so the previous 10 MB silently failed for a chunk of buyers on the app's flagship
+ * feature. Nothing is lost by the lower cap: the picker downscales first (below),
+ * the server downsizes again for Rekognition, and Rekognition itself accepts at most
+ * 5 MB of image bytes, so a 10 MB selfie could never have worked end to end.
+ */
+const MAX_SELFIE_BYTES = MAX_SERVER_ACTION_UPLOAD_BYTES;
+/** Plenty for face detection — the server downsizes further before the AWS call. */
+const SELFIE_MAX_EDGE = 1600;
 const ACCEPTED_MIME = 'image/jpeg,image/png,image/heic,image/heif';
 
 /**
@@ -161,21 +175,29 @@ export function FaceSearchModal({
   }, [file]);
 
   const onPickFile = useCallback(
-    (incoming: File | undefined) => {
+    async (incoming: File | undefined) => {
       setError(null);
       if (!incoming) {
         setFile(null);
         return;
       }
-      if (incoming.size > MAX_SELFIE_BYTES) {
+      // Shrink an oversized pick instead of refusing it — a modern phone photo
+      // clears 4 MB routinely, and the selfie is only ever used for face
+      // detection. Best-effort: an undecodable file (HEIC outside Safari) comes
+      // back untouched and hits the guard below.
+      const prepared = await downscaleImageFile(incoming, {
+        maxEdge: SELFIE_MAX_EDGE,
+        maxBytes: MAX_SELFIE_BYTES,
+      });
+      if (prepared.size > MAX_SELFIE_BYTES) {
         // Client-side guard — server re-validates via validatePhotoUpload.
         setFile(null);
-        setError(labels.errorGeneric);
+        setError(labels.errorTooLarge);
         return;
       }
-      setFile(incoming);
+      setFile(prepared);
     },
-    [labels.errorGeneric],
+    [labels.errorTooLarge],
   );
 
   /**
@@ -293,7 +315,7 @@ export function FaceSearchModal({
       (blob) => {
         if (!blob) return;
         const captured = new File([blob], `selfie-${Date.now()}.jpg`, { type: 'image/jpeg' });
-        onPickFile(captured);
+        void onPickFile(captured);
         stopCamera();
         setCameraMode('idle');
       },
@@ -372,7 +394,7 @@ export function FaceSearchModal({
             type="file"
             accept={ACCEPTED_MIME}
             className="hidden"
-            onChange={(e) => onPickFile(e.target.files?.[0])}
+            onChange={(e) => void onPickFile(e.target.files?.[0])}
             disabled={isSubmitting}
           />
           {/* Hidden capture canvas — invisible scratch surface for the
@@ -424,7 +446,7 @@ export function FaceSearchModal({
                 <img src={previewUrl} alt="" className="h-full w-full object-cover" />
                 <button
                   type="button"
-                  onClick={() => onPickFile(undefined)}
+                  onClick={() => void onPickFile(undefined)}
                   className="absolute -right-1 -top-1 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-foreground/80 text-background shadow-sm hover:bg-foreground"
                   aria-label={labels.removeSelfie}
                   disabled={isSubmitting}
@@ -437,7 +459,7 @@ export function FaceSearchModal({
                 <button
                   type="button"
                   onClick={() => {
-                    onPickFile(undefined);
+                    void onPickFile(undefined);
                     void startCamera();
                   }}
                   className="self-start text-xs font-medium text-primary hover:underline"

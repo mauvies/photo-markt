@@ -15,10 +15,11 @@ import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { minPhotoPriceMessage } from '@/lib/min-photo-price';
 import { getPlanLimitType, isPlanLimitError } from '@/lib/plan-limits';
+import { MAX_COVER_BYTES, uploadEventCover } from '@/lib/upload-event-cover';
 import { usePhotoUpload } from '@/lib/use-photo-upload';
 import { resolveWatermarkEnabled } from '@/lib/watermark-policy';
 import { deleteEventAction } from '../actions';
-import { createEvent, uploadEventCoverAction } from './actions';
+import { createEvent } from './actions';
 import { activityOptions } from './activity-options';
 import { DraftResumeDialog } from './components/draft-resume-dialog';
 import { ShareCodeDialog } from './components/share-code-dialog';
@@ -261,14 +262,24 @@ export default function NewEventForm({
   }, []);
 
   // Select / replace / clear the optional cover image, keeping a preview URL in
-  // sync and revoking the previous one so object URLs don't leak.
-  const handleCoverChange = useCallback((file: File | null) => {
-    setCoverPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return file ? URL.createObjectURL(file) : null;
-    });
-    setCoverFile(file);
-  }, []);
+  // sync and revoking the previous one so object URLs don't leak. The size check
+  // runs at PICK time, not at submit: the cover is uploaded after the event is
+  // created, so a rejection discovered then would arrive several steps away from
+  // the control that caused it (T-238).
+  const handleCoverChange = useCallback(
+    (file: File | null) => {
+      if (file && file.size > MAX_COVER_BYTES) {
+        toast.error(t('coverTooLarge' as keyof NewEventT));
+        return;
+      }
+      setCoverPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return file ? URL.createObjectURL(file) : null;
+      });
+      setCoverFile(file);
+    },
+    [t],
+  );
 
   const goToStep = useCallback(
     (step: StepNumber, opts?: { remember?: StepNumber }) => {
@@ -441,9 +452,7 @@ export default function NewEventForm({
         // failure must NOT discard the event — keep it with no cover and warn.
         if (coverFile) {
           try {
-            const coverData = new FormData();
-            coverData.append('cover', coverFile);
-            await uploadEventCoverAction(result.eventId, coverData);
+            await uploadEventCover(result.eventId, coverFile);
           } catch (coverErr) {
             console.error('[wizard] cover upload failed', coverErr);
             toast.error(t('coverUploadFailed' as keyof NewEventT));

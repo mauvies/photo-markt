@@ -1,12 +1,12 @@
 # T-238 · `FUNCTION_PAYLOAD_TOO_LARGE` al subir la portada — los bytes viajan por una Server Action y Vercel corta a 4,5 MB
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Riesgo:** normal  (subidas + config de plataforma; no toca pagos, auth ni BD)
 - **Blockers:** ninguno
 - **Rama:** `fix/server-action-payload-too-large`  (tipo = fix)
 - **OpenSpec change:** — (decidir al ejecutar: si se hacen las 3 superficies de una, probablemente sí)
-- **PR:** —
+- **PR:** #289
 
 ## Requerimiento
 

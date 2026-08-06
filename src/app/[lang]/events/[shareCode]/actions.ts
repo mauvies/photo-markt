@@ -52,6 +52,7 @@ import { computeWindow, getClientIp, rateLimit, rateLimitCost } from '@/lib/rate
 import { getProvenRevealIds, grantReveal } from '@/lib/reveal-gate';
 import { isEventRevealGated } from '@/lib/reveal-token';
 import { safeCall } from '@/lib/safe-call';
+import { MAX_SERVER_ACTION_UPLOAD_BYTES, MAX_SERVER_ACTION_UPLOAD_MB } from '@/lib/upload-limits';
 import { BIB_SEARCH_RATE_LIMIT_PREFIX, type SearchPhotosByBibResult } from './bib-search-shared';
 import {
   FACE_SEARCH_EXHAUSTED_MESSAGE,
@@ -332,8 +333,11 @@ export async function searchFacesInEvent(
   if (!(rawFile instanceof File) || rawFile.size === 0) {
     throw new Error('No selfie provided.');
   }
-  if (rawFile.size > 10 * 1024 * 1024) {
-    throw new Error('Selfie is too large. Maximum size is 10 MB.');
+  // Mirrors the modal's cap (T-238). Above this the request never reaches us at
+  // all — Vercel 413s a function body over 4.5 MB — so this check exists for the
+  // non-Vercel/local path and as the server-side statement of the same rule.
+  if (rawFile.size > MAX_SERVER_ACTION_UPLOAD_BYTES) {
+    throw new Error(`Selfie is too large. Maximum size is ${MAX_SERVER_ACTION_UPLOAD_MB} MB.`);
   }
 
   let validated: Awaited<ReturnType<typeof validatePhotoUpload>>;

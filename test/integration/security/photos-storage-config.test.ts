@@ -16,8 +16,10 @@
  *
  * These tests assert that canonical state:
  *   1. The cover-upload contract: a `.webp` uploads via the service-role
- *      client (the path `uploadEventCoverAction` uses) and the bucket has no
- *      MIME restriction. This is the acceptance criterion for T-070.
+ *      client and the bucket has no MIME restriction. This is the acceptance
+ *      criterion for T-070. (Since T-238 the cover's bytes go up through a signed
+ *      upload URL rather than the service-role client, but both bypass RLS the
+ *      same way, so what this asserts about the bucket is unchanged.)
  *   2. Policy convergence to production: authenticated clients can no longer
  *      write to or read from the `photos` bucket directly. Before the
  *      migration the duplicate `photos_insert_own` / `photos_select_own`

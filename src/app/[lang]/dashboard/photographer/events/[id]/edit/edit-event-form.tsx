@@ -20,8 +20,9 @@ import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { minPhotoPriceMessage } from '@/lib/min-photo-price';
 import { getPlanLimitType, isPlanLimitError } from '@/lib/plan-limits';
+import { CoverUploadError, uploadEventCover } from '@/lib/upload-event-cover';
 import { usePhotoUpload } from '@/lib/use-photo-upload';
-import { removeEventCoverAction, uploadEventCoverAction } from '../../new/actions';
+import { removeEventCoverAction } from '../../new/actions';
 import { updateEventAction } from './actions';
 import { EventAiSettingsFields } from './components/event-ai-settings-fields';
 import { EventFormFields } from './components/event-form-fields';
@@ -160,6 +161,7 @@ export function EditEventForm({
   // owner-only actions (the event already exists) — decoupled from the Save
   // button. Success is silent (the preview is the feedback); failure rolls the
   // preview back and toasts. Object-URL previews are revoked once superseded.
+  // The bytes go direct to Storage (T-238) — see `uploadEventCover`.
   const handleCoverChange = (file: File | null) => {
     const prior = coverPreviewUrl;
     if (file) {
@@ -167,15 +169,17 @@ export function EditEventForm({
       setCoverPreviewUrl(objectUrl);
       startCoverTransition(async () => {
         try {
-          const formData = new FormData();
-          formData.append('cover', file);
-          await uploadEventCoverAction(event.id, formData);
+          await uploadEventCover(event.id, file);
           if (prior?.startsWith('blob:')) URL.revokeObjectURL(prior);
         } catch (error) {
           console.error(error);
           URL.revokeObjectURL(objectUrl);
           setCoverPreviewUrl(prior);
-          toast.error(t('coverUpdateFailed'));
+          toast.error(
+            error instanceof CoverUploadError && error.code === 'too-large'
+              ? t('coverTooLarge')
+              : t('coverUpdateFailed'),
+          );
         }
       });
     } else {

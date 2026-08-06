@@ -2,6 +2,7 @@ import type { Buffer } from 'node:buffer';
 import sharp from 'sharp';
 import { AVATAR_ALLOWED_FORMATS, MAX_AVATAR_BYTES } from '@/lib/avatar-constants';
 import { type ValidatedUpload, validatePhotoUpload } from '@/lib/photo-upload';
+import { MAX_SERVER_ACTION_UPLOAD_MB } from '@/lib/upload-limits';
 
 /**
  * Avatar (profile-picture) upload helpers (T-182). Server-only — imports Sharp
@@ -28,7 +29,7 @@ export async function validateAvatarUpload(file: File): Promise<ValidatedUpload>
   return validatePhotoUpload(file, {
     maxBytes: MAX_AVATAR_BYTES,
     allowedFormats: AVATAR_ALLOWED_FORMATS,
-    tooLargeMessage: 'Image is too large. Maximum size is 8 MB.',
+    tooLargeMessage: `Image is too large. Maximum size is ${MAX_SERVER_ACTION_UPLOAD_MB} MB.`,
   });
 }
 
