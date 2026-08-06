@@ -1,12 +1,12 @@
-# T-237 (absorbido por T-215, PR #290) · Un reembolso parcial anula el hold entero y deja al fotógrafo sin la parte no reembolsada
+# T-237 (absorbido por T-215) · Un reembolso parcial anula el hold entero y deja al fotógrafo sin la parte no reembolsada
 
 - **Prioridad:** P2
-- **Estado:** done
+- **Estado:** doing
 - **Riesgo:** alto  (pagos)
 - **Blockers:** ninguno
 - **Rama:** `fix/partial-refund-payout-hold`  (tipo = fix)
 - **OpenSpec change:** — (decidir al ejecutar: si se hace dentro de T-215, lo cubre su change)
-- **PR:** #290
+- **PR:** #290 (draft — reabierto: la 2ª revisión encontró 10 defectos, 3 en los arreglos de la 1ª)
 - **Dep:** **ejecutar junto a T-215**, que ya tiene el reembolso parcial en su DoD para el camino gemelo (revertir una transferencia **ya emitida**)
 
 ## Requerimiento
