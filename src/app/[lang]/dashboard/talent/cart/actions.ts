@@ -32,6 +32,7 @@ import { getBaseUrl } from '@/lib/get-base-url';
 import { getSiteUrl } from '@/lib/get-site-url';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import { buildServiceFeeLineItem } from '@/lib/stripe/service-fee-line-item';
+import { buildWithdrawalConsentMetadata } from '@/lib/withdrawal-consent';
 
 export interface CartItemDetail {
   photoId: string;
@@ -392,7 +393,9 @@ export async function checkPhotoInCartAction(photoId: string): Promise<boolean> 
 /**
  * Create Stripe checkout session for cart
  */
-export async function createCheckoutSessionAction(): Promise<CheckoutResult> {
+export async function createCheckoutSessionAction(
+  withdrawalConsentAccepted: boolean,
+): Promise<CheckoutResult> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -405,6 +408,13 @@ export async function createCheckoutSessionAction(): Promise<CheckoutResult> {
   // Verify user is talent
   if (!(await userHasRole('talent'))) {
     throw new Error('Only talent users can checkout.');
+  }
+
+  // T-228: no art. 16(m) consent, no contract. Checked right after the identity
+  // gate and before any cart/DB/Stripe work — the disabled button is UX, this
+  // is what actually blocks the charge.
+  if (!withdrawalConsentAccepted) {
+    return { ok: false, error: 'consent_required' };
   }
 
   // Get user's cart
@@ -518,6 +528,9 @@ export async function createCheckoutSessionAction(): Promise<CheckoutResult> {
     metadata: {
       user_id: user.id,
       cart_id: cart.id,
+      // T-228: the consent proof travels with the session so the webhook can
+      // persist it on the order it creates.
+      ...buildWithdrawalConsentMetadata(),
     },
   });
 

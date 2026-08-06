@@ -1,12 +1,12 @@
 # T-228 · Casilla de desistimiento en el checkout (contenido digital)
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Riesgo:** alto  (pagos · legal)
 - **Blockers:** ninguno — pero **conviene validarlo con un abogado antes de mergear** (ver Notas)
 - **Rama:** `feat/digital-content-withdrawal-consent`  (tipo = feat)
 - **OpenSpec change:** —  (dos strings + un check en ambos checkouts; el "por qué" va en el ticket)
-- **PR:** —
+- **PR:** #284
 
 ## Requerimiento
 

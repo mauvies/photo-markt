@@ -268,6 +268,8 @@
     "subtotal": "Subtotal",
     "emailNotice": "Your email will be collected during checkout to send your download link.",
     "proceedToCheckout": "Proceed to Checkout",
+    "withdrawalConsentLabel": "I ask Photo Markt to start delivering my photos immediately and I acknowledge that I therefore lose my right of withdrawal once the download is available.",
+    "withdrawalConsentRequired": "Please confirm the statement above to continue.",
     "processing": "Processing...",
     "continueShopping": "You can continue shopping and add more items",
     "remove": "Remove",
@@ -1788,9 +1790,13 @@
         "bullets": []
       },
       {
-        "heading": "Refunds",
-        "body": "Photos are digital goods delivered immediately after payment, so purchases are generally final once the full-resolution file has been made available. If a photo is faulty, was charged in error, or there is another problem with your order, contact us and we will review it in good faith and in line with applicable consumer law.",
-        "bullets": []
+        "heading": "Refunds and right of withdrawal",
+        "body": "Photos are digital content delivered immediately and not supplied on a physical medium. As a consumer you normally have 14 days to withdraw from a distance purchase, but that right does not apply to digital content whose delivery has begun with your prior express consent and your acknowledgement that you thereby lose it. That is exactly what we ask you to confirm at checkout before any payment is taken; we record your confirmation with your order and repeat it in your confirmation email. Once you have confirmed it and the download has been made available, the purchase is final.",
+        "bullets": [
+          "If you do not confirm it, delivery does not start and you are not charged.",
+          "Your rights when something is wrong are unaffected: if a file is faulty or corrupt, if you received photos other than the ones you bought, or if your order was never delivered, contact us and we will fix it or refund you.",
+          "Charged in error, or another problem with your order? Contact us and we will review it in good faith and in line with applicable consumer law."
+        ]
       },
       {
         "heading": "AI photo search and biometric data",

@@ -20,7 +20,11 @@ export type CheckoutErrorCode =
   | 'photographer_not_connected'
   | 'items_unavailable'
   | 'rate_limited'
-  | 'cart_empty';
+  | 'cart_empty'
+  // T-228: the buyer did not give the art. 16(m) consent. The disabled button
+  // is only UX — this code is what the server returns when the action is
+  // called without it anyway.
+  | 'consent_required';
 
 export type CheckoutResult = { ok: true; url: string } | { ok: false; error: CheckoutErrorCode };
 
@@ -34,7 +38,8 @@ export type CartCheckoutMessageKey =
   | 'checkoutPhotographerNotConnected'
   | 'itemsUnavailableRemoved'
   | 'checkoutRateLimited'
-  | 'empty';
+  | 'empty'
+  | 'withdrawalConsentRequired';
 
 export function checkoutErrorMessageKey(code: CheckoutErrorCode): CartCheckoutMessageKey {
   switch (code) {
@@ -46,5 +51,7 @@ export function checkoutErrorMessageKey(code: CheckoutErrorCode): CartCheckoutMe
       return 'checkoutRateLimited';
     case 'cart_empty':
       return 'empty';
+    case 'consent_required':
+      return 'withdrawalConsentRequired';
   }
 }

@@ -268,6 +268,8 @@
     "subtotal": "Subtotal",
     "emailNotice": "Tu correo electrónico se recopilará durante el pago para enviarte el enlace de descarga.",
     "proceedToCheckout": "Proceder al pago",
+    "withdrawalConsentLabel": "Solicito a Photo Markt que inicie la entrega de mis fotos de inmediato y reconozco que, por ello, pierdo mi derecho de desistimiento una vez que la descarga esté disponible.",
+    "withdrawalConsentRequired": "Confirma la declaración anterior para continuar.",
     "processing": "Procesando...",
     "continueShopping": "Puedes seguir comprando y agregar más artículos",
     "remove": "Eliminar",
@@ -1788,9 +1790,13 @@
         "bullets": []
       },
       {
-        "heading": "Reembolsos",
-        "body": "Las fotos son bienes digitales que se entregan de inmediato tras el pago, por lo que las compras son por lo general definitivas una vez que el archivo en resolución completa queda disponible. Si una foto está defectuosa, se cobró por error o hay otro problema con tu pedido, contáctanos y lo revisaremos de buena fe y conforme a la legislación de consumo aplicable.",
-        "bullets": []
+        "heading": "Reembolsos y derecho de desistimiento",
+        "body": "Las fotos son contenido digital que se entrega de inmediato y no se suministra en un soporte material. Como consumidor dispones normalmente de 14 días para desistir de una compra a distancia, pero ese derecho no se aplica al contenido digital cuya ejecución ha comenzado con tu consentimiento previo y expreso y con tu reconocimiento de que, por ello, lo pierdes. Eso es exactamente lo que te pedimos confirmar en el checkout antes de cobrar nada; guardamos esa confirmación junto a tu pedido y la repetimos en tu email de confirmación. Una vez confirmado y disponible la descarga, la compra es definitiva.",
+        "bullets": [
+          "Si no lo confirmas, la entrega no se inicia y no se te cobra nada.",
+          "Tus derechos cuando algo va mal no se ven afectados: si un archivo está defectuoso o corrupto, si recibiste fotos distintas de las que compraste o si tu pedido nunca se entregó, contáctanos y lo solucionaremos o te reembolsaremos.",
+          "¿Se te cobró por error o hay otro problema con tu pedido? Contáctanos y lo revisaremos de buena fe y conforme a la legislación de consumo aplicable."
+        ]
       },
       {
         "heading": "Búsqueda con IA y datos biométricos",

@@ -17,6 +17,7 @@ import type { GuestCartItem } from '@/lib/guest-cart';
 import { getClientIp, rateLimit } from '@/lib/rate-limit';
 import { stripe } from '@/lib/stripe/config';
 import { buildServiceFeeLineItem } from '@/lib/stripe/service-fee-line-item';
+import { buildWithdrawalConsentMetadata } from '@/lib/withdrawal-consent';
 
 /**
  * Ceiling on ids per guest-cart state request. A real guest cart holds a
@@ -162,9 +163,18 @@ async function getGuestEventPricing(
  */
 export async function createGuestCheckoutSessionAction(
   items: GuestCartItem[],
+  withdrawalConsentAccepted: boolean,
 ): Promise<CheckoutResult> {
   if (items.length === 0) {
     return { ok: false, error: 'cart_empty' };
+  }
+
+  // T-228: no art. 16(m) consent, no contract — checked before the rate
+  // limiter and before any DB/Stripe work, so a client bug can't burn the
+  // buyer's 10/h quota on requests that do nothing. The disabled button is UX;
+  // this is the gate.
+  if (!withdrawalConsentAccepted) {
+    return { ok: false, error: 'consent_required' };
   }
 
   const h = await headers();
@@ -257,6 +267,9 @@ export async function createGuestCheckoutSessionAction(
   const cartMetadata: Record<string, string> = {
     is_guest: 'true',
     cart_count: String(validatedItems.length),
+    // T-228: the consent record rides along with the cart so it reaches the
+    // webhook by the same route as the order it belongs to.
+    ...buildWithdrawalConsentMetadata(),
   };
   for (let i = 0; i < validatedItems.length; i++) {
     const item = validatedItems[i];

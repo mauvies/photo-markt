@@ -185,6 +185,64 @@ describe('GuestCartContent — unavailable item cleanup (T-117)', () => {
   });
 });
 
+/**
+ * T-228: checkout is gated on the right-of-withdrawal consent, so every test
+ * that means to reach the action has to tick it first. Both render sites
+ * (desktop summary + mobile sticky footer) share one piece of state, so
+ * ticking either is the same answer.
+ */
+function tickWithdrawalConsent() {
+  fireEvent.click(screen.getAllByRole('checkbox')[0]);
+}
+
+describe('GuestCartContent — withdrawal consent gate (T-228)', () => {
+  it('keeps checkout unreachable until the consent is ticked', async () => {
+    loadGuestCartStateAction.mockResolvedValue({
+      removedPhotoIds: [],
+      previews: { 'photo-1': LIVE_PREVIEW_URL },
+    });
+    createGuestCheckoutSessionAction.mockResolvedValue({
+      ok: true,
+      url: 'https://checkout.stripe.test/s',
+    });
+
+    renderCart();
+    await waitFor(() => screen.getByAltText('Surf Cup'));
+
+    for (const button of screen.getAllByText('proceedToCheckout')) {
+      expect(button.closest('button')?.disabled).toBe(true);
+    }
+    fireEvent.click(screen.getAllByText('proceedToCheckout')[0]);
+    expect(createGuestCheckoutSessionAction).not.toHaveBeenCalled();
+
+    tickWithdrawalConsent();
+
+    for (const button of screen.getAllByText('proceedToCheckout')) {
+      expect(button.closest('button')?.disabled).toBe(false);
+    }
+  });
+
+  it('passes the consent through to the Server Action', async () => {
+    loadGuestCartStateAction.mockResolvedValue({
+      removedPhotoIds: [],
+      previews: { 'photo-1': LIVE_PREVIEW_URL },
+    });
+    createGuestCheckoutSessionAction.mockResolvedValue({
+      ok: true,
+      url: 'https://checkout.stripe.test/s',
+    });
+
+    renderCart();
+    await waitFor(() => screen.getByAltText('Surf Cup'));
+    tickWithdrawalConsent();
+    fireEvent.click(screen.getAllByText('proceedToCheckout')[0]);
+
+    await waitFor(() =>
+      expect(createGuestCheckoutSessionAction).toHaveBeenCalledWith(expect.anything(), true),
+    );
+  });
+});
+
 describe('GuestCartContent — typed checkout failure (T-189 / T-117)', () => {
   it('shows the localized reason and re-validates the cart on items_unavailable', async () => {
     loadGuestCartStateAction.mockResolvedValue({
@@ -200,6 +258,7 @@ describe('GuestCartContent — typed checkout failure (T-189 / T-117)', () => {
     await waitFor(() => screen.getByAltText('Surf Cup'));
     loadGuestCartStateAction.mockClear();
 
+    tickWithdrawalConsent();
     // Two checkout buttons render (desktop summary + mobile sticky footer).
     fireEvent.click(screen.getAllByText('proceedToCheckout')[0]);
 
@@ -224,6 +283,7 @@ describe('GuestCartContent — typed checkout failure (T-189 / T-117)', () => {
     await waitFor(() => screen.getByAltText('Surf Cup'));
     loadGuestCartStateAction.mockClear();
 
+    tickWithdrawalConsent();
     fireEvent.click(screen.getAllByText('proceedToCheckout')[0]);
 
     await waitFor(() =>

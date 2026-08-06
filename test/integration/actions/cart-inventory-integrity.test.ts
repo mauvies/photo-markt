@@ -258,7 +258,7 @@ describe('T-117 — cart inventory integrity', () => {
       const sb = createServiceClient();
       await sb.from('events').update({ deleted_at: new Date().toISOString() }).eq('id', event.id);
 
-      expect(await createCheckoutSessionAction()).toEqual({
+      expect(await createCheckoutSessionAction(true)).toEqual({
         ok: false,
         error: 'items_unavailable',
       });
@@ -274,7 +274,7 @@ describe('T-117 — cart inventory integrity', () => {
       mockSession.userId = talent.id;
       await addPhotoToCartAction(photo.id);
 
-      const result = await createCheckoutSessionAction();
+      const result = await createCheckoutSessionAction(true);
 
       expect(result).toEqual({
         ok: true,
@@ -295,7 +295,7 @@ describe('T-117 — cart inventory integrity', () => {
       mockSession.userId = talent.id;
       await addPhotoToCartAction(photo.id);
 
-      expect(await createCheckoutSessionAction()).toEqual({
+      expect(await createCheckoutSessionAction(true)).toEqual({
         ok: false,
         error: 'photographer_not_connected',
       });
@@ -325,7 +325,7 @@ describe('T-117 — cart inventory integrity', () => {
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', deadEvent.id);
 
-      expect(await createCheckoutSessionAction()).toEqual({
+      expect(await createCheckoutSessionAction(true)).toEqual({
         ok: false,
         error: 'items_unavailable',
       });
@@ -342,7 +342,7 @@ describe('T-117 — cart inventory integrity', () => {
       const sb = createServiceClient();
       await sb.from('events').update({ deleted_at: new Date().toISOString() }).eq('id', event.id);
 
-      expect(await createGuestCheckoutSessionAction([guestItem(photo.id)])).toEqual({
+      expect(await createGuestCheckoutSessionAction([guestItem(photo.id)], true)).toEqual({
         ok: false,
         error: 'items_unavailable',
       });
@@ -355,7 +355,7 @@ describe('T-117 — cart inventory integrity', () => {
       const event = await createTestEvent(photographer.id, { price_per_photo: 10 });
       const photo = await createTestPhoto(event.id, { user_id: photographer.id });
 
-      const result = await createGuestCheckoutSessionAction([guestItem(photo.id)]);
+      const result = await createGuestCheckoutSessionAction([guestItem(photo.id)], true);
 
       expect(result).toEqual({
         ok: true,
@@ -448,7 +448,7 @@ describe('T-117 — cart inventory integrity', () => {
       // Photographer flips the event private after it's in the cart.
       await createServiceClient().from('events').update({ is_public: false }).eq('id', event.id);
 
-      expect(await createCheckoutSessionAction()).toEqual({
+      expect(await createCheckoutSessionAction(true)).toEqual({
         ok: false,
         error: 'items_unavailable',
       });
@@ -468,7 +468,7 @@ describe('T-117 — cart inventory integrity', () => {
       mockSession.userId = talent.id;
       await addPhotoToCartAction(photo.id, 'PRIVOK134');
 
-      const result = await createCheckoutSessionAction();
+      const result = await createCheckoutSessionAction(true);
 
       expect(result).toEqual({
         ok: true,
@@ -493,7 +493,7 @@ describe('T-117 — cart inventory integrity', () => {
       mockSession.userId = talent.id;
       await addPhotoToCartAction(photo.id); // favorites path, no code
 
-      const result = await createCheckoutSessionAction();
+      const result = await createCheckoutSessionAction(true);
 
       expect(result).toEqual({
         ok: true,
@@ -523,7 +523,7 @@ describe('T-117 — cart inventory integrity', () => {
       await addPhotoToCartAction(photo.id, 'ROT_B'); // idempotent re-add refreshes the proof
 
       expect(await readAccessShareCode(talent.id)).toBe('ROT_B');
-      const result = await createCheckoutSessionAction();
+      const result = await createCheckoutSessionAction(true);
       expect(result).toEqual({
         ok: true,
         url: 'https://checkout.stripe.test/session/cs_test_123',
@@ -547,7 +547,7 @@ describe('T-117 — cart inventory integrity', () => {
       // Rotation revokes the old link; buyer never re-presents the new code.
       await createServiceClient().from('events').update({ share_code: 'ROT_C' }).eq('id', event.id);
 
-      expect(await createCheckoutSessionAction()).toEqual({
+      expect(await createCheckoutSessionAction(true)).toEqual({
         ok: false,
         error: 'items_unavailable',
       });
@@ -582,7 +582,7 @@ describe('T-117 — cart inventory integrity', () => {
         .eq('photo_id', photo.id)
         .eq('talent_user_id', talent.id);
 
-      expect(await createCheckoutSessionAction()).toEqual({
+      expect(await createCheckoutSessionAction(true)).toEqual({
         ok: false,
         error: 'items_unavailable',
       });

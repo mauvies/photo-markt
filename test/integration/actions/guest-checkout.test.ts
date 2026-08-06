@@ -70,7 +70,7 @@ describe('createGuestCheckoutSessionAction', () => {
   it('returns cart_empty for an empty cart', async () => {
     // T-189: expected failures now come back as a typed code instead of a
     // thrown Error (Next redacts thrown Server Action messages in prod).
-    expect(await createGuestCheckoutSessionAction([])).toEqual({
+    expect(await createGuestCheckoutSessionAction([], true)).toEqual({
       ok: false,
       error: 'cart_empty',
     });
@@ -79,7 +79,7 @@ describe('createGuestCheckoutSessionAction', () => {
   it('creates a Stripe checkout session for a valid guest cart item', async () => {
     const item = await seedPurchasablePhoto();
 
-    const result = await createGuestCheckoutSessionAction([item]);
+    const result = await createGuestCheckoutSessionAction([item], true);
 
     expect(result).toEqual({
       ok: true,
@@ -108,7 +108,7 @@ describe('createGuestCheckoutSessionAction', () => {
       .update({ stripe_connect_status: 'pending' })
       .eq('id', item.photographerId);
 
-    const result = await createGuestCheckoutSessionAction([item]);
+    const result = await createGuestCheckoutSessionAction([item], true);
 
     expect(result).toEqual({ ok: false, error: 'photographer_not_connected' });
     expect(createSessionMock).not.toHaveBeenCalled();
@@ -121,7 +121,7 @@ describe('createGuestCheckoutSessionAction', () => {
   it('refuses to check out a private-event item with no share code (T-132)', async () => {
     const item = await seedPurchasablePhoto({ is_public: false, share_code: 'PRIVCHK' });
 
-    expect(await createGuestCheckoutSessionAction([item])).toEqual({
+    expect(await createGuestCheckoutSessionAction([item], true)).toEqual({
       ok: false,
       error: 'items_unavailable',
     });
@@ -131,7 +131,9 @@ describe('createGuestCheckoutSessionAction', () => {
   it('refuses a private-event item with the wrong share code (T-132)', async () => {
     const item = await seedPurchasablePhoto({ is_public: false, share_code: 'PRIVCHK' });
 
-    expect(await createGuestCheckoutSessionAction([{ ...item, eventShareCode: 'NOPE' }])).toEqual({
+    expect(
+      await createGuestCheckoutSessionAction([{ ...item, eventShareCode: 'NOPE' }], true),
+    ).toEqual({
       ok: false,
       error: 'items_unavailable',
     });
@@ -141,7 +143,10 @@ describe('createGuestCheckoutSessionAction', () => {
   it('checks out a private-event item when it carries the correct share code (T-132)', async () => {
     const item = await seedPurchasablePhoto({ is_public: false, share_code: 'PRIVCHK' });
 
-    const result = await createGuestCheckoutSessionAction([{ ...item, eventShareCode: 'PRIVCHK' }]);
+    const result = await createGuestCheckoutSessionAction(
+      [{ ...item, eventShareCode: 'PRIVCHK' }],
+      true,
+    );
 
     expect(result).toEqual({
       ok: true,
@@ -162,7 +167,7 @@ describe('createGuestCheckoutSessionAction', () => {
 
     // First 10 calls (the configured limit) succeed.
     for (let i = 0; i < 10; i++) {
-      await expect(createGuestCheckoutSessionAction([item])).resolves.toMatchObject({
+      await expect(createGuestCheckoutSessionAction([item], true)).resolves.toMatchObject({
         ok: true,
         url: expect.any(String),
       });
@@ -170,7 +175,7 @@ describe('createGuestCheckoutSessionAction', () => {
 
     // The 11th call in the same window is refused with a typed code — not forwarded to Stripe.
     createSessionMock.mockClear();
-    expect(await createGuestCheckoutSessionAction([item])).toEqual({
+    expect(await createGuestCheckoutSessionAction([item], true)).toEqual({
       ok: false,
       error: 'rate_limited',
     });

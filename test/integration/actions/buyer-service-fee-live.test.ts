@@ -82,7 +82,7 @@ describe('the buyer service fee is live', () => {
   it('bills a real €10 guest checkout €10.55', async () => {
     const item = await seedPricedPhoto(10);
 
-    const result = await createGuestCheckoutSessionAction([item]);
+    const result = await createGuestCheckoutSessionAction([item], true);
 
     expect(result.ok).toBe(true);
     const items = lastLineItems();
@@ -99,7 +99,7 @@ describe('the buyer service fee is live', () => {
     // what the buyer was shown.
     const item = await seedPricedPhoto(10);
 
-    await createGuestCheckoutSessionAction([item]);
+    await createGuestCheckoutSessionAction([item], true);
     const fee = lastLineItems().find(
       (i) => i.price_data.product_data.name === SERVICE_FEE_LINE_ITEM_NAME,
     );
@@ -110,7 +110,7 @@ describe('the buyer service fee is live', () => {
   it('leaves a free event free — no fee on a €0 cart', async () => {
     const item = await seedPricedPhoto(0);
 
-    await createGuestCheckoutSessionAction([item]);
+    await createGuestCheckoutSessionAction([item], true);
     const items = lastLineItems();
 
     expect(items.some((i) => i.price_data.product_data.name === SERVICE_FEE_LINE_ITEM_NAME)).toBe(

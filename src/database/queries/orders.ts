@@ -4,6 +4,7 @@
  */
 
 import { PLATFORM_CURRENCY } from '@/lib/currency';
+import type { WithdrawalConsentRecord } from '@/lib/withdrawal-consent';
 import type { SupabaseServerClient } from './types';
 import { getErrorMessage } from './types';
 
@@ -29,6 +30,12 @@ export interface Order {
   updated_at: string;
   completed_at: string | null;
   metadata: Record<string, unknown>;
+  /**
+   * T-228 — proof of the art. 16(m) consent (immediate delivery + loss of the
+   * right of withdrawal). Null on rows created before the gate shipped.
+   */
+  withdrawal_consent_at: string | null;
+  withdrawal_consent_version: string | null;
 }
 
 export interface OrderItem {
@@ -61,6 +68,11 @@ export async function createOrder(
     total_amount_cents: number;
     currency?: string;
     metadata?: Record<string, unknown>;
+    /**
+     * T-228 — passed as one object so the timestamp and the wording version
+     * can never be written half-set. Undefined/null ⇒ both columns stay NULL.
+     */
+    withdrawal_consent?: WithdrawalConsentRecord | null;
   },
 ): Promise<Order> {
   const { data, error } = await supabase
@@ -75,6 +87,8 @@ export async function createOrder(
       total_amount_cents: orderData.total_amount_cents,
       currency: orderData.currency ?? PLATFORM_CURRENCY,
       metadata: orderData.metadata ?? {},
+      withdrawal_consent_at: orderData.withdrawal_consent?.acceptedAt ?? null,
+      withdrawal_consent_version: orderData.withdrawal_consent?.version ?? null,
     })
     .select()
     .single();
