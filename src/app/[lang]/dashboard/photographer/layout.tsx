@@ -68,12 +68,13 @@ export default async function PhotographerLayout({ children }: { children: React
         }}
       />
       <SidebarInset>
-        <DashboardTopHeader user={sidebarUser} activeRole={activeRole} />
+        <DashboardTopHeader user={sidebarUser} activeRole={activeRole} heldRoles={heldRoles} />
         <div className="flex flex-1 flex-col gap-6 px-4 py-4 pb-20 md:pb-4">{children}</div>
       </SidebarInset>
       <PhotographerBottomNav
         user={sidebarUser}
         activeRole={activeRole}
+        heldRoles={heldRoles}
         navLabels={{
           overview: dict.dashboard.overview,
           createEvent: dict.dashboard.createEvent,
@@ -87,6 +88,9 @@ export default async function PhotographerLayout({ children }: { children: React
           feedback: dict.dashboard.feedback,
           account: dict.dashboard.account,
           switchToTalent: `${dict.dashboard.switchTo} ${dict.talentDashboard.talentRole}`,
+          becomeTalent: dict.dashboard.becomeTalent,
+          roleActionFailed: dict.dashboard.roleActionFailed,
+          roleActionNotSignedIn: dict.dashboard.roleActionNotSignedIn,
           logOut: dict.dashboard.logOut,
         }}
       />

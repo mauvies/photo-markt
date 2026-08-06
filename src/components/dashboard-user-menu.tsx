@@ -4,7 +4,13 @@ import { Camera, LifeBuoy, LogOut, Send, Settings, Shield, User } from 'lucide-r
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useOptimistic, useTransition } from 'react';
-import { switchRole } from '@/app/[lang]/actions/roles';
+import { toast } from 'sonner';
+import {
+  enablePhotographerRole,
+  enableTalentRole,
+  type RoleActionResult,
+  switchRole,
+} from '@/app/[lang]/actions/roles';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -17,6 +23,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { createClient } from '@/database/client';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { roleActionErrorLabel } from '@/lib/role-action-error';
 import type { RoleSlug } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 
@@ -36,6 +43,7 @@ const MENU_ITEM_CLASS = 'cursor-pointer py-2 text-[15px]';
 export function DashboardUserMenu({
   user,
   activeRole,
+  heldRoles = [],
   navLabels = {},
 }: {
   user: {
@@ -44,6 +52,15 @@ export function DashboardUserMenu({
     avatar?: string | null;
   };
   activeRole: RoleSlug;
+  /**
+   * Roles the user actually holds (capability), not the role they're viewing.
+   * Decides whether the menu offers a *switch* or an *upgrade* — before T-234
+   * the menu didn't know, so it offered a talent-only user a switch to
+   * photographer that the server could only reject, silently. Defaults to `[]`
+   * so a caller that hasn't been wired yet degrades to "become", which is
+   * recoverable, rather than to a switch that fails.
+   */
+  heldRoles?: RoleSlug[];
   navLabels?: {
     activeRole?: string;
     profile?: string;
@@ -55,6 +72,11 @@ export function DashboardUserMenu({
     support?: string;
     feedback?: string;
     switchTo?: string;
+    /** Shown instead of "Switch to…" when the user doesn't hold that role yet. */
+    becomePhotographer?: string;
+    becomeTalent?: string;
+    roleActionFailed?: string;
+    roleActionNotSignedIn?: string;
     logOut?: string;
     rolePhotographer?: string;
     roleTalent?: string;
@@ -89,13 +111,29 @@ export function DashboardUserMenu({
     if (role === optimisticRole || isPending) return;
     startTransition(async () => {
       addOptimisticRole(role);
+      // Holding the role → switch. Not holding it → grant it first; that is a
+      // different action on purpose (see `enablePhotographerRole`).
+      const run = heldRoles.includes(role)
+        ? () => switchRole(role)
+        : role === 'photographer'
+          ? enablePhotographerRole
+          : enableTalentRole;
+      let result: RoleActionResult;
       try {
-        const result = await switchRole(role);
-        addOptimisticRole(result.activeRole);
-        router.push(lp(role === 'photographer' ? '/dashboard/photographer' : '/dashboard/talent'));
-      } catch {
-        addOptimisticRole(activeRole);
+        result = await run();
+      } catch (err) {
+        console.error('[DashboardUserMenu] role action threw', err);
+        result = { ok: false, error: 'failed' };
       }
+      if (!result.ok) {
+        // T-234: never revert in silence. A rejected switch used to leave the
+        // menu looking untouched, which read as "the button does nothing".
+        addOptimisticRole(activeRole);
+        toast.error(roleActionErrorLabel(result.error, navLabels));
+        return;
+      }
+      addOptimisticRole(result.activeRole);
+      router.push(lp(role === 'photographer' ? '/dashboard/photographer' : '/dashboard/talent'));
     });
   };
 
@@ -121,6 +159,14 @@ export function DashboardUserMenu({
   const talentLabel = navLabels.roleTalent ?? 'Talent';
   const otherRoleLabel = otherRole === 'photographer' ? photographerLabel : talentLabel;
   const currentRoleLabel = optimisticRole === 'photographer' ? photographerLabel : talentLabel;
+  // "Switch to X" promises a role the user already has; offering it to someone
+  // who doesn't hold X is a promise the server has to break (T-234).
+  const holdsOtherRole = heldRoles.includes(otherRole);
+  const roleSwitchLabel = holdsOtherRole
+    ? `${navLabels.switchTo ?? 'Switch to'} ${otherRoleLabel}`
+    : otherRole === 'photographer'
+      ? (navLabels.becomePhotographer ?? 'Become a photographer')
+      : (navLabels.becomeTalent ?? 'Become a talent');
 
   return (
     <DropdownMenu>
@@ -188,9 +234,7 @@ export function DashboardUserMenu({
           ) : (
             <User className="mr-2 h-4 w-4" />
           )}
-          <span>
-            {navLabels.switchTo ?? 'Switch to'} {otherRoleLabel}
-          </span>
+          <span>{roleSwitchLabel}</span>
         </DropdownMenuItem>
 
         {/* Profile + Settings — surfaced in the dropdown on every role/viewport

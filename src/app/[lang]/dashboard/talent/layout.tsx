@@ -61,6 +61,7 @@ export default async function TalentLayout({ children }: { children: React.React
       <TalentDashboardHeader
         user={sidebarUser}
         activeRole={activeRole}
+        heldRoles={heldRoles}
         navLabels={{
           explore: dict.nav.explore,
           myPhotos: dict.nav.favorites,
@@ -72,6 +73,10 @@ export default async function TalentLayout({ children }: { children: React.React
           feedback: dict.dashboard.feedback,
           activeRole: dict.dashboard.activeRole,
           switchTo: dict.dashboard.switchTo,
+          becomePhotographer: dict.dashboard.becomePhotographer,
+          becomeTalent: dict.dashboard.becomeTalent,
+          roleActionFailed: dict.dashboard.roleActionFailed,
+          roleActionNotSignedIn: dict.dashboard.roleActionNotSignedIn,
           logOut: dict.dashboard.logOut,
           rolePhotographer: dict.photographerDashboard.rolePhotographer,
           roleTalent: dict.talentDashboard.talentRole,

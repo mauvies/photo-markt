@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 export async function DashboardTopHeader({
   user,
   activeRole,
+  heldRoles = [],
 }: {
   user: {
     name: string;
@@ -20,6 +21,9 @@ export async function DashboardTopHeader({
     avatar?: string | null;
   };
   activeRole: RoleSlug;
+  /** Roles the user holds — decides whether the account menu offers a role
+   *  switch or an upgrade (T-234). */
+  heldRoles?: RoleSlug[];
 }) {
   const lang = await getLangFromHeaders();
   const dict = await getDictionary(lang as Locale);
@@ -54,6 +58,7 @@ export async function DashboardTopHeader({
         <DashboardUserMenu
           user={user}
           activeRole={activeRole}
+          heldRoles={heldRoles}
           navLabels={{
             activeRole: dict.dashboard.activeRole,
             profile: dict.dashboard.profile,
@@ -61,6 +66,10 @@ export async function DashboardTopHeader({
             support: dict.dashboard.support,
             feedback: dict.dashboard.feedback,
             switchTo: dict.dashboard.switchTo,
+            becomePhotographer: dict.dashboard.becomePhotographer,
+            becomeTalent: dict.dashboard.becomeTalent,
+            roleActionFailed: dict.dashboard.roleActionFailed,
+            roleActionNotSignedIn: dict.dashboard.roleActionNotSignedIn,
             logOut: dict.dashboard.logOut,
             rolePhotographer: dict.photographerDashboard.rolePhotographer,
             roleTalent: dict.talentDashboard.talentRole,

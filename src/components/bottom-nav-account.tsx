@@ -4,7 +4,13 @@ import { Camera, LifeBuoy, LogOut, Send, Settings, Shield, User } from 'lucide-r
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTransition } from 'react';
-import { switchRole } from '@/app/[lang]/actions/roles';
+import { toast } from 'sonner';
+import {
+  enablePhotographerRole,
+  enableTalentRole,
+  type RoleActionResult,
+  switchRole,
+} from '@/app/[lang]/actions/roles';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -17,6 +23,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { createClient } from '@/database/client';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
+import { roleActionErrorLabel } from '@/lib/role-action-error';
 import type { RoleSlug } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 
@@ -42,6 +49,11 @@ export interface BottomNavAccountLabels {
   currentRoleName: string;
   /** Full localized "Switch to <other role>" string. */
   switchRoleLabel: string;
+  /** Full localized "Become a <other role>" string — shown instead of
+   *  `switchRoleLabel` when the user doesn't hold that role yet (T-234). */
+  becomeRoleLabel?: string;
+  roleActionFailed?: string;
+  roleActionNotSignedIn?: string;
   profile: string;
   settings: string;
   /** Talent-only menu item. */
@@ -60,10 +72,14 @@ export interface BottomNavAccountLabels {
 export function BottomNavAccount({
   user,
   activeRole,
+  heldRoles = [],
   labels,
 }: {
   user: { name: string; email: string; avatar?: string | null };
   activeRole: RoleSlug;
+  /** Roles the user holds (capability), not the one they're viewing. See the
+   *  same prop on `DashboardUserMenu` for why the menu needs it. */
+  heldRoles?: RoleSlug[];
   labels: BottomNavAccountLabels;
 }) {
   const pathname = usePathname();
@@ -74,6 +90,12 @@ export function BottomNavAccount({
   const pathWithoutLang = pathname.replace(/^\/(es|en)/, '') || '/';
   const isPhotographer = activeRole === 'photographer';
   const otherRole: RoleSlug = isPhotographer ? 'talent' : 'photographer';
+  // "Switch to X" promises a role the user already has; offering it to someone
+  // who doesn't hold X is a promise the server has to break (T-234).
+  const holdsOtherRole = heldRoles.includes(otherRole);
+  const roleSwitchLabel = holdsOtherRole
+    ? labels.switchRoleLabel
+    : (labels.becomeRoleLabel ?? labels.switchRoleLabel);
 
   // Photographer "Profile" → the dashboard-wrapped preview so the dashboard
   // chrome stays visible; talent goes straight to their profile page.
@@ -105,12 +127,27 @@ export function BottomNavAccount({
   const handleSwitchRole = () => {
     if (isPending) return;
     startTransition(async () => {
+      // Holding the role → switch. Not holding it → grant it first; that is a
+      // different action on purpose (see `enablePhotographerRole`).
+      const run = holdsOtherRole
+        ? () => switchRole(otherRole)
+        : otherRole === 'photographer'
+          ? enablePhotographerRole
+          : enableTalentRole;
+      let result: RoleActionResult;
       try {
-        await switchRole(otherRole);
-        router.push(lp(`/dashboard/${otherRole}`));
-      } catch {
-        // Stay on the current role — the server action rejected the switch.
+        result = await run();
+      } catch (err) {
+        console.error('[BottomNavAccount] role action threw', err);
+        result = { ok: false, error: 'failed' };
       }
+      if (!result.ok) {
+        // T-234: the old `catch {}` here left the user staring at an unchanged
+        // menu with no idea the server had refused.
+        toast.error(roleActionErrorLabel(result.error, labels));
+        return;
+      }
+      router.push(lp(`/dashboard/${otherRole}`));
     });
   };
 
@@ -189,7 +226,7 @@ export function BottomNavAccount({
           ) : (
             <User className="mr-2 h-4 w-4" />
           )}
-          <span>{labels.switchRoleLabel}</span>
+          <span>{roleSwitchLabel}</span>
         </DropdownMenuItem>
 
         {/* Profile + Settings — always surfaced. On mobile the bottom nav only

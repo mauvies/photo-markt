@@ -92,6 +92,11 @@ usuario como un error del driver.
 - [ ] Strings nuevos en `en.json` y `es.json` (si la copia de error se localiza)
 - [ ] Test de regresión que falla antes y pasa después: `getEvent` con un id inexistente → `null`,
       y `reindexEvent` sobre un evento ajeno → error tipado, no `PGRST116`
+- [ ] **`getUserRole` (`queries/user-roles.ts`) — misma familia, hallado al ejecutar T-234:** usa
+      `.maybeSingle()` sobre `user_role_memberships`, tabla que legítimamente tiene **2 filas** para
+      un usuario con ambos roles → PGRST116 («more than one row») en la puerta del **onboarding**
+      (`/onboarding/role` lo llama para decidir si el usuario ya tiene rol). El arreglo es del mismo
+      tipo: devolver la lista, o `.limit(1)` si de verdad solo importa «¿tiene alguno?»
 - [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas

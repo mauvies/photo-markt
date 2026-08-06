@@ -108,7 +108,30 @@ Two user roles with separate dashboards:
 - **PHOTOGRAPHER** (`/dashboard/photographer`) — manages events, uploads/manages photos, tracks sales and earnings, manages payout account
 - **TALENT** (`/dashboard/talent`) — browses events, finds and purchases photos of themselves, manages saved photos
 
-Role is stored in `profiles.active_role`. Users can switch roles. Initial role assigned during onboarding via `src/app/[lang]/actions/roles.ts`.
+**Two columns, two meanings — do not confuse them.** `user_role_memberships` is the **capability**
+(which roles a user holds); `profiles.active_role` is the **view preference** (which dashboard they
+last chose). ⚠️ **Gate on the membership, never on `active_role`** — the two legitimately diverge
+(`active_role` can point at a role the user does not hold; pinned by a T-061 regression test), which
+is why both dashboard layouts filter on `heldRoles` from `getRoleContext()`. ⚠️ **There is also an
+unrelated, EMPTY `user_roles` table** — a false lead that costs a diagnosis; no code reads it.
+
+Role mutation lives entirely in `src/app/[lang]/actions/roles.ts` (initial assignment in
+`completeOnboarding`), and every action there returns a typed **`RoleActionResult`** rather than
+throwing — Next redacts thrown Server Action messages in prod (T-189), so a `throw` cannot tell the
+user why anything failed. Codes and their copy: `src/lib/role-action-error.ts`.
+
+- **`switchRole` only switches between roles you already hold** (talent's auto-enable is the one
+  documented exception) and returns `role_not_held` otherwise. That guard is a deliberate invariant
+  pinned by `test/integration/actions/roles.test.ts` — do not "simplify" it away.
+- **Gaining a role is a separate, explicit action:** `enablePhotographerRole` / `enableTalentRole`.
+  Safe by design — a role is a self-service capability, not a privilege tier (anyone picks either at
+  onboarding with no verification), and neither touches `admin_users`. Before T-234 only the talent
+  side existed, so a talent user had **no path at all** to become a photographer while the account
+  menu offered them a switch that could only be refused — silently, because both switchers swallowed
+  the rejection in a bare `catch {}`.
+- **The account menus take `heldRoles`** and render «Switch to X» vs «Become a photographer»
+  accordingly (`dashboard-user-menu.tsx`, `bottom-nav-account.tsx`). A menu that doesn't know the
+  user's capabilities can only offer promises the server has to break.
 
 ### Key Architectural Patterns
 
