@@ -18,6 +18,7 @@ import { cn, NAV_ACTIVE_PILL } from '@/lib/utils';
 export function TalentDashboardHeader({
   user,
   activeRole,
+  heldRoles = [],
   navLabels,
 }: {
   user: {
@@ -26,6 +27,9 @@ export function TalentDashboardHeader({
     avatar?: string | null;
   };
   activeRole: RoleSlug;
+  /** Roles the user holds — decides whether the account menu offers a role
+   *  switch or an upgrade (T-234). Pass-through to the two menus. */
+  heldRoles?: RoleSlug[];
   navLabels: {
     explore: string;
     myPhotos: string;
@@ -40,6 +44,10 @@ export function TalentDashboardHeader({
     feedback: string;
     activeRole: string;
     switchTo: string;
+    becomePhotographer: string;
+    becomeTalent: string;
+    roleActionFailed: string;
+    roleActionNotSignedIn: string;
     logOut: string;
     rolePhotographer: string;
     roleTalent: string;
@@ -109,6 +117,7 @@ export function TalentDashboardHeader({
             <DashboardUserMenu
               user={user}
               activeRole={activeRole}
+              heldRoles={heldRoles}
               navLabels={{
                 activeRole: navLabels.activeRole,
                 profile: navLabels.profile,
@@ -117,6 +126,10 @@ export function TalentDashboardHeader({
                 support: navLabels.support,
                 feedback: navLabels.feedback,
                 switchTo: navLabels.switchTo,
+                becomePhotographer: navLabels.becomePhotographer,
+                becomeTalent: navLabels.becomeTalent,
+                roleActionFailed: navLabels.roleActionFailed,
+                roleActionNotSignedIn: navLabels.roleActionNotSignedIn,
                 logOut: navLabels.logOut,
                 rolePhotographer: navLabels.rolePhotographer,
                 roleTalent: navLabels.roleTalent,
@@ -155,11 +168,15 @@ export function TalentDashboardHeader({
           <BottomNavAccount
             user={user}
             activeRole={activeRole}
+            heldRoles={heldRoles}
             labels={{
               accountTab: navLabels.account,
               activeRoleLabel: navLabels.activeRole,
               currentRoleName: navLabels.roleTalent,
               switchRoleLabel: `${navLabels.switchTo} ${navLabels.rolePhotographer}`,
+              becomeRoleLabel: navLabels.becomePhotographer,
+              roleActionFailed: navLabels.roleActionFailed,
+              roleActionNotSignedIn: navLabels.roleActionNotSignedIn,
               profile: navLabels.profile,
               settings: navLabels.settings,
               privacy: navLabels.privacy,

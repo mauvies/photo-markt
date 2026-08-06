@@ -3,11 +3,19 @@
  *
  * Roles are auth-adjacent — `switchRole` decides which dashboard a user lands
  * on after sign-in. These tests pin the security guarantees:
- *   - You can't switch to a role you've never had granted (TALENT enable is
- *     the legitimate auto-grant path; PHOTOGRAPHER is not auto-grantable).
+ *   - You can't SWITCH to a role you've never had granted (TALENT enable is
+ *     the legitimate auto-grant path inside `switchRole`; PHOTOGRAPHER is not).
  *   - You can't act on roles without auth.
  *   - getActiveRole falls back to PHOTOGRAPHER when no profile exists yet
  *     (the documented onboarding default).
+ *
+ * T-234 did NOT relax that first guarantee. Granting a role you don't hold is
+ * now possible, but only through the separate, explicit `enablePhotographerRole`
+ * / `enableTalentRole` actions — "become a photographer" is a different intent
+ * from "switch between the roles I already have", and the account menu says so
+ * too. `switchRole` still refuses; it just reports the refusal as a typed
+ * `{ ok: false, error: 'role_not_held' }` instead of throwing a message that
+ * Next redacts in production (T-189), which is what made the failure invisible.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -51,6 +59,7 @@ vi.mock('@/lib/i18n/get-lang-from-headers', () => ({
 
 import {
   completeOnboarding,
+  enablePhotographerRole,
   enableTalentRole,
   getRoleContext,
   switchRole,
@@ -126,7 +135,7 @@ describe('roles Server Actions', () => {
   describe('switchRole', () => {
     it('rejects unauthenticated callers', async () => {
       mockSession.userId = null;
-      await expect(switchRole('talent')).rejects.toThrow(/signed in/i);
+      expect(await switchRole('talent')).toEqual({ ok: false, error: 'not_signed_in' });
     });
 
     it("enables the TALENT role and switches to it when the user doesn't have it yet", async () => {
@@ -136,7 +145,7 @@ describe('roles Server Actions', () => {
       mockSession.userId = user.id;
 
       const result = await switchRole('talent', { skipRevalidation: true });
-      expect(result.activeRole).toBe('talent');
+      expect(result).toEqual({ ok: true, activeRole: 'talent' });
 
       const sb = createServiceClient();
       const { data: profile } = await sb
@@ -151,6 +160,10 @@ describe('roles Server Actions', () => {
       // We seed a user with only the TALENT role and explicitly clean up the
       // PHOTOGRAPHER row that createTestUser would normally add. Then a
       // request to switch back to PHOTOGRAPHER must be rejected.
+      //
+      // T-234 preserved this invariant deliberately: the refusal is now a typed
+      // code instead of a thrown message, but `switchRole` still refuses, and
+      // it must NOT quietly grant the role (that is `enablePhotographerRole`).
       const sb = createServiceClient();
       const user = await createTestUser('TALENT');
       await sb
@@ -160,15 +173,71 @@ describe('roles Server Actions', () => {
         .eq('role', 'PHOTOGRAPHER');
 
       mockSession.userId = user.id;
-      await expect(switchRole('photographer', { skipRevalidation: true })).rejects.toThrow(
-        /not enabled/i,
-      );
+      expect(await switchRole('photographer', { skipRevalidation: true })).toEqual({
+        ok: false,
+        error: 'role_not_held',
+      });
+
+      const { data: roles } = await sb
+        .from('user_role_memberships')
+        .select('role')
+        .eq('user_id', user.id);
+      expect(roles?.map((r) => r.role)).toEqual(['TALENT']);
     });
 
     it('rejects an invalid role slug at the Zod boundary', async () => {
       const user = await createTestUser('TALENT');
       mockSession.userId = user.id;
-      await expect(switchRole('admin' as 'talent', { skipRevalidation: true })).rejects.toThrow();
+      expect(await switchRole('admin' as 'talent', { skipRevalidation: true })).toEqual({
+        ok: false,
+        error: 'invalid_role',
+      });
+    });
+  });
+
+  // T-234: before this, a talent-only user had no path to ever become a
+  // photographer — the account menu offered a switch that could only be refused,
+  // and refused in silence.
+  describe('enablePhotographerRole', () => {
+    it('grants PHOTOGRAPHER and flips active_role for a talent-only user', async () => {
+      const sb = createServiceClient();
+      const user = await createTestUser('TALENT');
+      await sb
+        .from('user_role_memberships')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('role', 'PHOTOGRAPHER');
+      mockSession.userId = user.id;
+
+      expect(await enablePhotographerRole()).toEqual({ ok: true, activeRole: 'photographer' });
+
+      const { data: roles } = await sb
+        .from('user_role_memberships')
+        .select('role')
+        .eq('user_id', user.id);
+      const roleSet = new Set(roles?.map((r) => r.role));
+      expect(roleSet.has('PHOTOGRAPHER')).toBe(true);
+      // The talent membership survives — becoming a photographer adds a
+      // capability, it never revokes the one they already had.
+      expect(roleSet.has('TALENT')).toBe(true);
+
+      const { data: profile } = await sb
+        .from('profiles')
+        .select('active_role')
+        .eq('id', user.id)
+        .single();
+      expect(profile?.active_role).toBe('PHOTOGRAPHER');
+    });
+
+    it('is idempotent for a user who already holds the role', async () => {
+      const user = await createTestUser('PHOTOGRAPHER');
+      mockSession.userId = user.id;
+      expect(await enablePhotographerRole()).toEqual({ ok: true, activeRole: 'photographer' });
+    });
+
+    it('rejects unauthenticated callers', async () => {
+      mockSession.userId = null;
+      expect(await enablePhotographerRole()).toEqual({ ok: false, error: 'not_signed_in' });
     });
   });
 
@@ -178,7 +247,7 @@ describe('roles Server Actions', () => {
       mockSession.userId = user.id;
 
       const result = await enableTalentRole();
-      expect(result.activeRole).toBe('talent');
+      expect(result).toEqual({ ok: true, activeRole: 'talent' });
 
       const sb = createServiceClient();
       const { data: roles } = await sb
@@ -192,7 +261,7 @@ describe('roles Server Actions', () => {
 
     it('rejects unauthenticated callers', async () => {
       mockSession.userId = null;
-      await expect(enableTalentRole()).rejects.toThrow(/signed in/i);
+      expect(await enableTalentRole()).toEqual({ ok: false, error: 'not_signed_in' });
     });
   });
 

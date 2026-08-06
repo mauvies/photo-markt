@@ -12,6 +12,7 @@ import { createClient, getUser } from '@/database/server';
 import { type PlanIntent, planIntentResumePath } from '@/lib/billing/plan-intent';
 import { getLangFromHeaders } from '@/lib/i18n/get-lang-from-headers';
 import { localizedRedirect } from '@/lib/i18n/redirect';
+import type { RoleActionErrorCode } from '@/lib/role-action-error';
 import {
   ROLES,
   type RoleSlug,
@@ -27,23 +28,47 @@ type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 const userRoleSchema = z.enum([ROLES.PHOTOGRAPHER, ROLES.TALENT]);
 const roleSlugSchema = z.enum(['photographer', 'talent']);
 
-type SwitchRoleResult = {
-  activeRole: RoleSlug;
-};
+/**
+ * Outcome of a role mutation. Returned, never thrown (T-234): Next redacts
+ * thrown Server Action messages in production (the T-189 finding), so a `throw`
+ * cannot tell the user anything — and a role switch that fails without saying
+ * why is exactly the reported bug. Same discriminated-union shape as
+ * `AvatarActionResult` (`actions/avatar.ts`). The codes and their copy live in
+ * `lib/role-action-error.ts` so the client components can read them too.
+ */
+export type RoleActionResult =
+  | { ok: true; activeRole: RoleSlug }
+  | { ok: false; error: RoleActionErrorCode };
 
-async function getAuthenticatedClient() {
+/**
+ * Non-throwing counterpart of {@link getAuthenticatedClient}, for the actions
+ * that report failure through {@link RoleActionResult} instead of throwing.
+ */
+async function getAuthenticatedClientOrNull() {
   const [supabase, user] = await Promise.all([createClient(), getUser()]);
-
-  if (!user) {
-    throw new Error('You must be signed in to manage roles.');
-  }
-
-  return { supabase, user };
+  return user ? { supabase, user } : null;
 }
 
-async function enableTalentRoleInternal(supabase: SupabaseServerClient, userId: string) {
-  await dbUpsertUserRole(supabase, userId, ROLES.TALENT);
-  await dbUpsertProfileRole(supabase, userId, ROLES.TALENT);
+async function getAuthenticatedClient() {
+  const authed = await getAuthenticatedClientOrNull();
+  if (!authed) {
+    throw new Error('You must be signed in to manage roles.');
+  }
+  return authed;
+}
+
+/**
+ * Grant `role` to a user and make it their active view. Both writes together:
+ * the membership is the capability, `active_role` is the view preference, and
+ * granting one without the other leaves a user who holds a role they can't see.
+ */
+async function enableRoleInternal(
+  supabase: SupabaseServerClient,
+  userId: string,
+  role: UserRole,
+): Promise<void> {
+  await dbUpsertUserRole(supabase, userId, role);
+  await dbUpsertProfileRole(supabase, userId, role);
 }
 
 /** Recoverable failure outcome from {@link completeOnboarding}. Success redirects and never returns. */
@@ -162,52 +187,103 @@ export async function checkUsernameAvailability(candidate: string): Promise<User
   return existingProfile ? { available: false, reason: 'taken' } : { available: true };
 }
 
-/** Enable the talent role for the current user if not already present. */
-export async function enableTalentRole(): Promise<SwitchRoleResult> {
-  const { supabase, user } = await getAuthenticatedClient();
-  await enableTalentRoleInternal(supabase, user.id);
-
+function revalidateDashboards(): void {
   revalidatePath('/es/dashboard');
   revalidatePath('/en/dashboard');
   revalidatePath('/es/dashboard/talent');
   revalidatePath('/en/dashboard/talent');
-
-  return { activeRole: roleEnumToSlug(ROLES.TALENT) };
+  revalidatePath('/es/dashboard/photographer');
+  revalidatePath('/en/dashboard/photographer');
 }
 
-/** Switch the active role for the current user, enabling talent if needed. */
+/**
+ * Grant the current user a role they don't hold yet and switch them into it.
+ *
+ * **Why this is safe to expose as a one-click action (T-234):** a role here is
+ * a self-service *capability*, not an authorization tier — anyone can pick
+ * either one at onboarding with no verification, so granting it later opens
+ * nothing that wasn't already one signup away. It touches neither `admin_users`
+ * (the actual privilege table) nor billing: a fresh photographer lands on Free.
+ *
+ * This is deliberately **separate from {@link switchRole}**, whose "you cannot
+ * switch to a role you were never granted" guard is a documented invariant
+ * pinned by `test/integration/actions/roles.test.ts`. Becoming a photographer
+ * is a different intent from switching between roles you already hold, and the
+ * UI says so too ("Become a photographer" vs "Switch to photographer").
+ */
+async function enableRoleAction(role: UserRole): Promise<RoleActionResult> {
+  const authed = await getAuthenticatedClientOrNull();
+  if (!authed) return { ok: false, error: 'not_signed_in' };
+
+  try {
+    await enableRoleInternal(authed.supabase, authed.user.id, role);
+  } catch (err) {
+    console.error('[enableRoleAction] failed to grant role', { role, err });
+    return { ok: false, error: 'failed' };
+  }
+
+  revalidateDashboards();
+  return { ok: true, activeRole: roleEnumToSlug(role) };
+}
+
+/** Enable the talent role for the current user if not already present. */
+export async function enableTalentRole(): Promise<RoleActionResult> {
+  return enableRoleAction(ROLES.TALENT);
+}
+
+/**
+ * Enable the photographer role for the current user. The mirror of
+ * {@link enableTalentRole} — before T-234 a talent-only user had no path to
+ * ever become a photographer, while the account menu offered them a switch that
+ * could only fail.
+ */
+export async function enablePhotographerRole(): Promise<RoleActionResult> {
+  return enableRoleAction(ROLES.PHOTOGRAPHER);
+}
+
+/**
+ * Switch the active role for the current user, enabling talent if needed.
+ *
+ * Refuses a role the user does not hold (talent's auto-enable is the one
+ * documented exception). Granting a role is {@link enablePhotographerRole} /
+ * {@link enableTalentRole} — a separate, explicit intent.
+ */
 export async function switchRole(
   input: RoleSlug,
   options?: { skipRevalidation?: boolean },
-): Promise<SwitchRoleResult> {
-  const slug = roleSlugSchema.parse(input);
+): Promise<RoleActionResult> {
+  const parsed = roleSlugSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'invalid_role' };
+  const slug = parsed.data;
   const targetRole = roleSlugToEnum(slug);
-  const { supabase, user } = await getAuthenticatedClient();
 
-  const existingRoles = await getUserRoles(supabase, user.id);
-  const { needsEnableTalent } = resolveRoleSwitch(existingRoles, targetRole);
+  const authed = await getAuthenticatedClientOrNull();
+  if (!authed) return { ok: false, error: 'not_signed_in' };
+  const { supabase, user } = authed;
 
-  if (needsEnableTalent) {
-    await enableTalentRoleInternal(supabase, user.id);
-  } else {
-    const hasRole = existingRoles.includes(targetRole);
-    if (!hasRole) {
-      throw new Error('Role is not enabled for this user.');
+  try {
+    const existingRoles = await getUserRoles(supabase, user.id);
+    const { needsEnableTalent } = resolveRoleSwitch(existingRoles, targetRole);
+
+    if (needsEnableTalent) {
+      await enableRoleInternal(supabase, user.id, ROLES.TALENT);
+    } else {
+      if (!existingRoles.includes(targetRole)) {
+        return { ok: false, error: 'role_not_held' };
+      }
+      await dbUpsertProfileRole(supabase, user.id, targetRole);
     }
-    await dbUpsertProfileRole(supabase, user.id, targetRole);
+  } catch (err) {
+    console.error('[switchRole] failed to switch role', { slug, err });
+    return { ok: false, error: 'failed' };
   }
 
   // Only revalidate if not called during render (e.g., from user action)
   if (!options?.skipRevalidation) {
-    revalidatePath('/es/dashboard');
-    revalidatePath('/en/dashboard');
-    revalidatePath('/es/dashboard/talent');
-    revalidatePath('/en/dashboard/talent');
-    revalidatePath('/es/dashboard/photographer');
-    revalidatePath('/en/dashboard/photographer');
+    revalidateDashboards();
   }
 
-  return { activeRole: slug };
+  return { ok: true, activeRole: slug };
 }
 
 /**

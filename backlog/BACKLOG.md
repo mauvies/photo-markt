@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-234 | Cambiar a rol fotógrafo no hace nada y el error se traga en silencio | — | todo |
+| 1 | P1 | T-234 | Cambiar a rol fotógrafo no hace nada y el error se traga en silencio | — | doing |
 | 2 | P1 | T-235 | `getEvent` filtra un PostgrestError crudo (PGRST116) en vez de "evento no encontrado" | — | todo |
 | 3 | P1 | T-216 | Ganancias varadas: transferencias omitidas sin registro ni reintento | — | todo |
 | 4 | P1 | T-215 | Clawback: disputas y reembolsos deben revertir transferencia y acceso | Dep T-216 | todo |

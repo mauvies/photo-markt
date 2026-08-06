@@ -11,10 +11,14 @@ import { cn } from '@/lib/utils';
 export function PhotographerBottomNav({
   user,
   activeRole,
+  heldRoles = [],
   navLabels,
 }: {
   user: { name: string; email: string; avatar?: string | null };
   activeRole: RoleSlug;
+  /** Roles the user holds — decides whether the account menu offers a role
+   *  switch or an upgrade (T-234). */
+  heldRoles?: RoleSlug[];
   navLabels: {
     overview: string;
     events: string;
@@ -31,6 +35,9 @@ export function PhotographerBottomNav({
     support: string;
     feedback: string;
     switchToTalent: string;
+    becomeTalent: string;
+    roleActionFailed: string;
+    roleActionNotSignedIn: string;
     logOut: string;
   };
 }) {
@@ -122,11 +129,15 @@ export function PhotographerBottomNav({
       <BottomNavAccount
         user={user}
         activeRole={activeRole}
+        heldRoles={heldRoles}
         labels={{
           accountTab: navLabels.account,
           activeRoleLabel: navLabels.activeRoleLabel,
           currentRoleName: navLabels.roleLabel,
           switchRoleLabel: navLabels.switchToTalent,
+          becomeRoleLabel: navLabels.becomeTalent,
+          roleActionFailed: navLabels.roleActionFailed,
+          roleActionNotSignedIn: navLabels.roleActionNotSignedIn,
           profile: navLabels.profile,
           settings: navLabels.settings,
           support: navLabels.support,

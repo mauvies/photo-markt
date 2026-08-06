@@ -1,7 +1,7 @@
 # T-234 · Cambiar a rol fotógrafo no hace nada y el error se traga en silencio
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** alto  (auth/roles + estado de sesión; además la causa raíz no está identificada)
 - **Blockers:** ninguno
 - **Rama:** `fix/role-switch-silent-failure`  (tipo = fix)
