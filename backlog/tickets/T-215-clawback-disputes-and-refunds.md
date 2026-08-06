@@ -1,7 +1,7 @@
 # T-215 · Clawback: disputas y reembolsos deben revertir transferencia y acceso
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** alto  (pagos)
 - **Blockers:** ninguno
 - **Rama:** `fix/clawback-disputes-and-refunds`  (tipo = fix)
