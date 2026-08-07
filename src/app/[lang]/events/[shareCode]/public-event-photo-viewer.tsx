@@ -21,6 +21,7 @@ import { useBibSearch, useFaceSearch } from '@/components/event-gallery-with-fac
 import { EventPhotoCountLabel } from '@/components/event-photo-count-label';
 import { type EventPhotoFilter, EventPhotoFilterTabs } from '@/components/event-photo-filter-tabs';
 import { FaceSearchResults } from '@/components/face-search-results';
+import { GatedSearchPanel, type GatedSearchPanelLabels } from '@/components/gated-search-panel';
 import { useGuestCart } from '@/components/guest-cart-provider';
 import type { PhotoDetailModalLabels } from '@/components/photo-detail-modal';
 import {
@@ -96,6 +97,9 @@ interface PublicEventPhotoViewerProps {
   showAddToCart?: boolean;
   /** Localized copy shown when there are no photos yet. */
   emptyText?: string;
+  /** Reveal-gated pre-search panel (T-230). When present and nothing is
+   *  revealed, it replaces the muted empty paragraph and owns the search CTA. */
+  gatedPanel?: { labels: GatedSearchPanelLabels; photoCount?: number | null };
   /** Localized copy shown over the gallery while an upload is in flight. */
   uploadingLabel?: string;
   /** Labels for the contributor badge popover. */
@@ -172,6 +176,7 @@ export function PublicEventPhotoViewer({
   iconTooltips,
   showAddToCart = true,
   emptyText,
+  gatedPanel,
   uploadingLabel,
   uploaderLabels,
   bulkDeleteLabels,
@@ -787,7 +792,17 @@ export function PublicEventPhotoViewer({
 
   return (
     <div className="relative">
-      {photos.length === 0 ? (
+      {photos.length === 0 && gatedPanel && !isUploading ? (
+        // Gated event, nothing revealed yet (T-230). The panel IS the screen
+        // here: it carries the explanation and the search CTA, so the copy no
+        // longer has to point the visitor at a button somewhere above it.
+        <GatedSearchPanel
+          state="searchable"
+          labels={gatedPanel.labels}
+          photoCount={gatedPanel.photoCount}
+          onSearch={faceSearch.openSearch}
+        />
+      ) : photos.length === 0 ? (
         <div className="py-12 text-center">
           <p className="text-muted-foreground">
             {isUploading

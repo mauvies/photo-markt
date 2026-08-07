@@ -93,6 +93,9 @@ interface EventGalleryWithFaceSearchProps {
    * from `event.ai_matching_enabled` + indexing progress.
    */
   aiSearchEligible: boolean;
+  /** Reveal gate is on (T-177). When set, and no search has run yet, the gated
+   *  panel inside the gallery owns the CTA and this banner stays hidden. */
+  revealGated?: boolean;
   /** `'ready'` or `'indexing'`. Ignored when `aiSearchEligible === false`. */
   aiState: 'ready' | 'indexing';
   modalLabels: FaceSearchModalLabels;
@@ -119,6 +122,7 @@ interface EventGalleryWithFaceSearchProps {
 export function EventGalleryWithFaceSearch({
   shareCode,
   aiSearchEligible,
+  revealGated = false,
   aiState,
   modalLabels,
   findLabels,
@@ -168,6 +172,7 @@ export function EventGalleryWithFaceSearch({
     faceSearchActive: matches !== null,
     aiSearchEligible,
     bibDetectionEnabled,
+    revealGatedPreSearch: revealGated && matches === null,
   });
 
   return (

@@ -24,8 +24,15 @@ export function resolveFindMyPhotos(params: {
   aiSearchEligible: boolean;
   /** Event has bib detection enabled (server-computed). */
   bibDetectionEnabled: boolean;
+  /**
+   * Reveal gate is on AND nothing has been revealed yet (T-230). The gated
+   * pre-search panel owns the call to action in that case, so this banner must
+   * step aside — two search buttons on one empty screen is worse than none, and
+   * the split is what forced the old copy to say "take a selfie *above*".
+   */
+  revealGatedPreSearch?: boolean;
 }): FindMyPhotosVisibility {
-  if (params.faceSearchActive) {
+  if (params.faceSearchActive || params.revealGatedPreSearch) {
     return { visible: false, showFace: false, showBib: false };
   }
   const showFace = params.aiSearchEligible;
