@@ -1,8 +1,9 @@
 import { Skeleton } from '@/components/ui/skeleton';
+import { EVENT_CARD_COVER_ASPECT } from '@/lib/event-card-aspect';
 
 /**
  * Skeleton mirroring the real `EventCard` (T-119 redesign, T-125 cover ratio,
- * T-127 two-line title): rounded-2xl card, `aspect-[4/3]` cover, and an info
+ * T-127 two-line title): rounded-2xl card, a square cover (`EVENT_CARD_COVER_ASPECT`), and an info
  * section reserving the same two-line title height plus the location/date
  * rows and the divided photographer row — so swapping in the real card
  * produces no layout shift (T-128).
@@ -10,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 export function EventCardSkeleton() {
   return (
     <div className="overflow-hidden rounded-2xl bg-card">
-      <Skeleton className="aspect-[4/3] w-full rounded-none" />
+      <Skeleton className={`${EVENT_CARD_COVER_ASPECT} w-full rounded-none`} />
       <div className="p-3">
         <div className="min-h-[3.1rem] space-y-1.5 pt-0.5">
           <Skeleton className="h-4 w-4/5" />

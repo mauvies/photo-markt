@@ -13,8 +13,18 @@
  * NOTE: this only rewrites the displayed *total*. The gallery still renders
  * only the real photos that exist, so "load more" stops at the true count.
  *
- * TO REMOVE when the tests are done: delete this file and its single call
- * site in `src/app/[lang]/events/[shareCode]/page.tsx`.
+ * TO REMOVE when the tests are done. It is no longer a single call site (T-229 —
+ * the card surfaces disagreed with the event page precisely because it was wired
+ * in one place only), so delete ALL of these together:
+ *
+ *   1. this file;
+ *   2. `overrideEventTotalPhotoCount(event.id, approvedCount)` in
+ *      `src/app/[lang]/events/[shareCode]/page.tsx` — use `approvedCount`;
+ *   3. `getEventCardPhotoCount` in `src/lib/event-cover-stats.ts` — it collapses
+ *      to `stats.get(eventId)?.count ?? 0`, which its three callers used before;
+ *   4. `test/unit/lib/event-card-photo-count.test.ts`.
+ *
+ * Leaving any of them behind keeps a live override running in production.
  */
 const EVENT_TOTAL_PHOTO_COUNT_OVERRIDES: Record<string, number> = {
   // mussara-costa-dourada-salou-salou-2026

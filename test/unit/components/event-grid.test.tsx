@@ -1,6 +1,7 @@
 /** @vitest-environment happy-dom */
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { EVENT_CARD_COVER_ASPECT } from '@/lib/event-card-aspect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 
 vi.mock('next/navigation', () => ({
@@ -54,8 +55,8 @@ describe('EventGrid loading state (T-128)', () => {
       </TranslationsProvider>,
     );
     // The pre-T-128 skeleton used `aspect-square` tiles; the redesigned
-    // EventCard (T-119/T-125) uses `aspect-[4/3]`.
-    expect(container.innerHTML).toContain('aspect-[4/3]');
+    // EventCard (T-119/T-125) uses the shared `EVENT_CARD_COVER_ASPECT` (T-233).
+    expect(container.innerHTML).toContain(EVENT_CARD_COVER_ASPECT);
     expect(container.innerHTML).not.toContain('aspect-square');
     // Two skeleton cards for the two skeleton keys.
     expect(container.querySelectorAll('.rounded-2xl').length).toBe(2);

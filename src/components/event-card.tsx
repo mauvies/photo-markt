@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useCoarsePointer } from '@/hooks/use-coarse-pointer';
 import { getActivityIcon } from '@/lib/activity-icon';
 import { countryFlagEmoji } from '@/lib/country-flag';
+import { EVENT_CARD_COVER_ASPECT } from '@/lib/event-card-aspect';
 import { type EventStatus, isEventSoon } from '@/lib/event-status';
 import { formatEventDate, formatSessionTimeRange } from '@/lib/format-date';
 import { formatEventLocation } from '@/lib/format-location';
@@ -286,7 +287,7 @@ export function EventCard({
     <div className="group relative overflow-hidden rounded-2xl border bg-card">
       {/* Cover */}
       <Link href={eventHref} className="block">
-        <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
+        <div className={`relative ${EVENT_CARD_COVER_ASPECT} w-full overflow-hidden bg-muted`}>
           {coverSrc ? (
             <>
               {/* Skeleton sits BEHIND the image (earlier in DOM, both absolute)

@@ -9,6 +9,7 @@ import TalentEventsLoading from '@/app/[lang]/dashboard/talent/events/loading';
 import EventDetailLoading from '@/app/[lang]/events/[shareCode]/loading';
 import EventsListingLoading from '@/app/[lang]/events/loading';
 import RootLangLoading from '@/app/[lang]/loading';
+import { EVENT_CARD_COVER_ASPECT } from '@/lib/event-card-aspect';
 
 afterEach(cleanup);
 
@@ -71,7 +72,7 @@ describe('/events loading.tsx (T-157: now mirrors the home)', () => {
     // Full EventsExploreView skeleton: hero (sm:h-12/sm:h-6), heading (sm:h-7), grid.
     expect(container.innerHTML).toContain('sm:h-12');
     expect(container.innerHTML).toContain('sm:h-7');
-    expect(container.innerHTML).toContain('aspect-[4/3]');
+    expect(container.innerHTML).toContain(EVENT_CARD_COVER_ASPECT);
     // No bare <Spinner /> (an <output> element).
     expect(container.querySelector('output')).toBeNull();
   });
@@ -86,7 +87,7 @@ describe('/[lang]/(home) loading.tsx (T-156; scoped to the (home) group in T-171
     expect(container.innerHTML).toContain('sm:h-6');
     // "Latest events" heading placeholder.
     expect(container.innerHTML).toContain('sm:h-7');
-    expect(container.innerHTML).toContain('aspect-[4/3]');
+    expect(container.innerHTML).toContain(EVENT_CARD_COVER_ASPECT);
   });
 });
 
@@ -102,7 +103,7 @@ describe('/[lang] root loading.tsx is neutral (T-171)', () => {
     // A bare <Spinner /> is an <output> element with a "Loading" sr-only label.
     expect(container.querySelector('output')).not.toBeNull();
     // None of the home-skeleton fingerprints leak into non-home routes.
-    expect(container.innerHTML).not.toContain('aspect-[4/3]');
+    expect(container.innerHTML).not.toContain(EVENT_CARD_COVER_ASPECT);
     expect(container.innerHTML).not.toContain('max-w-[1300px]');
     expect(container.innerHTML).not.toContain('sm:h-12');
   });
@@ -111,7 +112,7 @@ describe('/[lang] root loading.tsx is neutral (T-171)', () => {
 describe('/dashboard/talent/events loading.tsx', () => {
   it('renders the real card grid without re-wrapping the layout margins', () => {
     const { container } = render(<TalentEventsLoading />);
-    expect(container.innerHTML).toContain('aspect-[4/3]');
+    expect(container.innerHTML).toContain(EVENT_CARD_COVER_ASPECT);
     // The dashboard layout already supplies mx-auto/max-w/px — this file
     // must not duplicate it.
     expect(container.innerHTML).not.toContain('max-w-[1300px]');

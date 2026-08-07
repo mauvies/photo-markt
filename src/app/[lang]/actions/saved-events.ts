@@ -17,6 +17,7 @@ import {
 } from '@/database/queries';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { getEventCardPhotoCount } from '@/lib/event-cover-stats';
 import { type EventStatus, getEventStatus } from '@/lib/event-status';
 
 const SAVED_EVENTS_PATHS = [
@@ -168,7 +169,7 @@ async function enrichSavedEvents(rows: SavedEventRow[]): Promise<SavedEventCard[
       city: row.city,
       country: row.country,
       activity: row.activity,
-      photoCount: stats.get(row.event_id)?.count ?? 0,
+      photoCount: getEventCardPhotoCount(row.event_id, stats),
       coverUrl: coverUrls.get(row.event_id) ?? null,
       pricePerPhoto: row.price_per_photo,
       photographerUsername: profile?.username ?? null,

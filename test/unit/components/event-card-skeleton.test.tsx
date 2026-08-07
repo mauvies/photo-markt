@@ -2,16 +2,17 @@
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { EventCardSkeleton, EventGridSkeleton } from '@/components/event-card-skeleton';
+import { EVENT_CARD_COVER_ASPECT } from '@/lib/event-card-aspect';
 
 afterEach(cleanup);
 
 describe('EventCardSkeleton (T-128)', () => {
   it('mirrors the real EventCard cover ratio and two-line title reservation', () => {
     const { container } = render(<EventCardSkeleton />);
-    // Matches event-card.tsx's rounded-2xl card + aspect-[4/3] cover (T-125) —
+    // Matches event-card.tsx's rounded-2xl card + shared cover ratio (T-233) —
     // the old skeleton used a mismatched aspect-square cover.
     expect(container.innerHTML).toContain('rounded-2xl');
-    expect(container.innerHTML).toContain('aspect-[4/3]');
+    expect(container.innerHTML).toContain(EVENT_CARD_COVER_ASPECT);
     // Matches the two-line title height reserved by the real card (T-127) —
     // without this a one-line skeleton title collapses and the rows below it
     // sit at a different height than the loaded card.
