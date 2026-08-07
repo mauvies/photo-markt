@@ -1,12 +1,12 @@
 # T-233 · Alargar el event card: cambiar el aspect ratio del contenedor de la portada
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Riesgo:** normal  (CSS puro + tests que fijan la clase; ni pagos ni auth ni BD)
 - **Blockers:** ninguno
 - **Rama:** `design/event-card-cover-aspect`  (tipo = design)
 - **OpenSpec change:** —  (cambio de una constante de estilo; no aplica)
-- **PR:** —
+- **PR:** #291 (junto con el otro ticket del cluster event card)
 
 ## Requerimiento (en palabras del usuario)
 > Alargar más el event card, es decir modificar el radio de aspecto para que la foto de portada se

@@ -1,12 +1,12 @@
 # T-229 · El conteo de fotos del event card ignora el override por ID de evento
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Riesgo:** normal  (solo display; no toca pagos, BD, auth ni seguridad)
 - **Blockers:** ninguno
 - **Rama:** `fix/event-card-photo-count-override`  (tipo = fix)
 - **OpenSpec change:** —  (un helper compartido + 3 call sites)
-- **PR:** —
+- **PR:** #291 (junto con el otro ticket del cluster event card)
 
 ## Requerimiento
 
