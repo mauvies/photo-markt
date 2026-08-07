@@ -1,162 +1,171 @@
 import { describe, expect, it } from 'vitest';
 import {
-  computeReducedHoldCents,
-  computeReversalCents,
-  isFullReversal,
+  type ClawbackTarget,
+  isChargeback,
+  isDisputeClosed,
+  isDisputeOpen,
+  resolveClawbackTarget,
+  reversalDeltaCents,
   reversalIdempotencyKey,
+  targetReversedCents,
 } from '@/lib/payouts/clawback';
 
 /**
- * T-215 (+ T-237). The arithmetic of taking a photographer's money back.
+ * T-215 (+T-237). The arithmetic of taking a photographer's money back.
  *
- * Two properties carry the most weight here:
- *   - a partial reversal is PROPORTIONAL, on both money already sent and money
- *     still held — before this, any partial refund voided the whole hold and the
- *     photographer irrecoverably lost their net on the part that was never
- *     refunded (T-237);
- *   - no sequence of events can claw back more than was transferred, however
- *     Stripe redelivers or reorders them.
+ * These tests exist because the FIRST version of this module was delta-based and
+ * two review passes found five money bugs in it. Each block below pins the
+ * property whose absence caused one of them.
  */
 
-describe('isFullReversal', () => {
-  it('treats a charge refunded up to its total as full', () => {
-    expect(isFullReversal(2000, 2000)).toBe(true);
-    // Several partial refunds can accumulate to the total.
-    expect(isFullReversal(2001, 2000)).toBe(true);
-    expect(isFullReversal(1999, 2000)).toBe(false);
+const target = (reversedCents: number, chargeTotalCents: number): ClawbackTarget => ({
+  reversedCents,
+  chargeTotalCents,
+});
+
+describe('resolveClawbackTarget', () => {
+  it('adds refunds and a lost dispute, capped at the charge', () => {
+    // Settling a chargeback by refunding first is the NORMAL path, so the two
+    // must not double-count.
+    expect(
+      resolveClawbackTarget({
+        chargeAmountCents: 2000,
+        chargeAmountRefundedCents: 2000,
+        disputeLostAmountCents: 2000,
+      }),
+    ).toEqual({ reversedCents: 2000, chargeTotalCents: 2000 });
+
+    expect(
+      resolveClawbackTarget({
+        chargeAmountCents: 2000,
+        chargeAmountRefundedCents: 500,
+        disputeLostAmountCents: 500,
+      }),
+    ).toEqual({ reversedCents: 1000, chargeTotalCents: 2000 });
   });
 
-  it('refuses to call anything full when the charge total is unusable', () => {
-    // Fails closed: without a denominator there is no proportion to take, and
-    // guessing "full" would claw back everything on a bad payload.
-    expect(isFullReversal(500, 0)).toBe(false);
-    expect(isFullReversal(500, Number.NaN)).toBe(false);
+  it('returns null — never 0 — when the charge total is unusable', () => {
+    // THE regression. The previous version passed `chargeTotal ?? 0` and called
+    // it fail-closed; 0 is a usable number that reads as "nothing was refunded",
+    // so the hold stayed fully payable and the cron paid out a charged-back sale
+    // while the alert said the transfer had been reversed. `null` has nowhere to
+    // fall through to.
+    for (const bad of [0, -1, null, undefined, Number.NaN]) {
+      expect(
+        resolveClawbackTarget({
+          chargeAmountCents: bad as number,
+          chargeAmountRefundedCents: 500,
+        }),
+      ).toBeNull();
+    }
+  });
+
+  it('treats a missing refunded amount as zero, not as unknown', () => {
+    expect(
+      resolveClawbackTarget({ chargeAmountCents: 2000, chargeAmountRefundedCents: undefined }),
+    ).toEqual({ reversedCents: 0, chargeTotalCents: 2000 });
   });
 });
 
-describe('computeReversalCents', () => {
-  const base = { payoutAmountCents: 1000, alreadyReversedCents: 0, chargeCents: 2000 };
-
-  it('reverses the whole payout when the whole charge comes back', () => {
-    expect(computeReversalCents({ ...base, reversedCents: 2000 })).toBe(1000);
+describe('targetReversedCents', () => {
+  it('is proportional on a partial reversal', () => {
+    expect(targetReversedCents(1000, target(500, 2000))).toBe(250);
   });
 
-  it('reverses proportionally on a partial refund', () => {
-    // A quarter of the charge → a quarter of the photographer's net.
-    expect(computeReversalCents({ ...base, reversedCents: 500 })).toBe(250);
+  it('lands exactly on the full amount for a full reversal', () => {
+    // By comparison, not arithmetic — so no rounding residue is left with the
+    // photographer on a sale that was entirely taken back.
+    expect(targetReversedCents(999, target(2000, 2000))).toBe(999);
+    expect(targetReversedCents(999, target(2001, 2000))).toBe(999);
   });
 
-  it('floors, so the platform absorbs the sub-cent and not the photographer', () => {
+  it('floors, so the platform absorbs the sub-cent', () => {
     // 1000 * 333 / 2000 = 166.5
-    expect(computeReversalCents({ ...base, reversedCents: 333 })).toBe(166);
+    expect(targetReversedCents(1000, target(333, 2000))).toBe(166);
   });
 
-  it('returns only the delta once part has already been reversed', () => {
-    // Cumulative 50% target = 500, of which 250 is already back.
-    expect(computeReversalCents({ ...base, alreadyReversedCents: 250, reversedCents: 1000 })).toBe(
-      250,
-    );
+  it('is zero when nothing was taken back', () => {
+    expect(targetReversedCents(1000, target(0, 2000))).toBe(0);
+  });
+});
+
+describe('reversalDeltaCents', () => {
+  it('IS IDEMPOTENT: applying the same target repeatedly moves nothing after the first', () => {
+    // The bug this replaces: the delta was computed against the row's CURRENT
+    // amount, so every Stripe redelivery — routine here, because the access half
+    // deliberately 500s on a transient DB error — reduced it again:
+    // 2000 → 1500 → 1125 → 844 on a single €5 refund.
+    const t = target(500, 2000);
+    let reversed = 0;
+    for (let i = 0; i < 5; i += 1) {
+      reversed += reversalDeltaCents(1000, reversed, t);
+    }
+    expect(reversed).toBe(250);
   });
 
-  it('never reverses more than was transferred, whatever the events say', () => {
-    expect(computeReversalCents({ ...base, alreadyReversedCents: 900, reversedCents: 2000 })).toBe(
-      100,
-    );
-    expect(computeReversalCents({ ...base, alreadyReversedCents: 1000, reversedCents: 2000 })).toBe(
-      0,
-    );
+  it('IS ORDER-INDEPENDENT: refund-then-dispute equals dispute-then-refund', () => {
+    const refundOnly = resolveClawbackTarget({
+      chargeAmountCents: 2000,
+      chargeAmountRefundedCents: 500,
+    }) as ClawbackTarget;
+    const both = resolveClawbackTarget({
+      chargeAmountCents: 2000,
+      chargeAmountRefundedCents: 500,
+      disputeLostAmountCents: 500,
+    }) as ClawbackTarget;
+
+    // refund first, then the lost dispute
+    let a = 0;
+    a += reversalDeltaCents(1000, a, refundOnly);
+    a += reversalDeltaCents(1000, a, both);
+
+    // the lost dispute first, then the refund is reported
+    let b = 0;
+    b += reversalDeltaCents(1000, b, both);
+    b += reversalDeltaCents(1000, b, refundOnly);
+
+    expect(a).toBe(b);
+    expect(a).toBe(500);
+  });
+
+  it('never reverses more than was transferred', () => {
+    expect(reversalDeltaCents(1000, 1000, target(2000, 2000))).toBe(0);
+    expect(reversalDeltaCents(1000, 900, target(2000, 2000))).toBe(100);
   });
 
   it('does nothing on a stale event reporting less than is already reversed', () => {
-    // Out-of-order redelivery: a negative "reversal" is not an error to raise,
-    // it is an instruction to do nothing.
-    expect(computeReversalCents({ ...base, alreadyReversedCents: 500, reversedCents: 400 })).toBe(
-      0,
-    );
-  });
-
-  it('is a no-op for a payout that carried no money', () => {
-    expect(computeReversalCents({ ...base, payoutAmountCents: 0, reversedCents: 2000 })).toBe(0);
-  });
-
-  it('reverses nothing when the charge total is missing rather than guessing', () => {
-    expect(computeReversalCents({ ...base, chargeCents: 0, reversedCents: 500 })).toBe(0);
+    expect(reversalDeltaCents(1000, 500, target(400, 2000))).toBe(0);
   });
 });
 
-describe('computeReducedHoldCents', () => {
-  it('voids the hold on a full refund (T-216 behaviour, unchanged)', () => {
-    expect(
-      computeReducedHoldCents({ amountCents: 1000, reversedCents: 2000, chargeCents: 2000 }),
-    ).toBe(null);
+describe('dispute status predicates', () => {
+  it('separates inquiries from chargebacks', () => {
+    // Inquiries arrive through the SAME `charge.dispute.created` event. Treating
+    // them alike revoked a paying buyer's photos over a bank's suspicion, and
+    // `warning_closed` restored nothing.
+    for (const s of ['warning_needs_response', 'warning_under_review', 'warning_closed']) {
+      expect(isChargeback(s)).toBe(false);
+    }
+    for (const s of ['needs_response', 'under_review', 'won', 'lost', 'prevented']) {
+      expect(isChargeback(s)).toBe(true);
+    }
   });
 
-  it('KEEPS the hold with a reduced amount on a partial refund', () => {
-    // The T-237 regression: refunding a quarter must not destroy the
-    // photographer's net on the other three quarters.
-    expect(
-      computeReducedHoldCents({ amountCents: 1000, reversedCents: 500, chargeCents: 2000 }),
-    ).toBe(750);
-  });
-
-  it('always leaves at least a payable cent on a partial refund', () => {
-    // Flooring the deduction guarantees this, which is why only a FULL refund
-    // voids a hold. It matters because `payouts.amount_cents` has a `> 0` CHECK:
-    // a survivor of 0 could not be written at all.
-    expect(
-      computeReducedHoldCents({ amountCents: 2, reversedCents: 1999, chargeCents: 2000 }),
-    ).toBe(1);
-    expect(
-      computeReducedHoldCents({ amountCents: 1, reversedCents: 1999, chargeCents: 2000 }),
-    ).toBe(1);
-  });
-
-  it('voids a hold that carries no money', () => {
-    expect(computeReducedHoldCents({ amountCents: 0, reversedCents: 500, chargeCents: 2000 })).toBe(
-      null,
-    );
-  });
-
-  it('voids rather than guessing when the charge total is missing', () => {
-    // The two sides fail closed in OPPOSITE directions, and that asymmetry is the
-    // point: not sending money is recoverable (the row can be restored), sending
-    // it is not. `undefined <= 0` is false in JS, so an absent `charge.amount`
-    // would otherwise sail past a naive guard and make the proportion NaN.
-    const missing = undefined as unknown as number;
-    expect(
-      computeReducedHoldCents({ amountCents: 1000, reversedCents: 500, chargeCents: missing }),
-    ).toBe(null);
-    expect(
-      computeReversalCents({
-        payoutAmountCents: 1000,
-        alreadyReversedCents: 0,
-        reversedCents: 500,
-        chargeCents: missing,
-      }),
-    ).toBe(0);
-  });
-
-  it('leaves the hold untouched when nothing was reversed', () => {
-    expect(
-      computeReducedHoldCents({ amountCents: 1000, reversedCents: 0, chargeCents: 2000 }),
-    ).toBe(1000);
+  it('knows every closing state the SDK declares', () => {
+    for (const s of ['lost', 'won', 'warning_closed', 'prevented']) {
+      expect(isDisputeClosed(s)).toBe(true);
+      expect(isDisputeOpen(s)).toBe(false);
+    }
+    for (const s of ['needs_response', 'under_review', 'warning_needs_response']) {
+      expect(isDisputeOpen(s)).toBe(true);
+    }
   });
 });
 
 describe('reversalIdempotencyKey', () => {
-  it('is stable for a redelivery of the same event', () => {
-    expect(reversalIdempotencyKey('row-1', 500)).toBe(reversalIdempotencyKey('row-1', 500));
-  });
-
-  it('differs for a second, larger partial refund on the same charge', () => {
-    // The whole reason the key is NOT `(transfer, charge)`: that pair is constant
-    // across successive partial refunds, so the second refund would reuse the
-    // first's key, Stripe would return the first reversal, and the photographer
-    // would silently keep money the buyer got back.
-    expect(reversalIdempotencyKey('row-1', 500)).not.toBe(reversalIdempotencyKey('row-1', 900));
-  });
-
-  it('differs per payout row', () => {
-    expect(reversalIdempotencyKey('row-1', 500)).not.toBe(reversalIdempotencyKey('row-2', 500));
+  it('is stable for a redelivery and distinct for a bigger target', () => {
+    expect(reversalIdempotencyKey('row-1', 250)).toBe(reversalIdempotencyKey('row-1', 250));
+    expect(reversalIdempotencyKey('row-1', 250)).not.toBe(reversalIdempotencyKey('row-1', 500));
+    expect(reversalIdempotencyKey('row-1', 250)).not.toBe(reversalIdempotencyKey('row-2', 250));
   });
 });

@@ -1,68 +1,55 @@
-## 1. Schema
+## 1. Kernel (pure, no Stripe, no DB)
 
-- [x] 1.1 Add `supabase/migrations/20260808000000_add_payout_reversals_and_disputes.sql`: on `payouts`, add `reversed_amount_cents int not null default 0 check (reversed_amount_cents >= 0)`, `stripe_reversal_id text`, `reversed_at timestamptz`, and `void_reason text check (void_reason is null or void_reason in ('refund','dispute'))`
-- [x] 1.2 In the same migration, widen the three `status` CHECK constraints: `payouts` gains `'reversed'`, `orders` and `guest_orders` gain `'disputed'` (drop-and-recreate each constraint by name, as `20260807000000` does)
-- [x] 1.3 Write column/constraint comments carrying the *why* (`void_reason` exists so a won dispute restores only what the dispute voided; `amount_cents > 0` is deliberately kept, so a reduction to ≤ 0 must void instead)
-- [x] 1.4 `pnpm db:reset` and confirm the local stack applies it cleanly
+- [x] 1.1 Rewrite `src/lib/payouts/clawback.ts` around a TARGET: `resolveClawbackTarget` (returns `null` when the charge total is unknown — no fallback), `targetReversedCents`, `reversalDeltaCents`, `reversalIdempotencyKey(payoutId, targetForRow)`
+- [x] 1.2 Delete `computeReducedHoldCents` — holds and paid rows share one target function; their divergence is what produced the fail-open
+- [x] 1.3 Add dispute predicates: `isChargeback` (not `warning_*`), `isDisputeOpen`, `isDisputeClosed`, covering all 8 SDK statuses including `prevented`
+- [x] 1.4 New `src/lib/payouts/order-status.ts` — `resolveOrderStatus({fullyRefunded, chargebackOpen, chargebackLost})`
+- [x] 1.5 Rewrite `test/unit/lib/payout-clawback.test.ts`: target math, idempotence under repeated application, refund↔dispute order-independence, unknown total ⇒ `null`
+- [x] 1.6 New `test/unit/lib/order-status.test.ts` — truth table over the three facts
 
-## 2. Pure kernel
+## 2. Schema
 
-- [x] 2.1 Create `src/lib/payouts/clawback.ts` with `refundRatio`, `isFullRefund`, `computeReversalCents` (delta, clamped to `[0, amount − alreadyReversed]`, floored), `computeReducedHoldCents` (survivor amount or `null` = void), and `reversalIdempotencyKey(payoutId, cumulativeReversedCents)`
-- [x] 2.2 Document in the module docstring: the ratio is taken against `charge.amount` (fee-inclusive) because Stripe refunds are amounts, not line items — and why the key is keyed on the cumulative amount rather than `(transfer, charge)`
-- [x] 2.3 Add `test/unit/lib/payout-clawback.test.ts` covering the proportional delta, clamping at the already-reversed total, the floor direction, the ≤ 0 survivor ⇒ void rule, and key derivation (same key on redelivery, different key for a larger second partial refund)
+- [x] 2.1 Migration on top of `20260808000000`: add `payouts.frozen_by_dispute_id text`, with a comment stating that freeze and refund accounting are orthogonal
+- [x] 2.2 `pnpm db:reset` and verify
 
-## 3. Stripe wrapper
+## 3. Ledger queries
 
-- [x] 3.1 Add `createTransferReversal({ transferId, amountCents, idempotencyKey })` to `src/lib/stripe/connect.ts`, passing the idempotency key in the request-options second argument exactly as `createTransfer` does
+- [x] 3.1 `applyReversalToHolds` → target-based; NEVER updates `amount_cents`; uses `.select()` and treats "0 rows matched" as a reconciliation case
+- [x] 3.2 `freezeHoldsForCharge` records `frozen_by_dispute_id`; `restoreHoldsForCharge` clears only rows carrying that id
+- [x] 3.3 `getTotalPendingPayouts` subtracts `reversed_amount_cents`
+- [x] 3.4 `releasePayoutReversal` stops taking a status argument — status is derived from `reversed_amount_cents` vs `amount_cents`
+- [x] 3.5 New `listUnconfirmedReversals` for the phantom-reversal sweep
 
-## 4. Ledger queries
+## 4. Retry worker
 
-- [x] 4.1 Replace `voidHoldsForCharge` with `applyRefundToHolds(supabase, chargeId, ratio, voidReason)` in `src/database/queries/payouts.ts`: full ⇒ cancel (unchanged behaviour), partial ⇒ reduce `amount_cents`, voiding only when the survivor would be ≤ 0; stamp `void_reason`
-- [x] 4.2 Add `restoreHoldsForCharge(supabase, chargeId)` — `cancelled` + `void_reason = 'dispute'` back to `pending`
-- [x] 4.3 Add `listReversibleRowsForCharge(supabase, chargeId)` returning the `paid` and `processing` rows for a charge
-- [x] 4.4 Add `recordPayoutReversal(supabase, payoutId, { reversedCents, stripeReversalId })` — accumulate `reversed_amount_cents`, set `reversed_at`, flip status to `'reversed'` once fully reversed
-- [x] 4.5 Make `getTotalPaidOut` net of reversals: sum `amount_cents − reversed_amount_cents` over `('paid','reversed')`, with the docstring explaining the `withdrawableBalanceCents` identity it protects
-- [x] 4.6 Add `'reversed'` to the `PayoutStatus` union and fix the resulting typecheck error in `earnings-content.tsx`'s status map
+- [x] 4.1 `PayableRow` carries the payable amount; `toPayableRow` subtracts reversals
+- [x] 4.2 Subtract at the two sites that bypass it: the stale-batch total and the post-claim recompute
+- [x] 4.3 `findTransferByGroup` keeps probing with the ORIGINAL `amount_cents`; transfers send the payable amount
+- [x] 4.4 A `transfer_failed` row with `reversed_amount_cents > 0` is never transferred — flagged for review
+- [ ] 4.5 Claim individual rows out of `pending` before calling Stripe, as the batch path already does
+- [x] 4.6 Phantom-reversal sweep (`reversed_at` set, `stripe_reversal_id` null, >30 min) alerting via `reportMoneyIncident`
 
-## 5. Clawback orchestrator
+## 5. Orchestrator + webhook
 
-- [x] 5.1 Create `src/lib/payouts/apply-clawback.ts` exporting `applyClawback({ chargeId, reversedCents, chargeCents, reason })`, used by both the refund and the lost-dispute paths
-- [x] 5.2 Reduce or void outstanding holds first via `applyRefundToHolds`
-- [x] 5.3 For each reversible row, reverse the computed delta with `createTransferReversal` + `reversalIdempotencyKey`, then `recordPayoutReversal`
-- [x] 5.4 For a `processing` row, probe `findTransferByGroup(payoutTransferGroup(row.id), destination, amount)` first: `found` ⇒ settle paid then reverse; `none`/`unknown` ⇒ do nothing, record and alert (fail closed)
-- [x] 5.5 Ensure no per-row failure escapes: each is caught, recorded on the row and alerted, and the function always resolves
+- [x] 5.1 `applyClawback` → `reconcileChargeClawback`: resolve the target once, abort entirely if unknown
+- [x] 5.2 `charge.refunded` reconciles money, then writes the recomputed order status
+- [x] 5.3 `charge.dispute.created`: freeze money always; touch access only for a real chargeback
+- [x] 5.4 `charge.dispute.closed`: handle all four closing states (`lost`, `won`, `warning_closed`, `prevented`)
+- [x] 5.5 All three cases recompute order status through `resolveOrderStatus` — no unconditional `completed`
+- [x] 5.6 `assertOrdersResolved` in every case, including `dispute.closed`
 
-## 6. Observability
+## 6. UI
 
-- [x] 6.1 Create `src/lib/observability/report-money-incident.ts` — console.error plus a lazy `await import('@sentry/nextjs')` `captureException` with a stable fingerprint and `subsystem` tags, PII stripped, never throwing (pattern from `src/lib/rate-limit.ts`)
-- [x] 6.2 Create `src/lib/email/send-clawback-alert.ts` mirroring `send-face-search-alert.ts`
-- [x] 6.3 Add optional `OPS_ALERT_EMAIL` to `env.mjs`; absent ⇒ the email is a no-op
+- [x] 6.1 Earnings payout history renders `amount_cents − reversed_amount_cents`
 
-## 7. Webhook
+## 7. Tests + close-out
 
-- [x] 7.1 Add `getGuestOrderByPaymentIntentId` to `src/database/queries/guest-orders.ts` (the column already exists — no migration)
-- [x] 7.2 Rewrite `case 'charge.refunded'` to call `applyClawback` with `charge.amount_refunded` / `charge.amount` and to flip the guest order as well as the authenticated one
-- [x] 7.3 Add `case 'charge.dispute.created'`: order + guest order → `disputed`, holds voided with `void_reason = 'dispute'`, alert
-- [x] 7.4 Add `case 'charge.dispute.closed'`: `lost` ⇒ `applyClawback` for `dispute.amount` + record the dispute fee from `dispute.balance_transactions` into order metadata as a platform cost + alert; `won` ⇒ order back to `completed`, `restoreHoldsForCharge`, alert; any other status logged and ignored
-- [x] 7.5 Wrap each new case so a clawback failure cannot 500 the webhook, matching how `voidHoldsForCharge` is already isolated
-- [x] 7.6 Update the header docstring — both the "Handles" list and the "Stripe Dashboard setup required" list — with the two dispute events, and refresh the stale "Transfer reversal is NOT automatic" note
-- [x] 7.7 Add the two events to the expected list in `test/unit/api/stripe-webhook-setup-doc.test.ts`
-
-## 8. Integration tests
-
-- [x] 8.1 Mock `createTransferReversal` in `test/integration/api/stripe-webhook.test.ts` alongside the existing `createTransfer` mock
-- [x] 8.2 Dispute created: order and guest order become `disputed`, the outstanding hold is voided with the dispute reason
-- [x] 8.3 Dispute lost: a reversal is created for the photographer's net, the row records it, and `getTotalPaidOut` drops
-- [x] 8.4 Dispute won: the order returns to `completed` and the dispute-voided hold returns to `pending`, while a refund-voided hold stays voided
-- [x] 8.5 Full refund: reversal in full and the hold cancelled — T-216's existing refund test must not regress
-- [x] 8.6 Partial refund (the T-237 regression, red before the fix): the reversal is proportional and the hold survives with a reduced amount
-- [x] 8.7 Reversal failure: the webhook still returns 200, the row is marked and the incident is reported
-
-## 9. Docs and close-out
-
-- [x] 9.1 Update `ARCHITECTURE.md` §4.3 — it currently states that a made transfer needs manual reversal and that T-215 owns automating it
-- [x] 9.2 Update the payouts section of `CLAUDE.md` with the clawback path, the `disputed`/`reversed` statuses and the proportional rule
-- [x] 9.3 Add `payoutStatusReversed` copy to `en.json` and `es.json`
-- [x] 9.4 Run `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` (`src/lib/` is touched)
-- [x] 9.5 Run `/code-review ultra` on the diff and fix the real findings before committing
-- [x] 9.6 Archive T-237 pointing at this PR instead of opening a separate branch, as its ticket instructs
+- [x] 7.1 Integration: redelivery ×3 of one partial refund leaves one value
+- [x] 7.2 Integration: dispute → refund-to-settle → won leaves the order refunded and the photographer unpaid
+- [x] 7.3 Integration: inquiry open + `warning_closed` never touches access; payout payable again
+- [x] 7.4 Integration: `lost` with the charge fetch failing changes nothing and alerts
+- [x] 7.5 Integration: a partially reversed `transfer_failed` row is never transferred
+- [x] 7.6 Flip the two assertions that encode the old model (`stripe-webhook.test.ts:1993`, partial-refund access)
+- [ ] 7.7 Update the OpenSpec design + delta specs to the new model
+- [x] 7.8 `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build`
+- [ ] 7.9 `/code-review` again — the last pass is what caught that the previous fixes were wrong

@@ -3,7 +3,7 @@
  * For tracking photographer payout requests and processing
  */
 
-import { computeReducedHoldCents } from '@/lib/payouts/clawback';
+import { type ClawbackTarget, targetReversedCents } from '@/lib/payouts/clawback';
 import type { SupabaseServerClient } from './types';
 import { getErrorMessage } from './types';
 
@@ -59,6 +59,8 @@ export interface Payout {
   stripe_reversal_id: string | null;
   reversed_at: string | null;
   void_reason: PayoutVoidReason | null;
+  /** The dispute whose opening froze this row (T-215). Null unless frozen. */
+  frozen_by_dispute_id: string | null;
   created_at: string;
   updated_at: string;
   paid_at: string | null;
@@ -452,58 +454,57 @@ export async function listStaleProcessingBatches(
 }
 
 export interface HoldReductionOutcome {
-  /** Holds voided outright (a full reversal, or nothing payable left). */
+  /** Holds moved to their reversal target (a full reversal voids the row). */
+  applied: number;
+  /** Holds voided outright because the whole charge came back. */
   voided: number;
-  /** Holds kept with a smaller amount (a partial reversal). */
-  reduced: number;
-  /**
-   * Holds voided because their amount could NOT safely be changed — a
-   * `transfer_failed` row, whose Stripe idempotency key is already spent. A human
-   * decides whether the photographer is still owed the unrefunded remainder.
-   */
-  frozenForReview: number;
+  /** Rows a human must look at — nothing was changed for these. */
+  needsReview: number;
 }
 
 /**
- * Apply a refund or a lost dispute to the money that has NOT been sent yet
- * (T-216, corrected by T-215/T-237).
+ * Move the money that has NOT been sent yet to its reversal target
+ * (T-216, redesigned by T-215/T-237).
  *
  * Without this, T-216 would CREATE a loss the pre-ledger code does not have: a
  * stranded hold is accidentally protected by being stranded, but once a worker
  * pays holds it would happily send a refunded buyer's money to the photographer.
  *
- * ⚠️ **This used to void the whole hold on ANY `charge.refunded` — including a
- * partial one.** Stripe fires that event for partial refunds too, so refunding
- * €5 of a €20 sale destroyed the photographer's net on the remaining €15, and
- * destroyed it *irrecoverably*: the partial unique index on
- * `(stripe_charge_id, photographer_id)` blocks inserting a replacement row. Now a
- * partial reversal REDUCES the hold proportionally (`computeReducedHoldCents`)
- * and only a full one voids it.
+ * ⚠️ **`amount_cents` is never written here — it is immutable after insert.** The
+ * reduction lives in `reversed_amount_cents`, and the payable amount is
+ * `amount_cents - reversed_amount_cents` everywhere. Two bugs die with that rule:
  *
- * Only `pending` rows are touched here. A `processing` row may already have a
- * transfer in flight at Stripe; reversing that is the other half of the clawback
- * and belongs to `applyClawback`, which probes Stripe before acting — silently
- * cancelling it here would desync the ledger from Stripe.
+ *   - **Redelivery.** The previous version reduced the CURRENT amount by a
+ *     proportion of the CUMULATIVE refund, so each of Stripe's redeliveries (up to
+ *     three days, and routine here) reduced it again — 2000 → 1500 → 1125 → 844 on
+ *     one €5 refund, irrecoverably, since the exactly-once index blocks writing a
+ *     replacement row. Moving to a target is idempotent.
+ *   - **The spent idempotency key.** A `transfer_failed` row already made a Stripe
+ *     call under `payout_<id>` at its original amount; the retry worker's recovery
+ *     probe matches on that EXACT amount. Preserving `amount_cents` keeps the probe
+ *     able to recognise the transfer that was really made.
  *
- * `voidReason` is stored so a WON dispute can restore exactly what it voided
- * (see {@link restoreHoldsForCharge}).
+ * Only `pending` rows are touched. A `processing` row may have a transfer in
+ * flight; reversing that belongs to the clawback orchestrator, which probes Stripe
+ * before acting.
+ *
+ * `voidReason` is recorded for the audit trail. It is NOT how a won dispute
+ * restores a freeze — that is scoped by `frozen_by_dispute_id`, so the two
+ * mechanisms cannot interfere.
  */
 export async function applyReversalToHolds(
   supabase: SupabaseServerClient,
   params: {
     stripeChargeId: string;
-    /** CUMULATIVE amount reversed on the charge. */
-    reversedCents: number;
-    /** The charge total, fee included. */
-    chargeCents: number;
+    target: ClawbackTarget;
     voidReason: PayoutVoidReason;
   },
 ): Promise<HoldReductionOutcome> {
-  const { stripeChargeId, reversedCents, chargeCents, voidReason } = params;
+  const { stripeChargeId, target, voidReason } = params;
 
   const { data: holds, error } = await supabase
     .from('payouts')
-    .select('id, amount_cents, hold_reason')
+    .select('id, amount_cents, reversed_amount_cents, hold_reason')
     .eq('stripe_charge_id', stripeChargeId)
     .eq('status', 'pending');
 
@@ -511,70 +512,71 @@ export async function applyReversalToHolds(
     throw new Error(`Failed to load holds for charge: ${getErrorMessage(error)}`);
   }
 
-  const outcome: HoldReductionOutcome = { voided: 0, reduced: 0, frozenForReview: 0 };
+  const outcome: HoldReductionOutcome = { applied: 0, voided: 0, needsReview: 0 };
 
   for (const hold of (holds ?? []) as Array<{
     id: string;
     amount_cents: number;
+    reversed_amount_cents: number | null;
     hold_reason: PayoutHoldReason | null;
   }>) {
-    const survivor = computeReducedHoldCents({
-      amountCents: hold.amount_cents,
-      reversedCents,
-      chargeCents,
-    });
+    const alreadyReversed = hold.reversed_amount_cents ?? 0;
+    const targetForRow = targetReversedCents(hold.amount_cents, target);
+    if (targetForRow <= alreadyReversed) continue;
 
-    // ⚠️ **A `transfer_failed` row's amount is frozen — it must never be reduced.**
-    // It is the one hold reason created AFTER a Stripe call, so its idempotency
-    // key `payout_<id>` has already been spent at the original amount. Change the
-    // amount and the retry worker replays that same key with a different body:
-    // Stripe 400s for the key's whole 24-hour life (indistinguishable from an
-    // outage in the logs) and then, once the key expires, issues a genuine SECOND
-    // transfer. The worker's recovery probe cannot save it either, because
-    // `findTransferByGroup` matches on the exact amount and would no longer
-    // recognise the transfer that was really made.
-    //
-    // So a partial reversal voids these instead. Not sending money is the
-    // recoverable direction — the row can be restored by UPDATE if a human decides
-    // the photographer is still owed the unrefunded part — whereas a wedged-then-
-    // double-paid transfer is not.
-    const keyAlreadySpent = hold.hold_reason === 'transfer_failed';
-    const mustFreeze = keyAlreadySpent && survivor !== null;
+    const fullyReversed = targetForRow >= hold.amount_cents;
 
-    const update =
-      survivor === null || mustFreeze
-        ? {
-            status: 'cancelled' as const,
-            void_reason: voidReason,
-            admin_notes: mustFreeze
-              ? `T-215: voided for review — a partial ${voidReason} (${reversedCents} of ${chargeCents} cents) cannot reduce a transfer_failed hold, whose Stripe idempotency key is already spent at ${hold.amount_cents} cents.`
-              : `T-215: voided — the originating charge was ${
-                  voidReason === 'dispute' ? 'disputed' : 'refunded'
-                } in full.`,
-          }
-        : {
-            amount_cents: survivor,
-            admin_notes: `T-215: reduced from ${hold.amount_cents} to ${survivor} cents — ${reversedCents} of ${chargeCents} cents was ${
-              voidReason === 'dispute' ? 'disputed' : 'refunded'
-            }.`,
-          };
+    // ⚠️ A `transfer_failed` row cannot be PARTIALLY clawed back. Its idempotency
+    // key is spent at the original amount, so the worker could only ever re-send
+    // that amount — more than is now owed. Voiding it is the recoverable
+    // direction (the row can be restored by UPDATE); a human decides whether the
+    // photographer is still owed the unreversed part.
+    const cannotPartiallyReduce = hold.hold_reason === 'transfer_failed' && !fullyReversed;
 
-    const { error: updateError } = await supabase
+    const update = cannotPartiallyReduce
+      ? {
+          status: 'cancelled' as const,
+          void_reason: voidReason,
+          admin_notes: `T-215: voided for review — ${target.reversedCents} of ${target.chargeTotalCents} cents was ${voidReason === 'dispute' ? 'disputed' : 'refunded'}, but this hold's Stripe idempotency key is already spent at ${hold.amount_cents} cents and cannot be partially reduced.`,
+        }
+      : {
+          reversed_amount_cents: targetForRow,
+          reversed_at: new Date().toISOString(),
+          ...(fullyReversed
+            ? {
+                status: 'cancelled' as const,
+                void_reason: voidReason,
+                admin_notes: `T-215: voided — the originating charge was ${voidReason === 'dispute' ? 'disputed' : 'refunded'} in full.`,
+              }
+            : {
+                admin_notes: `T-215: ${targetForRow} of ${hold.amount_cents} cents clawed back — ${target.reversedCents} of ${target.chargeTotalCents} cents was ${voidReason === 'dispute' ? 'disputed' : 'refunded'}.`,
+              }),
+        };
+
+    // ⚠️ `.select()` is load-bearing: re-asserting `pending` without checking what
+    // matched let a row the retry worker had already claimed be REPORTED as
+    // neutralised while the worker went on to pay it.
+    const { data: updated, error: updateError } = await supabase
       .from('payouts')
       .update(update)
-      // Re-assert `pending`: the retry worker may have claimed this row into
-      // `processing` between the read above and here, and a claimed row has a
-      // Stripe call in flight against it.
       .eq('id', hold.id)
-      .eq('status', 'pending');
+      .eq('status', 'pending')
+      .select('id');
 
     if (updateError) {
       throw new Error(`Failed to apply reversal to hold: ${getErrorMessage(updateError)}`);
     }
 
-    if (mustFreeze) outcome.frozenForReview += 1;
-    else if (survivor === null) outcome.voided += 1;
-    else outcome.reduced += 1;
+    if ((updated ?? []).length === 0) {
+      // The worker claimed it between our read and our write, so it may be paying
+      // right now. Nothing was changed and nobody may assume otherwise.
+      outcome.needsReview += 1;
+      continue;
+    }
+
+    if (cannotPartiallyReduce) outcome.needsReview += 1;
+    else if (fullyReversed) outcome.voided += 1;
+    else outcome.applied += 1;
   }
 
   return outcome;
@@ -595,13 +597,15 @@ export async function applyReversalToHolds(
 export async function freezeHoldsForCharge(
   supabase: SupabaseServerClient,
   stripeChargeId: string,
+  disputeId: string,
 ): Promise<number> {
   const { data, error } = await supabase
     .from('payouts')
     .update({
       status: 'cancelled',
       void_reason: 'dispute',
-      admin_notes: 'T-215: frozen — a chargeback was opened against this charge.',
+      frozen_by_dispute_id: disputeId,
+      admin_notes: `T-215: frozen — dispute ${disputeId} was opened against this charge.`,
     })
     .eq('stripe_charge_id', stripeChargeId)
     .eq('status', 'pending')
@@ -628,17 +632,22 @@ export async function freezeHoldsForCharge(
 export async function restoreHoldsForCharge(
   supabase: SupabaseServerClient,
   stripeChargeId: string,
+  disputeId: string,
 ): Promise<number> {
   const { data, error } = await supabase
     .from('payouts')
     .update({
       status: 'pending',
       void_reason: null,
-      admin_notes: 'T-215: restored — the dispute was won.',
+      frozen_by_dispute_id: null,
+      admin_notes: `T-215: unfrozen — dispute ${disputeId} closed without loss.`,
     })
     .eq('stripe_charge_id', stripeChargeId)
     .eq('status', 'cancelled')
-    .eq('void_reason', 'dispute')
+    // ⚠️ Scoped to THIS dispute. Matching on `void_reason` alone resurrected holds
+    // voided by a real refund: settling a chargeback by refunding, then winning
+    // it, paid the photographer for a sale the buyer got back in full.
+    .eq('frozen_by_dispute_id', disputeId)
     .select('id');
 
   if (error) {
@@ -744,24 +753,73 @@ export async function releasePayoutReversal(
   supabase: SupabaseServerClient,
   payoutId: string,
   reversedCents: number,
-  previousStatus: PayoutStatus,
 ): Promise<void> {
   const { data: current, error: readError } = await supabase
     .from('payouts')
-    .select('reversed_amount_cents')
+    .select('amount_cents, reversed_amount_cents, stripe_transfer_id')
     .eq('id', payoutId)
     .maybeSingle();
 
-  if (readError || !current) return;
+  if (readError || !current) {
+    console.error(`[payouts] could not read payout ${payoutId} to release its reversal`);
+    return;
+  }
 
-  const held = (current as { reversed_amount_cents: number | null }).reversed_amount_cents ?? 0;
-  await supabase
+  const row = current as {
+    amount_cents: number;
+    reversed_amount_cents: number | null;
+    stripe_transfer_id: string | null;
+  };
+  const released = Math.max(0, (row.reversed_amount_cents ?? 0) - Math.max(0, reversedCents));
+
+  // ⚠️ The status is DERIVED, never restored from a captured value. Taking a
+  // `previousStatus` argument wrote back the status read before the row was
+  // settled, so a failed reversal on a transfer we had just confirmed rewrote a
+  // `paid` row to `processing` — money that provably left the platform stopped
+  // counting in `getTotalPaidOut`, overstating the photographer's balance.
+  const { error } = await supabase
     .from('payouts')
     .update({
-      reversed_amount_cents: Math.max(0, held - Math.max(0, reversedCents)),
-      status: previousStatus,
+      reversed_amount_cents: released,
+      status: released >= row.amount_cents ? 'reversed' : 'paid',
     })
     .eq('id', payoutId);
+
+  if (error) {
+    console.error(`[payouts] failed to release reversal on ${payoutId}:`, error);
+  }
+}
+
+/**
+ * Reversals we recorded but never confirmed with Stripe (T-215).
+ *
+ * `reservePayoutReversal` writes before the Stripe call — deliberately, so a
+ * failure claws back LESS rather than more — which means a process killed in
+ * between leaves a row claiming money came back when it never did. Nothing else
+ * would ever notice: the target maths sees `already == target` and does nothing,
+ * while `getTotalPaidOut` deducts money still sitting in the photographer's Stripe
+ * account. This is the sweep that makes the docstring's "visible in
+ * reconciliation" true.
+ */
+export async function listUnconfirmedReversals(
+  supabase: SupabaseServerClient,
+  staleBeforeIso: string,
+  limit = 100,
+): Promise<Payout[]> {
+  const { data, error } = await supabase
+    .from('payouts')
+    .select('*')
+    .not('reversed_at', 'is', null)
+    .is('stripe_reversal_id', null)
+    .lt('reversed_at', staleBeforeIso)
+    .order('reversed_at', { ascending: true })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(`Failed to list unconfirmed reversals: ${getErrorMessage(error)}`);
+  }
+
+  return (data ?? []) as Payout[];
 }
 
 /**
@@ -839,7 +897,7 @@ export async function getTotalPendingPayouts(
 ): Promise<number> {
   const { data, error } = await supabase
     .from('payouts')
-    .select('amount_cents')
+    .select('amount_cents, reversed_amount_cents')
     .eq('photographer_id', photographerId)
     .in('status', ['pending', 'approved', 'processing']);
 
@@ -847,5 +905,13 @@ export async function getTotalPendingPayouts(
     throw new Error(`Failed to get pending payouts: ${getErrorMessage(error)}`);
   }
 
-  return (data ?? []).reduce((sum, payout) => sum + payout.amount_cents, 0);
+  // Net of clawbacks, for the same reason `getTotalPaidOut` is. `amount_cents` is
+  // immutable now, so a partially clawed-back hold no longer shrinks its own
+  // column — without this subtraction the withdrawable balance would be
+  // understated by exactly the reversed amount, the mirror of the bug the
+  // `getTotalPaidOut` docstring exists to prevent.
+  return (data ?? []).reduce(
+    (sum, payout) => sum + payout.amount_cents - (payout.reversed_amount_cents ?? 0),
+    0,
+  );
 }

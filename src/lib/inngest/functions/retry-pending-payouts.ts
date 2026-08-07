@@ -127,15 +127,30 @@ export const retryPendingPayouts = inngest.createFunction(
 );
 
 /** A payout row is a `PayableRow` plus the fields only the DB layer needs. */
+/**
+ * Project a ledger row into what the batching maths needs.
+ *
+ * ⚠️ `amount_cents` is the amount the sale ORIGINALLY owed; what is still payable
+ * is `amount_cents - reversed_amount_cents` (T-215). The column is immutable so
+ * that a partial clawback is idempotent under Stripe redelivery and so the
+ * recovery probe can still recognise a transfer made at the original amount — the
+ * price of that is that every consumer must subtract, here and at the two sites
+ * below that read raw rows.
+ */
 function toPayableRow(row: Payout): PayableRow {
   return {
     id: row.id,
     photographer_id: row.photographer_id,
-    amount_cents: row.amount_cents,
+    amount_cents: payableCents(row),
     currency: row.currency,
     stripe_charge_id: row.stripe_charge_id,
     hold_reason: row.hold_reason,
   };
+}
+
+/** What is still owed on a row after any clawback. */
+function payableCents(row: Pick<Payout, 'amount_cents' | 'reversed_amount_cents'>): number {
+  return Math.max(0, row.amount_cents - (row.reversed_amount_cents ?? 0));
 }
 
 /**
@@ -185,7 +200,7 @@ export async function runRetryPendingPayoutsFlow(
       const destination = connect?.stripe_connect_account_id;
       if (!destination) continue;
 
-      const totalCents = rows.reduce((sum, row) => sum + row.amount_cents, 0);
+      const totalCents = rows.reduce((sum, row) => sum + payableCents(row), 0);
       const probe = await deps.findTransferByGroup({
         transferGroup: batchTransferGroup(batchId),
         destination,
@@ -304,6 +319,13 @@ export async function runRetryPendingPayoutsFlow(
       // the charge's remaining headroom. So probe first, exactly as the batch
       // path does.
       if (row.hold_reason === 'transfer_failed') {
+        // ⚠️ `row.amount_cents` here is the PAYABLE amount, and the probe must
+        // match the ORIGINAL — that is what the spent idempotency key describes.
+        // The two only diverge when a clawback partially reduced this row, and
+        // `applyReversalToHolds` voids such rows precisely because neither the
+        // key nor the probe can express the new amount. Rows that reach here are
+        // therefore un-clawed-back, and the guard in `resolve-payable-holds`
+        // keeps it that way.
         const probe = await deps.findTransferByGroup({
           transferGroup: payoutTransferGroup(row.id),
           destination,
@@ -380,7 +402,7 @@ export async function runRetryPendingPayoutsFlow(
       // ⚠️ Recompute from what we ACTUALLY claimed. A concurrent run may have
       // taken part of the group, and transferring the pre-claim total would send
       // money for rows we don't own.
-      const claimedCents = claimed.reduce((sum, row) => sum + row.amount_cents, 0);
+      const claimedCents = claimed.reduce((sum, row) => sum + payableCents(row), 0);
 
       if (claimedCents < STRIPE_MIN_TRANSFER_CENTS) {
         // Stripe would reject this and cache the error under the batch key for

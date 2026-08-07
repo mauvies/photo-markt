@@ -104,6 +104,12 @@ import {
   payoutTransferGroup,
   STRIPE_MIN_TRANSFER_CENTS,
 } from '@/lib/payouts/batching';
+import { isChargeback, isDisputeOpen, resolveClawbackTarget } from '@/lib/payouts/clawback';
+import {
+  type ClawbackOrderStatus,
+  isFullyRefunded,
+  resolveOrderStatus,
+} from '@/lib/payouts/order-status';
 import { getPhotographerNetCents } from '@/lib/plans';
 import { stripe } from '@/lib/stripe/config';
 import {
@@ -228,35 +234,87 @@ async function moveOrdersTo(
   }
 }
 
-const markOrdersRefunded = (orders: ResolvedOrders) =>
-  moveOrdersTo(orders, 'refunded', { refunded_at: new Date().toISOString() });
-
-const markOrdersDisputed = (orders: ResolvedOrders) =>
-  moveOrdersTo(orders, 'disputed', { disputed_at: new Date().toISOString() });
-
-const markOrdersCompleted = (orders: ResolvedOrders) => moveOrdersTo(orders, 'completed');
+/**
+ * Recompute the buyer's entitlement from the charge, and write it.
+ *
+ * There is no "mark refunded" / "restore" pair any more: those verbs did not
+ * compose, and their non-composition is what handed a fully refunded buyer
+ * permanent access when the dispute they had opened was later won. The status is
+ * a pure function of three facts (`resolveOrderStatus`), so applying it twice, or
+ * out of order, lands in the same place.
+ */
+async function syncOrderAccess(
+  orders: ResolvedOrders,
+  charge: Stripe.Charge,
+  disputeFacts: { chargebackOpen: boolean; chargebackLost: boolean },
+  metadata?: Record<string, unknown>,
+): Promise<ClawbackOrderStatus> {
+  const status = resolveOrderStatus({
+    fullyRefunded: isFullyRefunded(charge.amount, charge.amount_refunded),
+    chargebackOpen: disputeFacts.chargebackOpen,
+    chargebackLost: disputeFacts.chargebackLost,
+  });
+  await moveOrdersTo(orders, status, metadata);
+  return status;
+}
 
 /**
- * The disputed charge's TOTAL, which a dispute event does not carry.
+ * The disputed/refunded charge as Stripe currently sees it.
  *
- * ⚠️ **`dispute.amount` is the disputed amount, not the charge total**, and the two
- * are not always equal — a partial capture, currency movement, or a dispute over
- * the unrefunded remainder of a partly-refunded charge all produce a smaller
- * value. Passing it as both numerator and denominator made every proportion
- * exactly 1, so a partial chargeback clawed back 100% of the photographer's
- * payout. The real total has to be fetched.
+ * ⚠️ **A dispute event does not carry the charge total, and `dispute.amount` is
+ * NOT it** — the SDK documents it as "usually the amount of the charge, but it can
+ * differ". Using it as the denominator made every proportion exactly 1, so a
+ * partial chargeback clawed back 100% of the photographer's payout.
  *
- * Returns `null` when Stripe cannot be reached, and the kernel fails closed on
- * that: an unknown denominator reverses NOTHING rather than guessing at a
- * photographer's money.
+ * Returns `null` when Stripe cannot be reached, and the caller must then touch
+ * NOTHING: an unknown denominator has no safe numeric substitute, and the previous
+ * attempt to give it one (`?? 0`) read as "nothing was refunded" and left the
+ * money fully payable.
  */
-async function fetchChargeTotalCents(chargeId: string): Promise<number | null> {
+async function fetchCharge(chargeId: string): Promise<Stripe.Charge | null> {
   try {
-    const charge = await stripe.charges.retrieve(chargeId);
-    return typeof charge.amount === 'number' ? charge.amount : null;
+    return await stripe.charges.retrieve(chargeId);
   } catch (err) {
-    console.error(`[money] could not retrieve charge ${chargeId} for its total:`, err);
+    console.error(`[money] could not retrieve charge ${chargeId}:`, err);
     return null;
+  }
+}
+
+/**
+ * Whether a real (non-inquiry) chargeback is open or lost on this charge right
+ * now — the facts `resolveOrderStatus` needs that the current event may not carry.
+ *
+ * Fetched rather than remembered: a stored flag would have to be kept in step
+ * across redeliveries and out-of-order events, which is the class of bug this
+ * redesign exists to remove.
+ */
+async function fetchDisputeFacts(
+  chargeId: string,
+): Promise<{ chargebackOpen: boolean; chargebackLost: boolean; lostAmountCents: number }> {
+  try {
+    const disputes = await stripe.disputes.list({ charge: chargeId, limit: 10 });
+    let chargebackOpen = false;
+    let chargebackLost = false;
+    let lostAmountCents = 0;
+    for (const d of disputes.data) {
+      if (!isChargeback(d.status)) continue;
+      if (d.status === 'lost') {
+        chargebackLost = true;
+        lostAmountCents += d.amount;
+      } else if (isDisputeOpen(d.status)) {
+        chargebackOpen = true;
+      }
+    }
+    return { chargebackOpen, chargebackLost, lostAmountCents };
+  } catch (err) {
+    // Safe defaults, never a throw. These facts only make the outcome MORE
+    // restrictive — a missed open dispute means we compute `refunded` instead of
+    // `disputed`, and both revoke access — while a missed lost dispute under-claws
+    // the money, which the dispute's own event reconciles moments later. Throwing
+    // would 500 the webhook and make Stripe redeliver a money operation over a
+    // read that was never load-bearing.
+    console.error(`[money] could not list disputes for charge ${chargeId}:`, err);
+    return { chargebackOpen: false, chargebackLost: false, lostAmountCents: 0 };
   }
 }
 
@@ -931,31 +989,58 @@ export async function POST(request: Request) {
         // refund; the second half was a comment telling a human to go and reverse
         // it in the Stripe Dashboard.
         //
-        // `applyClawback` never throws — a 500 here makes Stripe redeliver a money
-        // operation — so failures come back as `needsReconciliation` and are
-        // already alerted.
+        // Everything is driven from a TARGET resolved out of Stripe's own state,
+        // never a delta applied to whatever the row currently holds — Stripe
+        // redelivers for up to three days, and the access half below makes that
+        // routine on purpose.
         const orderForCharge = await resolveOrdersForCharge(charge.payment_intent);
-        await applyClawback({
-          supabase: supabaseAdmin as unknown as SupabaseServerClient,
-          stripeChargeId: charge.id,
-          // `amount_refunded` is CUMULATIVE across partial refunds, which is
-          // exactly what the proportional math and the idempotency key want.
-          reversedCents: charge.amount_refunded ?? charge.amount,
-          chargeCents: charge.amount,
-          reason: 'refund',
-          orderId: orderForCharge.order?.id ?? orderForCharge.guestOrder?.id ?? null,
+        const orderRef = orderForCharge.order?.id ?? orderForCharge.guestOrder?.id ?? null;
+
+        // A dispute may already be open or lost on this charge — refunding to
+        // settle a chargeback is the normal path — so both contribute to the
+        // target and to the access decision.
+        const disputeFacts = await fetchDisputeFacts(charge.id);
+        const target = resolveClawbackTarget({
+          chargeAmountCents: charge.amount,
+          chargeAmountRefundedCents: charge.amount_refunded,
+          disputeLostAmountCents: disputeFacts.chargebackLost ? disputeFacts.lostAmountCents : 0,
         });
+
+        if (!target) {
+          // No denominator ⇒ no proportion ⇒ touch nothing. There is deliberately
+          // no numeric fallback: the previous one (`?? 0`) read as "nothing was
+          // refunded" and left the money fully payable while reporting success.
+          await reportMoneyIncident({
+            kind: 'needs-reconciliation',
+            message:
+              'A refund arrived for a charge whose total could not be resolved; no money was clawed back.',
+            context: { chargeId: charge.id, orderId: orderRef },
+          });
+        } else {
+          // `applyClawback` never throws — a 500 here makes Stripe redeliver a
+          // money operation — so failures come back as `needsReconciliation`.
+          await applyClawback({
+            supabase: supabaseAdmin as unknown as SupabaseServerClient,
+            stripeChargeId: charge.id,
+            target,
+            reason: 'refund',
+            orderId: orderRef,
+          });
+        }
 
         // Access. Money first, access second, and this half is allowed to throw:
         // a 500 makes Stripe redeliver, which is the only retry that ever revokes
         // a refunded buyer's access when the database is briefly unavailable.
         //
-        // A partial refund still revokes the whole order, which is pre-existing
-        // behaviour and stays deliberate: the order is the unit a buyer's
-        // entitlement is expressed in, and Stripe does not say which photos a
-        // partial refund covers.
+        // ⚠️ A PARTIAL refund does not revoke. Stripe refunds are amounts, not
+        // line items, so nothing says which photos one covers — and revoking the
+        // whole order dropped the entire sale out of the photographer's `net`
+        // while only the refunded fraction left `paidOut`, quietly eating the
+        // difference from their other earnings.
         assertOrdersResolved(orderForCharge);
-        await markOrdersRefunded(orderForCharge);
+        await syncOrderAccess(orderForCharge, charge, disputeFacts, {
+          refunded_at: new Date().toISOString(),
+        });
         break;
       }
 
@@ -969,36 +1054,48 @@ export async function POST(request: Request) {
       case 'charge.dispute.created': {
         const dispute = event.data.object as Stripe.Dispute;
         const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id;
-
         const orders = await resolveOrdersForCharge(disputePaymentIntent(dispute));
+        const orderRef = orders.order?.id ?? orders.guestOrder?.id ?? null;
+        const chargeback = isChargeback(dispute.status);
 
-        // Freeze unsent money for the duration — all of it, not a proportion: the
-        // whole charge is in question until the dispute closes, and a WON dispute
-        // restores exactly these rows (`void_reason = 'dispute'`).
+        // Freeze unsent money for the duration — ALWAYS, inquiry or not. Holding a
+        // payout is reversible and cheap; paying one out on a charge that then
+        // becomes a chargeback is not. Scoped to this dispute id so closing it
+        // clears exactly these rows and never a hold voided by a refund.
         try {
-          await freezeHoldsForCharge(supabaseAdmin as unknown as SupabaseServerClient, chargeId);
+          await freezeHoldsForCharge(
+            supabaseAdmin as unknown as SupabaseServerClient,
+            chargeId,
+            dispute.id,
+          );
         } catch (err) {
           console.error(`[payouts] failed to freeze holds for disputed charge ${chargeId}:`, err);
         }
 
         await reportMoneyIncident({
           kind: 'dispute-opened',
-          message: 'A chargeback was opened; buyer access revoked pending the outcome.',
+          message: chargeback
+            ? 'A chargeback was opened; buyer access revoked pending the outcome.'
+            : 'An inquiry was opened; payouts frozen, buyer access left untouched.',
           context: {
             chargeId,
             disputeId: dispute.id,
+            disputeStatus: dispute.status,
             amountCents: dispute.amount,
             reason: dispute.reason,
-            orderId: orders.order?.id ?? orders.guestOrder?.id ?? null,
+            orderId: orderRef,
           },
         });
         try {
           await sendClawbackAlertEmail({
             kind: 'dispute-opened',
-            summary: 'A chargeback was opened. Buyer access is revoked pending the outcome.',
+            summary: chargeback
+              ? 'A chargeback was opened. Buyer access is revoked pending the outcome.'
+              : 'An inquiry was opened. Payouts are frozen; the buyer keeps their photos.',
             details: {
               chargeId,
               disputeId: dispute.id,
+              disputeStatus: dispute.status,
               amountCents: dispute.amount,
               reason: dispute.reason,
             },
@@ -1007,11 +1104,29 @@ export async function POST(request: Request) {
           console.error('[money] failed to send dispute-opened alert', err);
         }
 
-        // Access last, and allowed to throw: the alert above has already recorded
-        // the dispute, so a 500 here costs a Stripe redelivery that retries the
-        // revocation rather than losing it.
-        assertOrdersResolved(orders);
-        await markOrdersDisputed(orders);
+        // ⚠️ Access moves only for a REAL chargeback. Inquiries arrive through this
+        // same event, and revoking a paying buyer's photos over a bank's suspicion
+        // — one that frequently closes by itself — is real damage; `warning_closed`
+        // restored nothing, so it was also permanent.
+        if (chargeback) {
+          assertOrdersResolved(orders);
+          const charge = await fetchCharge(chargeId);
+          if (charge) {
+            await syncOrderAccess(
+              orders,
+              charge,
+              { chargebackOpen: true, chargebackLost: false },
+              { disputed_at: new Date().toISOString(), dispute_id: dispute.id },
+            );
+          } else {
+            // We know a chargeback is open even if the charge could not be read,
+            // and revocation must not wait on Stripe being reachable.
+            await moveOrdersTo(orders, 'disputed', {
+              disputed_at: new Date().toISOString(),
+              dispute_id: dispute.id,
+            });
+          }
+        }
         break;
       }
 
@@ -1019,113 +1134,144 @@ export async function POST(request: Request) {
         const dispute = event.data.object as Stripe.Dispute;
         const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id;
         const orders = await resolveOrdersForCharge(disputePaymentIntent(dispute));
-        const orderId = orders.order?.id ?? orders.guestOrder?.id ?? null;
+        const orderRef = orders.order?.id ?? orders.guestOrder?.id ?? null;
+        const lost = dispute.status === 'lost';
 
-        if (dispute.status === 'lost') {
-          // The bank has taken the money back. Reversing the photographer's
-          // transfer is the accepted product decision: the alternative is the
-          // platform funding a sale that no longer exists. Stripe permits the
-          // resulting negative balance, which future sales absorb.
-          // The charge TOTAL, not `dispute.amount` — see `fetchChargeTotalCents`.
-          // A partial chargeback must claw back its own proportion, not everything.
-          const chargeTotal = await fetchChargeTotalCents(chargeId);
-          const outcome = await applyClawback({
-            supabase: supabaseAdmin as unknown as SupabaseServerClient,
-            stripeChargeId: chargeId,
-            reversedCents: dispute.amount,
-            // `null` ⇒ the kernel reverses nothing and the rows are flagged, which
-            // is the right way to fail when the proportion is unknown.
-            chargeCents: chargeTotal ?? 0,
-            reason: 'dispute',
-            orderId,
-          });
+        // Money. A lost dispute joins the reversal target; every other closing
+        // state (`won`, `warning_closed`, `prevented`) releases the freeze and
+        // leaves the refund accounting exactly where it was.
+        const charge = await fetchCharge(chargeId);
+        const target = charge
+          ? resolveClawbackTarget({
+              chargeAmountCents: charge.amount,
+              chargeAmountRefundedCents: charge.amount_refunded,
+              disputeLostAmountCents: lost ? dispute.amount : 0,
+            })
+          : null;
 
-          // The dispute fee is a PLATFORM cost and is deliberately not passed on:
-          // the photographer controls neither the buyer's fraud nor the dispute
-          // process, and a €15 fee on a €5 photo would leave them deeply negative
-          // for something they could not have prevented. Recorded on the order so
-          // the real cost of a chargeback is on file.
-          //
-          // Both order kinds move, not just `orders`: a guest whose
-          // `charge.dispute.created` never arrived would otherwise keep a
-          // `completed` guest order and a download token that still mints
-          // unwatermarked originals.
-          const feeCents = disputeFeeCents(dispute);
-          await moveOrdersTo(orders, 'disputed', {
-            dispute_id: dispute.id,
-            dispute_status: 'lost',
-            dispute_fee_cents: feeCents,
-            dispute_closed_at: new Date().toISOString(),
-          });
+        if (lost) {
+          if (!target) {
+            await reportMoneyIncident({
+              kind: 'needs-reconciliation',
+              message:
+                'A dispute was lost but the charge total could not be resolved; no money was clawed back.',
+              context: { chargeId, disputeId: dispute.id, orderId: orderRef },
+            });
+          } else {
+            const outcome = await applyClawback({
+              supabase: supabaseAdmin as unknown as SupabaseServerClient,
+              stripeChargeId: chargeId,
+              target,
+              reason: 'dispute',
+              orderId: orderRef,
+            });
 
-          await reportMoneyIncident({
-            kind: 'dispute-lost',
-            message: 'A chargeback was lost; the photographer transfer was reversed.',
-            context: {
-              chargeId,
-              disputeId: dispute.id,
-              orderId,
-              amountCents: dispute.amount,
-              disputeFeeCents: feeCents,
-              reversedRows: outcome.reversed,
-              reversedCents: outcome.reversedCents,
-              needsReconciliation: outcome.needsReconciliation,
-            },
-          });
-          try {
-            await sendClawbackAlertEmail({
+            // The dispute fee is a PLATFORM cost, deliberately not passed on: the
+            // photographer controls neither the buyer's fraud nor the dispute
+            // process, and a €15 fee on a €5 photo would leave them deeply
+            // negative for something they could not have prevented.
+            const feeCents = disputeFeeCents(dispute);
+            await reportMoneyIncident({
               kind: 'dispute-lost',
-              summary:
-                'A chargeback was lost. The photographer transfer was reversed and the platform absorbed the dispute fee.',
-              details: {
+              message: 'A chargeback was lost; the photographer transfer was reversed.',
+              context: {
                 chargeId,
                 disputeId: dispute.id,
-                orderId,
+                orderId: orderRef,
                 amountCents: dispute.amount,
                 disputeFeeCents: feeCents,
+                reversedRows: outcome.reversed,
                 reversedCents: outcome.reversedCents,
                 needsReconciliation: outcome.needsReconciliation,
               },
             });
-          } catch (err) {
-            console.error('[money] failed to send dispute-lost alert', err);
+            try {
+              await sendClawbackAlertEmail({
+                kind: 'dispute-lost',
+                summary:
+                  'A chargeback was lost. The photographer transfer was reversed and the platform absorbed the dispute fee.',
+                details: {
+                  chargeId,
+                  disputeId: dispute.id,
+                  orderId: orderRef,
+                  amountCents: dispute.amount,
+                  disputeFeeCents: feeCents,
+                  reversedCents: outcome.reversedCents,
+                  needsReconciliation: outcome.needsReconciliation,
+                },
+              });
+            } catch (err) {
+              console.error('[money] failed to send dispute-lost alert', err);
+            }
           }
-          break;
-        }
-
-        if (dispute.status === 'won') {
-          // Put back exactly what opening the dispute took away — no more. The
-          // hold restore is scoped to `void_reason = 'dispute'`, so a hold voided
-          // by a real refund on the same charge stays voided.
-          await markOrdersCompleted(orders);
+        } else {
+          // Not lost: release the freeze this dispute put on. Scoped by dispute id,
+          // so a hold voided by a real refund stays voided.
           try {
             const restored = await restoreHoldsForCharge(
               supabaseAdmin as unknown as SupabaseServerClient,
               chargeId,
+              dispute.id,
             );
             if (restored > 0) {
               console.log(
-                `[payouts] restored ${restored} hold(s) after winning dispute ${chargeId}`,
+                `[payouts] unfroze ${restored} hold(s) after dispute ${dispute.id} closed as '${dispute.status}'`,
               );
             }
           } catch (err) {
-            console.error(`[payouts] failed to restore holds for won dispute ${chargeId}:`, err);
+            console.error(`[payouts] failed to unfreeze holds for dispute ${dispute.id}:`, err);
+          }
+
+          // ⚠️ Unfreezing is not the end of it: a refund may have landed WHILE the
+          // hold was frozen, and the refund path only touches `pending` rows, so
+          // it could not have seen it. Reconciling right after the unfreeze is
+          // what makes "restore" mean "return the row to whatever the refund
+          // accounting says", rather than "give it back at full value" — which
+          // paid the photographer in full for a sale that had been refunded in
+          // full to settle the very dispute being closed.
+          if (target && target.reversedCents > 0) {
+            await applyClawback({
+              supabase: supabaseAdmin as unknown as SupabaseServerClient,
+              stripeChargeId: chargeId,
+              target,
+              reason: 'refund',
+              orderId: orderRef,
+            });
           }
 
           await reportMoneyIncident({
             kind: 'dispute-won',
-            message: 'A chargeback was won; buyer access and outstanding payouts restored.',
-            context: { chargeId, disputeId: dispute.id, orderId },
+            message: `A dispute closed as '${dispute.status}'; payouts unfrozen and access recomputed.`,
+            context: {
+              chargeId,
+              disputeId: dispute.id,
+              disputeStatus: dispute.status,
+              orderId: orderRef,
+            },
           });
-          break;
         }
 
-        // Any other closing status (`warning_closed`, and whatever Stripe adds
-        // later) touches neither money nor access. Doing nothing is the
-        // conservative direction, and saying so beats an unexplained silence.
-        console.log(
-          `[money] dispute ${dispute.id} closed as '${dispute.status}' — no money or access change`,
-        );
+        // Access, recomputed from the facts rather than "restored". A dispute that
+        // was settled BY refunding the buyer closes in our favour, and the old
+        // unconditional flip back to `completed` handed that refunded buyer
+        // permanent access to the originals.
+        assertOrdersResolved(orders);
+        if (charge) {
+          const facts = await fetchDisputeFacts(chargeId);
+          await syncOrderAccess(orders, charge, facts, {
+            dispute_id: dispute.id,
+            dispute_status: dispute.status,
+            dispute_closed_at: new Date().toISOString(),
+            ...(lost ? { dispute_fee_cents: disputeFeeCents(dispute) } : {}),
+          });
+        } else {
+          await reportMoneyIncident({
+            kind: 'needs-reconciliation',
+            message:
+              'A dispute closed but the charge could not be read, so buyer access was left as it was.',
+            context: { chargeId, disputeId: dispute.id, orderId: orderRef },
+          });
+        }
         break;
       }
 
