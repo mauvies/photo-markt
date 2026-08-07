@@ -1,7 +1,7 @@
 # T-215 · Un reembolso TOTAL debe revertir la transferencia y el acceso
 
 - **Prioridad:** P1
-- **Estado:** doing
+- **Estado:** todo (pausado 2026-08-07 — rama y PR draft ya existen, ver Notas)
 - **Riesgo:** alto  (pagos)
 - **Blockers:** ninguno para implementar; **T-239 (P0) bloquea el DESPLIEGUE** — si prod tiene el esquema desincronizado con T-216, la migración de este ticket se apila sobre una base rota
 - **Rama:** `fix/clawback-disputes-and-refunds`  (tipo = fix)
@@ -49,6 +49,12 @@ proporcionalidad, redondeo y cuadre del saldo pertenecen al caso parcial.
 - [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
+
+**⚠️ Pausado el 2026-08-07, con trabajo a medias en el repo.** Antes de retomarlo:
+la rama `fix/clawback-disputes-and-refunds` y el **PR #290 (draft, WIP — do not merge)** ya existen y
+contienen el rediseño completo (reembolso total + parcial + disputas), con **10 defectos conocidos** de
+la tercera revisión. No empezar de cero ni abrir otra rama: el siguiente paso es **podar esa rama** a
+solo-reembolso-total, lo que elimina la mayoría de esos defectos por ser específicos de disputas.
 
 **La rama ya existe y contiene el rediseño completo** (reembolsos + parciales + disputas), con ~10
 defectos conocidos de la tercera revisión, la mayoría específicos de disputas. Hay que **podarla** a

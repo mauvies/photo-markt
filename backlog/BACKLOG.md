@@ -12,17 +12,17 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
 | 1 | P0 | T-239 | El worker de payouts no ve las columnas del ledger: `transfer_batch_id does not exist` en una BD ya migrada | — | todo |
-| 2 | P1 | T-215 | Reembolso TOTAL: revertir la transferencia y el acceso | — | doing |
-| 3 | P1 | T-243 | Ciclo de vida de disputas: chargebacks, inquiries y su escalado | Dep T-215 | todo |
-| 4 | P2 | T-237 | Reembolso parcial: proporcional, y cuadrar el saldo que eso rompe | Dep T-215 | todo |
-| 5 | P1 | T-240 | Las fotos de un evento no terminan de procesarse (evento `e5ae2822`) | Diagnosticar tras T-239 | todo |
-| 6 | P2 | T-236 | Barrido de órdenes sin payout: las varadas que T-216 no cubre | Dep T-239 (arreglar la causa antes de barrer) | todo |
-| 7 | P2 | T-241 | Guardar el perfil muestra un error falso «NEXT_REDIRECT» antes de guardar bien | — | todo |
-| 8 | P2 | T-229 | El conteo de fotos del event card ignora el override por ID de evento | — | todo |
-| 9 | P2 | T-230 | El estado previo a la búsqueda de un evento con reveal gate se ve vacío | — | todo |
-| 10 | P2 | T-232 | La edición de portada existe pero es inalcanzable desde los tabs del evento | Dep T-231 | todo |
-| 11 | P2 | T-233 | Alargar el event card: cambiar el aspect ratio del contenedor de la portada | Dep T-229 | todo |
-| 12 | P2 | T-242 | El header y la barra de selección usan fondos distintos al pasar el contenido por debajo | — | todo |
+| 2 | P1 | T-240 | Las fotos de un evento no terminan de procesarse (evento `e5ae2822`) | Diagnosticar tras T-239 | todo |
+| 3 | P2 | T-236 | Barrido de órdenes sin payout: las varadas que T-216 no cubre | Dep T-239 (arreglar la causa antes de barrer) | todo |
+| 4 | P2 | T-241 | Guardar el perfil muestra un error falso «NEXT_REDIRECT» antes de guardar bien | — | todo |
+| 5 | P2 | T-229 | El conteo de fotos del event card ignora el override por ID de evento | — | todo |
+| 6 | P2 | T-230 | El estado previo a la búsqueda de un evento con reveal gate se ve vacío | — | todo |
+| 7 | P2 | T-232 | La edición de portada existe pero es inalcanzable desde los tabs del evento | Dep T-231 | todo |
+| 8 | P2 | T-233 | Alargar el event card: cambiar el aspect ratio del contenedor de la portada | Dep T-229 | todo |
+| 9 | P2 | T-242 | El header y la barra de selección usan fondos distintos al pasar el contenido por debajo | — | todo |
+| 10 | P1 | T-215 | Reembolso TOTAL: revertir la transferencia y el acceso | — | todo |
+| 11 | P1 | T-243 | Ciclo de vida de disputas: chargebacks, inquiries y su escalado | Dep T-215 | todo |
+| 12 | P2 | T-237 | Reembolso parcial: proporcional, y cuadrar el saldo que eso rompe | Dep T-215 | todo |
 | 13 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | Dep T-216 | todo |
 | 14 | P2 | T-219 | Podar el esquema muerto (`payment_accounts`, `ai_search_profiles`, columnas fantasma, `profiles.is_admin`) | — | todo |
 | 15 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
