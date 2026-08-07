@@ -1,7 +1,7 @@
 # T-230 · El estado previo a la búsqueda de un evento con reveal gate se ve vacío
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** normal  (solo UI/copy; no toca pagos, BD, auth — pero **no debe aflojar el gate**, ver Notas)
 - **Blockers:** ninguno
 - **Rama:** `design/gated-event-search-hero-panel`  (tipo = design)

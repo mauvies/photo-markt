@@ -14,7 +14,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | 1 | P1 | T-215 | Clawback: disputas y reembolsos deben revertir transferencia y acceso | — | todo |
 | 2 | P2 | T-237 | Un reembolso parcial anula el hold entero y deja al fotógrafo sin la parte no reembolsada | Dep T-215 (ejecutar junto) | todo |
 | 3 | P2 | T-236 | Barrido de órdenes sin payout: las varadas que T-216 no cubre | — | todo |
-| 4 | P2 | T-230 | El estado previo a la búsqueda de un evento con reveal gate se ve vacío | — | todo |
+| 4 | P2 | T-230 | El estado previo a la búsqueda de un evento con reveal gate se ve vacío | — | doing |
 | 5 | P2 | T-232 | La edición de portada existe pero es inalcanzable desde los tabs del evento | Dep T-231 | todo |
 | 6 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | Dep T-216 | todo |
 | 7 | P2 | T-219 | Podar el esquema muerto (`payment_accounts`, `ai_search_profiles`, columnas fantasma, `profiles.is_admin`) | — | todo |
