@@ -9,12 +9,12 @@ const DROPDOWN_MAX_HEIGHT = 240;
 const DROPDOWN_OFFSET = 8;
 
 export function ActivityDropdown({
-  filtered,
+  options,
   anchorRef,
   onSelect,
   compact,
 }: {
-  filtered: ActivityOption[];
+  options: ActivityOption[];
   anchorRef: React.RefObject<HTMLDivElement | null>;
   onSelect: (opt: ActivityOption) => void;
   compact?: boolean;
@@ -52,14 +52,11 @@ export function ActivityDropdown({
           : 'rounded-2xl animate-[dropdown-down_0.15s_ease-out]',
       )}
     >
-      {filtered.map((opt) => (
+      {options.map((opt) => (
         <button
           key={opt.value}
           type="button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            onSelect(opt);
-          }}
+          onClick={() => onSelect(opt)}
           className="w-full text-left px-4 py-2.5 text-sm hover:bg-muted transition-colors"
         >
           {opt.label}

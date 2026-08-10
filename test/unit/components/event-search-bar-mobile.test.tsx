@@ -16,9 +16,12 @@ vi.mock('next/navigation', () => ({
 
 // Server actions reach for supabaseAdmin — stub the whole module so the client
 // component renders in happy-dom.
-const searchSuggestionsAction = vi.fn(async () => ({ events: [], photographers: [] }));
+const searchSuggestionsAction = vi.fn(async (_query: string) => ({
+  events: [],
+  photographers: [],
+}));
 vi.mock('@/app/[lang]/dashboard/talent/events/actions', () => ({
-  searchSuggestionsAction: (...args: unknown[]) => searchSuggestionsAction(...args),
+  searchSuggestionsAction: (query: string) => searchSuggestionsAction(query),
 }));
 
 import { EventSearchBar } from '@/components/event-search-bar';
@@ -76,5 +79,66 @@ describe('mobile search sheet — initial focus', () => {
       expect(screen.getByText(en.eventSearchBar.activityLabel)).toBeTruthy();
     });
     expect(document.activeElement).not.toBe(input);
+  });
+});
+
+describe('filters modal — Activity is a select, not a typeahead', () => {
+  // Regression: Activity was a free-text combobox. Typing that matched no
+  // option produced a shake animation and a `validate()` that aborted the
+  // search on submit — a dead end a fixed option list cannot reach.
+  it('offers no typeable Activity field', async () => {
+    renderBar();
+    openFiltersSheet();
+
+    await screen.findByText(en.eventSearchBar.activityLabel);
+    // The placeholder used to belong to an <input>; it is now the button's
+    // resting label.
+    const placeholder = screen.getAllByText(en.eventSearchBar.activityPlaceholder)[0];
+    expect(placeholder.closest('button')).not.toBeNull();
+    expect(screen.queryByPlaceholderText(en.eventSearchBar.activityPlaceholder)).toBeNull();
+  });
+
+  it('expands and collapses the option list on tap, and picking one sets the field', async () => {
+    renderBar();
+    openFiltersSheet();
+
+    await screen.findByText(en.eventSearchBar.activityLabel);
+    const trigger = screen
+      .getAllByText(en.eventSearchBar.activityPlaceholder)[0]
+      .closest('button') as HTMLButtonElement;
+
+    // Collapsed: no options rendered.
+    expect(screen.queryByRole('button', { name: 'Surf' })).toBeNull();
+
+    fireEvent.click(trigger);
+    const option = screen.getByRole('button', { name: 'Surf' });
+    expect(option).toBeTruthy();
+
+    // Tapping the field again collapses it without changing the value.
+    fireEvent.click(trigger);
+    expect(screen.queryByRole('button', { name: 'Surf' })).toBeNull();
+
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole('button', { name: 'Surf' }));
+
+    // Selecting collapses the list and shows the label in the field.
+    expect(screen.queryByRole('button', { name: 'Surf' })).toBeNull();
+    expect(screen.getAllByText('Surf').length).toBeGreaterThan(0);
+  });
+
+  it('submits the selected activity as its option value', async () => {
+    renderBar();
+    openFiltersSheet();
+
+    await screen.findByText(en.eventSearchBar.activityLabel);
+    const trigger = screen
+      .getAllByText(en.eventSearchBar.activityPlaceholder)[0]
+      .closest('button') as HTMLButtonElement;
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole('button', { name: 'Surf' }));
+    fireEvent.click(screen.getAllByRole('button', { name: en.eventSearchBar.searchButton })[0]);
+
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(push.mock.calls[0][0]).toContain('activity=SURF');
   });
 });

@@ -30,7 +30,7 @@ import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
 import { ActivityDropdown } from './ActivityDropdown';
-import { useActivityCombobox } from './EventSearchBar.hooks';
+import { useActivitySelect } from './EventSearchBar.hooks';
 import type { EventSearchBarProps } from './EventSearchBar.types';
 import {
   BLUR_DISMISS_DELAY_MS,
@@ -85,7 +85,6 @@ export function EventSearchBar({
   const [where, setWhere] = useState(initialWhere);
   const [photographer, setPhotographer] = useState(initialPhotographer);
   const whereRef = useRef<HTMLInputElement>(null);
-  const activityInputRef = useRef<HTMLInputElement>(null);
   const whereContainerRef = useRef<HTMLDivElement>(null);
 
   const [filterModalOpen, setFilterModalOpen] = useState(false);
@@ -123,7 +122,7 @@ export function EventSearchBar({
     () => [...activityOptions].sort((a, b) => a.label.localeCompare(b.label)),
     [],
   );
-  const activity = useActivityCombobox(initialActivity, sortedActivities);
+  const activity = useActivitySelect(initialActivity, sortedActivities);
   const debouncedWhere = useDebounce(where, 150);
 
   useEffect(() => {
@@ -179,8 +178,9 @@ export function EventSearchBar({
 
   const handleSearch = useCallback(() => {
     setShowSuggestions(false);
-    const validatedActivity = activity.validate();
-    if (validatedActivity === null) return;
+    // A select can only hold a real option value (or none), so there is
+    // nothing left to validate before submitting.
+    const selectedActivity = activity.selectedValue;
 
     // If the where input looks like an access code, route directly to that
     // event. The destination route is controlled by `resolvedAccessCodeHref`
@@ -198,13 +198,13 @@ export function EventSearchBar({
     const dt = dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : '';
 
     if (onSearch) {
-      onSearch(where, validatedActivity, df, dt);
+      onSearch(where, selectedActivity, df, dt);
       setMobileDialogOpen(false);
       return;
     }
     const params = new URLSearchParams();
     if (trimmedWhere) params.set('where', trimmedWhere);
-    if (validatedActivity) params.set('activity', validatedActivity);
+    if (selectedActivity) params.set('activity', selectedActivity);
     if (df) params.set('dateFrom', df);
     if (dt) params.set('dateTo', dt);
     if (presetLabel) params.set('preset', presetLabel);
@@ -421,62 +421,63 @@ export function EventSearchBar({
 
                 {mobileMoreFiltersOpen && (
                   <>
-                    {/* biome-ignore lint/a11y/noStaticElementInteractions: onMouseDown dismisses the date picker when tapping another field — no semantic role applies */}
+                    {/* Activity — tap to expand the option list, exactly like
+                        the "When" card below it. No text input: the value can
+                        only be one of the listed activities. */}
                     <section
                       ref={activity.containerRef}
-                      className="relative rounded-2xl border bg-background px-4 py-3 shadow-sm"
-                      onMouseDown={() => setMobileWhenOpen(false)}
+                      className="relative rounded-2xl border bg-background shadow-sm overflow-hidden"
                     >
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        {t('activityLabel')}
-                      </p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <input
-                          ref={activityInputRef}
+                      <div className="flex items-center">
+                        <button
+                          type="button"
                           id="event-search-activity-mobile"
-                          name="activity-mobile"
-                          type="text"
-                          placeholder={t('activityPlaceholder')}
-                          value={activity.inputValue}
-                          onChange={(e) => {
-                            activity.setInputValue(e.target.value);
-                            activity.setOpen(true);
+                          className="min-w-0 flex-1 px-4 py-3 text-left"
+                          aria-expanded={activity.open}
+                          onClick={() => {
+                            setMobileWhenOpen(false);
+                            activity.toggle();
                           }}
-                          onFocus={() => activity.setOpen(true)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSearch();
-                            if (e.key === 'Escape') activity.setOpen(false);
-                          }}
-                          className={cn(
-                            'min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground/50',
-                            activity.error &&
-                              'animate-[shake_0.35s_ease-in-out] text-destructive placeholder:text-destructive/40',
-                          )}
-                        />
-                        {activity.inputValue && (
+                        >
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            {t('activityLabel')}
+                          </p>
+                          <div className="mt-2 flex items-center gap-2">
+                            <span
+                              className={cn(
+                                'flex-1 truncate text-base font-medium',
+                                activity.selectedLabel
+                                  ? 'text-foreground'
+                                  : 'text-muted-foreground/50',
+                              )}
+                            >
+                              {activity.selectedLabel || t('activityPlaceholder')}
+                            </span>
+                          </div>
+                        </button>
+                        {activity.selectedValue && (
                           <button
                             type="button"
-                            onClick={() => {
-                              activity.clear();
-                              activityInputRef.current?.focus();
-                            }}
-                            className="shrink-0 text-muted-foreground hover:text-foreground"
+                            aria-label={t('clearFilters')}
+                            onClick={() => activity.clear()}
+                            className="px-4 text-muted-foreground hover:text-foreground"
                           >
                             <X className="h-4 w-4" />
                           </button>
                         )}
                       </div>
-                      {activity.open && activity.filtered.length > 0 && (
-                        <div className="mt-2 max-h-48 overflow-y-auto rounded-xl bg-background py-1">
-                          {activity.filtered.map((opt) => (
+                      {activity.open && (
+                        <div className="max-h-48 overflow-y-auto border-t py-1">
+                          {activity.options.map((opt) => (
                             <button
                               key={opt.value}
                               type="button"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                activity.select(opt);
-                              }}
-                              className="w-full py-2.5 text-left text-sm transition-colors hover:bg-muted"
+                              aria-pressed={opt.value === activity.selectedValue}
+                              onClick={() => activity.select(opt)}
+                              className={cn(
+                                'w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-muted',
+                                opt.value === activity.selectedValue && 'font-semibold',
+                              )}
                             >
                               {opt.label}
                             </button>
@@ -655,61 +656,58 @@ export function EventSearchBar({
             </DialogHeader>
 
             <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-3">
-              {/* Activity — inline expandable card */}
+              {/* Activity — inline expandable card. Tap to expand/collapse the
+                  option list; there is no text input, so the field can only
+                  ever hold a listed activity. */}
               <div
                 ref={activity.containerRef}
                 className="rounded-xl border bg-background overflow-hidden"
               >
-                <div className="px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    {t('activityLabel')}
-                  </p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <input
-                      id="event-search-activity-modal"
-                      name="activity-modal"
-                      type="text"
-                      placeholder={t('activityPlaceholder')}
-                      value={activity.inputValue}
-                      onChange={(e) => {
-                        activity.setInputValue(e.target.value);
-                        activity.setOpen(true);
-                      }}
-                      onFocus={() => activity.setOpen(true)}
-                      onBlur={() =>
-                        setTimeout(() => activity.setOpen(false), BLUR_DISMISS_DELAY_MS)
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === 'Escape') activity.setOpen(false);
-                      }}
-                      className={cn(
-                        'min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/50',
-                        activity.error &&
-                          'animate-[shake_0.35s_ease-in-out] text-destructive placeholder:text-destructive/40',
-                      )}
-                    />
-                    {activity.inputValue && (
-                      <button
-                        type="button"
-                        onClick={() => activity.clear()}
-                        className="shrink-0 text-muted-foreground hover:text-foreground"
+                <div className="flex items-center">
+                  <button
+                    type="button"
+                    id="event-search-activity-modal"
+                    className="min-w-0 flex-1 px-4 py-3 text-left"
+                    aria-expanded={activity.open}
+                    onClick={activity.toggle}
+                  >
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {t('activityLabel')}
+                    </p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span
+                        className={cn(
+                          'flex-1 truncate text-sm font-medium',
+                          activity.selectedLabel ? 'text-foreground' : 'text-muted-foreground/50',
+                        )}
                       >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
+                        {activity.selectedLabel || t('activityPlaceholder')}
+                      </span>
+                    </div>
+                  </button>
+                  {activity.selectedValue && (
+                    <button
+                      type="button"
+                      aria-label={t('clearFilters')}
+                      onClick={() => activity.clear()}
+                      className="px-4 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
-                {activity.open && activity.filtered.length > 0 && (
+                {activity.open && (
                   <div className="border-t max-h-48 overflow-y-auto py-1">
-                    {activity.filtered.map((opt) => (
+                    {activity.options.map((opt) => (
                       <button
                         key={opt.value}
                         type="button"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          activity.select(opt);
-                        }}
-                        className="w-full px-4 py-2 text-left text-sm transition-colors hover:bg-muted"
+                        aria-pressed={opt.value === activity.selectedValue}
+                        onClick={() => activity.select(opt)}
+                        className={cn(
+                          'w-full px-4 py-2 text-left text-sm transition-colors hover:bg-muted',
+                          opt.value === activity.selectedValue && 'font-semibold',
+                        )}
                       >
                         {opt.label}
                       </button>
@@ -724,7 +722,12 @@ export function EventSearchBar({
                   <button
                     type="button"
                     className="flex-1 px-4 py-3 text-left"
-                    onClick={() => setModalWhenOpen((o) => !o)}
+                    onClick={() => {
+                      // Only one card expands at a time — the Activity list is
+                      // no longer dismissed by a blur now that it's a button.
+                      activity.setOpen(false);
+                      setModalWhenOpen((o) => !o);
+                    }}
                   >
                     <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                       {t('whenLabel')}
@@ -946,14 +949,10 @@ export function EventSearchBar({
           </div>
         </div>
 
+        {/* `shake` used to live here to reject free text typed into the
+            Activity field. That field is a select now, so unrejectable input
+            is impossible and the animation had no callers left. */}
         <style>{`
-          @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            20%       { transform: translateX(-5px); }
-            40%       { transform: translateX(5px); }
-            60%       { transform: translateX(-3px); }
-            80%       { transform: translateX(3px); }
-          }
           @keyframes dropdown-down {
             from { opacity: 0; transform: translateY(-6px); }
             to   { opacity: 1; transform: translateY(0); }
@@ -1001,41 +1000,31 @@ export function EventSearchBar({
       </div>
       <div className="w-px h-4 bg-border shrink-0" />
       <div ref={activity.containerRef} className="relative flex items-center gap-1">
-        <input
-          ref={activityInputRef}
+        <button
+          type="button"
           id="event-search-activity-compact"
-          name="activity"
-          placeholder={t('activityCompactPlaceholder')}
-          value={activity.inputValue}
-          onChange={(e) => {
-            activity.setInputValue(e.target.value);
-            activity.setOpen(true);
-          }}
-          onFocus={() => activity.setOpen(true)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleSearch();
-            if (e.key === 'Escape') activity.setOpen(false);
-          }}
+          aria-expanded={activity.open}
+          onClick={activity.toggle}
           className={cn(
-            'h-6 w-24 text-sm bg-transparent outline-none placeholder:text-muted-foreground/50',
-            activity.error && 'text-destructive',
+            'h-6 w-24 truncate text-left text-sm outline-none',
+            activity.selectedLabel ? 'text-foreground' : 'text-muted-foreground/50',
           )}
-        />
-        {activity.inputValue && (
+        >
+          {activity.selectedLabel || t('activityCompactPlaceholder')}
+        </button>
+        {activity.selectedValue && (
           <button
             type="button"
-            onClick={() => {
-              activity.clear();
-              activityInputRef.current?.focus();
-            }}
+            aria-label={t('clearFilters')}
+            onClick={() => activity.clear()}
             className="shrink-0 text-muted-foreground hover:text-foreground"
           >
             <X className="h-3.5 w-3.5" />
           </button>
         )}
-        {activity.open && activity.filtered.length > 0 && typeof document !== 'undefined' && (
+        {activity.open && typeof document !== 'undefined' && (
           <ActivityDropdown
-            filtered={activity.filtered}
+            options={activity.options}
             anchorRef={activity.containerRef}
             onSelect={activity.select}
             compact
