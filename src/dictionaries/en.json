@@ -814,9 +814,9 @@
     "connectBannerRestricted": "Action required on your Stripe account. Please update your payout settings.",
     "connectBannerButton": "Go to payout settings",
     "stripeAvailable": "Stripe Available Balance",
-    "stripeAvailableDesc": "Ready for automatic payout",
+    "stripeAvailableDesc": "Ready to be paid out to your bank",
     "stripePending": "Stripe Pending Balance",
-    "stripePendingDesc": "In Stripe fraud-check window",
+    "stripePendingDesc": "Held by Stripe until your account's payout delay passes",
     "payoutScheduleTitle": "Automatic Payouts",
     "payoutScheduleDesc": "Stripe pays your earnings out to your bank account automatically, following the payout schedule on your own Stripe account. You can check or change it there at any time.",
     "stripeDashboardButton": "Open my Stripe dashboard",
@@ -1919,15 +1919,36 @@
     "submitSuccess": "Ticket submitted — we'll be in touch soon.",
     "submitError": "Something went wrong. Please try again.",
     "quickActionsTalent": [
-      { "title": "Missing photo", "description": "Report a photo you expected but cannot find" },
-      { "title": "Download access", "description": "Fix issues with downloading purchased photos" },
-      { "title": "Order help", "description": "Questions about charges, receipts, or refunds" },
-      { "title": "Profile privacy", "description": "Control who can see your profile and photos" }
+      {
+        "title": "Missing photo",
+        "description": "Report a photo you expected but cannot find"
+      },
+      {
+        "title": "Download access",
+        "description": "Fix issues with downloading purchased photos"
+      },
+      {
+        "title": "Order help",
+        "description": "Questions about charges, receipts, or refunds"
+      },
+      {
+        "title": "Profile privacy",
+        "description": "Control who can see your profile and photos"
+      }
     ],
     "quickActionsPhotographer": [
-      { "title": "Payout status", "description": "Check the status of your sales and payouts" },
-      { "title": "Upload error", "description": "Resolve failed or stuck photo uploads" },
-      { "title": "Pricing settings", "description": "Help configuring per-photo prices" },
+      {
+        "title": "Payout status",
+        "description": "Check the status of your sales and payouts"
+      },
+      {
+        "title": "Upload error",
+        "description": "Resolve failed or stuck photo uploads"
+      },
+      {
+        "title": "Pricing settings",
+        "description": "Help configuring per-photo prices"
+      },
       {
         "title": "Copyright & watermarks",
         "description": "Protect your work and manage watermark rules"
