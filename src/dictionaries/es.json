@@ -440,7 +440,6 @@
     "revenueSubtitle": "Sigue tu actividad de ventas y solicita pagos.",
     "tabSales": "Ventas",
     "tabEarnings": "Ganancias",
-    "tabPayouts": "Pagos",
     "profileTitle": "Perfil",
     "profileSubtitle": "Administra tu información de perfil, detalles de cuenta y configuración de pagos.",
     "viewPublicProfile": "Ver perfil público",
@@ -822,8 +821,6 @@
     "bundleDiscountNote": "Cuando un comprador se lleva uno de tus packs por volumen, el bruto que ves es el precio del pack que tú fijaste: lo que realmente pagó. El descuento es una rebaja tuya; Photo Markt no descuenta nada extra por él y no tiene nada que ver con la tarifa de servicio del comprador.",
     "availableBalance": "Saldo disponible",
     "readyToWithdraw": "Listo para retirar",
-    "pendingPayout": "Pago pendiente",
-    "pendingPayoutDesc": "Ganado, aún no enviado — se paga automáticamente",
     "payoutStatusPending": "Pendiente",
     "payoutStatusProcessing": "Enviando",
     "payoutStatusPaid": "Pagado",
@@ -921,7 +918,9 @@
     "moneyReady": "Listo — Stripe lo enviará en el próximo pago de tu cuenta",
     "noMoneyInFlight": "No hay dinero en camino ahora mismo. Tus ventas aparecerán aquí.",
     "unsentTitle": "aún no se han podido enviar",
-    "unsentDesc": "Es dinero que has ganado. Se enviará automáticamente en cuanto tu cuenta de cobro pueda recibirlo."
+    "unsentDesc": "Es dinero que has ganado. Se enviará automáticamente en cuanto tu cuenta de cobro pueda recibirlo.",
+    "stripeAccountTitle": "Tu cuenta de Stripe",
+    "noMoneyInFlightShort": "Nada en camino ahora mismo"
   },
   "payoutProfile": {
     "pageTitle": "Completar perfil de cobro",
