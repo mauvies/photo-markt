@@ -15,9 +15,9 @@ import {
   getConnectStatusForEarningsAction,
   getEarningsSummaryAction,
   getHasBundlePricingAction,
+  getPayoutOutlookAction,
   getPayoutsAction,
   getPhotographerEarningsAction,
-  getStripeConnectBalanceAction,
 } from './actions';
 
 type EarningsT = Dictionary['earnings'];
@@ -229,13 +229,13 @@ export function useRevenueData() {
   const { data, isFetching } = useQuery({
     queryKey: ['earnings'] as const,
     queryFn: async () => {
-      const [summaryData, earningsData, payoutsData, connectStatus, stripeBalance, bundlePricing] =
+      const [summaryData, earningsData, payoutsData, connectStatus, payoutOutlook, bundlePricing] =
         await Promise.all([
           getEarningsSummaryAction(),
           getPhotographerEarningsAction(20),
           getPayoutsAction(),
           getConnectStatusForEarningsAction(),
-          getStripeConnectBalanceAction(),
+          getPayoutOutlookAction(),
           getHasBundlePricingAction(),
         ]);
       return {
@@ -243,7 +243,7 @@ export function useRevenueData() {
         earnings: earningsData,
         payouts: payoutsData,
         connectStatus: connectStatus.stripe_connect_status,
-        stripeBalance,
+        payoutOutlook,
         hasBundlePricing: bundlePricing,
       };
     },
@@ -260,7 +260,7 @@ export function useRevenueData() {
     // active, until the query resolved and it vanished. A loading state must not
     // make claims.
     connectStatus: data?.connectStatus ?? null,
-    stripeBalance: data?.stripeBalance ?? null,
+    payoutOutlook: data?.payoutOutlook ?? null,
     hasBundlePricing: data?.hasBundlePricing ?? false,
     isLoading: isFetching && !data,
   };

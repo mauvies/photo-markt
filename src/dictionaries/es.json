@@ -814,9 +814,9 @@
     "connectBannerRestricted": "Se requiere acción en tu cuenta de Stripe. Actualiza tu configuración de pagos.",
     "connectBannerButton": "Ir a configuración de pagos",
     "stripeAvailable": "Balance disponible en Stripe",
-    "stripeAvailableDesc": "Listo para pago automático",
+    "stripeAvailableDesc": "Listo para enviarse a tu banco",
     "stripePending": "Balance pendiente en Stripe",
-    "stripePendingDesc": "En revisión de fraude de Stripe",
+    "stripePendingDesc": "Retenido por Stripe hasta que pase el plazo de pago de tu cuenta",
     "payoutScheduleTitle": "Pagos automáticos",
     "payoutScheduleDesc": "Stripe envía tus ganancias a tu cuenta bancaria automáticamente, según la frecuencia de pagos configurada en tu propia cuenta de Stripe. Puedes consultarla o cambiarla allí cuando quieras.",
     "stripeDashboardButton": "Abrir mi panel de Stripe",
@@ -920,7 +920,9 @@
     "payoutProfileBannerButton": "Completar perfil",
     "payoutMethodCardTitle": "Método de cobro",
     "payoutMethodCardDesc": "Administra tu cuenta bancaria o método de pago para recibir retiros.",
-    "payoutMethodCardButton": "Administrar método de cobro"
+    "payoutMethodCardButton": "Administrar método de cobro",
+    "availableOn": "Disponible el",
+    "arrivesOn": "Llega a tu banco el"
   },
   "payoutProfile": {
     "pageTitle": "Completar perfil de cobro",
@@ -1919,19 +1921,28 @@
     "submitSuccess": "Ticket enviado — te contactaremos pronto.",
     "submitError": "Algo salió mal. Inténtalo de nuevo.",
     "quickActionsTalent": [
-      { "title": "Foto faltante", "description": "Reporta una foto que esperabas y no encuentras" },
+      {
+        "title": "Foto faltante",
+        "description": "Reporta una foto que esperabas y no encuentras"
+      },
       {
         "title": "Acceso a descargas",
         "description": "Soluciona problemas al descargar fotos compradas"
       },
-      { "title": "Ayuda con pedidos", "description": "Dudas sobre cargos, recibos o reembolsos" },
+      {
+        "title": "Ayuda con pedidos",
+        "description": "Dudas sobre cargos, recibos o reembolsos"
+      },
       {
         "title": "Privacidad del perfil",
         "description": "Controla quién puede ver tu perfil y tus fotos"
       }
     ],
     "quickActionsPhotographer": [
-      { "title": "Estado de pagos", "description": "Consulta el estado de tus ventas y pagos" },
+      {
+        "title": "Estado de pagos",
+        "description": "Consulta el estado de tus ventas y pagos"
+      },
       {
         "title": "Error de subida",
         "description": "Resuelve subidas de fotos fallidas o atascadas"
