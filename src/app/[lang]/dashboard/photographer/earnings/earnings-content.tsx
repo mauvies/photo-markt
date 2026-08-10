@@ -5,6 +5,7 @@ import { CalendarClock, DollarSign, TrendingUp, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import { BundleDiscountNote } from '@/components/bundle-discount-note';
 import { BuyerFeeNote } from '@/components/buyer-fee-note';
+import { StripeDashboardButton } from '@/components/stripe-dashboard-button';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { PhotographerEarning } from '@/database/queries/earnings';
@@ -252,7 +253,11 @@ export function EarningsContent() {
   const summary = data?.summary ?? null;
   const earnings = data?.earnings ?? [];
   const payouts = data?.payouts ?? [];
-  const connectStatus = data?.connectStatus ?? 'not_connected';
+  // ⚠️ `null` while loading, NOT `'not_connected'`. Defaulting an unknown to the
+  // alarming answer meant every visit flashed "connect your bank account to start
+  // receiving payouts" at photographers whose account is perfectly active, until
+  // the query resolved and it vanished. A loading state must not make claims.
+  const connectStatus = data?.connectStatus ?? null;
   const stripeBalance = data?.stripeBalance ?? null;
   const hasBundlePricing = data?.hasBundlePricing ?? false;
   const isLoading = isFetching && !data;
@@ -261,8 +266,8 @@ export function EarningsContent() {
 
   return (
     <div className="space-y-6">
-      {/* Connect account banner if not active */}
-      {connectStatus !== 'active' && (
+      {/* Connect account banner — only once we actually know the status */}
+      {connectStatus !== null && connectStatus !== 'active' && (
         <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-950 flex items-center justify-between gap-4">
           <p className="text-sm text-yellow-800 dark:text-yellow-200">
             {connectStatus === 'not_connected'
@@ -365,13 +370,26 @@ export function EarningsContent() {
             </div>
           )}
 
-          {/* Payout schedule info */}
+          {/* Payout schedule info.
+              ⚠️ This block used to promise "every Monday" and a "$25 minimum".
+              Neither is true: the platform sets no schedule (in code or in the
+              Stripe dashboard, where connected accounts are allowed to manage
+              their own), and Stripe has no such minimum setting at all. Both
+              numbers were invented, and they were being told to the person whose
+              money it is. What the photographer actually needs is the way IN. */}
           <div className="rounded-xl border bg-card p-6 shadow-sm flex items-start gap-4">
             <CalendarClock className="h-6 w-6 text-primary shrink-0 mt-0.5" />
             <div>
               <h3 className="font-semibold mb-1">{t('payoutScheduleTitle')}</h3>
               <p className="text-sm text-muted-foreground">{t('payoutScheduleDesc')}</p>
-              <p className="text-xs text-muted-foreground mt-1">{t('payoutMinimumThreshold')}</p>
+              {connectStatus === 'active' && (
+                <StripeDashboardButton
+                  label={t('stripeDashboardButton')}
+                  errorNotReady={t('stripeDashboardNotReady')}
+                  errorUnavailable={t('stripeDashboardUnavailable')}
+                  className="mt-3"
+                />
+              )}
             </div>
           </div>
 
