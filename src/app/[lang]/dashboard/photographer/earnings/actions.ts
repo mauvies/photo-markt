@@ -10,7 +10,7 @@ import { hasBundlePricingConfigured } from '@/database/queries/events';
 import { getPayouts, type Payout } from '@/database/queries/payouts';
 import { getProfileStripeConnect } from '@/database/queries/profiles';
 import { createClient } from '@/database/server';
-import { retrieveConnectBalance } from '@/lib/stripe/connect';
+import { type PayoutOutlook, retrievePayoutOutlook } from '@/lib/stripe/connect';
 
 export async function getEarningsSummaryAction(): Promise<EarningsSummary> {
   const supabase = await createClient();
@@ -72,10 +72,17 @@ export async function getPayoutsAction(
   return getPayouts(supabase, user.id, status);
 }
 
-export async function getStripeConnectBalanceAction(): Promise<{
-  available: number;
-  pending: number;
-} | null> {
+/**
+ * The photographer's balance AND the dates Stripe attaches to it (T-246).
+ *
+ * Replaces the balance-only read: two numbers with no dates left the obvious
+ * question — "so when do I actually get it?" — answered nowhere in the product,
+ * which is how the copy around them ended up inventing answers.
+ *
+ * Null when there is no active connected account, and on any Stripe failure: a
+ * missing date renders as nothing, never as a guess.
+ */
+export async function getPayoutOutlookAction(): Promise<PayoutOutlook | null> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -89,7 +96,7 @@ export async function getStripeConnectBalanceAction(): Promise<{
   }
 
   try {
-    return await retrieveConnectBalance(connect.stripe_connect_account_id);
+    return await retrievePayoutOutlook(connect.stripe_connect_account_id);
   } catch {
     return null;
   }

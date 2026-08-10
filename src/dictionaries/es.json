@@ -919,7 +919,9 @@
     "payoutProfileBannerButton": "Completar perfil",
     "payoutMethodCardTitle": "Método de cobro",
     "payoutMethodCardDesc": "Administra tu cuenta bancaria o método de pago para recibir retiros.",
-    "payoutMethodCardButton": "Administrar método de cobro"
+    "payoutMethodCardButton": "Administrar método de cobro",
+    "availableOn": "Disponible el",
+    "arrivesOn": "Llega a tu banco el"
   },
   "payoutProfile": {
     "pageTitle": "Completar perfil de cobro",

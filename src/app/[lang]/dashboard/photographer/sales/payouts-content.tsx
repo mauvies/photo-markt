@@ -17,6 +17,15 @@ import {
 
 type EarningsT = Dictionary['earnings'];
 
+/** A date Stripe gave us, in the reader's own words. */
+function formatDay(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 /**
  * "When do I get my money?" — the Payouts tab.
  *
@@ -31,7 +40,7 @@ type EarningsT = Dictionary['earnings'];
 export function PayoutsContent() {
   const { t } = useTranslations<EarningsT>();
   const lp = useLocalizedPath();
-  const { payouts, connectStatus, stripeBalance, isLoading } = useRevenueData();
+  const { payouts, connectStatus, payoutOutlook, isLoading } = useRevenueData();
 
   return (
     <div className="space-y-6">
@@ -63,21 +72,33 @@ export function PayoutsContent() {
         </div>
       ) : (
         <>
-          {/* Live from Stripe: money already sitting in the photographer's own
-              connected account, as opposed to what our ledger says is owed. */}
-          {stripeBalance && (
+          {/* Live from Stripe: money already in the photographer's own account,
+              as opposed to what our ledger says is owed — plus the dates, which
+              are the part they actually came here for.
+              ⚠️ Every date is Stripe's own (`available_on` / `arrival_date`).
+              None is derived from `delay_days`: the two disagree in practice,
+              and a computed date would look authoritative while being wrong. */}
+          {payoutOutlook && (
             <div className="grid gap-4 sm:grid-cols-2">
               <SummaryCard
                 title={t('stripeAvailable')}
-                value={formatPrice(stripeBalance.available)}
+                value={formatPrice(payoutOutlook.availableCents)}
                 icon={<Wallet className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />}
-                description={t('stripeAvailableDesc')}
+                description={
+                  payoutOutlook.nextPayout
+                    ? `${t('arrivesOn')} ${formatDay(payoutOutlook.nextPayout.arrivalDate)}`
+                    : t('stripeAvailableDesc')
+                }
               />
               <SummaryCard
                 title={t('stripePending')}
-                value={formatPrice(stripeBalance.pending)}
+                value={formatPrice(payoutOutlook.pendingCents)}
                 icon={<CalendarClock className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />}
-                description={t('stripePendingDesc')}
+                description={
+                  payoutOutlook.nextAvailableOn
+                    ? `${t('availableOn')} ${formatDay(payoutOutlook.nextAvailableOn)}`
+                    : t('stripePendingDesc')
+                }
               />
             </div>
           )}

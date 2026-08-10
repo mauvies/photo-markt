@@ -919,7 +919,9 @@
     "payoutProfileBannerButton": "Complete Profile",
     "payoutMethodCardTitle": "Payout Method",
     "payoutMethodCardDesc": "Manage your bank account or payment method for receiving payouts.",
-    "payoutMethodCardButton": "Manage Payout Method"
+    "payoutMethodCardButton": "Manage Payout Method",
+    "availableOn": "Available on",
+    "arrivesOn": "Arrives in your bank on"
   },
   "payoutProfile": {
     "pageTitle": "Complete Payout Profile",
