@@ -71,7 +71,7 @@ export default async function DownloadPage({
   const photoItems: PhotoDownloadItem[] = [];
 
   await Promise.all(
-    guestOrder.items.map(async (item) => {
+    guestOrder.items.map(async (item, index) => {
       // Get the photo's storage path
       const { data: photo } = await supabaseAdmin
         .from('photos')
@@ -81,9 +81,19 @@ export default async function DownloadPage({
 
       if (!photo?.original_url) return;
 
+      // ⚠️ The download has to be asked for HERE, when the URL is signed.
+      // The markup already carries `<a download>`, but that attribute is
+      // **ignored for cross-origin URLs** — and these point at Supabase Storage,
+      // a different origin — so the browser navigated to the image instead and
+      // the buyer had to save it by hand from a raw storage URL. Supabase's
+      // `download` option sets `Content-Disposition: attachment` on the response,
+      // which is honoured whatever the origin.
+      const extension = photo.original_url.split('.').pop()?.toLowerCase() || 'jpg';
+      const filename = `photo-markt-${index + 1}.${extension}`;
+
       const { data: signedData } = await supabaseAdmin.storage
         .from('photos')
-        .createSignedUrl(photo.original_url, 3600);
+        .createSignedUrl(photo.original_url, 3600, { download: filename });
 
       if (!signedData?.signedUrl) return;
 

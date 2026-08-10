@@ -25,6 +25,22 @@ export function Toaster(props: ToasterProps) {
       mobileOffset={16}
       style={
         {
+          // Radix's modal Dialog (`disableOutsidePointerEvents`, the default
+          // for `modal={true}`) sets `document.body.style.pointerEvents =
+          // 'none'` while open, to make everything outside the dialog
+          // unclickable — and re-enables `auto` only on ITS OWN layer. The
+          // Toaster is a sibling in `[lang]/layout.tsx`, outside Radix's
+          // component tree entirely, so with no override it inherits that
+          // `none` and the whole toast — including "View cart" — becomes
+          // unclickable for as long as any modal Dialog is open: a click at
+          // its position falls through to the (`pointer-events: auto`)
+          // overlay behind it, which is exactly what closes the dialog.
+          // `pointer-events` is inheritable but any descendant can override
+          // it regardless of what an ancestor set, so pinning it back to
+          // `auto` here — closer to the toast than `body` — restores
+          // clickability without touching Radix's protection for the rest
+          // of the page (T-241).
+          pointerEvents: 'auto',
           '--toast-close-button-start': 'auto',
           '--toast-close-button-end': '12px',
           '--toast-close-button-transform': 'none',
