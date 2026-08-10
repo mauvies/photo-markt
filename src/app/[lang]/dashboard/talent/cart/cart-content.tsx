@@ -24,6 +24,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WithdrawalConsentCheckbox } from '@/components/withdrawal-consent-checkbox';
+import { useFixedBottomInset } from '@/hooks/use-fixed-bottom-inset';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { priceCartWithBundles } from '@/lib/cart-bundle-pricing';
 import { cartView } from '@/lib/cart-view';
@@ -84,6 +85,12 @@ export function CartContent({ initialCartData }: CartContentProps) {
   const [consentAccepted, setConsentAccepted] = useState(false);
   // The cart item whose photo is open in the close-only lightbox (null = closed).
   const [lightboxItem, setLightboxItem] = useState<CartItemDetail | null>(null);
+  // The mobile checkout bar is fixed over the list; reserve its measured height
+  // below the items so the last one is always scrollable into view. Measured
+  // from the viewport bottom, so it also accounts for the bottom nav this bar
+  // is stacked above.
+  const { ref: mobileSummaryRef, inset: mobileSummaryInset } =
+    useFixedBottomInset<HTMLDivElement>();
   const router = useRouter();
   const queryClient = useQueryClient();
   // How many optimistic removals are still awaiting their server confirmation
@@ -429,7 +436,7 @@ export function CartContent({ initialCartData }: CartContentProps) {
 
   return (
     <div className="relative">
-      <div className="flex flex-col md:flex-row gap-6 pb-44 md:pb-0">
+      <div className="flex flex-col md:flex-row gap-6">
         {/* Left side - Cart items */}
         <div className="flex-2 min-w-0">
           <div className="flex items-center justify-between mb-2">
@@ -483,6 +490,15 @@ export function CartContent({ initialCartData }: CartContentProps) {
                 }}
               />
             ))}
+            {/* Exactly the room the fixed checkout bar (and the bottom nav it
+                sits above) takes, measured — see `useFixedBottomInset`. Without
+                it the list ends behind the bar and the items past the second
+                are unreachable. */}
+            <div
+              aria-hidden="true"
+              className="shrink-0 md:hidden"
+              style={{ height: mobileSummaryInset }}
+            />
           </div>
         </div>
 
@@ -537,10 +553,15 @@ export function CartContent({ initialCartData }: CartContentProps) {
         </div>
       </div>
 
-      {/* Mobile summary - sticky footer (stacked above BottomNav) */}
-      <div className="md:hidden fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 z-50 border-t border-border bg-card shadow-lg">
-        <div className="p-4">
-          <div className="mb-3 space-y-2">
+      {/* Mobile summary - sticky footer (stacked above BottomNav). Tight by
+          design — the consent sentence is legally required in full, so every
+          pixel saved has to come from spacing rather than copy. */}
+      <div
+        ref={mobileSummaryRef}
+        className="md:hidden fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 z-50 border-t border-border bg-card shadow-lg"
+      >
+        <div className="px-4 pt-2.5 pb-3">
+          <div className="mb-2.5 space-y-1.5">
             <CartTotals
               subtotalCents={cartData.subtotalCents}
               bundleDiscountCents={cartData.bundleDiscountCents}
