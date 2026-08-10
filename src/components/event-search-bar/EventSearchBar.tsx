@@ -107,6 +107,11 @@ export function EventSearchBar({
     () => !!initialActivity || !!initialDateFrom || !!initialDateTo || !!initialPhotographer,
   );
   const [mobileWhenOpen, setMobileWhenOpen] = useState(false);
+  // Which affordance opened the mobile sheet. "Search your event" should land
+  // the caret in the Where field so the keyboard comes up on the FIRST tap;
+  // the Filters button opens the same sheet for the cards further down, where
+  // raising the keyboard would only cover them.
+  const [autoFocusWhere, setAutoFocusWhere] = useState(false);
   const [modalWhenOpen, setModalWhenOpen] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [eventSuggestions, setEventSuggestions] = useState<EventSuggestion[]>([]);
@@ -257,7 +262,10 @@ export function EventSearchBar({
         <div className="md:hidden w-full flex justify-center items-center gap-2">
           <button
             type="button"
-            onClick={() => setMobileDialogOpen(true)}
+            onClick={() => {
+              setAutoFocusWhere(true);
+              setMobileDialogOpen(true);
+            }}
             className="flex h-14 items-center rounded-full border bg-background px-8 gap-3 shadow-lg sm:h-14"
           >
             <Search className="w-4 h-6 md:h-8 md:w-8 text-foreground/80" />
@@ -268,6 +276,7 @@ export function EventSearchBar({
               <button
                 type="button"
                 onClick={() => {
+                  setAutoFocusWhere(false);
                   setMobileMoreFiltersOpen(true);
                   setMobileDialogOpen(true);
                 }}
@@ -299,6 +308,18 @@ export function EventSearchBar({
           <DialogContent
             showCloseButton={false}
             className="inset-0 h-dvh max-w-none translate-x-0 translate-y-0 rounded-none border-0 p-0"
+            // Radix's default sends focus to the first focusable descendant —
+            // here the ✕ button — so the sheet opened with nothing typeable
+            // focused and the user had to tap the field a second time before
+            // the keyboard appeared. Claim the initial focus for the Where
+            // input instead, synchronously inside Radix's own auto-focus hook
+            // (the closest we can stay to the opening tap, which is what iOS
+            // Safari requires before it will raise the keyboard).
+            onOpenAutoFocus={(event) => {
+              if (!autoFocusWhere) return;
+              event.preventDefault();
+              whereRef.current?.focus();
+            }}
           >
             <DialogTitle className="sr-only">Search events</DialogTitle>
             {/* CSS entrance animation (tw-animate-css, same idiom as DialogContent)
