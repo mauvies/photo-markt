@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarClock, Wallet } from 'lucide-react';
+import { AlertTriangle, CalendarClock, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import { StripeDashboardButton } from '@/components/stripe-dashboard-button';
 import { Button } from '@/components/ui/button';
@@ -8,12 +8,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
-import {
-  formatPrice,
-  PayoutHistory,
-  SummaryCard,
-  useRevenueData,
-} from '../earnings/earnings-content';
+import { type MoneyTiming, resolveMoneyOnItsWay } from '@/lib/payouts/money-outlook';
+import { formatPrice, PayoutHistory, useRevenueData } from '../earnings/earnings-content';
 
 type EarningsT = Dictionary['earnings'];
 
@@ -40,7 +36,20 @@ function formatDay(iso: string): string {
 export function PayoutsContent() {
   const { t } = useTranslations<EarningsT>();
   const lp = useLocalizedPath();
-  const { payouts, connectStatus, payoutOutlook, isLoading } = useRevenueData();
+  const { payouts, summary, connectStatus, payoutOutlook, isLoading } = useRevenueData();
+
+  const money = resolveMoneyOnItsWay(payoutOutlook);
+  // Ledger money we could NOT send. Zero in a healthy account, so it is an
+  // exception to raise rather than a figure to display.
+  const unsentCents = summary?.pendingPayoutsCents ?? 0;
+
+  /** What we can honestly say about timing — silence when Stripe said nothing. */
+  function timingLabel(timing: MoneyTiming): string | null {
+    if (timing.kind === 'arriving') return `${t('arrivesOn')} ${formatDay(timing.date)}`;
+    if (timing.kind === 'available-on') return `${t('availableOn')} ${formatDay(timing.date)}`;
+    if (timing.kind === 'ready') return t('moneyReady');
+    return null;
+  }
 
   return (
     <div className="space-y-6">
@@ -72,59 +81,74 @@ export function PayoutsContent() {
         </div>
       ) : (
         <>
-          {/* Live from Stripe: money already in the photographer's own account,
-              as opposed to what our ledger says is owed — plus the dates, which
-              are the part they actually came here for.
-              ⚠️ Every date is Stripe's own (`available_on` / `arrival_date`).
-              None is derived from `delay_days`: the two disagree in practice,
-              and a computed date would look authoritative while being wrong. */}
-          {payoutOutlook && (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <SummaryCard
-                title={t('stripeAvailable')}
-                value={formatPrice(payoutOutlook.availableCents)}
-                icon={<Wallet className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />}
-                description={
-                  payoutOutlook.nextPayout
-                    ? `${t('arrivesOn')} ${formatDay(payoutOutlook.nextPayout.arrivalDate)}`
-                    : t('stripeAvailableDesc')
-                }
-              />
-              <SummaryCard
-                title={t('stripePending')}
-                value={formatPrice(payoutOutlook.pendingCents)}
-                icon={<CalendarClock className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />}
-                description={
-                  payoutOutlook.nextAvailableOn
-                    ? `${t('availableOn')} ${formatDay(payoutOutlook.nextAvailableOn)}`
-                    : t('stripePendingDesc')
-                }
-              />
-            </div>
-          )}
-
-          {/* ⚠️ This block used to promise "every Monday" and a "$25 minimum".
-              Neither is true: the platform sets no schedule (not in code, and not
-              in the Stripe dashboard, where connected accounts are allowed to
-              manage their own) and Stripe has no such minimum setting at all.
-              Both numbers were invented, and were being told to the person whose
-              money it is. What the photographer needs is the way IN. */}
-          <div className="rounded-xl border bg-card p-6 shadow-sm flex items-start gap-4">
-            <CalendarClock className="h-6 w-6 text-primary shrink-0 mt-0.5" />
-            <div>
-              <h3 className="font-semibold mb-1">{t('payoutScheduleTitle')}</h3>
-              <p className="text-sm text-muted-foreground">{t('payoutScheduleDesc')}</p>
+          {/* ONE figure and ONE date. Four balances lived here and two of them
+              were not balances: "not sent yet" is an exception needing an action
+              (below), and "in your bank" is not observable once the money leaves
+              Stripe. What remains is a single pot — Stripe's own split between
+              `pending` and `available` is settlement mechanics the photographer
+              does not live in — with the date carrying the meaning.
+              ⚠️ Dates are Stripe's (`available_on` / `arrival_date`), never
+              derived from `delay_days`; the two disagree, and a computed date
+              would look authoritative while being wrong. */}
+          {money ? (
+            <div className="rounded-xl border bg-card p-6 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">{t('yourMoney')}</p>
+                  <p className="mt-2 text-4xl font-bold">{formatPrice(money.totalCents)}</p>
+                  {timingLabel(money.timing) && (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {timingLabel(money.timing)}
+                    </p>
+                  )}
+                  <p className="mt-1 text-xs text-muted-foreground">{t('paidAutomatically')}</p>
+                </div>
+                <div className="shrink-0 rounded-full bg-primary/10 p-3">
+                  <Wallet className="h-6 w-6 text-primary" />
+                </div>
+              </div>
               {connectStatus === 'active' && (
                 <StripeDashboardButton
                   label={t('stripeDashboardButton')}
                   errorNotReady={t('stripeDashboardNotReady')}
                   errorUnavailable={t('stripeDashboardUnavailable')}
                   title={t('stripeDashboardTitle')}
-                  className="mt-3"
+                  className="mt-4"
                 />
               )}
             </div>
-          </div>
+          ) : (
+            <div className="rounded-xl border border-dashed p-8 text-center">
+              <CalendarClock className="mx-auto h-8 w-8 text-muted-foreground" />
+              <p className="mt-3 text-sm text-muted-foreground">{t('noMoneyInFlight')}</p>
+            </div>
+          )}
+
+          {/* Only when it is real, and then it says what to do about it. This is
+              the money T-216 records when a transfer could not be made — an
+              inactive Connect account, a net below Stripe's floor, a failed
+              call — so the photographer's next step is the point, not the sum. */}
+          {unsentCents > 0 && (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+              <div className="flex-1 text-sm">
+                <p className="font-medium">
+                  {formatPrice(unsentCents)} {t('unsentTitle')}
+                </p>
+                <p className="mt-0.5 text-muted-foreground">{t('unsentDesc')}</p>
+                {connectStatus !== 'active' && (
+                  <Link
+                    href={lp('/dashboard/photographer/settings/payout-profile')}
+                    className="mt-2 inline-block"
+                  >
+                    <Button size="sm" variant="outline">
+                      {t('connectBannerButton')}
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
 
           <PayoutHistory payouts={payouts} />
         </>
