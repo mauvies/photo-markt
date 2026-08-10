@@ -5,7 +5,7 @@ import { enUS, es } from 'date-fns/locale';
 import { Clock, Search, SlidersHorizontal, X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/activity-options';
 import type { PhotographerSearchResult } from '@/app/[lang]/dashboard/talent/events/actions';
@@ -31,6 +31,7 @@ import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
 import { ActivityDropdown } from './ActivityDropdown';
+import { CalendarFallback } from './CalendarFallback';
 import { useActivitySelect } from './EventSearchBar.hooks';
 import type { EventSearchBarProps } from './EventSearchBar.types';
 import {
@@ -49,7 +50,27 @@ import { WhereSuggestionsDropdown } from './WhereSuggestionsDropdown';
 // The calendar pulls in `react-day-picker`; it only ever renders inside the
 // search/filter dialogs, so code-split it out of the initial home bundle and
 // load it on first dialog open.
+//
+// ⚠️ EVERY render site must wrap this in its own `<Suspense>`. A dynamic import
+// with no boundary of its own suspends against the nearest ancestor one — here
+// the route's `loading.tsx` — so tapping "When" hid the entire page (open
+// dialog included) behind the home-page skeleton until the chunk arrived. The
+// boundary lives at the call sites rather than in `loading:` because the two
+// sites render the calendar at different heights and each has to reserve its
+// own. See `CalendarFallback`.
 const Calendar = dynamic(() => import('@/components/ui/calendar').then((m) => m.Calendar));
+
+/** Height of the mobile sheet's calendar (`w-full`, so its day cells stretch). */
+const MOBILE_CALENDAR_HEIGHT = 'h-[402px] w-full';
+/** Height of the filter modal's calendar — unstretched `--cell-size` rows. */
+const MODAL_CALENDAR_HEIGHT = 'h-[293px] w-[252px]';
+
+/** Fetch the calendar chunk without rendering it. Same module specifier as the
+ *  `dynamic` import above, so they resolve to one chunk and the second call is
+ *  a no-op once it's warm. */
+function preloadCalendar() {
+  void import('@/components/ui/calendar');
+}
 
 export function EventSearchBar({
   variant = 'hero',
@@ -180,6 +201,15 @@ export function EventSearchBar({
     setPhotographer(photographerFilterValue(p));
     setShowPhotographerSuggestions(false);
   }, []);
+
+  // Warm the calendar chunk the moment a surface that can reveal it opens, so
+  // tapping "When" never suspends mid-interaction. This keeps the whole point
+  // of the dynamic import intact — nothing is fetched until the user opens the
+  // search or filters UI, so react-day-picker still stays out of the initial
+  // home bundle — while moving the fetch off the interaction that renders it.
+  useEffect(() => {
+    if (mobileDialogOpen || filterModalOpen) preloadCalendar();
+  }, [mobileDialogOpen, filterModalOpen]);
 
   // Close activity dropdown when filter modal opens so it doesn't auto-open
   useEffect(() => {
@@ -581,26 +611,30 @@ export function EventSearchBar({
                               </button>
                             ))}
                           </div>
-                          <Calendar
-                            mode="range"
-                            selected={dateRange}
-                            onSelect={(range) => {
-                              setDateRange(range);
-                              setPresetLabel(null);
-                              if (range?.from && range?.to) setMobileWhenOpen(false);
-                            }}
-                            numberOfMonths={1}
-                            className="w-full p-2! [--cell-size:--spacing(7)]"
-                            classNames={{
-                              root: 'w-full',
-                              months: 'flex flex-col gap-4 relative w-full',
-                              month: 'flex flex-col w-full gap-4',
-                              month_grid: 'w-full',
-                              weekdays: 'flex w-full',
-                              week: 'flex w-full mt-2',
-                            }}
-                            components={MOBILE_CALENDAR_COMPONENTS}
-                          />
+                          <Suspense
+                            fallback={<CalendarFallback className={MOBILE_CALENDAR_HEIGHT} />}
+                          >
+                            <Calendar
+                              mode="range"
+                              selected={dateRange}
+                              onSelect={(range) => {
+                                setDateRange(range);
+                                setPresetLabel(null);
+                                if (range?.from && range?.to) setMobileWhenOpen(false);
+                              }}
+                              numberOfMonths={1}
+                              className="w-full p-2! [--cell-size:--spacing(7)]"
+                              classNames={{
+                                root: 'w-full',
+                                months: 'flex flex-col gap-4 relative w-full',
+                                month: 'flex flex-col w-full gap-4',
+                                month_grid: 'w-full',
+                                weekdays: 'flex w-full',
+                                week: 'flex w-full mt-2',
+                              }}
+                              components={MOBILE_CALENDAR_COMPONENTS}
+                            />
+                          </Suspense>
                         </div>
                       )}
                     </div>
@@ -838,18 +872,20 @@ export function EventSearchBar({
                       ))}
                     </div>
                     <div className="flex justify-center">
-                      <Calendar
-                        mode="range"
-                        selected={dateRange}
-                        onSelect={(range) => {
-                          setDateRange(range);
-                          setPresetLabel(null);
-                          if (range?.from && range?.to) setModalWhenOpen(false);
-                        }}
-                        locale={calendarLocale}
-                        numberOfMonths={1}
-                        className="p-2 [--cell-size:--spacing(7)] [&_button]:text-[12px]"
-                      />
+                      <Suspense fallback={<CalendarFallback className={MODAL_CALENDAR_HEIGHT} />}>
+                        <Calendar
+                          mode="range"
+                          selected={dateRange}
+                          onSelect={(range) => {
+                            setDateRange(range);
+                            setPresetLabel(null);
+                            if (range?.from && range?.to) setModalWhenOpen(false);
+                          }}
+                          locale={calendarLocale}
+                          numberOfMonths={1}
+                          className="p-2 [--cell-size:--spacing(7)] [&_button]:text-[12px]"
+                        />
+                      </Suspense>
                     </div>
                   </div>
                 )}
