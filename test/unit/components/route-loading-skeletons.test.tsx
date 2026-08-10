@@ -1,13 +1,13 @@
 /** @vitest-environment happy-dom */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import HomeLoading from '@/app/[lang]/(home)/loading';
 import TalentEventDetailLoading from '@/app/[lang]/dashboard/talent/events/[id]/loading';
 import TalentEventsLoading from '@/app/[lang]/dashboard/talent/events/loading';
+import EventsListingLoading from '@/app/[lang]/events/(index)/loading';
 import EventDetailLoading from '@/app/[lang]/events/[shareCode]/loading';
-import EventsListingLoading from '@/app/[lang]/events/loading';
 import RootLangLoading from '@/app/[lang]/loading';
 import { EVENT_CARD_COVER_ASPECT } from '@/lib/event-card-aspect';
 
@@ -32,8 +32,8 @@ afterEach(cleanup);
 const SHELL_ROUTES = {
   home: 'src/app/[lang]/(home)/page.tsx',
   homeLoading: 'src/app/[lang]/(home)/loading.tsx',
-  events: 'src/app/[lang]/events/page.tsx',
-  eventsLoading: 'src/app/[lang]/events/loading.tsx',
+  events: 'src/app/[lang]/events/(index)/page.tsx',
+  eventsLoading: 'src/app/[lang]/events/(index)/loading.tsx',
 } as const;
 
 /** The `mx-auto w-full max-w-[1300px] …` container class declared in a route file. */
@@ -61,6 +61,27 @@ describe('the home and /events page shells stay identical (T-157)', () => {
       events: SHELL_CLASS,
       eventsLoading: SHELL_CLASS,
     });
+  });
+});
+
+// A `loading.tsx` is the Suspense fallback for its segment AND everything
+// nested under it. `events/loading.tsx` therefore covered `/events/[shareCode]`
+// too, so navigating from the home to an event page could paint the EXPLORE
+// skeleton — hero, search bar, grid of event cards — instead of the event
+// page's own. Same leak T-171 fixed for the home, same fix: scope it to a route
+// group so only the index route owns it.
+describe('the /events explore skeleton cannot cover the event detail route', () => {
+  it('declares no loading.tsx directly on the `events` segment', () => {
+    expect(existsSync(join(process.cwd(), 'src/app/[lang]/events/loading.tsx'))).toBe(false);
+    // It lives one level in, alongside the page it stands in for.
+    expect(existsSync(join(process.cwd(), SHELL_ROUTES.eventsLoading))).toBe(true);
+    expect(existsSync(join(process.cwd(), SHELL_ROUTES.events))).toBe(true);
+  });
+
+  it('leaves the event detail route its own skeleton', () => {
+    expect(existsSync(join(process.cwd(), 'src/app/[lang]/events/[shareCode]/loading.tsx'))).toBe(
+      true,
+    );
   });
 });
 
