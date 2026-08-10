@@ -1,7 +1,7 @@
 # T-248 · Un evento con precio puede publicarse sin cuenta de cobro
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** normal  (UI + una validación; no toca el camino del dinero)
 - **Blockers:** ninguno
 - **Rama:** `fix/priced-event-needs-payout-account`  (tipo = fix)

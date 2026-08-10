@@ -575,6 +575,20 @@ law is mandatory and cannot be waived by contract — so the consent is collecte
 - Photo Markt absorbs the Stripe Connect fee (0.5%) — photographer always receives exactly their promised net amount
 - Transfers fire per order, synchronously in the `payment_intent.succeeded` webhook handler — there is no cron or minimum threshold (see `ARCHITECTURE.md` §4.3)
 - Sales and earnings share one tabbed page at `/dashboard/photographer/sales/` (`?tab=earnings` selects earnings); `/ventas`, `/ganancias`, `/earnings` are redirect aliases to it
+- **Pricing an event does NOT require a connected payout account — that is a deliberate product
+  decision (T-248), paid for with warnings.** Preparing an event and getting paid for it are separate
+  jobs, so the save is never blocked. ⚠️ But the consequence is stronger than "the money waits": both
+  checkouts already refuse a cart whose photographer isn't `active` on Connect
+  (`photographer_not_connected`), so a priced event without a payout account **cannot be bought at
+  all** — the photographer's only signal used to be a buyer asking why nothing works. The decision
+  lives in **`src/lib/payouts/payout-readiness.ts`** (`resolvePayoutReadiness` for the account-wide
+  banner, `eventSalesBlockedByPayouts` for one event) so the two surfaces can't disagree: the
+  dashboard banner escalates from the mild "connect your account" nudge to a red "you have N events on
+  sale and no way to get paid" the moment `countPricedEvents` is non-zero, and the event page carries
+  the same alert above its tabs for as long as it is priced and unpayable. Free events (`null`/`0`)
+  are exempt — they need no account, so warning about one is noise. Both surfaces read the status
+  through `reconcileAndPersistConnectStatus`, never the raw column: a `pending` left by a lagged
+  `account.updated` webhook would otherwise accuse a working account of blocking sales
 
 ## Shared Components
 

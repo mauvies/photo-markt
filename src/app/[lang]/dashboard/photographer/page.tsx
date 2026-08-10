@@ -1,4 +1,5 @@
 import { DashboardHeader } from '@/components/dashboard-header';
+import { countPricedEvents } from '@/database/queries/events';
 import { getProfile } from '@/database/queries/profiles';
 import { createClient } from '@/database/server';
 import { requireUser } from '@/lib/auth/require-user';
@@ -32,7 +33,14 @@ export default async function PhotographerDashboardPage({
   const { checkout } = await searchParams;
   const [supabase, dict] = await Promise.all([createClient(), getDictionary(lang as Locale)]);
 
-  const [data, profile] = await Promise.all([getDashboardData(), getProfile(supabase, user.id)]);
+  const [data, profile, pricedEventCount] = await Promise.all([
+    getDashboardData(),
+    getProfile(supabase, user.id),
+    // T-248: how many live events actually charge. With a non-active Connect
+    // account each of them is refused at checkout, so this turns the generic
+    // "connect your account" nudge into a statement of what is being lost.
+    countPricedEvents(supabase, user.id),
+  ]);
 
   const storedStatus = (profile?.stripe_connect_status ?? 'not_connected') as StripeConnectStatus;
   // Reconcile a stale cached status (e.g. a `pending` left behind by a
@@ -75,11 +83,14 @@ export default async function PhotographerDashboardPage({
       <StripeConnectBanner
         status={connectStatus}
         lang={lang}
+        pricedEventCount={pricedEventCount}
         t={{
           connectAccount: dict.stripeConnect.banner.connectAccount,
           pendingReview: dict.stripeConnect.banner.pendingReview,
           actionRequired: dict.stripeConnect.banner.actionRequired,
           goToPayoutProfile: dict.stripeConnect.banner.goToPayoutProfile,
+          salesBlockedOne: dict.stripeConnect.banner.salesBlockedOne,
+          salesBlockedMany: dict.stripeConnect.banner.salesBlockedMany,
         }}
       />
       <div className="flex flex-1 flex-col gap-4">

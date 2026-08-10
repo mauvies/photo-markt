@@ -1364,6 +1364,9 @@
       "connectAccount": "Conecta tu cuenta bancaria para empezar a vender fotos y recibir pagos.",
       "pendingReview": "Tu cuenta de Stripe está en revisión. Los pagos se habilitarán cuando sea aprobada.",
       "actionRequired": "Se requiere acción en tu cuenta de Stripe. Actualiza tu configuración de pagos para continuar vendiendo.",
+      "salesBlockedOne": "Tienes 1 evento a la venta y no puedes cobrar: sin cuenta de cobro conectada, nadie puede completar la compra de tus fotos.",
+      "salesBlockedMany": "Tienes {count} eventos a la venta y no puedes cobrar: sin cuenta de cobro conectada, nadie puede completar la compra de tus fotos.",
+      "eventSalesBlocked": "Este evento tiene precio, pero no puedes cobrar: sin cuenta de cobro conectada, nadie puede completar la compra de sus fotos.",
       "goToPayoutProfile": "Ir a configuración de pagos"
     },
     "sales": {

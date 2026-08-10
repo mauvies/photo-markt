@@ -1,6 +1,7 @@
 import { Images, ScanFace } from 'lucide-react';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { EventMetaLine } from '@/components/event-meta-line';
+import { PayoutAccountAlert } from '@/components/payout-account-alert';
 import { PhotosEmptyState } from '@/components/photos-empty-state';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -10,6 +11,7 @@ import {
   getEventPhotographers,
   getEventPhotos,
   getEventPhotosPage,
+  getProfileStripeConnect,
   getProfilesByIds,
   isApprovedEventPhotographer,
   type SupabaseServerClient,
@@ -32,7 +34,9 @@ import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedPath } from '@/lib/i18n/localized-path';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
+import { eventSalesBlockedByPayouts, isPricedEvent } from '@/lib/payouts/payout-readiness';
 import { getShareableEventPath } from '@/lib/shareable-event-url';
+import { reconcileAndPersistConnectStatus } from '@/lib/stripe/connect';
 import { getPhotoTags } from './actions';
 import { AiStatusCard } from './ai-status-card';
 import { BibStatusCard } from './bib-status-card';
@@ -223,6 +227,27 @@ export default async function EventDetailPage({
     (eventRecord.ai_matching_status as AiMatchingStatus | undefined) ?? 'idle';
   const bibDetectionStatus =
     (eventRecord.bib_detection_status as BibDetectionEventStatus | undefined) ?? 'idle';
+  // T-248 — a priced event whose owner has no active Connect account cannot be
+  // bought at all (both checkouts return `photographer_not_connected`), so the
+  // warning stays on the event for as long as that is true. Reconciled against
+  // Stripe rather than read raw, so a `pending` left behind by a lagged
+  // `account.updated` webhook doesn't accuse a working account of blocking sales.
+  // Only a priced event can be blocked, so a free event costs no query here.
+  let payoutsBlockSales = false;
+  if (isPricedEvent(event.price_per_photo)) {
+    const connect = await getProfileStripeConnect(supabase, user.id);
+    const connectStatus = await reconcileAndPersistConnectStatus({
+      client: supabase,
+      userId: user.id,
+      accountId: connect?.stripe_connect_account_id,
+      storedStatus: connect?.stripe_connect_status ?? 'not_connected',
+    });
+    payoutsBlockSales = eventSalesBlockedByPayouts({
+      pricePerPhoto: event.price_per_photo,
+      connectStatus,
+    });
+  }
+
   const [aiProgress, bibProgress] = await Promise.all([
     role === 'owner' && aiMatchingEnabled
       ? getEventAiIndexingProgress(adminClient, id)
@@ -589,6 +614,18 @@ export default async function EventDetailPage({
           <EventActionsMenu eventId={id} t={dict.events} />
         </div>
       </div>
+      {/* T-248 — sits above the tabs, not inside one, because it is true of the
+          whole event and must not depend on which tab is open. */}
+      {payoutsBlockSales ? (
+        <div className="mt-4">
+          <PayoutAccountAlert
+            severity="blocked"
+            message={dict.stripeConnect.banner.eventSalesBlocked}
+            ctaHref={localizedPath(lang, '/dashboard/photographer/settings/payout-profile')}
+            ctaLabel={dict.stripeConnect.banner.goToPayoutProfile}
+          />
+        </div>
+      ) : null}
       <EventTabs
         initialTab={initialTab}
         labels={{

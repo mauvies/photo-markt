@@ -118,6 +118,32 @@ export async function getEventsCreatedCount(
 }
 
 /**
+ * How many of the photographer's live events actually charge for photos (T-248).
+ *
+ * Drives the "you have events for sale and cannot be paid" escalation: with a
+ * non-`active` Connect account every one of these events is refused at
+ * checkout, so the count is the size of the problem, not a vanity metric.
+ * Soft-deleted events are excluded — they sell nothing.
+ */
+export async function countPricedEvents(
+  supabase: SupabaseServerClient,
+  userId: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from('events')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .is('deleted_at', null)
+    .gt('price_per_photo', 0);
+
+  if (error) {
+    throw new Error(`Failed to count priced events: ${getErrorMessage(error)}`);
+  }
+
+  return count ?? 0;
+}
+
+/**
  * Whether the photographer has ever configured volume pricing on any of their
  * events — a rung ladder (`bundle_tiers`) or an all-photos ceiling
  * (`bundle_all_photos_cents`). T-205: it decides whether the Sales and Earnings

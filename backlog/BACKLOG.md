@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-248 | Un evento con precio puede publicarse sin cuenta de cobro — 228 fotos vendibles que nadie puede cobrar | — | todo |
+| 1 | P1 | T-248 | Un evento con precio puede publicarse sin cuenta de cobro — 228 fotos vendibles que nadie puede cobrar | — | doing |
 | 2 | P1 | T-249 | Una venta que se salta la transferencia al fotógrafo no avisa a nadie | — | todo |
 | 3 | P2 | T-232 | La edición de portada existe pero es inalcanzable desde los tabs del evento | — | todo |
 | 4 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | — | todo |

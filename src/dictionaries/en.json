@@ -1364,6 +1364,9 @@
       "connectAccount": "Connect your bank account to start selling photos and receiving payouts.",
       "pendingReview": "Your Stripe account is under review. Payouts will be enabled once approved.",
       "actionRequired": "Action required on your Stripe account. Update your payout settings to continue selling.",
+      "salesBlockedOne": "You have 1 event on sale and no way to get paid: without a connected payout account, nobody can complete a purchase of your photos.",
+      "salesBlockedMany": "You have {count} events on sale and no way to get paid: without a connected payout account, nobody can complete a purchase of your photos.",
+      "eventSalesBlocked": "This event has a price, but you can't get paid: without a connected payout account, nobody can complete a purchase of its photos.",
       "goToPayoutProfile": "Go to payout settings"
     },
     "sales": {
