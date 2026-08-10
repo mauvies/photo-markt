@@ -41,7 +41,7 @@ export default async function PayoutProfilePage({
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4 sm:gap-6">
+    <div className="flex flex-1 flex-col gap-3">
       <div>
         <DashboardHeader title={dict.payoutProfile.pageTitle} />
         <p className="text-sm text-muted-foreground">{dict.payoutProfile.pageDesc}</p>

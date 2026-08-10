@@ -55,7 +55,7 @@ export default async function PhotographerDashboardPage({
     data.totals.totalPhotos === 0;
 
   return (
-    <div className="flex flex-1 flex-col gap-4 sm:gap-6">
+    <div className="flex flex-1 flex-col gap-3">
       <DashboardHeader title={t.overview} />
 
       {checkout === 'success' && (

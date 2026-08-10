@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CalendarClock, DollarSign, TrendingUp, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import { BundleDiscountNote } from '@/components/bundle-discount-note';
-import { BuyerFeeNote } from '@/components/buyer-fee-note';
 import { StripeDashboardButton } from '@/components/stripe-dashboard-button';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -383,12 +382,12 @@ export function EarningsContent() {
               T-205: and a bundled sale's gross is the discounted price the
               photographer set, not a deduction — renders nothing unless they
               have volume pricing configured somewhere. */}
-          <div className="space-y-1">
-            <BuyerFeeNote>{t('buyerFeeNote')}</BuyerFeeNote>
-            <BundleDiscountNote hasBundlePricing={hasBundlePricing}>
-              {t('bundleDiscountNote')}
-            </BundleDiscountNote>
-          </div>
+          {/* <div className="space-y-1"> */}
+          {/* <BuyerFeeNote>{t('buyerFeeNote')}</BuyerFeeNote> */}
+          <BundleDiscountNote hasBundlePricing={hasBundlePricing}>
+            {t('bundleDiscountNote')}
+          </BundleDiscountNote>
+          {/* </div> */}
 
           {/* Money our ledger could not send. Zero in a healthy account, so it
               is an exception to raise rather than a figure to display — and when
