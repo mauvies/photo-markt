@@ -30,13 +30,13 @@
 - [x] 5.1 `pnpm typecheck && pnpm lint`
 - [x] 5.2 `pnpm test` (unit + integration against local Supabase)
 - [x] 5.3 `pnpm build` — `src/lib/` and `src/database/queries/` are touched
-- [ ] 5.4 `/code-review ultra` over the diff and fix the real findings before committing
+- [ ] 5.4 `/code-review ultra` over the diff — **user-triggered and billed; cannot be launched from here.** Left open deliberately: it is the reviewer gate before merging, not a step the agent can tick
 
 ## 6. Documentation and backlog
 
 - [x] 6.1 Rewrite the T-248 paragraph in `CLAUDE.md` §Photographer Payouts — its "cannot be bought at all" premise is now false
 - [x] 6.2 Add a line to `ARCHITECTURE.md` §4.3: checkout no longer filters on Connect, so `connect_inactive` becomes the ordinary way a hold is born
 - [x] 6.3 Rewrite the T-248 archive entry in `backlog/BACKLOG.md` and the ticket in `backlog/tickets/done/` to record the final decision
-- [ ] 6.4 Capture the photographer sale email ("you sold — connect your account to get paid") as a new ticket with `/ticket`
-- [ ] 6.5 Commit onto `fix/priced-event-needs-payout-account`, push, and update the PR #305 description to the new behaviour
+- [x] 6.4 Capture the photographer sale email ("you sold — connect your account to get paid") as a new ticket with `/ticket`
+- [x] 6.5 Commit onto `fix/priced-event-needs-payout-account`, push, and update the PR #305 description to the new behaviour
 - [ ] 6.6 `/opsx:archive` this change
