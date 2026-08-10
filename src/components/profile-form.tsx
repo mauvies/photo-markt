@@ -1,7 +1,7 @@
 'use client';
 
 import { useForm } from '@tanstack/react-form';
-import { useRouter } from 'next/navigation';
+import { unstable_rethrow, useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -66,6 +66,16 @@ export function ProfileForm({
           await onSubmit(parsed);
           router.refresh();
         } catch (error) {
+          // ⚠️ FIRST line of the catch, always (T-241). Next implements
+          // `redirect()`, `notFound()` and `forbidden()` by THROWING a control-flow
+          // exception, so a generic catch treats a successful save as a failure:
+          // `updateProfileAction` ends in `localizedRedirect(...)`, and this block
+          // painted the literal string `NEXT_REDIRECT` in the error banner while
+          // the save had in fact already succeeded and the navigation completed.
+          // The user was shown the internals of a correct save with the word
+          // "error" in front of them.
+          unstable_rethrow(error);
+
           if (error instanceof z.ZodError) {
             setSubmitError(error.issues[0]?.message || 'Validation failed');
           } else {

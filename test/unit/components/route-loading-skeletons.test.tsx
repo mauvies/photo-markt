@@ -1,14 +1,15 @@
 /** @vitest-environment happy-dom */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import HomeLoading from '@/app/[lang]/(home)/loading';
 import TalentEventDetailLoading from '@/app/[lang]/dashboard/talent/events/[id]/loading';
 import TalentEventsLoading from '@/app/[lang]/dashboard/talent/events/loading';
+import EventsListingLoading from '@/app/[lang]/events/(index)/loading';
 import EventDetailLoading from '@/app/[lang]/events/[shareCode]/loading';
-import EventsListingLoading from '@/app/[lang]/events/loading';
 import RootLangLoading from '@/app/[lang]/loading';
+import { EVENT_CARD_COVER_ASPECT } from '@/lib/event-card-aspect';
 
 afterEach(cleanup);
 
@@ -31,8 +32,8 @@ afterEach(cleanup);
 const SHELL_ROUTES = {
   home: 'src/app/[lang]/(home)/page.tsx',
   homeLoading: 'src/app/[lang]/(home)/loading.tsx',
-  events: 'src/app/[lang]/events/page.tsx',
-  eventsLoading: 'src/app/[lang]/events/loading.tsx',
+  events: 'src/app/[lang]/events/(index)/page.tsx',
+  eventsLoading: 'src/app/[lang]/events/(index)/loading.tsx',
 } as const;
 
 /** The `mx-auto w-full max-w-[1300px] …` container class declared in a route file. */
@@ -63,6 +64,27 @@ describe('the home and /events page shells stay identical (T-157)', () => {
   });
 });
 
+// A `loading.tsx` is the Suspense fallback for its segment AND everything
+// nested under it. `events/loading.tsx` therefore covered `/events/[shareCode]`
+// too, so navigating from the home to an event page could paint the EXPLORE
+// skeleton — hero, search bar, grid of event cards — instead of the event
+// page's own. Same leak T-171 fixed for the home, same fix: scope it to a route
+// group so only the index route owns it.
+describe('the /events explore skeleton cannot cover the event detail route', () => {
+  it('declares no loading.tsx directly on the `events` segment', () => {
+    expect(existsSync(join(process.cwd(), 'src/app/[lang]/events/loading.tsx'))).toBe(false);
+    // It lives one level in, alongside the page it stands in for.
+    expect(existsSync(join(process.cwd(), SHELL_ROUTES.eventsLoading))).toBe(true);
+    expect(existsSync(join(process.cwd(), SHELL_ROUTES.events))).toBe(true);
+  });
+
+  it('leaves the event detail route its own skeleton', () => {
+    expect(existsSync(join(process.cwd(), 'src/app/[lang]/events/[shareCode]/loading.tsx'))).toBe(
+      true,
+    );
+  });
+});
+
 describe('/events loading.tsx (T-157: now mirrors the home)', () => {
   it('matches the home shell exactly — /events became an alias of the home explore view', () => {
     const { container } = render(<EventsListingLoading />);
@@ -71,7 +93,7 @@ describe('/events loading.tsx (T-157: now mirrors the home)', () => {
     // Full EventsExploreView skeleton: hero (sm:h-12/sm:h-6), heading (sm:h-7), grid.
     expect(container.innerHTML).toContain('sm:h-12');
     expect(container.innerHTML).toContain('sm:h-7');
-    expect(container.innerHTML).toContain('aspect-[4/3]');
+    expect(container.innerHTML).toContain(EVENT_CARD_COVER_ASPECT);
     // No bare <Spinner /> (an <output> element).
     expect(container.querySelector('output')).toBeNull();
   });
@@ -86,7 +108,7 @@ describe('/[lang]/(home) loading.tsx (T-156; scoped to the (home) group in T-171
     expect(container.innerHTML).toContain('sm:h-6');
     // "Latest events" heading placeholder.
     expect(container.innerHTML).toContain('sm:h-7');
-    expect(container.innerHTML).toContain('aspect-[4/3]');
+    expect(container.innerHTML).toContain(EVENT_CARD_COVER_ASPECT);
   });
 });
 
@@ -102,7 +124,7 @@ describe('/[lang] root loading.tsx is neutral (T-171)', () => {
     // A bare <Spinner /> is an <output> element with a "Loading" sr-only label.
     expect(container.querySelector('output')).not.toBeNull();
     // None of the home-skeleton fingerprints leak into non-home routes.
-    expect(container.innerHTML).not.toContain('aspect-[4/3]');
+    expect(container.innerHTML).not.toContain(EVENT_CARD_COVER_ASPECT);
     expect(container.innerHTML).not.toContain('max-w-[1300px]');
     expect(container.innerHTML).not.toContain('sm:h-12');
   });
@@ -111,7 +133,7 @@ describe('/[lang] root loading.tsx is neutral (T-171)', () => {
 describe('/dashboard/talent/events loading.tsx', () => {
   it('renders the real card grid without re-wrapping the layout margins', () => {
     const { container } = render(<TalentEventsLoading />);
-    expect(container.innerHTML).toContain('aspect-[4/3]');
+    expect(container.innerHTML).toContain(EVENT_CARD_COVER_ASPECT);
     // The dashboard layout already supplies mx-auto/max-w/px — this file
     // must not duplicate it.
     expect(container.innerHTML).not.toContain('max-w-[1300px]');

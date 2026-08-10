@@ -11,7 +11,7 @@ import {
   signEventCoverUrls,
 } from '@/database/queries';
 import { supabaseAdmin } from '@/database/supabase-admin';
-import { resolvePublicEventCoverStats } from '@/lib/event-cover-stats';
+import { getEventCardPhotoCount, resolvePublicEventCoverStats } from '@/lib/event-cover-stats';
 import { thumbRelativeUrl } from '@/lib/thumbnails';
 
 export type { PhotographerSearchResult } from '@/database/queries';
@@ -115,7 +115,7 @@ export async function searchEventsAction(filters: {
       const profile = profileMap.get(event.user_id);
       return {
         ...event,
-        photoCount: stats.get(event.id)?.count ?? 0,
+        photoCount: getEventCardPhotoCount(event.id, stats),
         coverUrl: coverUrls.get(event.id) ?? null,
         coverThumbUrl: (() => {
           const s = stats.get(event.id);

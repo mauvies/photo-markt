@@ -24,13 +24,54 @@ export function resolveFindMyPhotos(params: {
   aiSearchEligible: boolean;
   /** Event has bib detection enabled (server-computed). */
   bibDetectionEnabled: boolean;
+  /**
+   * Reveal gate is on AND nothing has been revealed yet (T-230). The gated
+   * pre-search panel owns the call to action in that case, so this banner must
+   * step aside — two search buttons on one empty screen is worse than none, and
+   * the split is what forced the old copy to say "take a selfie *above*".
+   */
+  revealGatedPreSearch?: boolean;
 }): FindMyPhotosVisibility {
-  if (params.faceSearchActive) {
+  if (params.faceSearchActive || params.revealGatedPreSearch) {
     return { visible: false, showFace: false, showBib: false };
   }
   const showFace = params.aiSearchEligible;
   const showBib = params.bibDetectionEnabled;
   return { visible: showFace || showBib, showFace, showBib };
+}
+
+/** Which of the gallery slot's mutually exclusive views renders (T-230). */
+export type EventGalleryView = 'search-results' | 'gated-panel' | 'empty' | 'grid';
+
+/**
+ * Pick the gallery slot's view. Shared by both event viewers so the public page
+ * and the talent dashboard can't disagree about the same event.
+ *
+ * ⚠️ **An active face search outranks emptiness.** On a reveal-gated event the
+ * grid is empty by design until a proof cookie is presented, so the matched set
+ * arriving from the search is the ONLY thing the viewer has to render — the
+ * public viewer used to test emptiness first and therefore answered a successful
+ * search with its empty paragraph, hiding the very photos the visitor had just
+ * proven they were in. (The talent viewer already returned results first; this
+ * makes the two agree.) A non-gated event is unaffected in practice: it can only
+ * be searched once something is indexed, so an empty grid plus an active search
+ * means "searched, no matches" — which the results view states, and the empty
+ * paragraph doesn't.
+ */
+export function resolveEventGalleryView(params: {
+  /** The (paginated, deletion-filtered) grid has at least one photo. */
+  hasPhotos: boolean;
+  /** A face search has run (`matches !== null`) — including a zero-match one. */
+  faceSearchActive: boolean;
+  /** The caller supplied gated-panel labels, i.e. the event is reveal-gated. */
+  gatedPanel: boolean;
+  /** An upload is in flight — its own progress copy owns the empty slot. */
+  isUploading?: boolean;
+}): EventGalleryView {
+  if (params.faceSearchActive) return 'search-results';
+  if (params.hasPhotos) return 'grid';
+  if (params.gatedPanel && !params.isUploading) return 'gated-panel';
+  return 'empty';
 }
 
 /**

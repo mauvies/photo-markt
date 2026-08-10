@@ -11,6 +11,7 @@ import {
 } from '@/database/queries';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import type { EventWithStats } from '@/hooks/use-event-search';
+import { getEventCardPhotoCount } from '@/lib/event-cover-stats';
 import { getEventStatus } from '@/lib/event-status';
 import { thumbRelativeUrl } from '@/lib/thumbnails';
 
@@ -110,7 +111,7 @@ export async function getPhotographerEventsAction(
   return {
     events: events.map((event) => ({
       ...event,
-      photoCount: stats.get(event.id)?.count ?? 0,
+      photoCount: getEventCardPhotoCount(event.id, stats),
       coverUrl: coverUrls.get(event.id) ?? null,
       coverThumbUrl: (() => {
         const s = stats.get(event.id);

@@ -60,11 +60,16 @@ export async function updateProfileAction(values: {
   if (oldSlug) revalidateTag(`photographer-${oldSlug}`, 'max');
   if (newSlug !== oldSlug) revalidateTag(`photographer-${newSlug}`, 'max');
 
-  // After save, return the photographer to the dashboard-wrapped preview
-  // so they immediately see the result without leaving the dashboard
-  // chrome. `localizedRedirect` throws the Next.js NEXT_REDIRECT exception,
-  // which the form's submit handler will surface to React — no
+  // After save, return the photographer to the dashboard-wrapped preview so
+  // they immediately see the result without leaving the dashboard chrome. No
   // client-side router.push needed.
+  //
+  // ⚠️ `localizedRedirect` works by THROWING Next's NEXT_REDIRECT control-flow
+  // exception. A caller that catches it generically will treat this successful
+  // save as a failure — which is exactly what `profile-form.tsx` did until
+  // T-241, painting the literal string `NEXT_REDIRECT` in its error banner
+  // while the save had already committed. Any client caller of this action must
+  // start its catch with `unstable_rethrow` from `next/navigation`.
   const lang = await getLangFromHeaders();
   localizedRedirect(lang, '/dashboard/photographer/profile/preview');
 }

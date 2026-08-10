@@ -1,12 +1,12 @@
 # T-241 · Guardar el perfil muestra un error falso «NEXT_REDIRECT» antes de guardar bien
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Riesgo:** normal
 - **Blockers:** ninguno
 - **Rama:** `fix/profile-form-swallows-next-redirect`  (tipo = fix)
 - **OpenSpec change:** —  (un componente + un comentario; no llega al umbral)
-- **PR:** —
+- **PR:** #292
 
 ## Requerimiento
 

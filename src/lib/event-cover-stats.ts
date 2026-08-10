@@ -13,6 +13,8 @@
  * to index them).
  */
 
+import { overrideEventTotalPhotoCount } from '@/lib/event-photo-count-overrides';
+
 export interface EventPhotoRow {
   event_id: string | null;
   original_url: string | null;
@@ -59,4 +61,32 @@ export function resolvePublicEventCoverStats(
     stats.set(row.event_id, current);
   }
   return stats;
+}
+
+/**
+ * The photo count an event CARD should display (T-229).
+ *
+ * ⚠️ **The single point where the temporary total-count override reaches the
+ * card surfaces.** The override was wired into the event detail page only, so
+ * the same event showed one number inside and another one out on the home,
+ * `/events`, saved events and the public photographer profile — three
+ * independent call sites that each did `stats.get(id)?.count ?? 0` and knew
+ * nothing about it.
+ *
+ * It takes the whole map rather than a count so the override still applies to an
+ * event with NO photo rows at all: those never appear in `stats`, and applying
+ * the override inside {@link resolvePublicEventCoverStats} would silently skip
+ * exactly the events the override exists for.
+ *
+ * ⚠️ When the override is deleted, this function collapses to
+ * `stats.get(eventId)?.count ?? 0` — see the removal list in
+ * `event-photo-count-overrides.ts`.
+ */
+export function getEventCardPhotoCount(
+  eventId: string,
+  // Structurally minimal on purpose: the saved-events surface builds its own,
+  // narrower stats map, and this helper only ever needs the count.
+  stats: ReadonlyMap<string, { count: number }>,
+): number {
+  return overrideEventTotalPhotoCount(eventId, stats.get(eventId)?.count ?? 0);
 }

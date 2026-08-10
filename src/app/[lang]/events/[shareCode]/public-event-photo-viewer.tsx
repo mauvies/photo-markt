@@ -21,6 +21,7 @@ import { useBibSearch, useFaceSearch } from '@/components/event-gallery-with-fac
 import { EventPhotoCountLabel } from '@/components/event-photo-count-label';
 import { type EventPhotoFilter, EventPhotoFilterTabs } from '@/components/event-photo-filter-tabs';
 import { FaceSearchResults } from '@/components/face-search-results';
+import { GatedSearchPanel, type GatedSearchPanelLabels } from '@/components/gated-search-panel';
 import { useGuestCart } from '@/components/guest-cart-provider';
 import type { PhotoDetailModalLabels } from '@/components/photo-detail-modal';
 import {
@@ -43,6 +44,7 @@ import type { BundleTier } from '@/lib/bundle-pricing';
 import { showAddedToCartToast } from '@/lib/cart-toast';
 import { type EventBulkActionKey, eventBulkActionKeys } from '@/lib/event-bulk-actions';
 import { filterEventPhotoPages, filterEventPhotos } from '@/lib/event-photo-filter';
+import { resolveEventGalleryView } from '@/lib/find-my-photos';
 import { resolveGalleryCounts } from '@/lib/gallery-photo-count';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import { localizedPath } from '@/lib/i18n/localized-path';
@@ -96,6 +98,9 @@ interface PublicEventPhotoViewerProps {
   showAddToCart?: boolean;
   /** Localized copy shown when there are no photos yet. */
   emptyText?: string;
+  /** Reveal-gated pre-search panel (T-230). When present and nothing is
+   *  revealed, it replaces the muted empty paragraph and owns the search CTA. */
+  gatedPanel?: { labels: GatedSearchPanelLabels; photoCount?: number | null };
   /** Localized copy shown over the gallery while an upload is in flight. */
   uploadingLabel?: string;
   /** Labels for the contributor badge popover. */
@@ -172,6 +177,7 @@ export function PublicEventPhotoViewer({
   iconTooltips,
   showAddToCart = true,
   emptyText,
+  gatedPanel,
   uploadingLabel,
   uploaderLabels,
   bulkDeleteLabels,
@@ -785,9 +791,30 @@ export function PublicEventPhotoViewer({
   }, [handleBulkAddToCart, faceMatchIds]);
   const canAddAllMatched = canBulkAddToCart && faceMatchIds.length > 0 && bundleLabels != null;
 
+  // Which view owns the gallery slot (T-230) — shared with the talent viewer so
+  // the two surfaces can't disagree. Search results outrank an empty grid: on a
+  // gated event the grid IS empty until a reload carries the proof cookie, so
+  // testing emptiness first hid the matches the visitor had just earned.
+  const galleryView = resolveEventGalleryView({
+    hasPhotos: photos.length > 0,
+    faceSearchActive: faceSearch.matches !== null,
+    gatedPanel: gatedPanel != null,
+    isUploading,
+  });
+
   return (
     <div className="relative">
-      {photos.length === 0 ? (
+      {galleryView === 'gated-panel' && gatedPanel ? (
+        // Gated event, nothing revealed yet (T-230). The panel IS the screen
+        // here: it carries the explanation and the search CTA, so the copy no
+        // longer has to point the visitor at a button somewhere above it.
+        <GatedSearchPanel
+          state="searchable"
+          labels={gatedPanel.labels}
+          photoCount={gatedPanel.photoCount}
+          onSearch={faceSearch.openSearch}
+        />
+      ) : galleryView === 'empty' ? (
         <div className="py-12 text-center">
           <p className="text-muted-foreground">
             {isUploading
@@ -795,7 +822,7 @@ export function PublicEventPhotoViewer({
               : (emptyText ?? 'No photos available yet.')}
           </p>
         </div>
-      ) : faceSearch.matches !== null ? (
+      ) : galleryView === 'search-results' && faceSearch.matches !== null ? (
         <FaceSearchResults
           bucketed={bucketed}
           matchCount={faceSearch.matches.length}

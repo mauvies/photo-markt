@@ -61,6 +61,12 @@ export function CartTotals({
   const chargedSubtotalCents = subtotalCents - discountCents;
   const feeCents = getBuyerServiceFeeCents(chargedSubtotalCents);
   const amountClass = variant === 'desktop' ? 'text-xl font-bold' : 'text-lg font-bold';
+  // The mobile summary lives in a fixed bar competing for room with a
+  // legally-required consent sentence that can't be shortened, so its rows sit
+  // tighter than the desktop panel's. Every row still renders — this is
+  // spacing, not disclosure.
+  const rowGapClass = variant === 'desktop' ? 'space-y-2' : 'space-y-1';
+  const totalRowClass = variant === 'desktop' ? 'pt-2' : 'pt-1.5';
 
   // A free cart still reads "Free" rather than "€0.00" — pre-existing behaviour
   // of both carts, kept.
@@ -76,7 +82,7 @@ export function CartTotals({
   }
 
   return (
-    <div className="space-y-2">
+    <div className={rowGapClass}>
       <div className="flex items-center justify-between">
         <span className="text-sm text-muted-foreground">{labels.subtotal}</span>
         <span className="text-sm text-foreground">{subtotalLabel}</span>
@@ -95,7 +101,7 @@ export function CartTotals({
           <span className="text-sm text-foreground">{formatAmount(feeCents)}</span>
         </div>
       ) : null}
-      <div className="flex items-center justify-between border-t border-border pt-2">
+      <div className={`flex items-center justify-between border-t border-border ${totalRowClass}`}>
         <span className="text-sm font-medium text-muted-foreground">{labels.total}</span>
         <span className={`${amountClass} text-foreground`}>
           {formatAmount(chargedSubtotalCents + feeCents)}

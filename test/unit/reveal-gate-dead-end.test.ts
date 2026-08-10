@@ -10,10 +10,14 @@ import { describe, expect, it } from 'vitest';
  * them — a silent dead-end.
  *
  * The fix computes `resolveGatedFaceSearchNotice(...)` server-side and renders a
- * `<GatedFaceSearchNotice>` clear state instead of the mute empty gallery. Both
- * viewing surfaces must wire it (logged-in talents are redirected to the
- * dashboard view; guests/photographers stay on the public page), so this pins
- * the wiring on both. Fails before the fix, passes after.
+ * clear state instead of the mute empty gallery. Both viewing surfaces must wire
+ * it (logged-in talents are redirected to the dashboard view;
+ * guests/photographers stay on the public page), so this pins the wiring on
+ * both. Fails before the fix, passes after.
+ *
+ * T-230 replaced the standalone `<GatedFaceSearchNotice>` with the shared
+ * `<GatedSearchPanel>`, which renders those two states plus the searchable one
+ * at equal weight — the guard itself is unchanged, only what draws it.
  */
 
 const talentPage = readFileSync(
@@ -37,13 +41,13 @@ for (const [name, source] of [
       expect(source).toContain('const gatedFaceSearchNotice = resolveGatedFaceSearchNotice({');
     });
 
-    it('renders the clear-state notice instead of a mute empty gallery', () => {
+    it('renders the clear-state panel instead of a mute empty gallery', () => {
       expect(source).toContain(
-        "import { GatedFaceSearchNotice } from '@/components/gated-face-search-notice';",
+        "import { GatedSearchPanel } from '@/components/gated-search-panel';",
       );
       expect(source).toContain("gatedFaceSearchNotice !== 'none'");
-      expect(source).toContain('<GatedFaceSearchNotice');
-      expect(source).toContain('dict.aiSearch.gatedNotice');
+      expect(source).toContain('<GatedSearchPanel');
+      expect(source).toContain('dict.aiSearch.gatedPanel');
     });
   });
 }

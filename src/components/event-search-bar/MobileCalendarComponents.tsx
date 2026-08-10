@@ -11,8 +11,29 @@ function MobileWeeks({ className, ...props }: React.HTMLAttributes<HTMLTableSect
   return <tbody className={className} {...props} />;
 }
 
-function MobileWeekdays({ className, ...props }: React.HTMLAttributes<HTMLTableRowElement>) {
-  return <tr className={className} {...props} />;
+/**
+ * ⚠️ The weekday header row must sit inside a `<thead>`.
+ *
+ * `<table><tr>` is not valid HTML: the parser silently re-parents a stray `<tr>`
+ * into an implicit `<tbody>`, so the DOM the browser builds has a row group
+ * React never rendered — a hydration mismatch on the home page's mobile date
+ * picker. (`Weeks` below already renders a real `<tbody>`, which is why only
+ * this row was affected.) `<thead>` is a `table-header-group`, the same box the
+ * implicit `<tbody>` was producing, so the layout is unchanged — the `flex`
+ * classNames the caller passes still land on the `<tr>` itself.
+ */
+function MobileWeekdays({
+  className,
+  children,
+  ...props
+}: React.HTMLAttributes<HTMLTableRowElement>) {
+  return (
+    <thead>
+      <tr className={className} {...props}>
+        {children}
+      </tr>
+    </thead>
+  );
 }
 
 function MobileWeekday({ className, ...props }: React.ThHTMLAttributes<HTMLTableCellElement>) {

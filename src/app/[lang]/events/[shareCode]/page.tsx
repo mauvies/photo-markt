@@ -9,7 +9,7 @@ import { EventGalleryWithFaceSearch } from '@/components/event-gallery-with-face
 import { EventMetaLine } from '@/components/event-meta-line';
 import { EventPricingSection } from '@/components/event-pricing-section';
 import { EventShareButton } from '@/components/event-share-button';
-import { GatedFaceSearchNotice } from '@/components/gated-face-search-notice';
+import { GatedSearchPanel } from '@/components/gated-search-panel';
 import {
   countEventPhotosByStatus,
   createPhotoUrlMap,
@@ -429,6 +429,17 @@ export default async function EventPage({
     aiUsable,
     aiStatus,
   });
+  // Copy for the gated pre-search panel (T-230), resolved once and passed to
+  // both places that can render it: the page itself for the processing /
+  // unavailable states, and the viewer for the searchable one.
+  const gatedPanelLabels = dict.aiSearch.gatedPanel;
+  // Whether that panel owns the gallery slot — i.e. the visitor has proven
+  // nothing yet. It carries the event total itself, so the header drops its own
+  // copy of that line while this is true.
+  const gatedPanelOwnsGallery =
+    gated &&
+    eventStatus !== 'upcoming' &&
+    (gatedFaceSearchNotice !== 'none' || photos.length === 0);
   // Free collaborative events skip the cart entirely — no purchase flow.
   const isForSale = event.price_per_photo !== null;
   const showCartUi = isForSale;
@@ -639,8 +650,11 @@ export default async function EventPage({
               />
               {/* Reveal gate (T-177): the total lives here (not above the
                   gallery) so a gated event advertises it's worth searching,
-                  while the toolbar counter reflects only what's revealed. */}
-              {gated && eventStatus !== 'upcoming' ? (
+                  while the toolbar counter reflects only what's revealed.
+                  Dropped while the gated panel renders (T-230) — the panel
+                  states the same total, and printing it twice on one screen
+                  reads as a bug. */}
+              {gated && eventStatus !== 'upcoming' && !gatedPanelOwnsGallery ? (
                 <p className="mt-1 text-sm text-muted-foreground">
                   {dict.events.photosInEvent.replace('{n}', String(totalCount))}
                 </p>
@@ -707,15 +721,18 @@ export default async function EventPage({
           ) : gatedFaceSearchNotice !== 'none' ? (
             // Reveal gate (T-177) dead-end guard (T-184): gated event with no
             // searchable face index yet — show a clear state, not a mute empty
-            // gallery the visitor can't escape.
-            <GatedFaceSearchNotice
+            // gallery the visitor can't escape. Same panel as the searchable
+            // state (T-230), so all three pre-search states carry equal weight.
+            <GatedSearchPanel
               state={gatedFaceSearchNotice}
-              labels={dict.aiSearch.gatedNotice}
+              labels={gatedPanelLabels}
+              photoCount={totalCount}
             />
           ) : (
             <EventGalleryWithFaceSearch
               shareCode={event.share_code ?? event.id}
               aiSearchEligible={aiSearchEligible}
+              revealGated={gated}
               aiState={aiBannerState}
               modalLabels={dict.aiSearch.modal}
               bibDetectionEnabled={
@@ -781,6 +798,9 @@ export default async function EventPage({
                     iconTooltips={dict.photoIconButtons}
                     showAddToCart={showCartUi}
                     emptyText={gated ? dict.events.galleryGatedEmpty : dict.events.galleryEmpty}
+                    gatedPanel={
+                      gated ? { labels: gatedPanelLabels, photoCount: totalCount } : undefined
+                    }
                     uploadingLabel={dict.collaborativeEvent.galleryUploadingLabel}
                     uploaderLabels={{
                       tooltip: dict.collaborativeEvent.uploaderTooltip,

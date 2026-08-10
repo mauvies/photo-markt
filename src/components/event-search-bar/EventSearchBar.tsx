@@ -5,12 +5,13 @@ import { enUS, es } from 'date-fns/locale';
 import { Clock, Search, SlidersHorizontal, X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/activity-options';
 import type { PhotographerSearchResult } from '@/app/[lang]/dashboard/talent/events/actions';
 import {
   type EventSuggestion,
+  searchPhotographersAction,
   searchSuggestionsAction,
 } from '@/app/[lang]/dashboard/talent/events/actions';
 import { Button } from '@/components/ui/button';
@@ -30,7 +31,8 @@ import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import { cn } from '@/lib/utils';
 import { ActivityDropdown } from './ActivityDropdown';
-import { useActivityCombobox } from './EventSearchBar.hooks';
+import { CalendarFallback } from './CalendarFallback';
+import { useActivitySelect } from './EventSearchBar.hooks';
 import type { EventSearchBarProps } from './EventSearchBar.types';
 import {
   BLUR_DISMISS_DELAY_MS,
@@ -42,12 +44,33 @@ import {
   whenLabel,
 } from './EventSearchBar.utils';
 import { MOBILE_CALENDAR_COMPONENTS } from './MobileCalendarComponents';
+import { PhotographerSuggestions, photographerFilterValue } from './PhotographerSuggestions';
 import { WhereSuggestionsDropdown } from './WhereSuggestionsDropdown';
 
 // The calendar pulls in `react-day-picker`; it only ever renders inside the
 // search/filter dialogs, so code-split it out of the initial home bundle and
 // load it on first dialog open.
+//
+// ⚠️ EVERY render site must wrap this in its own `<Suspense>`. A dynamic import
+// with no boundary of its own suspends against the nearest ancestor one — here
+// the route's `loading.tsx` — so tapping "When" hid the entire page (open
+// dialog included) behind the home-page skeleton until the chunk arrived. The
+// boundary lives at the call sites rather than in `loading:` because the two
+// sites render the calendar at different heights and each has to reserve its
+// own. See `CalendarFallback`.
 const Calendar = dynamic(() => import('@/components/ui/calendar').then((m) => m.Calendar));
+
+/** Height of the mobile sheet's calendar (`w-full`, so its day cells stretch). */
+const MOBILE_CALENDAR_HEIGHT = 'h-[402px] w-full';
+/** Height of the filter modal's calendar — unstretched `--cell-size` rows. */
+const MODAL_CALENDAR_HEIGHT = 'h-[293px] w-[252px]';
+
+/** Fetch the calendar chunk without rendering it. Same module specifier as the
+ *  `dynamic` import above, so they resolve to one chunk and the second call is
+ *  a no-op once it's warm. */
+function preloadCalendar() {
+  void import('@/components/ui/calendar');
+}
 
 export function EventSearchBar({
   variant = 'hero',
@@ -85,7 +108,6 @@ export function EventSearchBar({
   const [where, setWhere] = useState(initialWhere);
   const [photographer, setPhotographer] = useState(initialPhotographer);
   const whereRef = useRef<HTMLInputElement>(null);
-  const activityInputRef = useRef<HTMLInputElement>(null);
   const whereContainerRef = useRef<HTMLDivElement>(null);
 
   const [filterModalOpen, setFilterModalOpen] = useState(false);
@@ -107,6 +129,11 @@ export function EventSearchBar({
     () => !!initialActivity || !!initialDateFrom || !!initialDateTo || !!initialPhotographer,
   );
   const [mobileWhenOpen, setMobileWhenOpen] = useState(false);
+  // Which affordance opened the mobile sheet. "Search your event" should land
+  // the caret in the Where field so the keyboard comes up on the FIRST tap;
+  // the Filters button opens the same sheet for the cards further down, where
+  // raising the keyboard would only cover them.
+  const [autoFocusWhere, setAutoFocusWhere] = useState(false);
   const [modalWhenOpen, setModalWhenOpen] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [eventSuggestions, setEventSuggestions] = useState<EventSuggestion[]>([]);
@@ -118,8 +145,17 @@ export function EventSearchBar({
     () => [...activityOptions].sort((a, b) => a.label.localeCompare(b.label)),
     [],
   );
-  const activity = useActivityCombobox(initialActivity, sortedActivities);
+  const activity = useActivitySelect(initialActivity, sortedActivities);
   const debouncedWhere = useDebounce(where, 150);
+
+  // Photographer filter suggestions. This field shipped as a bare text input:
+  // the value it produced (`?photographer=`) always filtered correctly, but
+  // nothing ever queried the roster, so typing an existing photographer's name
+  // offered nothing and the user had no way to know whether they had spelled it
+  // the way the profile does.
+  const debouncedPhotographer = useDebounce(photographer, 200);
+  const [photographerOptions, setPhotographerOptions] = useState<PhotographerSearchResult[]>([]);
+  const [showPhotographerSuggestions, setShowPhotographerSuggestions] = useState(false);
 
   useEffect(() => {
     if (!debouncedWhere.trim()) {
@@ -137,6 +173,43 @@ export function EventSearchBar({
         setPhotographerSuggestions([]);
       });
   }, [debouncedWhere]);
+
+  useEffect(() => {
+    const term = debouncedPhotographer.trim();
+    if (!term) {
+      setPhotographerOptions([]);
+      return;
+    }
+    // Only photographers with at least one public event come back, which is
+    // exactly the set this filter can produce results for.
+    let cancelled = false;
+    searchPhotographersAction(term)
+      .then((rows) => {
+        if (!cancelled) setPhotographerOptions(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setPhotographerOptions([]);
+      });
+    // Drop a response that lands after a newer keystroke — otherwise a slow
+    // request for "ma" can overwrite the suggestions for "mauricio".
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedPhotographer]);
+
+  const handleSelectPhotographerFilter = useCallback((p: PhotographerSearchResult) => {
+    setPhotographer(photographerFilterValue(p));
+    setShowPhotographerSuggestions(false);
+  }, []);
+
+  // Warm the calendar chunk the moment a surface that can reveal it opens, so
+  // tapping "When" never suspends mid-interaction. This keeps the whole point
+  // of the dynamic import intact — nothing is fetched until the user opens the
+  // search or filters UI, so react-day-picker still stays out of the initial
+  // home bundle — while moving the fetch off the interaction that renders it.
+  useEffect(() => {
+    if (mobileDialogOpen || filterModalOpen) preloadCalendar();
+  }, [mobileDialogOpen, filterModalOpen]);
 
   // Close activity dropdown when filter modal opens so it doesn't auto-open
   useEffect(() => {
@@ -174,8 +247,9 @@ export function EventSearchBar({
 
   const handleSearch = useCallback(() => {
     setShowSuggestions(false);
-    const validatedActivity = activity.validate();
-    if (validatedActivity === null) return;
+    // A select can only hold a real option value (or none), so there is
+    // nothing left to validate before submitting.
+    const selectedActivity = activity.selectedValue;
 
     // If the where input looks like an access code, route directly to that
     // event. The destination route is controlled by `resolvedAccessCodeHref`
@@ -193,13 +267,13 @@ export function EventSearchBar({
     const dt = dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : '';
 
     if (onSearch) {
-      onSearch(where, validatedActivity, df, dt);
+      onSearch(where, selectedActivity, df, dt);
       setMobileDialogOpen(false);
       return;
     }
     const params = new URLSearchParams();
     if (trimmedWhere) params.set('where', trimmedWhere);
-    if (validatedActivity) params.set('activity', validatedActivity);
+    if (selectedActivity) params.set('activity', selectedActivity);
     if (df) params.set('dateFrom', df);
     if (dt) params.set('dateTo', dt);
     if (presetLabel) params.set('preset', presetLabel);
@@ -257,7 +331,10 @@ export function EventSearchBar({
         <div className="md:hidden w-full flex justify-center items-center gap-2">
           <button
             type="button"
-            onClick={() => setMobileDialogOpen(true)}
+            onClick={() => {
+              setAutoFocusWhere(true);
+              setMobileDialogOpen(true);
+            }}
             className="flex h-14 items-center rounded-full border bg-background px-8 gap-3 shadow-lg sm:h-14"
           >
             <Search className="w-4 h-6 md:h-8 md:w-8 text-foreground/80" />
@@ -268,6 +345,7 @@ export function EventSearchBar({
               <button
                 type="button"
                 onClick={() => {
+                  setAutoFocusWhere(false);
                   setMobileMoreFiltersOpen(true);
                   setMobileDialogOpen(true);
                 }}
@@ -299,6 +377,18 @@ export function EventSearchBar({
           <DialogContent
             showCloseButton={false}
             className="inset-0 h-dvh max-w-none translate-x-0 translate-y-0 rounded-none border-0 p-0"
+            // Radix's default sends focus to the first focusable descendant —
+            // here the ✕ button — so the sheet opened with nothing typeable
+            // focused and the user had to tap the field a second time before
+            // the keyboard appeared. Claim the initial focus for the Where
+            // input instead, synchronously inside Radix's own auto-focus hook
+            // (the closest we can stay to the opening tap, which is what iOS
+            // Safari requires before it will raise the keyboard).
+            onOpenAutoFocus={(event) => {
+              if (!autoFocusWhere) return;
+              event.preventDefault();
+              whereRef.current?.focus();
+            }}
           >
             <DialogTitle className="sr-only">Search events</DialogTitle>
             {/* CSS entrance animation (tw-animate-css, same idiom as DialogContent)
@@ -306,7 +396,13 @@ export function EventSearchBar({
                 home/events/explore routes, and it kept the whole library in their
                 first-load bundle (T-123). The motion exit animation never ran
                 anyway: Radix unmounts the content on close. */}
-            <div className="flex h-full animate-in flex-col bg-background duration-200 ease-out fade-in-0 slide-in-from-bottom-5">
+            {/* ⚠️ `min-h-0` here too, and for the same reason as on the scroll
+                column below — this one is a GRID item (DialogContent is a
+                `grid`), whose automatic minimum size is also its content size.
+                Without it `h-full` loses: the wrapper stretched to 996px inside
+                an 844px sheet and handed that inflated height straight to the
+                scroll column, which then had nothing to scroll. */}
+            <div className="flex h-full min-h-0 animate-in flex-col bg-background duration-200 ease-out fade-in-0 slide-in-from-bottom-5">
               <div className="flex items-center justify-end px-4 py-6">
                 <DialogClose asChild>
                   <button
@@ -319,7 +415,15 @@ export function EventSearchBar({
                 </DialogClose>
               </div>
 
-              <div className="flex-1 space-y-3 overflow-x-hidden overflow-y-auto px-4 pb-28 [scrollbar-gutter:stable]">
+              {/* ⚠️ `min-h-0` is what makes `overflow-y-auto` actually scroll.
+                  A flex item's min-height defaults to `auto` — its content size
+                  — so without it this column refuses to shrink below its
+                  content: the box grows to match, there is nothing to scroll,
+                  and whatever doesn't fit the sheet is simply unreachable. It
+                  only bit once something tall enough appeared, i.e. when the
+                  date picker expanded (container 920px inside an 802px sheet).
+                  The filter modal's scroll column below already declares it. */}
+              <div className="min-h-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto px-4 pb-28 [scrollbar-gutter:stable]">
                 {/* biome-ignore lint/a11y/noStaticElementInteractions: onMouseDown dismisses the date picker when tapping another field — no semantic role applies */}
                 <section
                   ref={whereContainerRef}
@@ -400,62 +504,63 @@ export function EventSearchBar({
 
                 {mobileMoreFiltersOpen && (
                   <>
-                    {/* biome-ignore lint/a11y/noStaticElementInteractions: onMouseDown dismisses the date picker when tapping another field — no semantic role applies */}
+                    {/* Activity — tap to expand the option list, exactly like
+                        the "When" card below it. No text input: the value can
+                        only be one of the listed activities. */}
                     <section
                       ref={activity.containerRef}
-                      className="relative rounded-2xl border bg-background px-4 py-3 shadow-sm"
-                      onMouseDown={() => setMobileWhenOpen(false)}
+                      className="relative rounded-2xl border bg-background shadow-sm overflow-hidden"
                     >
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        {t('activityLabel')}
-                      </p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <input
-                          ref={activityInputRef}
+                      <div className="flex items-center">
+                        <button
+                          type="button"
                           id="event-search-activity-mobile"
-                          name="activity-mobile"
-                          type="text"
-                          placeholder={t('activityPlaceholder')}
-                          value={activity.inputValue}
-                          onChange={(e) => {
-                            activity.setInputValue(e.target.value);
-                            activity.setOpen(true);
+                          className="min-w-0 flex-1 px-4 py-3 text-left"
+                          aria-expanded={activity.open}
+                          onClick={() => {
+                            setMobileWhenOpen(false);
+                            activity.toggle();
                           }}
-                          onFocus={() => activity.setOpen(true)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSearch();
-                            if (e.key === 'Escape') activity.setOpen(false);
-                          }}
-                          className={cn(
-                            'min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground/50',
-                            activity.error &&
-                              'animate-[shake_0.35s_ease-in-out] text-destructive placeholder:text-destructive/40',
-                          )}
-                        />
-                        {activity.inputValue && (
+                        >
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            {t('activityLabel')}
+                          </p>
+                          <div className="mt-2 flex items-center gap-2">
+                            <span
+                              className={cn(
+                                'flex-1 truncate text-base font-medium',
+                                activity.selectedLabel
+                                  ? 'text-foreground'
+                                  : 'text-muted-foreground/50',
+                              )}
+                            >
+                              {activity.selectedLabel || t('activityPlaceholder')}
+                            </span>
+                          </div>
+                        </button>
+                        {activity.selectedValue && (
                           <button
                             type="button"
-                            onClick={() => {
-                              activity.clear();
-                              activityInputRef.current?.focus();
-                            }}
-                            className="shrink-0 text-muted-foreground hover:text-foreground"
+                            aria-label={t('clearFilters')}
+                            onClick={() => activity.clear()}
+                            className="px-4 text-muted-foreground hover:text-foreground"
                           >
                             <X className="h-4 w-4" />
                           </button>
                         )}
                       </div>
-                      {activity.open && activity.filtered.length > 0 && (
-                        <div className="mt-2 max-h-48 overflow-y-auto rounded-xl bg-background py-1">
-                          {activity.filtered.map((opt) => (
+                      {activity.open && (
+                        <div className="max-h-48 overflow-y-auto border-t py-1">
+                          {activity.options.map((opt) => (
                             <button
                               key={opt.value}
                               type="button"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                activity.select(opt);
-                              }}
-                              className="w-full py-2.5 text-left text-sm transition-colors hover:bg-muted"
+                              aria-pressed={opt.value === activity.selectedValue}
+                              onClick={() => activity.select(opt)}
+                              className={cn(
+                                'w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-muted',
+                                opt.value === activity.selectedValue && 'font-semibold',
+                              )}
                             >
                               {opt.label}
                             </button>
@@ -520,54 +625,84 @@ export function EventSearchBar({
                               </button>
                             ))}
                           </div>
-                          <Calendar
-                            mode="range"
-                            selected={dateRange}
-                            onSelect={(range) => {
-                              setDateRange(range);
-                              setPresetLabel(null);
-                              if (range?.from && range?.to) setMobileWhenOpen(false);
-                            }}
-                            numberOfMonths={1}
-                            className="w-full p-2! [--cell-size:--spacing(7)]"
-                            classNames={{
-                              root: 'w-full',
-                              months: 'flex flex-col gap-4 relative w-full',
-                              month: 'flex flex-col w-full gap-4',
-                              month_grid: 'w-full',
-                              weekdays: 'flex w-full',
-                              week: 'flex w-full mt-2',
-                            }}
-                            components={MOBILE_CALENDAR_COMPONENTS}
-                          />
+                          <Suspense
+                            fallback={<CalendarFallback className={MOBILE_CALENDAR_HEIGHT} />}
+                          >
+                            <Calendar
+                              mode="range"
+                              selected={dateRange}
+                              onSelect={(range) => {
+                                setDateRange(range);
+                                setPresetLabel(null);
+                                if (range?.from && range?.to) setMobileWhenOpen(false);
+                              }}
+                              numberOfMonths={1}
+                              className="w-full p-2! [--cell-size:--spacing(7)]"
+                              classNames={{
+                                root: 'w-full',
+                                months: 'flex flex-col gap-4 relative w-full',
+                                month: 'flex flex-col w-full gap-4',
+                                month_grid: 'w-full',
+                                weekdays: 'flex w-full',
+                                week: 'flex w-full mt-2',
+                              }}
+                              components={MOBILE_CALENDAR_COMPONENTS}
+                            />
+                          </Suspense>
                         </div>
                       )}
                     </div>
 
-                    <section className="rounded-2xl border bg-background px-4 py-3 shadow-sm">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        {t('photographerLabel')}
-                      </p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <input
-                          id="event-search-photographer-mobile"
-                          name="photographer-mobile"
-                          type="text"
-                          placeholder={t('photographerPlaceholder')}
-                          value={photographer}
-                          onChange={(e) => setPhotographer(e.target.value)}
-                          className="min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground/50"
-                        />
-                        {photographer && (
-                          <button
-                            type="button"
-                            onClick={() => setPhotographer('')}
-                            className="shrink-0 text-muted-foreground hover:text-foreground"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        )}
+                    <section className="rounded-2xl border bg-background shadow-sm overflow-hidden">
+                      <div className="px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          {t('photographerLabel')}
+                        </p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <input
+                            id="event-search-photographer-mobile"
+                            name="photographer-mobile"
+                            type="text"
+                            autoComplete="off"
+                            placeholder={t('photographerPlaceholder')}
+                            value={photographer}
+                            onChange={(e) => {
+                              setPhotographer(e.target.value);
+                              setShowPhotographerSuggestions(true);
+                            }}
+                            onFocus={() => {
+                              setMobileWhenOpen(false);
+                              activity.setOpen(false);
+                              setShowPhotographerSuggestions(true);
+                            }}
+                            onBlur={() =>
+                              setTimeout(
+                                () => setShowPhotographerSuggestions(false),
+                                BLUR_DISMISS_DELAY_MS,
+                              )
+                            }
+                            className="min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground/50"
+                          />
+                          {photographer && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPhotographer('');
+                                setShowPhotographerSuggestions(false);
+                              }}
+                              className="shrink-0 text-muted-foreground hover:text-foreground"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
                       </div>
+                      {showPhotographerSuggestions && (
+                        <PhotographerSuggestions
+                          options={photographerOptions}
+                          onSelect={handleSelectPhotographerFilter}
+                        />
+                      )}
                     </section>
 
                     {sortBy !== undefined && onSortChange && (
@@ -634,61 +769,58 @@ export function EventSearchBar({
             </DialogHeader>
 
             <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-3">
-              {/* Activity — inline expandable card */}
+              {/* Activity — inline expandable card. Tap to expand/collapse the
+                  option list; there is no text input, so the field can only
+                  ever hold a listed activity. */}
               <div
                 ref={activity.containerRef}
                 className="rounded-xl border bg-background overflow-hidden"
               >
-                <div className="px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    {t('activityLabel')}
-                  </p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <input
-                      id="event-search-activity-modal"
-                      name="activity-modal"
-                      type="text"
-                      placeholder={t('activityPlaceholder')}
-                      value={activity.inputValue}
-                      onChange={(e) => {
-                        activity.setInputValue(e.target.value);
-                        activity.setOpen(true);
-                      }}
-                      onFocus={() => activity.setOpen(true)}
-                      onBlur={() =>
-                        setTimeout(() => activity.setOpen(false), BLUR_DISMISS_DELAY_MS)
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === 'Escape') activity.setOpen(false);
-                      }}
-                      className={cn(
-                        'min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/50',
-                        activity.error &&
-                          'animate-[shake_0.35s_ease-in-out] text-destructive placeholder:text-destructive/40',
-                      )}
-                    />
-                    {activity.inputValue && (
-                      <button
-                        type="button"
-                        onClick={() => activity.clear()}
-                        className="shrink-0 text-muted-foreground hover:text-foreground"
+                <div className="flex items-center">
+                  <button
+                    type="button"
+                    id="event-search-activity-modal"
+                    className="min-w-0 flex-1 px-4 py-3 text-left"
+                    aria-expanded={activity.open}
+                    onClick={activity.toggle}
+                  >
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {t('activityLabel')}
+                    </p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span
+                        className={cn(
+                          'flex-1 truncate text-sm font-medium',
+                          activity.selectedLabel ? 'text-foreground' : 'text-muted-foreground/50',
+                        )}
                       >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
+                        {activity.selectedLabel || t('activityPlaceholder')}
+                      </span>
+                    </div>
+                  </button>
+                  {activity.selectedValue && (
+                    <button
+                      type="button"
+                      aria-label={t('clearFilters')}
+                      onClick={() => activity.clear()}
+                      className="px-4 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
-                {activity.open && activity.filtered.length > 0 && (
+                {activity.open && (
                   <div className="border-t max-h-48 overflow-y-auto py-1">
-                    {activity.filtered.map((opt) => (
+                    {activity.options.map((opt) => (
                       <button
                         key={opt.value}
                         type="button"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          activity.select(opt);
-                        }}
-                        className="w-full px-4 py-2 text-left text-sm transition-colors hover:bg-muted"
+                        aria-pressed={opt.value === activity.selectedValue}
+                        onClick={() => activity.select(opt)}
+                        className={cn(
+                          'w-full px-4 py-2 text-left text-sm transition-colors hover:bg-muted',
+                          opt.value === activity.selectedValue && 'font-semibold',
+                        )}
                       >
                         {opt.label}
                       </button>
@@ -703,7 +835,12 @@ export function EventSearchBar({
                   <button
                     type="button"
                     className="flex-1 px-4 py-3 text-left"
-                    onClick={() => setModalWhenOpen((o) => !o)}
+                    onClick={() => {
+                      // Only one card expands at a time — the Activity list is
+                      // no longer dismissed by a blur now that it's a button.
+                      activity.setOpen(false);
+                      setModalWhenOpen((o) => !o);
+                    }}
                   >
                     <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                       {t('whenLabel')}
@@ -749,48 +886,75 @@ export function EventSearchBar({
                       ))}
                     </div>
                     <div className="flex justify-center">
-                      <Calendar
-                        mode="range"
-                        selected={dateRange}
-                        onSelect={(range) => {
-                          setDateRange(range);
-                          setPresetLabel(null);
-                          if (range?.from && range?.to) setModalWhenOpen(false);
-                        }}
-                        locale={calendarLocale}
-                        numberOfMonths={1}
-                        className="p-2 [--cell-size:--spacing(7)] [&_button]:text-[12px]"
-                      />
+                      <Suspense fallback={<CalendarFallback className={MODAL_CALENDAR_HEIGHT} />}>
+                        <Calendar
+                          mode="range"
+                          selected={dateRange}
+                          onSelect={(range) => {
+                            setDateRange(range);
+                            setPresetLabel(null);
+                            if (range?.from && range?.to) setModalWhenOpen(false);
+                          }}
+                          locale={calendarLocale}
+                          numberOfMonths={1}
+                          className="p-2 [--cell-size:--spacing(7)] [&_button]:text-[12px]"
+                        />
+                      </Suspense>
                     </div>
                   </div>
                 )}
               </div>
 
               {/* Photographer */}
-              <div className="rounded-xl border bg-background px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {t('photographerLabel')}
-                </p>
-                <div className="mt-2 flex items-center gap-2">
-                  <input
-                    id="event-search-photographer-modal"
-                    name="photographer-modal"
-                    type="text"
-                    placeholder={t('photographerPlaceholder')}
-                    value={photographer}
-                    onChange={(e) => setPhotographer(e.target.value)}
-                    className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/50"
-                  />
-                  {photographer && (
-                    <button
-                      type="button"
-                      onClick={() => setPhotographer('')}
-                      className="shrink-0 text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
+              <div className="rounded-xl border bg-background overflow-hidden">
+                <div className="px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {t('photographerLabel')}
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      id="event-search-photographer-modal"
+                      name="photographer-modal"
+                      type="text"
+                      autoComplete="off"
+                      placeholder={t('photographerPlaceholder')}
+                      value={photographer}
+                      onChange={(e) => {
+                        setPhotographer(e.target.value);
+                        setShowPhotographerSuggestions(true);
+                      }}
+                      onFocus={() => {
+                        activity.setOpen(false);
+                        setShowPhotographerSuggestions(true);
+                      }}
+                      onBlur={() =>
+                        setTimeout(
+                          () => setShowPhotographerSuggestions(false),
+                          BLUR_DISMISS_DELAY_MS,
+                        )
+                      }
+                      className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/50"
+                    />
+                    {photographer && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPhotographer('');
+                          setShowPhotographerSuggestions(false);
+                        }}
+                        className="shrink-0 text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
+                {showPhotographerSuggestions && (
+                  <PhotographerSuggestions
+                    options={photographerOptions}
+                    onSelect={handleSelectPhotographerFilter}
+                  />
+                )}
               </div>
 
               {sortBy !== undefined && onSortChange && (
@@ -925,14 +1089,10 @@ export function EventSearchBar({
           </div>
         </div>
 
+        {/* `shake` used to live here to reject free text typed into the
+            Activity field. That field is a select now, so unrejectable input
+            is impossible and the animation had no callers left. */}
         <style>{`
-          @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            20%       { transform: translateX(-5px); }
-            40%       { transform: translateX(5px); }
-            60%       { transform: translateX(-3px); }
-            80%       { transform: translateX(3px); }
-          }
           @keyframes dropdown-down {
             from { opacity: 0; transform: translateY(-6px); }
             to   { opacity: 1; transform: translateY(0); }
@@ -980,41 +1140,31 @@ export function EventSearchBar({
       </div>
       <div className="w-px h-4 bg-border shrink-0" />
       <div ref={activity.containerRef} className="relative flex items-center gap-1">
-        <input
-          ref={activityInputRef}
+        <button
+          type="button"
           id="event-search-activity-compact"
-          name="activity"
-          placeholder={t('activityCompactPlaceholder')}
-          value={activity.inputValue}
-          onChange={(e) => {
-            activity.setInputValue(e.target.value);
-            activity.setOpen(true);
-          }}
-          onFocus={() => activity.setOpen(true)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleSearch();
-            if (e.key === 'Escape') activity.setOpen(false);
-          }}
+          aria-expanded={activity.open}
+          onClick={activity.toggle}
           className={cn(
-            'h-6 w-24 text-sm bg-transparent outline-none placeholder:text-muted-foreground/50',
-            activity.error && 'text-destructive',
+            'h-6 w-24 truncate text-left text-sm outline-none',
+            activity.selectedLabel ? 'text-foreground' : 'text-muted-foreground/50',
           )}
-        />
-        {activity.inputValue && (
+        >
+          {activity.selectedLabel || t('activityCompactPlaceholder')}
+        </button>
+        {activity.selectedValue && (
           <button
             type="button"
-            onClick={() => {
-              activity.clear();
-              activityInputRef.current?.focus();
-            }}
+            aria-label={t('clearFilters')}
+            onClick={() => activity.clear()}
             className="shrink-0 text-muted-foreground hover:text-foreground"
           >
             <X className="h-3.5 w-3.5" />
           </button>
         )}
-        {activity.open && activity.filtered.length > 0 && typeof document !== 'undefined' && (
+        {activity.open && typeof document !== 'undefined' && (
           <ActivityDropdown
-            filtered={activity.filtered}
+            options={activity.options}
             anchorRef={activity.containerRef}
             onSelect={activity.select}
             compact
