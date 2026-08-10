@@ -26,7 +26,9 @@
 - [x] 4.2 Subtract at the two sites that bypass it: the stale-batch total and the post-claim recompute
 - [x] 4.3 `findTransferByGroup` keeps probing with the ORIGINAL `amount_cents`; transfers send the payable amount
 - [x] 4.4 A `transfer_failed` row with `reversed_amount_cents > 0` is never transferred — flagged for review
-- [ ] 4.5 Claim individual rows out of `pending` before calling Stripe, as the batch path already does
+- [x] 4.5 Claim individual rows out of `pending` before calling Stripe, as the batch path already does —
+      plus `listStaleProcessingSingles` + a `recover-stale-singles` step, without which the claim only
+      trades a double-payment window for a permanent stranding
 - [x] 4.6 Phantom-reversal sweep (`reversed_at` set, `stripe_reversal_id` null, >30 min) alerting via `reportMoneyIncident`
 
 ## 5. Orchestrator + webhook
@@ -50,6 +52,17 @@
 - [x] 7.4 Integration: `lost` with the charge fetch failing changes nothing and alerts
 - [x] 7.5 Integration: a partially reversed `transfer_failed` row is never transferred
 - [x] 7.6 Flip the two assertions that encode the old model (`stripe-webhook.test.ts:1993`, partial-refund access)
-- [ ] 7.7 Update the OpenSpec design + delta specs to the new model
+- [x] 7.7 Update the OpenSpec design + delta specs to the new model
 - [x] 7.8 `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build`
 - [ ] 7.9 `/code-review` again — the last pass is what caught that the previous fixes were wrong
+
+## 8. Resumed 2026-08-10 (found while finishing, not in any earlier pass)
+
+- [x] 8.1 Freezing a hold moved the photographer's balance: an INQUIRY cancelled the row (out of
+      `getTotalPendingPayouts`) while the order stayed `completed` (still in `net`), so opening an inquiry
+      RAISED their withdrawable balance by the frozen amount. The freeze now mirrors access — it leaves
+      `pending` only when the sale leaves `net` — and `frozen_by_dispute_id`, not the status, is what
+      `listPayableHolds` refuses
+- [x] 8.2 `charge.dispute.updated` was neither handled nor subscribed, which is how an inquiry escalating
+      to a real chargeback arrives. Shares the `created` body, which is idempotent by construction
+- [x] 8.3 Integration tests for both, plus the stale single-claim recovery

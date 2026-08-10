@@ -70,6 +70,7 @@ vi.mock('next/cache', () => ({
 // here keeps the load order easy to reason about.
 import Stripe from 'stripe';
 import { POST } from '@/app/api/stripe/webhook/route';
+import { getTotalPendingPayouts, listPayableHolds } from '@/database/queries/payouts';
 import {
   createServiceClient,
   createTestEvent,
@@ -1722,7 +1723,7 @@ describe('app/api/stripe/webhook — clawback (T-215)', () => {
   }
 
   function disputeRequest(opts: {
-    type: 'charge.dispute.created' | 'charge.dispute.closed';
+    type: 'charge.dispute.created' | 'charge.dispute.updated' | 'charge.dispute.closed';
     chargeId: string;
     paymentIntentId: string;
     amountCents: number;
@@ -1849,7 +1850,7 @@ describe('app/api/stripe/webhook — clawback (T-215)', () => {
     // Inquiries arrive through the same event as chargebacks. Revoking a paying
     // buyer's photos over a bank's suspicion — one that often closes by itself —
     // was real damage, and `warning_closed` restored nothing.
-    const { sb, order, payout } = await seedCharge({
+    const { sb, order, payout, photographer } = await seedCharge({
       chargeId: 'ch_inquiry',
       paymentIntentId: 'pi_inquiry',
       amountCents: 500,
@@ -1883,13 +1884,23 @@ describe('app/api/stripe/webhook — clawback (T-215)', () => {
       .single();
     expect(duringOrder?.status).toBe('completed');
 
+    // ⚠️ The row stays `pending`. Cancelling it here took the hold out of
+    // `getTotalPendingPayouts` while the sale stayed in `net` (the order is still
+    // `completed`, deliberately) — so opening an inquiry RAISED the photographer's
+    // withdrawable balance by exactly the amount just frozen.
     const { data: duringPayout } = await sb
       .from('payouts')
       .select('status, frozen_by_dispute_id')
       .eq('id', payout.id)
       .single();
-    expect(duringPayout?.status).toBe('cancelled');
+    expect(duringPayout?.status).toBe('pending');
     expect(duringPayout?.frozen_by_dispute_id).toBe('dp_ch_inquiry');
+
+    // The balance does not move …
+    expect(await getTotalPendingPayouts(sb, photographer.id)).toBe(460);
+    // … and the frozen hold is still not payable, which is the point of freezing.
+    const payable = await listPayableHolds(sb);
+    expect(payable.map((row) => row.id)).not.toContain(payout.id);
 
     // Closing it releases the freeze and still never touches access.
     await stubStripeReads({ chargeId: 'ch_inquiry', amount: 500, disputes: [] });
@@ -1950,6 +1961,85 @@ describe('app/api/stripe/webhook — clawback (T-215)', () => {
 
     const { data: after } = await sb.from('orders').select('status').eq('id', order.id).single();
     expect(after?.status).toBe('disputed');
+  });
+
+  it('revokes access when an inquiry ESCALATES to a chargeback', async () => {
+    // The escalation does not arrive as a new event: it is `charge.dispute.updated`
+    // carrying a status that has left the `warning_*` family. Handling only
+    // `created` left the buyer downloading for the whole chargeback — weeks —
+    // because the inquiry branch leaves access alone by design and nothing
+    // revisited it before `closed`.
+    const { sb, order, payout, photographer } = await seedCharge({
+      chargeId: 'ch_escalate',
+      paymentIntentId: 'pi_escalate',
+      amountCents: 500,
+      payoutStatus: 'pending',
+      payoutAmountCents: 460,
+    });
+
+    await stubStripeReads({
+      chargeId: 'ch_escalate',
+      amount: 500,
+      disputes: [{ status: 'warning_needs_response', amount: 500 }],
+    });
+    expect(
+      (
+        await POST(
+          disputeRequest({
+            type: 'charge.dispute.created',
+            chargeId: 'ch_escalate',
+            paymentIntentId: 'pi_escalate',
+            amountCents: 500,
+            status: 'warning_needs_response',
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { data: asInquiry } = await sb
+      .from('orders')
+      .select('status')
+      .eq('id', order.id)
+      .single();
+    expect(asInquiry?.status).toBe('completed');
+
+    // The bank escalates: same dispute, real chargeback now.
+    await stubStripeReads({
+      chargeId: 'ch_escalate',
+      amount: 500,
+      disputes: [{ status: 'needs_response', amount: 500 }],
+    });
+    expect(
+      (
+        await POST(
+          disputeRequest({
+            type: 'charge.dispute.updated',
+            chargeId: 'ch_escalate',
+            paymentIntentId: 'pi_escalate',
+            amountCents: 500,
+            status: 'needs_response',
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { data: escalated } = await sb
+      .from('orders')
+      .select('status')
+      .eq('id', order.id)
+      .single();
+    expect(escalated?.status).toBe('disputed');
+
+    // And the money follows access out: the sale has left `net`, so the hold has to
+    // leave `pending` with it or the same money is subtracted twice.
+    const { data: heldRow } = await sb
+      .from('payouts')
+      .select('status, frozen_by_dispute_id')
+      .eq('id', payout.id)
+      .single();
+    expect(heldRow?.status).toBe('cancelled');
+    expect(heldRow?.frozen_by_dispute_id).toBe('dp_ch_escalate');
+    expect(await getTotalPendingPayouts(sb, photographer.id)).toBe(0);
   });
 
   it('reverses only its own proportion when a PARTIAL dispute is lost', async () => {

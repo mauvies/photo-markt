@@ -1,68 +1,68 @@
-# T-215 · Un reembolso TOTAL debe revertir la transferencia y el acceso
+# T-215 · Clawback: reembolsos y disputas deben revertir transferencia y acceso
 
 - **Prioridad:** P1
-- **Estado:** todo (pausado 2026-08-07 — rama y PR draft ya existen, ver Notas)
+- **Estado:** doing (retomado 2026-08-10 — alcance completo, ver Notas)
 - **Riesgo:** alto  (pagos)
-- **Blockers:** ninguno para implementar; **T-239 (P0) bloquea el DESPLIEGUE** — si prod tiene el esquema desincronizado con T-216, la migración de este ticket se apila sobre una base rota
+- **Blockers:** ninguno para implementar; **T-239 (P0) bloquea el DESPLIEGUE** — si prod tiene el esquema desincronizado con T-216, las migraciones de este ticket se apilan sobre una base rota
 - **Rama:** `fix/clawback-disputes-and-refunds`  (tipo = fix)
-- **OpenSpec change:** `clawback-disputes-and-refunds` (existe; hay que recortarlo al alcance nuevo)
-- **PR:** #290 (draft, WIP — hay que podarlo a este alcance)
+- **OpenSpec change:** `clawback-disputes-and-refunds` (activo)
+- **PR:** #290 (draft)
+- **Absorbe:** **T-237** (reembolso parcial) y **T-243** (ciclo de vida de disputas)
 
 ## Requerimiento
 
-`charge.refunded` se maneja a medias: la orden pasa a `refunded` —lo cual sí revoca el acceso— pero
+El webhook manejaba 8 eventos de Stripe y **ninguno era de disputa**. Al perder un chargeback: Stripe
+retira el importe de la cuenta de plataforma, cobra ~15 € de tasa, la orden sigue `completed` —o sea que
+**el comprador conserva el acceso indefinidamente**—, el fotógrafo conserva su transferencia, y no queda
+ni log, ni alerta, ni fila. Una foto de 5 € cuesta ~20 € y el archivo se va igual. Aplica **aunque no se
+ofrezcan reembolsos**: la disputa la fuerza el comprador por su banco, sin pasar por los términos.
+
+Y `charge.refunded` se manejaba a medias: la orden pasa a `refunded` —lo cual sí revoca el acceso— pero
 **la transferencia ya enviada al fotógrafo no se revierte nunca**. Documentado como «revertir a mano
-desde el dashboard», o sea, dependiente de que alguien se acuerde. El comprador recupera su dinero de
-la cuenta de plataforma y el fotógrafo conserva su neto: la plataforma absorbe el 100 % de la pérdida.
-
-**Alcance recortado a propósito (2026-08-07).** Este ticket llevaba también los reembolsos parciales y
-todo el ciclo de vida de disputas. Tres pasadas de `/code-review` encontraron ~25 defectos de dinero
-entre las tres, y cada ronda de arreglos introducía fail-opens nuevos. La causa no era la dificultad de
-cada defecto sino el tamaño del alcance: reembolso total, reembolso parcial y disputas tienen
-invariantes distintos y se estaban resolviendo a la vez. Se parten:
-
-- **este ticket** — solo reembolso **total**;
-- **T-237** — reembolso **parcial** (proporcional) + cuadrar el saldo, que se rompe por su culpa;
-- **T-243** — ciclo de vida de disputas.
-
-**Por qué el total es el caso fácil, y no es casualidad:** en un reembolso total la orden entera sale
-de `net` **y** el payout entero se revierte, así que la identidad
-`withdrawable = net − paidOut − pending` se mantiene sin hacer nada. Todos los defectos de
-proporcionalidad, redondeo y cuadre del saldo pertenecen al caso parcial.
+desde el dashboard», o sea, dependiente de que alguien se acuerde.
 
 ## Criterio de aceptación (Definition of Done)
 
-- [ ] `charge.refunded` con `amount_refunded >= amount` revierte la transferencia completa
-      (`transfers.createReversal`) y anula el hold pendiente entero
-- [ ] Un reembolso **parcial** no hace nada en este ticket salvo registrarlo y alertar — es T-237
-- [ ] La reversión es idempotente ante redelivery de Stripe (hasta 3 días): aplicar el mismo evento N
-      veces mueve dinero una vez
-- [ ] Se revoca también el acceso de **órdenes de invitado** (`guest_orders`), que hoy no se tocan: no
-      existe lookup por payment intent, así que un invitado reembolsado conserva su página de token
-- [ ] Una reversión fallida no tumba el webhook: se registra, se alerta y la fila queda marcada para
-      conciliación
+- [ ] `charge.refunded` revierte la transferencia (`transfers.createReversal`) y anula/reduce el hold
+- [ ] Reembolso **parcial**: proporcional en ambos lados (dinero enviado y retenido), y **no revoca el
+      acceso** — los reembolsos de Stripe son importes, no líneas de pedido (T-237)
+- [ ] `charge.dispute.created` congela el pago; revoca el acceso **solo** en un chargeback real, no en una
+      inquiry (T-243)
+- [ ] `charge.dispute.updated` manejado — es como llega el **escalado** de inquiry a chargeback (T-243)
+- [ ] `charge.dispute.closed` trata los **cuatro** cierres (`lost`, `won`, `warning_closed`, `prevented`)
+- [ ] Congelar/descongelar **no altera el saldo retirable** del fotógrafo (T-243)
+- [ ] Todo movimiento es un **target** derivado del estado de Stripe, no un delta: aplicar el mismo evento
+      N veces mueve dinero una vez, y reembolso↔disputa convergen en cualquier orden
+- [ ] Se revoca también el acceso de **órdenes de invitado** (`guest_orders`)
+- [ ] Una reversión fallida no tumba el webhook: se registra, se alerta y la fila queda para conciliación
+- [ ] ⚠️ Escribir el estado de la orden **nunca promueve** una orden que no estaba `completed`
+- [ ] Un fallo de lectura contra Stripe nunca restaura acceso ni paga un hold: al no poder decidir, no se
+      toca nada
 - [ ] El histórico de `payouts` refleja la reversión
-- [ ] ⚠️ Escribir el estado de la orden **nunca puede promover** una orden que no estaba `completed`
-      (una `pending` cuyo `payment_intent.succeeded` se perdió no puede ganar acceso por un reembolso)
-- [ ] Tests de integración: reembolso total, redelivery del mismo evento, orden de invitado, reversión
-      que falla
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [ ] La lista de eventos documentada en la cabecera del handler se actualiza —
+      `test/unit/api/stripe-webhook-setup-doc.test.ts` la valida contra el `switch`
+- [ ] Tests de integración por cada cruce, no solo por cada evento
+- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde (+ `pnpm build`)
 
 ## Notas
 
-**⚠️ Pausado el 2026-08-07, con trabajo a medias en el repo.** Antes de retomarlo:
-la rama `fix/clawback-disputes-and-refunds` y el **PR #290 (draft, WIP — do not merge)** ya existen y
-contienen el rediseño completo (reembolso total + parcial + disputas), con **10 defectos conocidos** de
-la tercera revisión. No empezar de cero ni abrir otra rama: el siguiente paso es **podar esa rama** a
-solo-reembolso-total, lo que elimina la mayoría de esos defectos por ser específicos de disputas.
+**Historia del alcance (importa para no repetirla).** El 2026-08-07 se decidió **partir** el ticket en
+tres (total / parcial / disputas) porque el PR llevaba «10 defectos conocidos» pendientes. Al retomarlo el
+2026-08-10 se comprobó que esa premisa ya no era cierta: esos 10 son los que reportó la **2ª** revisión, y
+el commit inmediatamente anterior a la partición (`b04c886`, *derive clawback state instead of applying
+deltas*) es justamente el rediseño que los corrige uno por uno con tests. La 3ª revisión (tarea 7.9) nunca
+llegó a correrse. El estado real era **implementación completa, sin verificar** — con 1277 unit tests en
+verde. **Decisión del usuario: terminarlo entero**, absorbiendo T-237 y T-243, en vez de podar código que
+funciona y volver a derivar los mismos invariantes en dos tickets más.
 
-**La rama ya existe y contiene el rediseño completo** (reembolsos + parciales + disputas), con ~10
-defectos conocidos de la tercera revisión, la mayoría específicos de disputas. Hay que **podarla** a
-este alcance, no empezar de cero: el kernel de objetivos (`clawback.ts`), la inmutabilidad de
-`amount_cents` y el modelo derivado de estado son la parte que sí conviene conservar.
+**Lo que hace correcto el alcance grande** (y por qué partirlo tenía su propio riesgo): reembolso y
+disputa **se cruzan** — reembolsar *para* zanjar un chargeback es el camino normal—, así que resolverlos
+por separado es justo lo que produjo los fail-opens de las dos primeras rondas. El modelo unificado de
+**target derivado** los hace converger en cualquier orden por construcción.
 
-⚠️ **Al desplegar:** la migración amplía tres CHECK de `status` y debe aplicarse **antes** del deploy;
-las aplica la GitHub Action, no Vercel.
+⚠️ **Al desplegar:** aplicar **las dos** migraciones antes del deploy (amplían tres CHECK de `status`; las
+aplica la GitHub Action, no Vercel) y **suscribir el endpoint de Stripe a los tres eventos de disputa** —
+sin `charge.dispute.updated` el escalado de una inquiry no revoca nada.
 
-Contexto: `src/app/api/stripe/webhook/route.ts` (`charge.refunded`), `src/lib/payouts/`,
+Contexto: `src/app/api/stripe/webhook/route.ts`, `src/lib/payouts/`,
 `src/database/queries/payouts.ts`, `ARCHITECTURE.md` §4.3.

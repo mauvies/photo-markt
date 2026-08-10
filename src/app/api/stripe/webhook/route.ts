@@ -11,7 +11,8 @@
  * - customer.subscription.deleted: Cancel subscription
  * - account.updated: Sync photographer Stripe Connect status + release held payouts on activation
  * - charge.refunded: Mark order (and guest order) refunded + claw back the photographer's money
- * - charge.dispute.created: Revoke buyer access + freeze outstanding payout holds
+ * - charge.dispute.created: Freeze outstanding payout holds; revoke buyer access for a real chargeback
+ * - charge.dispute.updated: Same body — this is how an inquiry ESCALATING to a chargeback arrives
  * - charge.dispute.closed: Reverse the transfer if lost; restore access + holds if won
  *
  * Stripe Dashboard setup required:
@@ -22,7 +23,7 @@
  *   payment_intent.payment_failed, customer.subscription.created,
  *   customer.subscription.updated, customer.subscription.deleted,
  *   account.updated, charge.refunded,
- *   charge.dispute.created, charge.dispute.closed
+ *   charge.dispute.created, charge.dispute.updated, charge.dispute.closed
  *   (T-192: an earlier version of this list named only account.updated +
  *   charge.refunded; a prod endpoint configured from it silently dropped every
  *   sale and subscription — orders/subscriptions are only ever written here.
@@ -1051,7 +1052,20 @@ export async function POST(request: Request) {
       // webhook handled neither event, so a lost dispute took the money back out
       // of the platform account, charged a ~€15 fee, and left the buyer with
       // permanent download access and the photographer with their transfer.
-      case 'charge.dispute.created': {
+      // ⚠️ ONE body for both, and that is the whole fix for escalation. A bank
+      // inquiry that turns into a real chargeback does NOT announce itself with a
+      // new event — it arrives as `charge.dispute.updated` carrying a status that
+      // has moved out of the `warning_*` family. Handling only `created` meant the
+      // buyer kept downloading for the entire chargeback (weeks), because the
+      // inquiry branch deliberately leaves access alone and nothing revisited it
+      // until `closed`.
+      //
+      // Sharing the body is safe precisely because it is idempotent: the freeze
+      // matches only outstanding holds and access is recomputed from Stripe's
+      // facts, so an `updated` that changes nothing we care about (evidence
+      // submitted, say) re-derives the same state.
+      case 'charge.dispute.created':
+      case 'charge.dispute.updated': {
         const dispute = event.data.object as Stripe.Dispute;
         const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id;
         const orders = await resolveOrdersForCharge(disputePaymentIntent(dispute));
@@ -1062,11 +1076,16 @@ export async function POST(request: Request) {
         // payout is reversible and cheap; paying one out on a charge that then
         // becomes a chargeback is not. Scoped to this dispute id so closing it
         // clears exactly these rows and never a hold voided by a refund.
+        //
+        // ⚠️ `revokesAccess` is not a detail: it decides whether the hold leaves
+        // `pending`, which has to mirror whether the sale leaves the photographer's
+        // `net`. See the note on `freezeHoldsForCharge`.
         try {
           await freezeHoldsForCharge(
             supabaseAdmin as unknown as SupabaseServerClient,
             chargeId,
             dispute.id,
+            { revokesAccess: chargeback },
           );
         } catch (err) {
           console.error(`[payouts] failed to freeze holds for disputed charge ${chargeId}:`, err);

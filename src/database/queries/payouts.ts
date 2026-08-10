@@ -349,6 +349,11 @@ export async function listPayableHolds(
     .eq('status', 'pending')
     .not('hold_reason', 'is', null)
     .not('stripe_charge_id', 'is', null)
+    // ⚠️ A hold frozen by an open INQUIRY stays `pending` on purpose — that is what
+    // keeps it inside `getTotalPendingPayouts` and therefore out of the
+    // photographer's withdrawable balance. `pending` alone is no longer the same
+    // question as "may we send this"; the freeze is.
+    .is('frozen_by_dispute_id', null)
     .order('created_at', { ascending: true })
     .limit(limit);
 
@@ -380,6 +385,10 @@ export async function claimPayoutsForBatch(
     .update({ status: 'processing', transfer_batch_id: batchId })
     .in('id', payoutIds)
     .eq('status', 'pending')
+    // Re-asserted here as well as in the read: a dispute may have frozen the row
+    // between listing it and claiming it, and the claim is the last moment before
+    // a Stripe call.
+    .is('frozen_by_dispute_id', null)
     .select();
 
   if (error) {
@@ -431,6 +440,44 @@ export async function settleBatchAsPaid(
   }
 }
 
+/**
+ * Claim ONE row for an individual transfer, the way {@link claimPayoutsForBatch}
+ * claims a group (T-215).
+ *
+ * ⚠️ This closes a real double-payment window, not a theoretical one. The row used
+ * to stay `pending` across its own Stripe call, so a run that transferred and then
+ * failed to write `settlePayoutPaid` left a paid row looking unpaid. Within 24h the
+ * idempotency key replays Stripe's original answer and hides it — but the key
+ * expires and the row does not, so the next tick after that sends the money a
+ * SECOND time. `source_transaction` only refuses an over-draw of the charge, which
+ * a single share of a multi-photographer order can still fit inside.
+ *
+ * Claiming first makes the row invisible to later ticks; if the process dies
+ * mid-flight, the stale-single recovery in the retry worker probes Stripe and
+ * either settles the row or hands it back as a hold.
+ *
+ * Returns `null` when the row was not claimable — already claimed, already paid,
+ * or frozen by a dispute between the read and here.
+ */
+export async function claimPayoutForTransfer(
+  supabase: SupabaseServerClient,
+  payoutId: string,
+): Promise<Payout | null> {
+  const { data, error } = await supabase
+    .from('payouts')
+    .update({ status: 'processing' })
+    .eq('id', payoutId)
+    .eq('status', 'pending')
+    .is('frozen_by_dispute_id', null)
+    .select();
+
+  if (error) {
+    throw new Error(`Failed to claim payout for transfer: ${getErrorMessage(error)}`);
+  }
+
+  return ((data ?? [])[0] as Payout | undefined) ?? null;
+}
+
 /** Batches left mid-flight past the staleness window, oldest first. */
 export async function listStaleProcessingBatches(
   supabase: SupabaseServerClient,
@@ -448,6 +495,35 @@ export async function listStaleProcessingBatches(
 
   if (error) {
     throw new Error(`Failed to list stale processing batches: ${getErrorMessage(error)}`);
+  }
+
+  return (data ?? []) as Payout[];
+}
+
+/**
+ * Individually-claimed rows left mid-flight past the staleness window (T-215).
+ *
+ * The mirror of {@link listStaleProcessingBatches} for rows claimed by
+ * {@link claimPayoutForTransfer}, told apart by having NO batch id. Without this
+ * the claim would trade a double-payment window for a permanent one: a row stuck
+ * `processing` is invisible to `listPayableHolds` and no other sweep looks for it.
+ */
+export async function listStaleProcessingSingles(
+  supabase: SupabaseServerClient,
+  staleBeforeIso: string,
+  limit = 50,
+): Promise<Payout[]> {
+  const { data, error } = await supabase
+    .from('payouts')
+    .select('*')
+    .eq('status', 'processing')
+    .is('transfer_batch_id', null)
+    .lt('updated_at', staleBeforeIso)
+    .order('updated_at', { ascending: true })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(`Failed to list stale processing payouts: ${getErrorMessage(error)}`);
   }
 
   return (data ?? []) as Payout[];
@@ -583,7 +659,8 @@ export async function applyReversalToHolds(
 }
 
 /**
- * Void every outstanding hold for a charge while a dispute is open (T-215).
+ * Stop every outstanding hold for a charge from being paid while a dispute is
+ * open (T-215).
  *
  * Distinct from {@link applyReversalToHolds} on purpose: an open dispute puts the
  * WHOLE charge in question, so there is no proportion to compute and no charge
@@ -591,21 +668,46 @@ export async function applyReversalToHolds(
  * passing `dispute.amount` as both the reversed amount and the charge total — the
  * exact conflation that made a partial dispute claw back 100% of a payout.
  *
- * Reversible because it is scoped by `void_reason`: winning restores precisely
- * these rows (see {@link restoreHoldsForCharge}).
+ * ## ⚠️ Whether the row leaves `pending` follows ACCESS, and is not a free choice
+ *
+ * The photographer's balance is `withdrawable = net − paidOut − pending`, so a
+ * hold must sit in `pending` exactly while its sale sits in `net`. `net` counts
+ * `completed` orders, and this app revokes access by moving the order off
+ * `completed` — so the two have to move together:
+ *
+ *   - **A real chargeback** revokes access, dropping the sale out of `net`. The
+ *     hold must leave `pending` too, or the same money is subtracted twice and the
+ *     difference is eaten out of that photographer's OTHER earnings.
+ *   - **An inquiry** deliberately leaves access alone, so the sale stays in `net`
+ *     and the hold must stay in `pending`. Cancelling it here — which is what this
+ *     function used to do for both — took the hold out of `pending` while the sale
+ *     stayed in `net`, so *opening an inquiry RAISED the photographer's
+ *     withdrawable balance* by exactly the amount that had just been frozen. The
+ *     precise opposite of freezing.
+ *
+ * Either way the row is marked with `frozen_by_dispute_id`, and that mark — not
+ * the status — is what {@link listPayableHolds} refuses to pay.
  */
 export async function freezeHoldsForCharge(
   supabase: SupabaseServerClient,
   stripeChargeId: string,
   disputeId: string,
+  /** True for a real chargeback (access is being revoked), false for an inquiry. */
+  options: { revokesAccess: boolean },
 ): Promise<number> {
   const { data, error } = await supabase
     .from('payouts')
     .update({
-      status: 'cancelled',
-      void_reason: 'dispute',
       frozen_by_dispute_id: disputeId,
-      admin_notes: `T-215: frozen — dispute ${disputeId} was opened against this charge.`,
+      ...(options.revokesAccess
+        ? {
+            status: 'cancelled' as const,
+            void_reason: 'dispute' as const,
+            admin_notes: `T-215: frozen and voided — chargeback ${disputeId} was opened against this charge, and the sale left the photographer's earnings with it.`,
+          }
+        : {
+            admin_notes: `T-215: frozen — inquiry ${disputeId} was opened against this charge. The row stays 'pending' so the photographer's balance does not move; it is simply not payable.`,
+          }),
     })
     .eq('stripe_charge_id', stripeChargeId)
     .eq('status', 'pending')
@@ -634,7 +736,15 @@ export async function restoreHoldsForCharge(
   stripeChargeId: string,
   disputeId: string,
 ): Promise<number> {
-  const { data, error } = await supabase
+  // A freeze now has two shapes, so releasing it has two steps. Both are scoped to
+  // THIS dispute id: matching on `void_reason` alone resurrected holds voided by a
+  // real refund — settling a chargeback by refunding, then winning it, paid the
+  // photographer for a sale the buyer got back in full.
+
+  // 1. Rows a CHARGEBACK voided. Only these may return to `pending`, and only when
+  //    the freeze is what voided them — `void_reason = 'refund'` means the buyer
+  //    really did get that money back, and winning a dispute does not undo it.
+  const { data: unvoided, error: unvoidError } = await supabase
     .from('payouts')
     .update({
       status: 'pending',
@@ -643,18 +753,30 @@ export async function restoreHoldsForCharge(
       admin_notes: `T-215: unfrozen — dispute ${disputeId} closed without loss.`,
     })
     .eq('stripe_charge_id', stripeChargeId)
+    .eq('frozen_by_dispute_id', disputeId)
     .eq('status', 'cancelled')
-    // ⚠️ Scoped to THIS dispute. Matching on `void_reason` alone resurrected holds
-    // voided by a real refund: settling a chargeback by refunding, then winning
-    // it, paid the photographer for a sale the buyer got back in full.
+    .eq('void_reason', 'dispute')
+    .select('id');
+
+  if (unvoidError) {
+    throw new Error(`Failed to restore holds for charge: ${getErrorMessage(unvoidError)}`);
+  }
+
+  // 2. Everything else this dispute froze: rows an INQUIRY left `pending`, plus any
+  //    the refund path voided while frozen. Clearing the mark is the whole release —
+  //    their status was never the freeze and must not be rewritten by it.
+  const { data: unmarked, error: unmarkError } = await supabase
+    .from('payouts')
+    .update({ frozen_by_dispute_id: null })
+    .eq('stripe_charge_id', stripeChargeId)
     .eq('frozen_by_dispute_id', disputeId)
     .select('id');
 
-  if (error) {
-    throw new Error(`Failed to restore holds for charge: ${getErrorMessage(error)}`);
+  if (unmarkError) {
+    throw new Error(`Failed to release the dispute freeze: ${getErrorMessage(unmarkError)}`);
   }
 
-  return (data ?? []).length;
+  return (unvoided ?? []).length + (unmarked ?? []).length;
 }
 
 /**

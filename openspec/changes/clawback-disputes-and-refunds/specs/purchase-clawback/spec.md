@@ -1,33 +1,62 @@
 ## ADDED Requirements
 
-### Requirement: An opened dispute revokes the buyer's access immediately
+### Requirement: A chargeback revokes the buyer's access immediately; an inquiry does not
 
-When a chargeback is opened against a purchase, the system SHALL mark the corresponding order as
+When a **chargeback** is opened against a purchase, the system SHALL mark the corresponding order as
 disputed so the buyer loses download access at once, without waiting for the dispute to close. The order
 SHALL be resolvable whether the purchase was made by an authenticated buyer or a guest.
 
-#### Scenario: Dispute opened on an authenticated purchase
+An **inquiry** — a dispute whose status is in the `warning_*` family — SHALL NOT touch access. Inquiries
+arrive through the same event as chargebacks and frequently close by themselves, so revoking a paying
+buyer's photos over a bank's question is damage taken for a suspicion.
 
-- **WHEN** `charge.dispute.created` is received for a charge belonging to a completed order
+#### Scenario: Chargeback opened on an authenticated purchase
+
+- **WHEN** `charge.dispute.created` is received with a chargeback status for a charge belonging to a
+  completed order
 - **THEN** the order's status becomes `disputed`
 - **AND** the buyer's purchased-photo reads and the ZIP download no longer include that order's photos
 
-#### Scenario: Dispute opened on a guest purchase
+#### Scenario: Chargeback opened on a guest purchase
 
-- **WHEN** `charge.dispute.created` is received for a charge belonging to a completed guest order
+- **WHEN** `charge.dispute.created` is received with a chargeback status for a completed guest order
 - **THEN** the guest order's status becomes `disputed`
 - **AND** the guest download-token page no longer serves the photos
 
-#### Scenario: Outstanding holds are frozen while the dispute is open
+#### Scenario: Inquiry opened
 
-- **WHEN** a dispute is opened for a charge that still has an outstanding payout hold
-- **THEN** the hold is voided and marked as voided by a dispute
-- **AND** the retry worker never transfers it while the dispute is open
+- **WHEN** `charge.dispute.created` is received with a `warning_*` status
+- **THEN** the buyer keeps their access
+- **AND** the outstanding payout hold is frozen
+
+#### Scenario: An inquiry escalates to a chargeback
+
+- **WHEN** the dispute's status leaves the `warning_*` family and arrives as `charge.dispute.updated`
+- **THEN** the order becomes `disputed` and the buyer's access is revoked
+- **AND** the frozen hold follows access out of the photographer's outstanding balance
 
 #### Scenario: Operator is alerted
 
 - **WHEN** a dispute is opened
 - **THEN** an operational alert is raised, carrying the charge and the order reference
+
+### Requirement: Freezing a payout does not move the photographer's balance
+
+The system SHALL keep a frozen hold counted in the photographer's outstanding payouts for exactly as long
+as its sale is counted in their earnings, so that freezing changes only what may be sent — never what the
+photographer is told they are owed.
+
+#### Scenario: An inquiry is opened while a hold is outstanding
+
+- **WHEN** an inquiry freezes an outstanding hold and the order keeps its access
+- **THEN** the photographer's withdrawable balance is unchanged
+- **AND** the retry worker will not transfer the frozen hold
+
+#### Scenario: A chargeback is opened while a hold is outstanding
+
+- **WHEN** a chargeback freezes an outstanding hold and the order loses its access
+- **THEN** the sale and the hold leave the balance together
+- **AND** the photographer's other earnings are untouched
 
 ### Requirement: A lost dispute reverses the photographer's transfer
 
@@ -53,21 +82,30 @@ platform cost and SHALL NOT be charged to the photographer.
 - **WHEN** a dispute is lost
 - **THEN** the order remains disputed and the buyer's access stays revoked
 
-### Requirement: A won dispute restores what the dispute revoked
+### Requirement: A dispute that closes without loss releases its own freeze and nothing else
 
-When a dispute is won, the system SHALL put back exactly what opening the dispute took away: the buyer's
-access and the photographer's outstanding hold.
+When a dispute closes as `won`, `warning_closed` or `prevented`, the system SHALL release exactly the
+holds that dispute froze, and SHALL recompute the buyer's access from the facts rather than restoring it.
 
-#### Scenario: Dispute won
+There is no "restore": settling a chargeback by refunding the buyer is the normal path, and an
+unconditional flip back to `completed` handed a fully refunded buyer permanent access to the originals.
 
-- **WHEN** `charge.dispute.closed` is received with status `won`
-- **THEN** the order returns to `completed` and the buyer's access is restored
-- **AND** any hold voided by that dispute returns to outstanding so the retry worker can pay it
+#### Scenario: Dispute won on a sale that was not refunded
+
+- **WHEN** `charge.dispute.closed` is received with status `won` and nothing was refunded
+- **THEN** the order is `completed` and the buyer's access is restored
+- **AND** the hold that dispute froze becomes payable again
+
+#### Scenario: Dispute won after refunding the buyer to settle it
+
+- **WHEN** a dispute is won on a charge that was refunded in full
+- **THEN** the order stays `refunded` and the buyer's access stays revoked
+- **AND** the released hold is reconciled against the refund rather than paid
 
 #### Scenario: A hold voided by a refund is not resurrected
 
-- **WHEN** a dispute is won on a charge that also had a hold voided by an earlier refund
-- **THEN** only the holds voided by the dispute are restored
+- **WHEN** a dispute closes without loss on a charge that also had a hold voided by an earlier refund
+- **THEN** only the holds that dispute froze are released
 - **AND** the refund-voided hold stays voided
 
 ### Requirement: A refund reverses money already sent to the photographer
@@ -100,10 +138,15 @@ redelivery.
 - **THEN** the guest order's status becomes `refunded`
 - **AND** the guest download-token page stops serving the photos
 
-### Requirement: A partial reversal is proportional, never all-or-nothing
+### Requirement: A partial reversal is proportional, and does not revoke access
 
 When only part of a charge is refunded or disputed, the system SHALL unwind the photographer's money in
 proportion to the reversed fraction, both for money already sent and for money still held.
+
+A partial refund SHALL NOT revoke the buyer's access. Stripe refunds are amounts, not line items, so a
+partial refund carries no information about which photos it covers; revoking the whole order also dropped
+the entire sale out of the photographer's earnings while only the refunded fraction came back out of their
+paid-out total, taking the difference from their unrelated sales.
 
 #### Scenario: Partial refund with the transfer already sent
 
@@ -114,14 +157,14 @@ proportion to the reversed fraction, both for money already sent and for money s
 #### Scenario: Partial refund with money still held
 
 - **WHEN** a quarter of a charge is refunded and the payout is still an outstanding hold
-- **THEN** the hold survives with its amount reduced by approximately a quarter
-- **AND** the retry worker can still pay the reduced amount
+- **THEN** approximately a quarter of the hold stops being payable
+- **AND** the retry worker can still pay the remainder
 
-#### Scenario: A partial refund never wipes the hold entirely
+#### Scenario: Buyer keeps their photos after a partial refund
 
-- **WHEN** a partial refund reduces a hold, however large the refunded fraction
-- **THEN** the hold retains at least the smallest payable amount rather than being voided
-- **AND** a hold reduced below the transfer minimum is still paid through the aggregation path
+- **WHEN** part of a charge is refunded
+- **THEN** the order stays `completed`
+- **AND** the buyer keeps access to the photos they bought
 
 ### Requirement: A clawback failure is recorded and alerted, never silent and never fatal
 
