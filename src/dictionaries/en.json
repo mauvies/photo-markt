@@ -812,12 +812,6 @@
     "connectBannerPending": "Your Stripe account is under review. You'll receive payouts once approved.",
     "connectBannerRestricted": "Action required on your Stripe account. Please update your payout settings.",
     "connectBannerButton": "Go to payout settings",
-    "stripeAvailable": "Stripe Available Balance",
-    "stripeAvailableDesc": "Ready to be paid out to your bank",
-    "stripePending": "Stripe Pending Balance",
-    "stripePendingDesc": "Held by Stripe until your account's payout delay passes",
-    "payoutScheduleTitle": "Automatic Payouts",
-    "payoutScheduleDesc": "Stripe pays your earnings out to your bank account automatically, following the payout schedule on your own Stripe account. You can check or change it there at any time.",
     "stripeDashboardButton": "Open my Stripe dashboard",
     "stripeDashboardTitle": "Opens your Stripe account in a new tab",
     "stripeDashboardNotReady": "Finish setting up your Stripe account first — you'll be able to open it from here once it's active.",
@@ -921,7 +915,13 @@
     "payoutMethodCardDesc": "Manage your bank account or payment method for receiving payouts.",
     "payoutMethodCardButton": "Manage Payout Method",
     "availableOn": "Available on",
-    "arrivesOn": "Arrives in your bank on"
+    "arrivesOn": "Arrives in your bank on",
+    "yourMoney": "Your money",
+    "paidAutomatically": "Stripe pays it into your bank account automatically.",
+    "moneyReady": "Ready — Stripe will send it on your account's next payout",
+    "noMoneyInFlight": "No money on its way right now. Your sales will show up here.",
+    "unsentTitle": "couldn't be sent yet",
+    "unsentDesc": "This is money you've earned. It will be sent automatically as soon as your payout account can receive it."
   },
   "payoutProfile": {
     "pageTitle": "Complete Payout Profile",

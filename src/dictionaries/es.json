@@ -812,12 +812,6 @@
     "connectBannerPending": "Tu cuenta de Stripe está en revisión. Recibirás pagos cuando sea aprobada.",
     "connectBannerRestricted": "Se requiere acción en tu cuenta de Stripe. Actualiza tu configuración de pagos.",
     "connectBannerButton": "Ir a configuración de pagos",
-    "stripeAvailable": "Balance disponible en Stripe",
-    "stripeAvailableDesc": "Listo para enviarse a tu banco",
-    "stripePending": "Balance pendiente en Stripe",
-    "stripePendingDesc": "Retenido por Stripe hasta que pase el plazo de pago de tu cuenta",
-    "payoutScheduleTitle": "Pagos automáticos",
-    "payoutScheduleDesc": "Stripe envía tus ganancias a tu cuenta bancaria automáticamente, según la frecuencia de pagos configurada en tu propia cuenta de Stripe. Puedes consultarla o cambiarla allí cuando quieras.",
     "stripeDashboardButton": "Abrir mi panel de Stripe",
     "stripeDashboardTitle": "Abre tu cuenta de Stripe en una pestaña nueva",
     "stripeDashboardNotReady": "Termina de configurar tu cuenta de Stripe primero — en cuanto esté activa podrás abrirla desde aquí.",
@@ -921,7 +915,13 @@
     "payoutMethodCardDesc": "Administra tu cuenta bancaria o método de pago para recibir retiros.",
     "payoutMethodCardButton": "Administrar método de cobro",
     "availableOn": "Disponible el",
-    "arrivesOn": "Llega a tu banco el"
+    "arrivesOn": "Llega a tu banco el",
+    "yourMoney": "Tu dinero",
+    "paidAutomatically": "Stripe lo ingresa en tu cuenta bancaria automáticamente.",
+    "moneyReady": "Listo — Stripe lo enviará en el próximo pago de tu cuenta",
+    "noMoneyInFlight": "No hay dinero en camino ahora mismo. Tus ventas aparecerán aquí.",
+    "unsentTitle": "aún no se han podido enviar",
+    "unsentDesc": "Es dinero que has ganado. Se enviará automáticamente en cuanto tu cuenta de cobro pueda recibirlo."
   },
   "payoutProfile": {
     "pageTitle": "Completar perfil de cobro",
