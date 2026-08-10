@@ -279,3 +279,66 @@ describe('PhotoDetailModal — Share', () => {
     expect(shared.url).not.toContain(items[0].url);
   });
 });
+
+// Regression: the "Added to cart" toast renders outside this dialog (from
+// [lang]/layout.tsx) and above it, so Radix counted dismissing the toast as an
+// outside interaction and closed the photo the buyer was still looking at.
+describe('PhotoDetailModal — toast interaction', () => {
+  const injected: HTMLElement[] = [];
+
+  afterEach(() => {
+    for (const el of injected.splice(0)) el.remove();
+  });
+
+  function inject(attribute?: string) {
+    const el = document.createElement('div');
+    if (attribute) el.setAttribute(attribute, '');
+    const button = document.createElement('button');
+    el.appendChild(button);
+    document.body.appendChild(el);
+    injected.push(el);
+    return button;
+  }
+
+  /** Radix registers its outside-pointerdown listener on a 0ms timeout so the
+   *  click that opened the dialog can't immediately close it — wait it out. */
+  const layerArmed = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  function renderModal(onClose: () => void) {
+    render(
+      <PhotoDetailModal
+        items={items}
+        open
+        onClose={onClose}
+        labels={labels}
+        locale="en"
+        pricePerPhoto={10}
+        showAddToCart
+      />,
+    );
+  }
+
+  it('stays open when the toast is dismissed', async () => {
+    const closeToastButton = inject('data-sonner-toaster');
+    const onClose = vi.fn();
+    renderModal(onClose);
+    await layerArmed();
+
+    fireEvent.pointerDown(closeToastButton, { pointerType: 'mouse' });
+    fireEvent.click(closeToastButton);
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('still closes on a genuine outside interaction', async () => {
+    const elsewhere = inject();
+    const onClose = vi.fn();
+    renderModal(onClose);
+    await layerArmed();
+
+    fireEvent.pointerDown(elsewhere, { pointerType: 'mouse' });
+    fireEvent.click(elsewhere);
+
+    expect(onClose).toHaveBeenCalled();
+  });
+});
