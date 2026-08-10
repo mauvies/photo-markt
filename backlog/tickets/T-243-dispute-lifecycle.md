@@ -1,7 +1,7 @@
 # T-243 · Ciclo de vida de disputas: chargebacks, inquiries y su escalado
 
 - **Prioridad:** P1
-- **Estado:** doing — **absorbido en T-215** (2026-08-10): misma rama, mismo PR. No abrir rama aparte.
+- **Estado:** blocked — **absorbido en T-215** (PR #290, draft). Aplazado con él el 2026-08-10.
 - **Riesgo:** alto  (pagos)
 - **Blockers:** ninguno
 - **Rama:** `feat/dispute-lifecycle`  (tipo = feat)

@@ -1,7 +1,7 @@
 # T-215 · Clawback: reembolsos y disputas deben revertir transferencia y acceso
 
 - **Prioridad:** P1
-- **Estado:** doing (retomado 2026-08-10 — alcance completo, ver Notas)
+- **Estado:** blocked — aplazado por el usuario (2026-08-10). Implementado y pusheado en **PR #290 (draft)**, verde (2151 tests + build). Falta **solo** `/code-review ultra` antes de mergear. Motivo del aplazamiento: sin ventas reales no puede haber disputas, así que la exposición es cero hasta validar el producto.
 - **Riesgo:** alto  (pagos)
 - **Blockers:** ninguno para implementar; **T-239 (P0) bloquea el DESPLIEGUE** — si prod tiene el esquema desincronizado con T-216, las migraciones de este ticket se apilan sobre una base rota
 - **Rama:** `fix/clawback-disputes-and-refunds`  (tipo = fix)

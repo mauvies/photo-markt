@@ -1,7 +1,7 @@
 # T-237 · Reembolso parcial: proporcional, y cuadrar el saldo que eso rompe
 
 - **Prioridad:** P2
-- **Estado:** doing — **absorbido en T-215** (2026-08-10): misma rama, mismo PR. No abrir rama aparte.
+- **Estado:** blocked — **absorbido en T-215** (PR #290, draft). Aplazado con él el 2026-08-10.
 - **Riesgo:** alto  (pagos)
 - **Blockers:** ninguno
 - **Rama:** `fix/partial-refund-payout-hold`  (tipo = fix)
