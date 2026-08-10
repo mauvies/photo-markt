@@ -216,3 +216,34 @@ describe('filters modal — photographer suggestions', () => {
     });
   });
 });
+
+describe('mobile sheet — the content column can actually scroll', () => {
+  // Regression: expanding the date picker made the sheet unscrollable. The
+  // scroll column and its wrapper both defaulted to `min-height: auto` (a flex
+  // item's, then a grid item's, automatic minimum size is its CONTENT size), so
+  // instead of being capped at the sheet's height they grew to fit — 996px and
+  // 920px inside an 844px sheet. `overflow-y-auto` then had nothing to scroll
+  // and everything below the fold was simply unreachable.
+  it('declares min-h-0 on the scrolling column', async () => {
+    renderBar();
+    openFiltersSheet();
+
+    const input = await screen.findByPlaceholderText(en.eventSearchBar.wherePlaceholder);
+    const column = input.closest('.overflow-y-auto') as HTMLElement;
+    expect(column).not.toBeNull();
+    expect(column.className).toContain('min-h-0');
+    expect(column.className).toContain('flex-1');
+  });
+
+  it('declares min-h-0 on the h-full wrapper between it and the dialog', async () => {
+    renderBar();
+    openFiltersSheet();
+
+    const input = await screen.findByPlaceholderText(en.eventSearchBar.wherePlaceholder);
+    const wrapper = (input.closest('.overflow-y-auto') as HTMLElement).parentElement as HTMLElement;
+    // `h-full` alone loses to the automatic minimum size — the wrapper stretches
+    // past the sheet and hands the inflated height to the column above.
+    expect(wrapper.className).toContain('h-full');
+    expect(wrapper.className).toContain('min-h-0');
+  });
+});

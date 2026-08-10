@@ -396,7 +396,13 @@ export function EventSearchBar({
                 home/events/explore routes, and it kept the whole library in their
                 first-load bundle (T-123). The motion exit animation never ran
                 anyway: Radix unmounts the content on close. */}
-            <div className="flex h-full animate-in flex-col bg-background duration-200 ease-out fade-in-0 slide-in-from-bottom-5">
+            {/* ⚠️ `min-h-0` here too, and for the same reason as on the scroll
+                column below — this one is a GRID item (DialogContent is a
+                `grid`), whose automatic minimum size is also its content size.
+                Without it `h-full` loses: the wrapper stretched to 996px inside
+                an 844px sheet and handed that inflated height straight to the
+                scroll column, which then had nothing to scroll. */}
+            <div className="flex h-full min-h-0 animate-in flex-col bg-background duration-200 ease-out fade-in-0 slide-in-from-bottom-5">
               <div className="flex items-center justify-end px-4 py-6">
                 <DialogClose asChild>
                   <button
@@ -409,7 +415,15 @@ export function EventSearchBar({
                 </DialogClose>
               </div>
 
-              <div className="flex-1 space-y-3 overflow-x-hidden overflow-y-auto px-4 pb-28 [scrollbar-gutter:stable]">
+              {/* ⚠️ `min-h-0` is what makes `overflow-y-auto` actually scroll.
+                  A flex item's min-height defaults to `auto` — its content size
+                  — so without it this column refuses to shrink below its
+                  content: the box grows to match, there is nothing to scroll,
+                  and whatever doesn't fit the sheet is simply unreachable. It
+                  only bit once something tall enough appeared, i.e. when the
+                  date picker expanded (container 920px inside an 802px sheet).
+                  The filter modal's scroll column below already declares it. */}
+              <div className="min-h-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto px-4 pb-28 [scrollbar-gutter:stable]">
                 {/* biome-ignore lint/a11y/noStaticElementInteractions: onMouseDown dismisses the date picker when tapping another field — no semantic role applies */}
                 <section
                   ref={whereContainerRef}
