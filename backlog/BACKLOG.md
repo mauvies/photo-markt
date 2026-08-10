@@ -14,7 +14,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | 1 | P1 | T-248 | Un evento con precio puede publicarse sin cuenta de cobro — 228 fotos vendibles que nadie puede cobrar | — | todo |
 | 2 | P1 | T-249 | Una venta que se salta la transferencia al fotógrafo no avisa a nadie | — | todo |
 | 3 | P2 | T-232 | La edición de portada existe pero es inalcanzable desde los tabs del evento | — | todo |
-| 4 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | Dep T-216 | todo |
+| 4 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | — | todo |
 | 5 | P2 | T-219 | Podar el esquema muerto (`payment_accounts`, `ai_search_profiles`, columnas fantasma, `profiles.is_admin`) | — | todo |
 | 6 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
 | 7 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
@@ -78,6 +78,73 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-247** · Refactor/Pagos (P2): la pestaña de pagos había acumulado **cuatro cifras, y dos no eran
+  saldos**. «Pendiente de enviar» vale €0 en toda cuenta sana —no es una fase por la que pase el dinero,
+  es la excepción que registra T-216 cuando una transferencia no puede salir— y «en tu banco» **no es
+  observable**: en cuanto el dinero deja Stripe deja de verse, así que nunca hubo un total, solo el
+  próximo envío, que es un evento con fecha. Peor aún, el reparto en dos pestañas puso **dos cifras
+  llamadas «pendiente» con significados opuestos**: Ganancias decía €0,00 (lo que nuestro ledger debe y
+  no ha enviado) mientras Pagos decía €1,83 (ya enviado, retenido por Stripe hasta el 13 ago) — y al
+  estar en pantallas distintas **nunca se veían juntas para notar la contradicción**, de modo que la
+  primera que encuentra un fotógrafo es justo la que siempre vale cero. Se repliega a dos pestañas y la
+  cuarta tarjeta de Ganancias pasa a ser el dinero en camino con su fecha. La cifra del ledger no se
+  pierde, **se reclasifica**: aparece solo si es distinta de cero, como alerta con la acción que la
+  resuelve. La decisión vive en `resolveMoneyOnItsWay` (`src/lib/payouts/money-outlook.ts`), fuera del
+  JSX, y sus tres negativas son lo que se testea: sin dinero no hay tarjeta, un pago programado gana a
+  una estimación, y **sin fecha de Stripe no se muestra ninguna** — PR #301 y #302
+
+- **T-246** · Fix/Pagos (P1): las tarjetas de saldo mostraban **dos números y ninguna fecha**, así que la
+  única pregunta que tiene un fotógrafo —*¿cuándo lo cobro?*— no se respondía en ningún sitio. Ese vacío
+  es donde creció el copy inventado: **tres de las cuatro afirmaciones falsas de la jornada** («pagos
+  cada lunes», «mínimo $25», «en revisión de fraude de Stripe») eran intentos de explicar una espera que
+  nadie estaba midiendo. `retrievePayoutOutlook` trae ahora la fecha junto al saldo, de **dos** fuentes
+  porque ninguna basta: el objeto *payout* solo existe cuando los fondos ya están disponibles, así que
+  justo tras una venta no hay ninguno y lo único que puede decir «cuándo» es el `available_on` de la
+  transacción pendiente. ⚠️ **Nada se deriva de `delay_days`, y ese es el punto**: la cuenta real está en
+  7 días y su transferencia trajo `available_on` a **tres**, porque el retraso es una entrada del modelo
+  de riesgo de Stripe, no la fórmula. Calcular la fecha habría impreso «17 de agosto» con total
+  seguridad. **Una frase equivocada parece una opinión; una fecha equivocada parece un cálculo.** Si
+  Stripe no responde, las fechas vuelven nulas y la UI describe la espera en vez de nombrar un día. De
+  paso muere «En revisión de fraude de Stripe» (en español, *«me están investigando por fraude»*), que
+  describía un plazo rutinario de la forma más alarmante posible — PR #299 y #300
+
+- **T-245** · Fix/Descargas (P1): tras una compra real de invitado, el botón de descarga **abría la foto
+  en el navegador** y el comprador —que acababa de pagar— tenía que guardarla a mano desde una URL de
+  Storage. El markup ya llevaba `<a … download>`, que parece suficiente y no lo es: **ese atributo se
+  ignora en URLs de otro origen**, y estas apuntan a Supabase Storage. Se pide ahora al **firmar** la
+  URL (`createSignedUrl(..., { download })` ⇒ `Content-Disposition: attachment`), que sí se respeta cruce
+  de orígenes. Se añade `/api/download/[token]`, hermana de la ZIP de evento pero con **el token como
+  credencial** en vez de sesión: rechaza token caducado, solo sirve pedidos `completed`, y toma las
+  fotos de los ítems del propio pedido, así que ningún dato de la petición puede ampliar el conjunto.
+  ⚠️ **Y se retira una promesa que no se cumplía:** la página invitaba a crear cuenta «para conservarlas
+  para siempre». El claim se ejecutaba (`auth/callback` marca `claimed_by_user_id`) pero **nada lee esa
+  columna para dar acceso** — la biblioteca del talento lee solo `orders`/`order_items`, `guest_orders`
+  no tiene `user_id`, y `getGuestOrdersByEmail` no tiene llamadores. El único efecto visible de
+  registrarse era que el banner desaparecía: la UI **señalaba éxito sin entregar nada**, y al caducar el
+  token el comprador perdía la foto igual. El estado «caducado» era peor: ofrecía «iniciar sesión» y
+  «crear cuenta», ninguno capaz de devolver una compra nunca ligada a una cuenta; ahora apunta a
+  `/contact`. **Ligar de verdad una compra de invitado a una cuenta queda pendiente y tiene trampa**:
+  convertirla en pedido normal duplicaría la venta, porque las ganancias suman `order_items` **y**
+  `guest_order_items` — PR #298
+
+- **T-244** · Feat/Pagos (P1): una cuenta Express **no tiene contraseña ni página de login** — la
+  plataforma tiene que generar el enlace, y nadie lo hacía. `active` era además **el único estado de
+  Connect cuya tarjeta no ofrecía ninguna acción**, así que un fotógrafo conectado no tenía forma de
+  llegar a sus propios pagos, datos bancarios ni frecuencia de cobro. `createStripeDashboardLinkAction`
+  mintea ese enlace **desde el perfil del propio llamante y no acepta ningún argumento**: el enlace
+  autentica a quien lo tenga dentro de esa cuenta, así que un parámetro sería una puerta autoservicio al
+  dinero de cualquier fotógrafo — la **ausencia** de parámetro es la propiedad de seguridad, y un test la
+  fija porque añadirlo compilaría. ⚠️ El botón reclama la pestaña **dentro del clic**: `window.open` con
+  `noopener` devuelve `null` por especificación, lo que dejó la pestaña nueva en blanco y con el foco
+  mientras la actual navegaba a Stripe (shipeado y corregido en la segunda vuelta; el test previo pasaba
+  porque su mock ignoraba los argumentos). Se corrige de paso un **falso estado de carga**: el estado de
+  Connect caía por defecto a `not_connected` mientras cargaba, así que cada visita mostraba «conecta tu
+  cuenta bancaria» a fotógrafos con la cuenta perfectamente activa — **un desconocido no puede resolverse
+  en la afirmación alarmante**. Y mueren dos números inventados que el producto llevaba tiempo contando:
+  «pagos automáticos **cada lunes**» y «**mínimo $25**», ninguno de los cuales existe (la plataforma no
+  fija schedule alguno, y Stripe no tiene tal ajuste) — PR #296 y #297
+
 
 - **T-239** · Fix/Pagos (P0) → **resuelto sin código (2026-08-10)**. El worker `retryPendingPayouts` fallaba con
   `column payouts.transfer_batch_id does not exist` en su primer paso. Las dos hipótesis del ticket eran
