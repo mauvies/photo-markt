@@ -33,6 +33,8 @@ const EVENT_TOTAL_PHOTO_COUNT_OVERRIDES: Record<string, number> = {
   'fb4ed048-dcc7-42ed-a001-3eaa678ac0fb': 4820,
   // xxvii-gran-fondo-alfarnate-pirineo-costa-del-sol-2026-malaga-2026
   '633d079b-df8e-4821-9fe9-c0273a4e3c38': 9150,
+  // cross-road-huelva-huelva-2026
+  '8192a562-9c82-4a3b-859e-c46dd2ae1f25': 6480,
 };
 
 /**
