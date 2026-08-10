@@ -24,7 +24,7 @@ export default async function TalentSettingsLayout({
   ];
 
   return (
-    <div className="flex flex-1 flex-col gap-4 sm:gap-6">
+    <div className="flex flex-1 flex-col gap-3">
       <DashboardHeader title={dict.settings.title} />
       <SettingsShell sections={sections}>{children}</SettingsShell>
     </div>

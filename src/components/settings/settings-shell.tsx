@@ -46,7 +46,7 @@ export function SettingsShell({ sections, children }: Props) {
   const activeSlug = resolveActiveSlug(pathname, sections);
 
   return (
-    <div className="flex flex-1 flex-col gap-4 sm:gap-6">
+    <div className="flex flex-1 flex-col gap-3">
       <Tabs value={activeSlug}>
         {/* `-mx-4 px-4` lets the scroll area bleed to the screen edges on
             mobile so the first/last tab align with the page padding. */}

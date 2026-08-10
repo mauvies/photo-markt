@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import { DollarSign, Image, ShoppingCart, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
 import { BundleDiscountNote } from '@/components/bundle-discount-note';
-import { BuyerFeeNote } from '@/components/buyer-fee-note';
 import {
   Select,
   SelectContent,
@@ -47,7 +46,7 @@ interface SummaryCardProps {
 
 function SummaryCard({ title, value, icon, trend, className }: SummaryCardProps) {
   return (
-    <div className={cn('rounded-lg border border-border bg-card p-6 shadow-sm', className)}>
+    <div className={cn('rounded-lg border border-border bg-card p-4 shadow-sm sm:p-6', className)}>
       <div className="flex items-center justify-between">
         <div className="flex-1">
           <p className="text-sm font-medium text-muted-foreground">{title}</p>
@@ -188,12 +187,12 @@ function RecentSales({ sales, lang, hasBundlePricing }: RecentSalesProps) {
           T-205: the Amount column is what the buyer was charged, so on a
           bundled sale it is the package price the photographer set — not a
           further deduction. Renders nothing without volume pricing. */}
-      <div className="mt-4 space-y-1">
-        <BuyerFeeNote>{t('buyerFeeNote')}</BuyerFeeNote>
-        <BundleDiscountNote hasBundlePricing={hasBundlePricing}>
-          {t('bundleDiscountNote')}
-        </BundleDiscountNote>
-      </div>
+      {/* <div className="mt-4 space-y-1"> */}
+      {/* <BuyerFeeNote>{t('buyerFeeNote')}</BuyerFeeNote> */}
+      <BundleDiscountNote hasBundlePricing={hasBundlePricing}>
+        {t('bundleDiscountNote')}
+      </BundleDiscountNote>
+      {/* </div> */}
     </div>
   );
 }

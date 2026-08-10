@@ -11,18 +11,19 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-215 | Clawback: disputas y reembolsos deben revertir transferencia y acceso | — | todo |
-| 2 | P2 | T-237 | Un reembolso parcial anula el hold entero y deja al fotógrafo sin la parte no reembolsada | Dep T-215 (ejecutar junto) | todo |
-| 3 | P2 | T-236 | Barrido de órdenes sin payout: las varadas que T-216 no cubre | — | todo |
-| 4 | P2 | T-232 | La edición de portada existe pero es inalcanzable desde los tabs del evento | Dep T-231 | todo |
-| 5 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | Dep T-216 | todo |
-| 6 | P2 | T-219 | Podar el esquema muerto (`payment_accounts`, `ai_search_profiles`, columnas fantasma, `profiles.is_admin`) | — | todo |
-| 7 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
-| 8 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
-| 9 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
-| 10 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
-| 11 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
-| 12 | P3 | T-223 | Carrito de invitado sin sincronización entre pestañas | — | todo |
+| 1 | P1 | T-248 | Un evento con precio puede publicarse sin cuenta de cobro — 228 fotos vendibles que nadie puede cobrar | — | todo |
+| 2 | P1 | T-249 | Una venta que se salta la transferencia al fotógrafo no avisa a nadie | — | todo |
+| 3 | P2 | T-232 | La edición de portada existe pero es inalcanzable desde los tabs del evento | — | todo |
+| 4 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | Dep T-216 | todo |
+| 5 | P2 | T-219 | Podar el esquema muerto (`payment_accounts`, `ai_search_profiles`, columnas fantasma, `profiles.is_admin`) | — | todo |
+| 6 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
+| 7 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
+| 8 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
+| 9 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
+| 10 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
+| 11 | P3 | T-223 | Carrito de invitado sin sincronización entre pestañas | — | todo |
+| — | P1 | T-215 | Clawback: reembolsos y disputas revierten transferencia y acceso | **blocked:** aplazado por el usuario (2026-08-10) — **implementado y pusheado en PR #290 (draft)**, verde; falta `/code-review ultra` antes de mergear. Sin ventas reales no hay disputas posibles | blocked |
+| — | P2 | T-237 | Reembolso parcial: proporcional, y cuadrar el saldo | **blocked:** absorbido en T-215 (PR #290) | blocked |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |
@@ -77,6 +78,27 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-239** · Fix/Pagos (P0) → **resuelto sin código (2026-08-10)**. El worker `retryPendingPayouts` fallaba con
+  `column payouts.transfer_batch_id does not exist` en su primer paso. Las dos hipótesis del ticket eran
+  «staging sin migrar» y «caché de esquema de PostgREST rancia». **Era la segunda, y se curó sola.**
+  Evidencia recogida hoy: la columna existe en prod **y** en staging (`information_schema`); el cron
+  dispara con normalidad (`inngest/scheduled.timer`, `10,40 * * * *`); los runs recientes están en
+  **`Completed`**; y la venta real de hoy escribió su fila en `payouts` por el **mismo cliente
+  PostgREST**, que es la prueba directa de que la app ve el esquema nuevo. ⚠️ **Si vuelve a ocurrir**, el
+  arreglo barato es que `migrate.yml` emita `NOTIFY pgrst, 'reload schema'` al terminar — mata la clase
+  entera («migración aplicada pero PostgREST no la ve»), no solo este caso. La parte del DoD que sí valía
+  y no dependía del diagnóstico se separa como **T-249**
+
+- **T-236** · Fix/Pagos (P2) → **cerrado sin trabajo (2026-08-10): no hay nada que barrer.** El ticket
+  proponía un barrido de órdenes completadas sin fila en `payouts`. Consultado producción, existen
+  exactamente **dos** pedidos completados y solo **uno** sin payout: la venta de €0,99 del 28 de julio,
+  que fue una **prueba del propio usuario** entre sus dos cuentas (comprador y fotógrafo), bajo el modelo
+  de precios anterior, y cuyo neto (€0,91) además **supera el saldo que quedó tras las comisiones**
+  (€0,59 de €0,99 — un 40% se fue en comisión + conversión de divisa). Se decidió no pagarla. Escribir un
+  barrido para un único objetivo que se ha elegido no pagar es trabajo tirado; si algún día aparecen
+  varadas reales, el ticket se reabre con datos
+
 
 - **T-230** · Diseño/Eventos (P2): en un evento con **reveal gate** (T-177) la galería no es navegable por diseño —las fotos solo se revelan a quien prueba una coincidencia facial—, así que **esa pantalla es el producto**: si el visitante no busca, no ve nada y no compra nada. Renderizaba **una línea gris** en la ranura de la galería mientras el botón real de búsqueda vivía en un banner **aparte y encima**; por eso el copy tenía que decir «sácate una selfie **arriba**». El vacío no era falta de mensaje: **el propósito de la pantalla estaba partido en dos piezas débiles** y ninguna anclaba la vista. `GatedSearchPanel` pasa a ocupar la ranura entera en los **tres** estados previos a la búsqueda (`searchable` / `processing` / `unavailable`) con el CTA dentro — antes un evento gated podía renderizar **tres pesos visuales distintos** según si su índice estaba listo — y sustituye a `GatedFaceSearchNotice`, que se elimina al quedarse sin llamadas. **Decisión de alcance declarada:** el banner **no** se mueve dentro del panel, **se oculta** (`revealGated` → `resolveFindMyPhotos`): moverlo tocaba la composición de `EventGalleryWithFaceSearch`, que comparte el caso **no** gated, y dos botones de búsqueda en una pantalla por lo demás vacía sería peor que el reparto que sustituye. **Apareció un bug vivo en la misma pantalla y se arregló:** el visor público comprobaba `photos.length === 0` **antes** que `faceSearch.matches !== null`, y la cuadrícula de un evento gated está vacía por diseño hasta que una recarga lleva la cookie de prueba — así que una búsqueda **con match** se respondía con el párrafo vacío, escondiendo justo las fotos que el visitante acababa de probar que eran suyas. Ahora ambos visores resuelven la ranura con `resolveEventGalleryView` (los resultados ganan a la vacuidad); el visor de talento ya se comportaba así, de modo que pasan a coincidir **por construcción, no por casualidad**. El panel muestra el **total del evento en los tres estados** —es lo que hace que merezca la pena buscar, o volver— y ambas cabeceras sueltan su propia línea de conteo mientras se pinta, para no imprimir la misma frase dos veces en la pantalla que el ticket viene a arreglar. ⚠️ **El gate no se afloja:** presentación pura, nada derivado de fotos concretas (ni miniaturas, ni IDs, ni conteos por foto); el total ya se mostraba junto a la cabecera en eventos gated y es el único dato reutilizado. Copy: `aiSearch.gatedNotice` → **`aiSearch.gatedPanel`** en ambos diccionarios con cinco claves nuevas, y `events.galleryGatedEmpty` ya no manda «arriba»/«above». Verde: typecheck + lint + **build** + **281 archivos / 2074 tests** — PR #293
 
