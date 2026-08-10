@@ -142,6 +142,28 @@ export async function createAccountLink(params: {
   return link.url;
 }
 
+/**
+ * A single-use link into the photographer's own Stripe Express dashboard.
+ *
+ * This is the only way they can reach it: an Express account has no password and
+ * no login page of its own — Stripe expects the platform to mint this link. Until
+ * now nothing did, so a photographer could see a balance in our UI and had no way
+ * to check when it reaches their bank, change their payout schedule, or see the
+ * transfers behind the number.
+ *
+ * ⚠️ The link authenticates the bearer into that account, so the caller MUST have
+ * resolved `accountId` from the authenticated user's own profile — never from
+ * anything the client sent. Expires in a few minutes and cannot be reused, so it
+ * must be minted per click and never stored or logged.
+ *
+ * Throws for an account that has not finished onboarding (Stripe refuses a login
+ * link before then), which is why callers gate on an `active` status.
+ */
+export async function createExpressLoginLink(accountId: string): Promise<string> {
+  const link = await stripe.accounts.createLoginLink(accountId);
+  return link.url;
+}
+
 export async function retrieveConnectBalance(accountId: string): Promise<{
   available: number;
   pending: number;

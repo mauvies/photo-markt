@@ -30,6 +30,8 @@ function StripeWordmark({ className }: { className?: string }) {
   return <span className={cn('font-bold tracking-tight text-[#635BFF]', className)}>stripe</span>;
 }
 
+import { StripeDashboardButton } from '@/components/stripe-dashboard-button';
+
 interface StripeConnectCardProps {
   status: 'not_connected' | 'pending' | 'active' | 'restricted';
   lang: string;
@@ -132,6 +134,18 @@ function StripeConnectCard({ status, lang, translations: t }: StripeConnectCardP
             </>
           )}
         </Button>
+      )}
+
+      {/* `active` was the only status with no action at all, which left a
+          connected photographer with nowhere to go: an Express account has no
+          login page of its own, so without a link minted here they simply cannot
+          reach their own payouts, bank details or payout schedule. */}
+      {status === 'active' && (
+        <StripeDashboardButton
+          label={t.openDashboardButton}
+          errorNotReady={t.openDashboardNotReady}
+          errorUnavailable={t.openDashboardUnavailable}
+        />
       )}
     </div>
   );
