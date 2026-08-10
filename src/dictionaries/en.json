@@ -440,7 +440,6 @@
     "revenueSubtitle": "Track your sales activity and request payouts.",
     "tabSales": "Sales",
     "tabEarnings": "Earnings",
-    "tabPayouts": "Payouts",
     "profileTitle": "Profile",
     "profileSubtitle": "Manage your profile information, account details, and payout settings.",
     "viewPublicProfile": "View public profile",
@@ -822,8 +821,6 @@
     "bundleDiscountNote": "When a buyer takes one of your volume packages, the gross shown is the package price you set — what they actually paid. The discount is your own price reduction: Photo Markt deducts nothing extra for it, and it has nothing to do with the buyer's service fee.",
     "availableBalance": "Available Balance",
     "readyToWithdraw": "Ready to withdraw",
-    "pendingPayout": "Pending Payout",
-    "pendingPayoutDesc": "Earned, not sent yet — paid automatically",
     "payoutStatusPending": "Pending",
     "payoutStatusProcessing": "Sending",
     "payoutStatusPaid": "Paid",
@@ -921,7 +918,9 @@
     "moneyReady": "Ready — Stripe will send it on your account's next payout",
     "noMoneyInFlight": "No money on its way right now. Your sales will show up here.",
     "unsentTitle": "couldn't be sent yet",
-    "unsentDesc": "This is money you've earned. It will be sent automatically as soon as your payout account can receive it."
+    "unsentDesc": "This is money you've earned. It will be sent automatically as soon as your payout account can receive it.",
+    "stripeAccountTitle": "Your Stripe account",
+    "noMoneyInFlightShort": "Nothing on its way right now"
   },
   "payoutProfile": {
     "pageTitle": "Complete Payout Profile",

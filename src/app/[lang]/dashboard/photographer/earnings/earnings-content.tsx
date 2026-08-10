@@ -1,15 +1,20 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { DollarSign, TrendingUp, Wallet } from 'lucide-react';
+import { AlertTriangle, CalendarClock, DollarSign, TrendingUp, Wallet } from 'lucide-react';
+import Link from 'next/link';
 import { BundleDiscountNote } from '@/components/bundle-discount-note';
 import { BuyerFeeNote } from '@/components/buyer-fee-note';
+import { StripeDashboardButton } from '@/components/stripe-dashboard-button';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { PhotographerEarning } from '@/database/queries/earnings';
 import type { Payout } from '@/database/queries/payouts';
+import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { PLATFORM_CURRENCY_CODE } from '@/lib/currency';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
+import { type MoneyTiming, resolveMoneyOnItsWay } from '@/lib/payouts/money-outlook';
 import { cn } from '@/lib/utils';
 import {
   getConnectStatusForEarningsAction,
@@ -21,6 +26,15 @@ import {
 } from './actions';
 
 type EarningsT = Dictionary['earnings'];
+
+/** A date Stripe gave us, in the reader's own words. */
+function formatDay(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
 
 export function formatPrice(cents: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -268,12 +282,43 @@ export function useRevenueData() {
 
 export function EarningsContent() {
   const { t } = useTranslations<EarningsT>();
-  const { summary, earnings, hasBundlePricing, isLoading } = useRevenueData();
+  const lp = useLocalizedPath();
+  const { summary, earnings, payouts, connectStatus, payoutOutlook, hasBundlePricing, isLoading } =
+    useRevenueData();
 
   const feePercent = summary ? Math.round(summary.platformFeeRate * 100) : null;
+  const money = resolveMoneyOnItsWay(payoutOutlook);
+  const unsentCents = summary?.pendingPayoutsCents ?? 0;
+
+  /** What we can honestly say about timing — silence when Stripe said nothing. */
+  function timingLabel(timing: MoneyTiming): string | null {
+    if (timing.kind === 'arriving') return `${t('arrivesOn')} ${formatDay(timing.date)}`;
+    if (timing.kind === 'available-on') return `${t('availableOn')} ${formatDay(timing.date)}`;
+    if (timing.kind === 'ready') return t('moneyReady');
+    return null;
+  }
 
   return (
     <div className="space-y-6">
+      {/* Only once we actually know the status — an unknown must not render as
+          "your bank account is not connected". */}
+      {connectStatus !== null && connectStatus !== 'active' && (
+        <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-950 flex items-center justify-between gap-4">
+          <p className="text-sm text-yellow-800 dark:text-yellow-200">
+            {connectStatus === 'not_connected'
+              ? t('connectBannerNotConnected')
+              : connectStatus === 'pending'
+                ? t('connectBannerPending')
+                : t('connectBannerRestricted')}
+          </p>
+          <Link href={lp('/dashboard/photographer/settings/payout-profile')}>
+            <Button size="sm" variant="outline">
+              {t('connectBannerButton')}
+            </Button>
+          </Link>
+        </div>
+      )}
+
       {/* Summary Cards */}
       {isLoading && !summary ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -310,22 +355,25 @@ export function EarningsContent() {
               icon={<TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />}
               description={t('afterPlatformFees')}
             />
-            {/* T-216: this used to be "Available balance / Ready to withdraw",
-                reading `withdrawableBalanceCents`. That card was a promise the
-                system could not keep: the two silent transfer exits (inactive
-                Connect, sub-50-cent net) counted toward net earnings but never
-                produced a payout, so the figure was permanently positive money
-                that would never arrive — and there is no withdrawal UI behind
-                it either. Now that every euro is paid, pending or in flight,
-                that number is structurally ~0. What the photographer actually
-                needs to see is what is owed but not yet sent; the genuinely
-                available figure is the live Stripe balance card below, which is
-                money already in their own account. */}
+            {/* The fourth card is the money on its way to the photographer's
+                bank, dated by Stripe.
+
+                It used to be `pendingPayoutsCents` — what OUR ledger owes but
+                has not sent — and that number is €0 in every healthy account,
+                because a transfer only fails to go out in the exceptional cases
+                T-216 records. So the one card that should have answered "where
+                is my money" always read zero, while the money itself (€1.83
+                landing on 13 Aug) sat on another tab under a second label also
+                called "pending". Two opposite meanings, one word, never on
+                screen together.
+
+                The ledger figure is not lost — it surfaces below, as an alert,
+                but only when it is real and with the action that resolves it. */}
             <SummaryCard
-              title={t('pendingPayout')}
-              value={formatPrice(summary.pendingPayoutsCents)}
+              title={t('yourMoney')}
+              value={formatPrice(money?.totalCents ?? 0)}
               icon={<Wallet className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />}
-              description={t('pendingPayoutDesc')}
+              description={(money && timingLabel(money.timing)) ?? t('noMoneyInFlightShort')}
             />
           </div>
 
@@ -342,10 +390,59 @@ export function EarningsContent() {
             </BundleDiscountNote>
           </div>
 
-          {/* The Stripe balance, the payout schedule and the payout history all
-              moved to the Payouts tab: this tab answers "what did I earn", that
-              one answers "when do I get it". */}
-          <EarningsTable earnings={earnings} />
+          {/* Money our ledger could not send. Zero in a healthy account, so it
+              is an exception to raise rather than a figure to display — and when
+              it is real, the point is the next step, not the sum. This is what
+              T-216 records when a transfer cannot go out: Connect unfinished, a
+              net below Stripe's floor, a call that threw. */}
+          {unsentCents > 0 && (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+              <div className="flex-1 text-sm">
+                <p className="font-medium">
+                  {formatPrice(unsentCents)} {t('unsentTitle')}
+                </p>
+                <p className="mt-0.5 text-muted-foreground">{t('unsentDesc')}</p>
+                {connectStatus !== 'active' && (
+                  <Link
+                    href={lp('/dashboard/photographer/settings/payout-profile')}
+                    className="mt-2 inline-block"
+                  >
+                    <Button size="sm" variant="outline">
+                      {t('connectBannerButton')}
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* The way into their own Stripe account — the only place the full
+              payout detail exists, since an Express account has no login page of
+              its own. */}
+          {connectStatus === 'active' && (
+            <div className="rounded-xl border bg-card p-6 shadow-sm flex items-start gap-4">
+              <CalendarClock className="h-6 w-6 text-primary shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-semibold mb-1">{t('stripeAccountTitle')}</h3>
+                <p className="text-sm text-muted-foreground">{t('paidAutomatically')}</p>
+                <StripeDashboardButton
+                  label={t('stripeDashboardButton')}
+                  errorNotReady={t('stripeDashboardNotReady')}
+                  errorUnavailable={t('stripeDashboardUnavailable')}
+                  title={t('stripeDashboardTitle')}
+                  className="mt-3"
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-4 xl:flex-row">
+            <EarningsTable earnings={earnings} className="xl:w-[60%]" />
+            <div className="flex-1">
+              <PayoutHistory payouts={payouts} />
+            </div>
+          </div>
         </>
       ) : null}
     </div>
