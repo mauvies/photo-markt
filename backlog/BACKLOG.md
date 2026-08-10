@@ -11,17 +11,16 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-248 | Un evento con precio puede publicarse sin cuenta de cobro — 228 fotos vendibles que nadie puede cobrar | — | doing |
-| 2 | P1 | T-249 | Una venta que se salta la transferencia al fotógrafo no avisa a nadie | — | todo |
-| 3 | P2 | T-232 | La edición de portada existe pero es inalcanzable desde los tabs del evento | — | todo |
-| 4 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | — | todo |
-| 5 | P2 | T-219 | Podar el esquema muerto (`payment_accounts`, `ai_search_profiles`, columnas fantasma, `profiles.is_admin`) | — | todo |
-| 6 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
-| 7 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
-| 8 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
-| 9 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
-| 10 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
-| 11 | P3 | T-223 | Carrito de invitado sin sincronización entre pestañas | — | todo |
+| 1 | P1 | T-249 | Una venta que se salta la transferencia al fotógrafo no avisa a nadie | — | todo |
+| 2 | P2 | T-232 | La edición de portada existe pero es inalcanzable desde los tabs del evento | — | todo |
+| 3 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | — | todo |
+| 4 | P2 | T-219 | Podar el esquema muerto (`payment_accounts`, `ai_search_profiles`, columnas fantasma, `profiles.is_admin`) | — | todo |
+| 5 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
+| 6 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
+| 7 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
+| 8 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
+| 9 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
+| 10 | P3 | T-223 | Carrito de invitado sin sincronización entre pestañas | — | todo |
 | — | P1 | T-215 | Clawback: reembolsos y disputas revierten transferencia y acceso | **blocked:** aplazado por el usuario (2026-08-10) — **implementado y pusheado en PR #290 (draft)**, verde; falta `/code-review ultra` antes de mergear. Sin ventas reales no hay disputas posibles | blocked |
 | — | P2 | T-237 | Reembolso parcial: proporcional, y cuadrar el saldo | **blocked:** absorbido en T-215 (PR #290) | blocked |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |
@@ -78,6 +77,25 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-248** · Fix/Pagos (P1): se podía **publicar y poner precio a un evento sin cuenta de cobro
+  conectada**, y el producto no lo decía en ningún sitio — el mayor catálogo de producción (228 fotos
+  públicas a €6,50) es de una cuenta `not_connected`. **La consecuencia era peor de lo que suponía el
+  ticket:** los dos checkouts ya rechazan un carrito cuyo fotógrafo no esté `active` en Connect
+  (`photographer_not_connected`), así que esas fotos no es que tarden en pagarse — **no se pueden
+  comprar en absoluto**, y la única señal que recibía el fotógrafo era un comprador preguntándole por
+  qué no funciona. **Decisión del usuario: se avisa, no se bloquea** — preparar el evento y cobrar por
+  él son trabajos distintos, y exigir el onboarding de Stripe por delante frena a quien solo quiere
+  dejar la galería lista. El precio de esa libertad es que el hueco tiene que ser **ruidoso mientras
+  siga siendo cierto**, no un toast al guardar. Toda la decisión vive en
+  `src/lib/payouts/payout-readiness.ts` para que el banner de cuenta y el aviso por evento no puedan
+  contradecirse: el del dashboard deja de decir lo mismo con 0 eventos a la venta que con 228 y pasa a
+  nombrar la cifra y la consecuencia; el del evento va **encima de los tabs**, no dentro de uno, porque
+  es cierto del evento entero. Los eventos gratis (`null`/`0`) quedan exentos — no necesitan cuenta, así
+  que avisar sería ruido. ⚠️ Ambas superficies leen el estado por `reconcileAndPersistConnectStatus` y
+  no por la columna cruda: un `pending` que dejó un `account.updated` rezagado acusaría a una cuenta que
+  funciona de estar bloqueando sus propias ventas. **Queda abierto lo que no es código:** onboardar a
+  `tom256_sa` o despublicar su evento — PR #305
 
 - **T-247** · Refactor/Pagos (P2): la pestaña de pagos había acumulado **cuatro cifras, y dos no eran
   saldos**. «Pendiente de enviar» vale €0 en toda cuenta sana —no es una fase por la que pase el dinero,

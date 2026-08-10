@@ -1,12 +1,12 @@
 # T-248 · Un evento con precio puede publicarse sin cuenta de cobro
 
 - **Prioridad:** P1
-- **Estado:** doing
+- **Estado:** done
 - **Riesgo:** normal  (UI + una validación; no toca el camino del dinero)
 - **Blockers:** ninguno
 - **Rama:** `fix/priced-event-needs-payout-account`  (tipo = fix)
 - **OpenSpec change:** —
-- **PR:** —
+- **PR:** #305
 
 ## Requerimiento
 
@@ -29,15 +29,21 @@ Descubierto al auditar producción tras verificar el camino del dinero (2026-08-
 
 ## Criterio de aceptación (Definition of Done)
 
-- [ ] Al publicar o poner precio a un evento sin `stripe_connect_status = 'active'`, el fotógrafo ve un
+- [x] Al publicar o poner precio a un evento sin `stripe_connect_status = 'active'`, el fotógrafo ve un
       aviso claro con el enlace para conectar su cuenta
-- [ ] Decidir y documentar **si se bloquea o solo se avisa**. Bloquear es más seguro para el comprador;
-      avisar es más amable con un fotógrafo que quiere preparar el evento antes de cobrar. ⚠️ No dejarlo
-      a medias: si se avisa y se permite, el aviso tiene que seguir visible mientras el evento esté vivo
-- [ ] El dashboard del fotógrafo hace visible el estado «tienes eventos a la venta y no puedes cobrar»
-- [ ] Acción inmediata y sin código: **onboardar a `tom256_sa`, o despublicar su evento** hasta que lo esté
-- [ ] Test de regresión sobre la validación
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] Decidido y documentado: **se avisa, no se bloquea** (decisión del usuario). El aviso sigue visible
+      mientras el evento esté vivo — va encima de los tabs de la página del evento, no en un toast
+- [x] El dashboard del fotógrafo hace visible el estado «tienes N eventos a la venta y no puedes cobrar»
+- [ ] ⚠️ **Pendiente, y no es código:** onboardar a `tom256_sa`, o despublicar su evento
+- [x] Test de regresión sobre la decisión (escalado de severidad, exenciones, singular/plural)
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde (1378 unit + 780 integration) + `pnpm build`
+
+## Hallazgo durante la ejecución
+
+La consecuencia real es **más grave** que la descrita arriba: los dos checkouts ya devuelven
+`photographer_not_connected` cuando el fotógrafo no está `active`, así que el evento con precio **no es
+que pague tarde — no se puede comprar**. Eso es lo que justifica que el aviso sea rojo y nombre la
+cifra, en vez de reusar el empujón genérico de «conecta tu cuenta».
 
 ## Notas
 

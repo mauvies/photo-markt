@@ -672,7 +672,7 @@ export default async function EventPage({
               so one event can never quote two different prices. Renders nothing
               for a free event or one without a ladder. */}
           <EventPricingSection
-            className="mb-6"
+            className="mb-4"
             pricePerPhoto={event.price_per_photo}
             bundleTiers={bundleTiers}
             bundleAllPhotosCents={bundleAllPhotosCents}
@@ -704,7 +704,7 @@ export default async function EventPage({
           ) : null}
 
           {showContributeLockedNotice ? (
-            <div className="mb-6 rounded-lg border border-dashed border-input bg-muted/30 p-4 text-sm text-muted-foreground">
+            <div className="mb-4 rounded-lg border border-dashed border-input bg-muted/30 p-4 text-sm text-muted-foreground">
               {dict.collaborativeEvent.contributeOpensOn.replace(
                 '{date}',
                 new Date(event.date).toDateString().split(' ').slice(1).join(' '),
