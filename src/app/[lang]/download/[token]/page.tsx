@@ -1,4 +1,4 @@
-import { Clock, Download, UserPlus } from 'lucide-react';
+import { Clock, Download } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -43,12 +43,14 @@ export default async function DownloadPage({
         </div>
         <h1 className="mt-4 text-xl font-semibold">{dict.download.expiredTitle}</h1>
         <p className="mt-2 text-sm text-muted-foreground max-w-sm">{dict.download.expiredDesc}</p>
-        <div className="mt-6 flex gap-3">
-          <Link href={localizedPath(lang, '/login')}>
-            <Button variant="outline">{dict.download.login}</Button>
-          </Link>
-          <Link href={localizedPath(lang, '/signup')}>
-            <Button>{dict.download.createAccount}</Button>
+        {/* Was "log in" / "create an account", which is the cruellest possible
+            pair here: a guest purchase is not attached to any account, so both
+            buttons led somewhere that could not return the photos. The only
+            thing that actually helps is reaching a human who can re-issue the
+            link. */}
+        <div className="mt-6">
+          <Link href={localizedPath(lang, '/contact')}>
+            <Button>{dict.download.contactSupport}</Button>
           </Link>
         </div>
       </div>
@@ -116,35 +118,46 @@ export default async function DownloadPage({
 
   return (
     <div className="mx-auto max-w-[1300px] px-4 py-8 sm:px-6">
-      {/* Account creation nudge */}
-      {!downloadToken.claimed_by_user_id && (
-        <div className="mb-6 flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
-          <UserPlus className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-          <div className="flex-1 text-sm">
-            <span className="font-medium">
-              {dict.download.expiresSoon} {daysLeft}{' '}
-              {daysLeft === 1 ? dict.download.day : dict.download.days}.{' '}
-            </span>
-            <span className="text-muted-foreground">{dict.download.keepPermanently}</span>
-            <div className="mt-2">
-              <Link href={localizedPath(lang, `/signup?token=${token}`)}>
-                <Button size="sm" className="gap-1.5">
-                  <UserPlus className="h-3.5 w-3.5" />
-                  {dict.download.createFreeAccount}
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ⚠️ This used to offer "create a free account to keep them permanently".
+          The account was created and the claim ran, but NOTHING reads
+          `download_tokens.claimed_by_user_id` for entitlement — the talent
+          library reads only `orders`/`order_items` — so the purchase never
+          appeared anywhere and the buyer still lost it when the link expired.
+          The only visible effect was this banner disappearing, i.e. the UI
+          signalled success while delivering nothing. Until the purchase can
+          really be attached to an account, the honest thing is to say when the
+          link expires and let them save the files. */}
+      <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950">
+        <Clock className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+        <p className="flex-1 text-sm">
+          <span className="font-medium">
+            {dict.download.expiresSoon} {daysLeft}{' '}
+            {daysLeft === 1 ? dict.download.day : dict.download.days}.{' '}
+          </span>
+          <span className="text-muted-foreground">{dict.download.saveThemNow}</span>
+        </p>
+      </div>
 
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold">{dict.download.yourPhotos}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {photoItems.length} {photoItems.length === 1 ? dict.events.photo : dict.events.photos}{' '}
-          {dict.download.readyToDownload} · {dict.download.linksValid}
-        </p>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">{dict.download.yourPhotos}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {photoItems.length} {photoItems.length === 1 ? dict.events.photo : dict.events.photos}{' '}
+            {dict.download.readyToDownload} · {dict.download.linksValid}
+          </p>
+        </div>
+        {/* One click for the whole purchase. Only worth showing for more than
+            one photo — for a single one the card's own button is the same thing
+            without the ZIP round-trip. */}
+        {photoItems.length > 1 && (
+          <a href={`/api/download/${token}`} download>
+            <Button className="gap-1.5">
+              <Download className="h-4 w-4" />
+              {dict.download.downloadAll}
+            </Button>
+          </a>
+        )}
       </div>
 
       {/* Photo grid */}

@@ -344,15 +344,14 @@
   },
   "download": {
     "expiredTitle": "Enlace de descarga caducado",
-    "expiredDesc": "Este enlace de descarga ha caducado. Si tienes una cuenta de Photo Markt, tus fotos siguen disponibles en tu biblioteca.",
-    "login": "Iniciar sesión",
-    "createAccount": "Crear cuenta",
-    "expiresSoon": "Tus fotos caducan en",
+    "expiredDesc": "Este enlace de descarga ya no es válido. Escríbenos y te enviamos uno nuevo — tu compra está a salvo.",
+    "contactSupport": "Contactar con nosotros",
+    "expiresSoon": "Tu enlace de descarga caduca en",
     "day": "día",
     "days": "días",
-    "keepPermanently": "Crea una cuenta gratuita para guardarlas en tu biblioteca de forma permanente.",
-    "createFreeAccount": "Crear cuenta gratis",
+    "saveThemNow": "Guarda tus fotos en tu dispositivo antes de esa fecha.",
     "yourPhotos": "Tus fotos",
+    "downloadAll": "Descargar todas",
     "readyToDownload": "listas para descargar",
     "linksValid": "Enlaces válidos por 1 hora (recarga la página si caducan)",
     "noPhotosFound": "No se encontraron fotos para este pedido.",
@@ -1919,19 +1918,28 @@
     "submitSuccess": "Ticket enviado — te contactaremos pronto.",
     "submitError": "Algo salió mal. Inténtalo de nuevo.",
     "quickActionsTalent": [
-      { "title": "Foto faltante", "description": "Reporta una foto que esperabas y no encuentras" },
+      {
+        "title": "Foto faltante",
+        "description": "Reporta una foto que esperabas y no encuentras"
+      },
       {
         "title": "Acceso a descargas",
         "description": "Soluciona problemas al descargar fotos compradas"
       },
-      { "title": "Ayuda con pedidos", "description": "Dudas sobre cargos, recibos o reembolsos" },
+      {
+        "title": "Ayuda con pedidos",
+        "description": "Dudas sobre cargos, recibos o reembolsos"
+      },
       {
         "title": "Privacidad del perfil",
         "description": "Controla quién puede ver tu perfil y tus fotos"
       }
     ],
     "quickActionsPhotographer": [
-      { "title": "Estado de pagos", "description": "Consulta el estado de tus ventas y pagos" },
+      {
+        "title": "Estado de pagos",
+        "description": "Consulta el estado de tus ventas y pagos"
+      },
       {
         "title": "Error de subida",
         "description": "Resuelve subidas de fotos fallidas o atascadas"

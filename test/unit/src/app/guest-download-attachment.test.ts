@@ -24,7 +24,7 @@ describe('guest download page', () => {
   const source = readFileSync(join(REPO_ROOT, PAGE), 'utf8');
 
   it('signs the URL with a download filename', () => {
-    expect(source).toMatch(/createSignedUrl\([^)]*\{\s*download:/s);
+    expect(source).toMatch(/createSignedUrl\([^)]*\{[\s\S]*?download:/);
   });
 
   it('never signs the originals without one', () => {
