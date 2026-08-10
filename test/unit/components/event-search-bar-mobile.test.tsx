@@ -20,8 +20,18 @@ const searchSuggestionsAction = vi.fn(async (_query: string) => ({
   events: [],
   photographers: [],
 }));
+type PhotographerRow = {
+  id: string;
+  username: string;
+  slug: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  event_count: number;
+};
+const searchPhotographersAction = vi.fn(async (_query: string): Promise<PhotographerRow[]> => []);
 vi.mock('@/app/[lang]/dashboard/talent/events/actions', () => ({
   searchSuggestionsAction: (query: string) => searchSuggestionsAction(query),
+  searchPhotographersAction: (query: string) => searchPhotographersAction(query),
 }));
 
 import { EventSearchBar } from '@/components/event-search-bar';
@@ -50,6 +60,8 @@ function openFiltersSheet() {
 beforeEach(() => {
   push.mockClear();
   searchSuggestionsAction.mockClear();
+  searchPhotographersAction.mockClear();
+  searchPhotographersAction.mockResolvedValue([]);
 });
 
 afterEach(cleanup);
@@ -140,5 +152,67 @@ describe('filters modal — Activity is a select, not a typeahead', () => {
 
     expect(push).toHaveBeenCalledTimes(1);
     expect(push.mock.calls[0][0]).toContain('activity=SURF');
+  });
+});
+
+describe('filters modal — photographer suggestions', () => {
+  const ana: PhotographerRow = {
+    id: 'p1',
+    username: 'anaphoto',
+    slug: 'anaphoto',
+    display_name: 'Ana Pérez',
+    avatar_url: null,
+    event_count: 3,
+  };
+
+  // Regression: this field shipped as a bare text input. `?photographer=` always
+  // filtered correctly, but NOTHING ever queried the roster — typing the name of
+  // a photographer who demonstrably exists offered no suggestion, because none
+  // was ever wired.
+  it('queries the roster and offers a match while typing', async () => {
+    searchPhotographersAction.mockResolvedValue([ana]);
+    renderBar();
+    openFiltersSheet();
+
+    const input = (
+      await screen.findAllByPlaceholderText(en.eventSearchBar.photographerPlaceholder)
+    )[0];
+    fireEvent.change(input, { target: { value: 'ana' } });
+
+    await waitFor(() => {
+      expect(searchPhotographersAction).toHaveBeenCalledWith('ana');
+    });
+    expect(await screen.findByText('Ana Pérez')).toBeTruthy();
+    expect(screen.getByText('@anaphoto')).toBeTruthy();
+  });
+
+  it('fills the field with a value the server-side filter matches, and submits it', async () => {
+    searchPhotographersAction.mockResolvedValue([ana]);
+    renderBar();
+    openFiltersSheet();
+
+    const input = (
+      await screen.findAllByPlaceholderText(en.eventSearchBar.photographerPlaceholder)
+    )[0];
+    fireEvent.change(input, { target: { value: 'ana' } });
+    fireEvent.mouseDown(await screen.findByText('Ana Pérez'));
+
+    // `display_name` — one of the two columns `searchPublicEvents` matches on.
+    expect((input as HTMLInputElement).value).toBe('Ana Pérez');
+
+    fireEvent.click(screen.getAllByRole('button', { name: en.eventSearchBar.searchButton })[0]);
+    expect(push).toHaveBeenCalledTimes(1);
+    // URLSearchParams form-encodes the space as `+`.
+    expect(push.mock.calls[0][0]).toContain('photographer=Ana+P%C3%A9rez');
+  });
+
+  it('does not query on an empty field', async () => {
+    renderBar();
+    openFiltersSheet();
+
+    await screen.findAllByPlaceholderText(en.eventSearchBar.photographerPlaceholder);
+    await waitFor(() => {
+      expect(searchPhotographersAction).not.toHaveBeenCalled();
+    });
   });
 });

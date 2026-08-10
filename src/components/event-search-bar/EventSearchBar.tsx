@@ -11,6 +11,7 @@ import { activityOptions } from '@/app/[lang]/dashboard/photographer/events/new/
 import type { PhotographerSearchResult } from '@/app/[lang]/dashboard/talent/events/actions';
 import {
   type EventSuggestion,
+  searchPhotographersAction,
   searchSuggestionsAction,
 } from '@/app/[lang]/dashboard/talent/events/actions';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,7 @@ import {
   whenLabel,
 } from './EventSearchBar.utils';
 import { MOBILE_CALENDAR_COMPONENTS } from './MobileCalendarComponents';
+import { PhotographerSuggestions, photographerFilterValue } from './PhotographerSuggestions';
 import { WhereSuggestionsDropdown } from './WhereSuggestionsDropdown';
 
 // The calendar pulls in `react-day-picker`; it only ever renders inside the
@@ -125,6 +127,15 @@ export function EventSearchBar({
   const activity = useActivitySelect(initialActivity, sortedActivities);
   const debouncedWhere = useDebounce(where, 150);
 
+  // Photographer filter suggestions. This field shipped as a bare text input:
+  // the value it produced (`?photographer=`) always filtered correctly, but
+  // nothing ever queried the roster, so typing an existing photographer's name
+  // offered nothing and the user had no way to know whether they had spelled it
+  // the way the profile does.
+  const debouncedPhotographer = useDebounce(photographer, 200);
+  const [photographerOptions, setPhotographerOptions] = useState<PhotographerSearchResult[]>([]);
+  const [showPhotographerSuggestions, setShowPhotographerSuggestions] = useState(false);
+
   useEffect(() => {
     if (!debouncedWhere.trim()) {
       setEventSuggestions([]);
@@ -141,6 +152,34 @@ export function EventSearchBar({
         setPhotographerSuggestions([]);
       });
   }, [debouncedWhere]);
+
+  useEffect(() => {
+    const term = debouncedPhotographer.trim();
+    if (!term) {
+      setPhotographerOptions([]);
+      return;
+    }
+    // Only photographers with at least one public event come back, which is
+    // exactly the set this filter can produce results for.
+    let cancelled = false;
+    searchPhotographersAction(term)
+      .then((rows) => {
+        if (!cancelled) setPhotographerOptions(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setPhotographerOptions([]);
+      });
+    // Drop a response that lands after a newer keystroke — otherwise a slow
+    // request for "ma" can overwrite the suggestions for "mauricio".
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedPhotographer]);
+
+  const handleSelectPhotographerFilter = useCallback((p: PhotographerSearchResult) => {
+    setPhotographer(photographerFilterValue(p));
+    setShowPhotographerSuggestions(false);
+  }, []);
 
   // Close activity dropdown when filter modal opens so it doesn't auto-open
   useEffect(() => {
@@ -566,30 +605,56 @@ export function EventSearchBar({
                       )}
                     </div>
 
-                    <section className="rounded-2xl border bg-background px-4 py-3 shadow-sm">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        {t('photographerLabel')}
-                      </p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <input
-                          id="event-search-photographer-mobile"
-                          name="photographer-mobile"
-                          type="text"
-                          placeholder={t('photographerPlaceholder')}
-                          value={photographer}
-                          onChange={(e) => setPhotographer(e.target.value)}
-                          className="min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground/50"
-                        />
-                        {photographer && (
-                          <button
-                            type="button"
-                            onClick={() => setPhotographer('')}
-                            className="shrink-0 text-muted-foreground hover:text-foreground"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        )}
+                    <section className="rounded-2xl border bg-background shadow-sm overflow-hidden">
+                      <div className="px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          {t('photographerLabel')}
+                        </p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <input
+                            id="event-search-photographer-mobile"
+                            name="photographer-mobile"
+                            type="text"
+                            autoComplete="off"
+                            placeholder={t('photographerPlaceholder')}
+                            value={photographer}
+                            onChange={(e) => {
+                              setPhotographer(e.target.value);
+                              setShowPhotographerSuggestions(true);
+                            }}
+                            onFocus={() => {
+                              setMobileWhenOpen(false);
+                              activity.setOpen(false);
+                              setShowPhotographerSuggestions(true);
+                            }}
+                            onBlur={() =>
+                              setTimeout(
+                                () => setShowPhotographerSuggestions(false),
+                                BLUR_DISMISS_DELAY_MS,
+                              )
+                            }
+                            className="min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground/50"
+                          />
+                          {photographer && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPhotographer('');
+                                setShowPhotographerSuggestions(false);
+                              }}
+                              className="shrink-0 text-muted-foreground hover:text-foreground"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
                       </div>
+                      {showPhotographerSuggestions && (
+                        <PhotographerSuggestions
+                          options={photographerOptions}
+                          onSelect={handleSelectPhotographerFilter}
+                        />
+                      )}
                     </section>
 
                     {sortBy !== undefined && onSortChange && (
@@ -791,30 +856,55 @@ export function EventSearchBar({
               </div>
 
               {/* Photographer */}
-              <div className="rounded-xl border bg-background px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {t('photographerLabel')}
-                </p>
-                <div className="mt-2 flex items-center gap-2">
-                  <input
-                    id="event-search-photographer-modal"
-                    name="photographer-modal"
-                    type="text"
-                    placeholder={t('photographerPlaceholder')}
-                    value={photographer}
-                    onChange={(e) => setPhotographer(e.target.value)}
-                    className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/50"
-                  />
-                  {photographer && (
-                    <button
-                      type="button"
-                      onClick={() => setPhotographer('')}
-                      className="shrink-0 text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
+              <div className="rounded-xl border bg-background overflow-hidden">
+                <div className="px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {t('photographerLabel')}
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      id="event-search-photographer-modal"
+                      name="photographer-modal"
+                      type="text"
+                      autoComplete="off"
+                      placeholder={t('photographerPlaceholder')}
+                      value={photographer}
+                      onChange={(e) => {
+                        setPhotographer(e.target.value);
+                        setShowPhotographerSuggestions(true);
+                      }}
+                      onFocus={() => {
+                        activity.setOpen(false);
+                        setShowPhotographerSuggestions(true);
+                      }}
+                      onBlur={() =>
+                        setTimeout(
+                          () => setShowPhotographerSuggestions(false),
+                          BLUR_DISMISS_DELAY_MS,
+                        )
+                      }
+                      className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/50"
+                    />
+                    {photographer && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPhotographer('');
+                          setShowPhotographerSuggestions(false);
+                        }}
+                        className="shrink-0 text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
+                {showPhotographerSuggestions && (
+                  <PhotographerSuggestions
+                    options={photographerOptions}
+                    onSelect={handleSelectPhotographerFilter}
+                  />
+                )}
               </div>
 
               {sortBy !== undefined && onSortChange && (
