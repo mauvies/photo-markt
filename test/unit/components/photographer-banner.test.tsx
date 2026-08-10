@@ -41,11 +41,40 @@ describe('PhotographerBanner', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders nothing while auth is unresolved', () => {
+  // Regression: the strip sits at top:0 of the document, so rendering nothing
+  // until auth resolved and then inserting it pushed the ENTIRE home page down.
+  it('reserves the strip while auth is unresolved instead of collapsing', () => {
     mockPathname = '/es';
     mockUser = undefined;
-    const { container } = render(<PhotographerBanner label="Soy fotógrafo" />);
-    expect(container.firstChild).toBeNull();
+    const { container, queryByText } = render(<PhotographerBanner label="Soy fotógrafo" />);
+    const placeholder = container.querySelector('[data-slot="skeleton"]');
+    expect(placeholder).not.toBeNull();
+    // Placeholder only — no link and no label to flash at a viewer who may
+    // turn out to be signed in.
+    expect(container.querySelector('a')).toBeNull();
+    expect(queryByText('Soy fotógrafo')).toBeNull();
+  });
+
+  it('reserves exactly the strip the resolved banner occupies', () => {
+    mockPathname = '/es';
+    mockUser = undefined;
+    const { container: pending } = render(<PhotographerBanner label="Soy fotógrafo" />);
+    const pendingStrip =
+      pending.querySelector('[data-slot="skeleton"]')?.parentElement?.getAttribute('class') ?? '';
+    // Same mobile-only gate, so neither state leaks onto desktop.
+    expect(pending.firstElementChild?.getAttribute('class')).toBe('md:hidden');
+    cleanup();
+
+    mockUser = null;
+    const { container: resolved } = render(<PhotographerBanner label="Soy fotógrafo" />);
+    const resolvedStrip = resolved.querySelector('a')?.getAttribute('class') ?? '';
+
+    // Height comes from `py-2` + the `text-sm` line box; both states must
+    // declare both, or the swap reintroduces the shift this test pins.
+    expect(pendingStrip).toContain('py-2');
+    expect(pendingStrip).toContain('text-sm');
+    expect(resolvedStrip).toContain('py-2');
+    expect(resolvedStrip).toContain('text-sm');
   });
 
   it('renders nothing outside the home page', () => {
