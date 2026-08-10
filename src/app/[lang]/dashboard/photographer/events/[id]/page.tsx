@@ -34,7 +34,7 @@ import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedPath } from '@/lib/i18n/localized-path';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
-import { eventSalesBlockedByPayouts, isPricedEvent } from '@/lib/payouts/payout-readiness';
+import { eventEarningsWillBeHeld, isPricedEvent } from '@/lib/payouts/payout-readiness';
 import { getShareableEventPath } from '@/lib/shareable-event-url';
 import { reconcileAndPersistConnectStatus } from '@/lib/stripe/connect';
 import { getPhotoTags } from './actions';
@@ -227,13 +227,14 @@ export default async function EventDetailPage({
     (eventRecord.ai_matching_status as AiMatchingStatus | undefined) ?? 'idle';
   const bibDetectionStatus =
     (eventRecord.bib_detection_status as BibDetectionEventStatus | undefined) ?? 'idle';
-  // T-248 — a priced event whose owner has no active Connect account cannot be
-  // bought at all (both checkouts return `photographer_not_connected`), so the
-  // warning stays on the event for as long as that is true. Reconciled against
-  // Stripe rather than read raw, so a `pending` left behind by a lagged
-  // `account.updated` webhook doesn't accuse a working account of blocking sales.
-  // Only a priced event can be blocked, so a free event costs no query here.
-  let payoutsBlockSales = false;
+  // T-248 — a priced event whose owner has no active Connect account still
+  // sells; its earnings are held in the ledger until the account can receive
+  // them. The warning therefore stays on the event for as long as both are
+  // true, rather than firing once at save time. Reconciled against Stripe
+  // rather than read raw, so a `pending` left behind by a lagged
+  // `account.updated` webhook doesn't tell a working account its money is stuck.
+  // Only a priced event can hold anything, so a free event costs no query here.
+  let earningsWillBeHeld = false;
   if (isPricedEvent(event.price_per_photo)) {
     const connect = await getProfileStripeConnect(supabase, user.id);
     const connectStatus = await reconcileAndPersistConnectStatus({
@@ -242,7 +243,7 @@ export default async function EventDetailPage({
       accountId: connect?.stripe_connect_account_id,
       storedStatus: connect?.stripe_connect_status ?? 'not_connected',
     });
-    payoutsBlockSales = eventSalesBlockedByPayouts({
+    earningsWillBeHeld = eventEarningsWillBeHeld({
       pricePerPhoto: event.price_per_photo,
       connectStatus,
     });
@@ -597,7 +598,6 @@ export default async function EventDetailPage({
           {/* Event details under the title — same shared meta line the talent
               event view uses, so the two never diverge in field order/format. */}
           <EventMetaLine
-            className="mt-1"
             date={event.date}
             sessionTime={event.session_time}
             sessionEndTime={event.session_end_time}
@@ -616,11 +616,14 @@ export default async function EventDetailPage({
       </div>
       {/* T-248 — sits above the tabs, not inside one, because it is true of the
           whole event and must not depend on which tab is open. */}
-      {payoutsBlockSales ? (
+      {earningsWillBeHeld ? (
         <div className="mt-4">
           <PayoutAccountAlert
-            severity="blocked"
-            message={dict.stripeConnect.banner.eventSalesBlocked}
+            // Informational, not an emergency: the event works, the money is
+            // simply waiting. The red treatment is reserved for the dashboard
+            // banner once earnings are actually stuck.
+            severity="info"
+            message={dict.stripeConnect.banner.eventSalesHeld}
             ctaHref={localizedPath(lang, '/dashboard/photographer/settings/payout-profile')}
             ctaLabel={dict.stripeConnect.banner.goToPayoutProfile}
           />

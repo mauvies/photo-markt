@@ -96,11 +96,13 @@ describe('createGuestCheckoutSessionAction', () => {
     expect(sessionArgs.line_items[0]?.price_data.currency).toBe('eur');
   });
 
-  // T-189: the buyer must learn *why* checkout is blocked. When a photo's
-  // photographer isn't payout-ready (Stripe Connect not `active`), the action
-  // returns a typed `photographer_not_connected` code (mapped client-side to
-  // localized copy) instead of a thrown Error that Next redacts in prod.
-  it('returns photographer_not_connected when a photographer is not active on Connect', async () => {
+  // T-248 — the inverse of what this test used to assert. Checkout no longer
+  // refuses a cart because its photographer can't be paid: selling and being
+  // able to receive the money are separate readiness states. The webhook
+  // records the net as a `connect_inactive` hold and `retry-pending-payouts`
+  // pays it on activation, so blocking the sale only cost the buyer their
+  // photos and the photographer their sale.
+  it('checks out normally when a photographer is not active on Connect', async () => {
     const item = await seedPurchasablePhoto();
     const sb = createServiceClient();
     await sb
@@ -110,8 +112,8 @@ describe('createGuestCheckoutSessionAction', () => {
 
     const result = await createGuestCheckoutSessionAction([item], true);
 
-    expect(result).toEqual({ ok: false, error: 'photographer_not_connected' });
-    expect(createSessionMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: true, url: 'https://checkout.stripe.test/session/cs_test_123' });
+    expect(createSessionMock).toHaveBeenCalledTimes(1);
   });
 
   // T-132: a private event is reachable only via its share code. A guest

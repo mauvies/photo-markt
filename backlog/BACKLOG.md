@@ -79,23 +79,27 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 ## Archivo (done)
 
 - **T-248** · Fix/Pagos (P1): se podía **publicar y poner precio a un evento sin cuenta de cobro
-  conectada**, y el producto no lo decía en ningún sitio — el mayor catálogo de producción (228 fotos
-  públicas a €6,50) es de una cuenta `not_connected`. **La consecuencia era peor de lo que suponía el
-  ticket:** los dos checkouts ya rechazan un carrito cuyo fotógrafo no esté `active` en Connect
-  (`photographer_not_connected`), así que esas fotos no es que tarden en pagarse — **no se pueden
-  comprar en absoluto**, y la única señal que recibía el fotógrafo era un comprador preguntándole por
-  qué no funciona. **Decisión del usuario: se avisa, no se bloquea** — preparar el evento y cobrar por
-  él son trabajos distintos, y exigir el onboarding de Stripe por delante frena a quien solo quiere
-  dejar la galería lista. El precio de esa libertad es que el hueco tiene que ser **ruidoso mientras
-  siga siendo cierto**, no un toast al guardar. Toda la decisión vive en
-  `src/lib/payouts/payout-readiness.ts` para que el banner de cuenta y el aviso por evento no puedan
-  contradecirse: el del dashboard deja de decir lo mismo con 0 eventos a la venta que con 228 y pasa a
-  nombrar la cifra y la consecuencia; el del evento va **encima de los tabs**, no dentro de uno, porque
-  es cierto del evento entero. Los eventos gratis (`null`/`0`) quedan exentos — no necesitan cuenta, así
-  que avisar sería ruido. ⚠️ Ambas superficies leen el estado por `reconcileAndPersistConnectStatus` y
-  no por la columna cruda: un `pending` que dejó un `account.updated` rezagado acusaría a una cuenta que
-  funciona de estar bloqueando sus propias ventas. **Queda abierto lo que no es código:** onboardar a
-  `tom256_sa` o despublicar su evento — PR #305
+  conectada** y el producto no lo decía en ningún sitio. Al ejecutarlo se descubrió que la consecuencia
+  era **peor** de lo que suponía el ticket: los dos checkouts devolvían `photographer_not_connected`, así
+  que esos eventos **no se podían comprar** — 5 de los 6 con precio en producción. Ante eso el usuario
+  decidió lo contrario de lo asumido: **que la venta sí ocurra**. ⚠️ **Y el destino ya estaba
+  construido:** T-216 dejó lista la ruta entera — el webhook abre la fila `payouts` con
+  `hold_reason='connect_inactive'` y `retry-pending-payouts` la drena en cuanto `account.updated` marca
+  la cuenta activa. El gate era **anterior** a T-216 y era lo único que impedía usar esa maquinaria;
+  además leía el estado **cacheado**, así que un `pending` de un webhook rezagado bloqueaba las ventas
+  de una cuenta que funcionaba. `photographer_not_connected` se **borra**, no se deja sin usar: un
+  código inalcanzable invita a resucitar el rechazo por accidente. Al comprador **no se le dice nada**
+  — su compra es correcta y completa, y el estado de Connect del fotógrafo no le da nada accionable.
+  El aviso va al fotógrafo y **en proporción**, decidido en un solo sitio
+  (`src/lib/payouts/payout-readiness.ts`): rojo solo cuando hay dinero de verdad retenido
+  (`money_held`, con la cifra de `getTotalPendingPayouts` — la misma que ya usa Ganancias, para que no
+  puedan discrepar), ámbar cuando aún es un pronóstico (`sales_will_hold`), porque vestir un
+  pronóstico de rojo enseña a ignorar el rojo. Consecuencia a saber: `connect_inactive` deja de ser un
+  caso casi imposible y pasa a ser **la vía normal** por la que nace un hold — el worker de reintentos
+  deja de ser un rescate y pasa a ser cómo se completa una venta corriente. Riesgo aceptado: se retiene
+  dinero de quien quizá nunca conecte, sin reembolso automático (el comprador ya tiene sus fotos).
+  Hueco diferido: quien no entra al dashboard no ve nada — hace falta email, capturado aparte.
+  Sin migración; el rollback es revertir, y los holds creados entretanto siguen siendo válidos — PR #305
 
 - **T-247** · Refactor/Pagos (P2): la pestaña de pagos había acumulado **cuatro cifras, y dos no eran
   saldos**. «Pendiente de enviar» vale €0 en toda cuenta sana —no es una fase por la que pase el dinero,

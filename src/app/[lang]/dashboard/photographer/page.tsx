@@ -1,5 +1,6 @@
 import { DashboardHeader } from '@/components/dashboard-header';
 import { countPricedEvents } from '@/database/queries/events';
+import { getTotalPendingPayouts } from '@/database/queries/payouts';
 import { getProfile } from '@/database/queries/profiles';
 import { createClient } from '@/database/server';
 import { requireUser } from '@/lib/auth/require-user';
@@ -33,13 +34,15 @@ export default async function PhotographerDashboardPage({
   const { checkout } = await searchParams;
   const [supabase, dict] = await Promise.all([createClient(), getDictionary(lang as Locale)]);
 
-  const [data, profile, pricedEventCount] = await Promise.all([
+  const [data, profile, pricedEventCount, heldCents] = await Promise.all([
     getDashboardData(),
     getProfile(supabase, user.id),
-    // T-248: how many live events actually charge. With a non-active Connect
-    // account each of them is refused at checkout, so this turns the generic
-    // "connect your account" nudge into a statement of what is being lost.
+    // T-248: what is at stake if this photographer can't be paid. Priced events
+    // are the forecast (their sales will be held); `heldCents` is the fact —
+    // money already earned and stuck. The same query feeds the Earnings alert,
+    // so the two surfaces can't quote different amounts for the same money.
     countPricedEvents(supabase, user.id),
+    getTotalPendingPayouts(supabase, user.id),
   ]);
 
   const storedStatus = (profile?.stripe_connect_status ?? 'not_connected') as StripeConnectStatus;
@@ -84,13 +87,15 @@ export default async function PhotographerDashboardPage({
         status={connectStatus}
         lang={lang}
         pricedEventCount={pricedEventCount}
+        heldCents={heldCents}
         t={{
           connectAccount: dict.stripeConnect.banner.connectAccount,
           pendingReview: dict.stripeConnect.banner.pendingReview,
           actionRequired: dict.stripeConnect.banner.actionRequired,
           goToPayoutProfile: dict.stripeConnect.banner.goToPayoutProfile,
-          salesBlockedOne: dict.stripeConnect.banner.salesBlockedOne,
-          salesBlockedMany: dict.stripeConnect.banner.salesBlockedMany,
+          salesWillHoldOne: dict.stripeConnect.banner.salesWillHoldOne,
+          salesWillHoldMany: dict.stripeConnect.banner.salesWillHoldMany,
+          moneyHeld: dict.stripeConnect.banner.moneyHeld,
         }}
       />
       <div className="flex flex-1 flex-col gap-4">

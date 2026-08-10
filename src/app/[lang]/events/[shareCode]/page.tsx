@@ -630,11 +630,10 @@ export default async function EventPage({
         }}
       >
         <div className="mx-auto max-w-[1300px] w-full flex-1 px-3 py-4 sm:py-6 sm:px-6 lg:px-8">
-          <div className="mb-6 flex items-start justify-between gap-4">
+          <div className="mb-5 flex items-start justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold">{event.name}</h1>
               <EventMetaLine
-                className="mt-2"
                 date={event.date}
                 sessionTime={event.session_time}
                 sessionEndTime={event.session_end_time}

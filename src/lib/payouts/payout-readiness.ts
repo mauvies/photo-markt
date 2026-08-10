@@ -1,21 +1,25 @@
 import type { StripeConnectStatus } from '@/database/queries/profiles';
 
 /**
- * T-248 — "this event is for sale and its photographer cannot be paid".
+ * T-248 — "this photographer is selling and cannot yet be paid."
  *
- * The product deliberately lets a photographer publish and price an event
- * before connecting their payout account: preparing the event and getting paid
- * for it are separate jobs, and forcing Stripe onboarding up front would block
- * someone who just wants the gallery ready. The cost of that freedom is that
- * the gap must be *loud* — which is what this module decides.
+ * The product deliberately lets a photographer publish, price and SELL an event
+ * before connecting their payout account: preparing the event, selling it, and
+ * getting paid for it are separate readiness states, and forcing Stripe
+ * onboarding up front would block someone who just wants the gallery ready.
  *
- * ⚠️ The consequence is stronger than "the money waits". Both checkouts refuse
- * a cart whose photographer is not `active` on Connect
- * (`photographer_not_connected`, `cart/actions.ts` + `dashboard/talent/cart/actions.ts`),
- * so a priced event without a payout account is not slow to pay — it cannot be
- * bought at all, and the photographer only finds out from a buyer. That is why
- * the priced case gets its own severity instead of reusing the generic
- * "connect your account" nudge.
+ * ⚠️ **Nobody is refused.** Neither checkout looks at Connect status — the
+ * webhook records the photographer's net as a `payouts` row with
+ * `hold_reason = 'connect_inactive'`, and `retry-pending-payouts` drains it the
+ * moment `account.updated` reports the account active. The money waits; the sale
+ * does not. (Before this, both checkouts returned `photographer_not_connected`,
+ * so a priced event could not be bought at all and its owner's only signal was
+ * a buyer asking why nothing worked.)
+ *
+ * The cost of that freedom is that the gap must be *loud*, and loud in
+ * proportion: a priced event is a forecast ("sales will be held"), an
+ * outstanding hold is a fact ("€X of yours is waiting"). This module is the one
+ * place that decides which, so every surface showing it agrees.
  */
 
 /** Connect is only good enough to receive money when it is fully `active`. */
@@ -33,25 +37,32 @@ export function isPricedEvent(pricePerPhoto: number | null | undefined): boolean
 }
 
 /**
- * `sales_blocked` — priced events exist and nobody can buy from them.
- * `setup_pending` — nothing is priced yet, so this is still just an unfinished
- * setup step, not an active loss.
+ * `money_held` — sales already happened and their net is sitting in the ledger.
+ * `sales_will_hold` — priced events exist but nothing has sold yet.
+ * `setup_pending` — nothing priced either; still just an unfinished setup step.
  */
-export type PayoutReadiness = 'sales_blocked' | 'setup_pending';
+export type PayoutReadiness = 'money_held' | 'sales_will_hold' | 'setup_pending';
 
 export function resolvePayoutReadiness(params: {
   connectStatus: StripeConnectStatus;
   pricedEventCount: number;
+  /**
+   * Outstanding held payouts in cents, from `getTotalPendingPayouts` — the same
+   * query behind the Earnings alert, so the two surfaces cannot quote different
+   * amounts for the same money.
+   */
+  heldCents: number;
 }): PayoutReadiness | null {
   if (canReceivePayouts(params.connectStatus)) return null;
-  return params.pricedEventCount > 0 ? 'sales_blocked' : 'setup_pending';
+  if (params.heldCents > 0) return 'money_held';
+  return params.pricedEventCount > 0 ? 'sales_will_hold' : 'setup_pending';
 }
 
 /**
- * Per-event variant, for the notice that stays on the event while it is alive.
- * Same rule, one event: priced + not payable ⇒ its photos are unsellable.
+ * Per-event variant, for the notice that stays on the event while it is alive:
+ * this event sells, and its earnings will be held rather than paid out.
  */
-export function eventSalesBlockedByPayouts(params: {
+export function eventEarningsWillBeHeld(params: {
   pricePerPhoto: number | null | undefined;
   connectStatus: StripeConnectStatus;
 }): boolean {

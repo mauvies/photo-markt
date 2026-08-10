@@ -14,21 +14,22 @@ import en from '@/dictionaries/en.json';
 import es from '@/dictionaries/es.json';
 import { type CheckoutErrorCode, checkoutErrorMessageKey } from '@/lib/checkout-error';
 
+// `photographer_not_connected` is deliberately absent: an unpayable
+// photographer no longer blocks the sale, so the code was removed rather than
+// left unreachable. Re-adding it here would not compile.
 const ALL_CODES: CheckoutErrorCode[] = [
-  'photographer_not_connected',
   'items_unavailable',
   'rate_limited',
   'cart_empty',
+  'consent_required',
 ];
 
 describe('checkoutErrorMessageKey', () => {
   it('maps each code to a distinct cart-namespace key', () => {
-    expect(checkoutErrorMessageKey('photographer_not_connected')).toBe(
-      'checkoutPhotographerNotConnected',
-    );
     expect(checkoutErrorMessageKey('items_unavailable')).toBe('itemsUnavailableRemoved');
     expect(checkoutErrorMessageKey('rate_limited')).toBe('checkoutRateLimited');
     expect(checkoutErrorMessageKey('cart_empty')).toBe('empty');
+    expect(checkoutErrorMessageKey('consent_required')).toBe('withdrawalConsentRequired');
   });
 
   it('maps every code to a non-empty string present in BOTH dictionaries', () => {

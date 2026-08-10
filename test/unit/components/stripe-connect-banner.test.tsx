@@ -1,9 +1,10 @@
 /** @vitest-environment happy-dom */
 /**
  * T-248 — the dashboard banner used to say the same mild "connect your account"
- * line whether the photographer had nothing for sale or 228 photos nobody can
- * buy. This pins the escalation: with priced events it must name the count and
- * state the consequence.
+ * line whether the photographer had nothing for sale or money already stuck in
+ * the ledger. This pins the escalation, and in particular that only genuinely
+ * held money gets the red treatment: a priced event that hasn't sold yet is a
+ * forecast, and a red forecast trains the photographer to ignore the colour.
  */
 
 import { cleanup, render, screen } from '@testing-library/react';
@@ -15,37 +16,84 @@ const t = {
   pendingReview: 'Under review.',
   actionRequired: 'Action required.',
   goToPayoutProfile: 'Go to payout settings',
-  salesBlockedOne: 'You have 1 event on sale and no way to get paid.',
-  salesBlockedMany: 'You have {count} events on sale and no way to get paid.',
+  salesWillHoldOne: '1 event on sale; your money will be held.',
+  salesWillHoldMany: '{count} events on sale; your money will be held.',
+  moneyHeld: 'You have {amount} waiting.',
 };
 
 afterEach(cleanup);
 
 describe('StripeConnectBanner', () => {
-  it('renders nothing when the account is active, even with priced events', () => {
+  it('renders nothing when the account is active, even with priced events and held money', () => {
     const { container } = render(
-      <StripeConnectBanner status="active" lang="es" pricedEventCount={228} t={t} />,
+      <StripeConnectBanner
+        status="active"
+        lang="es"
+        pricedEventCount={228}
+        heldCents={5000}
+        t={t}
+      />,
     );
     expect(container.innerHTML).toBe('');
   });
 
-  it('keeps the mild setup nudge when nothing is priced', () => {
-    render(<StripeConnectBanner status="not_connected" lang="es" pricedEventCount={0} t={t} />);
+  it('keeps the mild setup nudge when nothing is priced and nothing is held', () => {
+    render(
+      <StripeConnectBanner
+        status="not_connected"
+        lang="es"
+        pricedEventCount={0}
+        heldCents={0}
+        t={t}
+      />,
+    );
     expect(screen.getByText('Connect your account.')).toBeTruthy();
   });
 
-  it('names the count and the consequence when events are on sale', () => {
-    render(<StripeConnectBanner status="not_connected" lang="es" pricedEventCount={3} t={t} />);
-    expect(screen.getByText('You have 3 events on sale and no way to get paid.')).toBeTruthy();
+  it('warns that sales will be held, naming the count, before anything has sold', () => {
+    render(
+      <StripeConnectBanner
+        status="not_connected"
+        lang="es"
+        pricedEventCount={3}
+        heldCents={0}
+        t={t}
+      />,
+    );
+    expect(screen.getByText('3 events on sale; your money will be held.')).toBeTruthy();
   });
 
   it('uses the singular copy for exactly one priced event', () => {
-    render(<StripeConnectBanner status="restricted" lang="es" pricedEventCount={1} t={t} />);
-    expect(screen.getByText('You have 1 event on sale and no way to get paid.')).toBeTruthy();
+    render(
+      <StripeConnectBanner
+        status="restricted"
+        lang="es"
+        pricedEventCount={1}
+        heldCents={0}
+        t={t}
+      />,
+    );
+    expect(screen.getByText('1 event on sale; your money will be held.')).toBeTruthy();
+  });
+
+  it('names the formatted amount, and outranks the priced-event forecast, once money is held', () => {
+    render(
+      <StripeConnectBanner
+        status="not_connected"
+        lang="es"
+        pricedEventCount={3}
+        heldCents={1250}
+        t={t}
+      />,
+    );
+    expect(screen.getByText('You have €12.50 waiting.')).toBeTruthy();
+    expect(screen.queryByText('3 events on sale; your money will be held.')).toBeNull();
   });
 
   it('always links to the payout settings', () => {
-    render(<StripeConnectBanner status="pending" lang="en" pricedEventCount={2} t={t} />);
+    render(
+      <StripeConnectBanner status="pending" lang="en" pricedEventCount={2} heldCents={0} t={t} />,
+    );
     expect(screen.getByText('Go to payout settings').getAttribute('href')).toBe(
       '/en/dashboard/photographer/settings/payout-profile',
     );

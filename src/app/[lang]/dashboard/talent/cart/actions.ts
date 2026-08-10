@@ -12,7 +12,6 @@ import {
   getCartItemCount,
   getCartItemsWithDetails,
   getOrCreateCart,
-  getPhotographerConnectStatuses,
   getPhotoPreviewUrls,
   getPurchasablePhotoIds,
   isEventAccessible,
@@ -463,13 +462,10 @@ export async function createCheckoutSessionAction(
     return { ok: false, error: 'cart_empty' };
   }
 
-  // Block checkout if any photographer has not connected their Stripe account
-  const photographerIds = [...new Set(cartItems.map((i) => i.photographer_id))];
-  const connectStatuses = await getPhotographerConnectStatuses(supabaseAdmin, photographerIds);
-  const notConnected = connectStatuses.filter((p) => p.stripe_connect_status !== 'active');
-  if (notConnected.length > 0) {
-    return { ok: false, error: 'photographer_not_connected' };
-  }
+  // No Connect gate here — see the matching note in the guest checkout
+  // (`src/app/[lang]/cart/actions.ts`). The money is held by the ledger and paid
+  // on activation; the sale is not the place to enforce the photographer's
+  // onboarding, and a mixed cart must not be blocked by one unready seller.
 
   const { stripe } = await import('@/lib/stripe/config');
 

@@ -283,10 +283,11 @@ describe('T-117 — cart inventory integrity', () => {
       expect(createSessionMock).toHaveBeenCalledTimes(1);
     });
 
-    // T-189: mirror of the guest case — the authed buyer must learn *why*
-    // checkout is blocked when a photographer isn't payout-ready, so the action
-    // returns a typed code instead of a thrown (prod-redacted) Error.
-    it('returns photographer_not_connected when the photographer is not active on Connect', async () => {
+    // T-248 — mirror of the guest case, and the inverse of what this used to
+    // assert. A photographer who cannot yet receive money no longer blocks the
+    // sale: the webhook holds their net as `connect_inactive` and the retry
+    // worker pays it once their account is active.
+    it('checks out normally when the photographer is not active on Connect', async () => {
       const photographer = await createTestUser('PHOTOGRAPHER');
       // Deliberately NOT marked connected → stripe_connect_status stays non-active.
       const event = await createTestEvent(photographer.id, { price_per_photo: 5 });
@@ -296,10 +297,10 @@ describe('T-117 — cart inventory integrity', () => {
       await addPhotoToCartAction(photo.id);
 
       expect(await createCheckoutSessionAction(true)).toEqual({
-        ok: false,
-        error: 'photographer_not_connected',
+        ok: true,
+        url: 'https://checkout.stripe.test/session/cs_test_123',
       });
-      expect(createSessionMock).not.toHaveBeenCalled();
+      expect(createSessionMock).toHaveBeenCalledTimes(1);
     });
 
     // `getCartItemsWithDetails` (used to build Stripe line items) already

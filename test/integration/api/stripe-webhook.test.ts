@@ -1285,6 +1285,16 @@ describe('app/api/stripe/webhook — payout ledger (T-216)', () => {
     expect(payouts?.[0]?.stripe_charge_id).toBe('ch_hold_inactive');
     expect(payouts?.[0]?.currency).toBe('eur');
     expect(payouts?.[0]?.order_kind).toBe('order');
+
+    // T-248 — the property that makes selling before onboarding safe is not
+    // that a row exists, it is that the row is RECOVERABLE. Now that checkout
+    // no longer refuses these sales, this is the ordinary path rather than an
+    // edge case, so assert the retry worker's own selector picks it up:
+    // `listPayableHolds` requires both a hold reason and a charge id, and a row
+    // missing either is money the worker can never pay.
+    const { listPayableHolds } = await import('@/database/queries/payouts');
+    const payable = await listPayableHolds(sb, 50);
+    expect(payable.map((row) => row.stripe_charge_id)).toContain('ch_hold_inactive');
   });
 
   it('records a hold when the net is below the Stripe transfer minimum', async () => {

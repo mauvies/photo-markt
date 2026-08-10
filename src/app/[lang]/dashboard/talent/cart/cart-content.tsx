@@ -205,7 +205,6 @@ export function CartContent({ initialCartData }: CartContentProps) {
     failedClearCart: string;
     failedStartCheckout: string;
     itemsUnavailableRemoved: string;
-    checkoutPhotographerNotConnected: string;
     checkoutRateLimited: string;
     withdrawalConsentLabel: string;
     withdrawalConsentRequired: string;

@@ -450,6 +450,15 @@ synchronous path could not send — a recovery path, not the normal one.
 `/api/admin/payouts/[id]` still exists and now refuses ledger-managed rows;
 whether it survives at all is T-220's call.
 
+⚠️ **Since T-248 the checkout no longer filters on Connect status**, so
+`connect_inactive` is the ORDINARY way a hold is born rather than a near-
+impossible edge case: a photographer can sell before finishing onboarding and
+the ledger holds their net until `account.updated` reports the account active.
+That reclassifies the retry worker too — for this reason it is the *completion*
+of a normal sale, not only a recovery path. The checkouts previously returned
+`photographer_not_connected`; that code was deleted rather than left unused, so
+the refusal cannot be reinstated by accident.
+
 **The payout row is created BEFORE the Stripe call, and its id IS the
 idempotency key** (`payout_<row.id>`), used identically by the webhook and the
 retry worker. That ordering is what makes the
