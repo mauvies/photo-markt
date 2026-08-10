@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  resolveEventGalleryView,
   resolveFindMyPhotos,
   resolveFindMyPhotosCopy,
   resolveGatedFaceSearchNotice,
@@ -64,6 +65,89 @@ describe('resolveFindMyPhotos', () => {
         bibDetectionEnabled: true,
       }),
     ).toEqual({ visible: false, showFace: false, showBib: false });
+  });
+
+  // T-230: on a gated event before any search, the panel inside the gallery owns
+  // the call to action. Two search buttons on one otherwise-empty screen is
+  // worse than the split that forced the old "take a selfie above" copy.
+  it('hides the banner on a gated event before the visitor has searched', () => {
+    expect(
+      resolveFindMyPhotos({
+        faceSearchActive: false,
+        aiSearchEligible: true,
+        bibDetectionEnabled: false,
+        revealGatedPreSearch: true,
+      }),
+    ).toEqual({ visible: false, showFace: false, showBib: false });
+  });
+
+  it('leaves a non-gated event untouched (the banner keeps owning the CTA)', () => {
+    expect(
+      resolveFindMyPhotos({
+        faceSearchActive: false,
+        aiSearchEligible: true,
+        bibDetectionEnabled: true,
+        revealGatedPreSearch: false,
+      }),
+    ).toEqual({ visible: true, showFace: true, showBib: true });
+  });
+});
+
+/**
+ * Which view owns the gallery slot (T-230). Shared by both event viewers.
+ *
+ * The regression this pins: an active face search must outrank an empty grid.
+ * A reveal-gated event's grid is empty by design until a reload carries the
+ * proof cookie, so the public viewer's old "empty first" ordering answered a
+ * successful search with its empty paragraph — hiding the very photos the
+ * visitor had just proven they were in.
+ */
+describe('resolveEventGalleryView', () => {
+  it('shows the search results over an empty grid (the gated-event regression)', () => {
+    expect(
+      resolveEventGalleryView({ hasPhotos: false, faceSearchActive: true, gatedPanel: true }),
+    ).toBe('search-results');
+  });
+
+  it('shows the search results over an empty grid on a non-gated event too', () => {
+    expect(
+      resolveEventGalleryView({ hasPhotos: false, faceSearchActive: true, gatedPanel: false }),
+    ).toBe('search-results');
+  });
+
+  it('shows the gated panel when nothing is revealed and no search has run', () => {
+    expect(
+      resolveEventGalleryView({ hasPhotos: false, faceSearchActive: false, gatedPanel: true }),
+    ).toBe('gated-panel');
+  });
+
+  it('falls back to the plain empty state on a non-gated event with no photos', () => {
+    expect(
+      resolveEventGalleryView({ hasPhotos: false, faceSearchActive: false, gatedPanel: false }),
+    ).toBe('empty');
+  });
+
+  it('lets an in-flight upload keep the empty slot for its own progress copy', () => {
+    expect(
+      resolveEventGalleryView({
+        hasPhotos: false,
+        faceSearchActive: false,
+        gatedPanel: true,
+        isUploading: true,
+      }),
+    ).toBe('empty');
+  });
+
+  it('renders the grid once photos are revealed and no search is active', () => {
+    expect(
+      resolveEventGalleryView({ hasPhotos: true, faceSearchActive: false, gatedPanel: true }),
+    ).toBe('grid');
+  });
+
+  it('still prefers the results view over a populated grid during a search', () => {
+    expect(
+      resolveEventGalleryView({ hasPhotos: true, faceSearchActive: true, gatedPanel: false }),
+    ).toBe('search-results');
   });
 });
 
