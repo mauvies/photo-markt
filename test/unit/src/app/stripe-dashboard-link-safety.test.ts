@@ -85,6 +85,19 @@ describe('no surface promises a payout schedule the platform does not set', () =
     expect(source).not.toMatch(/Minimum balance required|Balance mínimo requerido/i);
   });
 
+  /**
+   * The pending balance said "In Stripe fraud-check window" — in Spanish, "En
+   * revisión de fraude de Stripe", which reads as *Stripe is investigating me
+   * for fraud*. Nothing is under review: the charge succeeded and was captured,
+   * and the money is simply inside the account's payout delay. Telling a
+   * photographer their first sale is a fraud case is the most alarming way
+   * possible to describe a routine wait.
+   */
+  it.each(dictionaries)('%s does not describe the payout delay as a fraud review', (path) => {
+    const source = read(path);
+    expect(source).not.toMatch(/fraud-check|fraud check|revisión de fraude/i);
+  });
+
   it('createExpressAccount still sets no payout schedule, which is why the copy cannot name one', () => {
     expect(read('src/lib/stripe/connect.ts')).not.toContain('payouts: { schedule');
   });
