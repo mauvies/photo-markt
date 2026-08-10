@@ -9,6 +9,8 @@ import type { PhotoUploaderInfo } from '@/components/photo-uploader-indicator';
 import { useCarouselNavigation } from '@/hooks/use-carousel-navigation';
 import { useImageLoad } from '@/hooks/use-image-load';
 import { useKeyboardNav } from '@/hooks/use-keyboard-nav';
+import { buildPhotoShareUrl } from '@/lib/photo-share-url';
+import { shareUrl } from '@/lib/share-url';
 
 export type PhotoLightboxItem = {
   id: string;
@@ -252,21 +254,12 @@ export function PhotoLightbox({
       return;
     }
 
-    // Default: share the photo URL
-    if (!currentPhoto.url) return;
-
-    if (navigator.share) {
-      navigator
-        .share({
-          title: currentPhoto.alt || 'Photo',
-          url: currentPhoto.url,
-        })
-        .catch(() => {
-          navigator.clipboard.writeText(currentPhoto.url).catch(() => {});
-        });
-    } else {
-      navigator.clipboard.writeText(currentPhoto.url).catch(() => {});
-    }
+    // Default: share the PAGE this photo is open on, with `?photo=` set — not
+    // `currentPhoto.url`, which is the image itself (watermark route or a
+    // short-lived signed original). See `buildPhotoShareUrl`.
+    const href = buildPhotoShareUrl(currentPhoto.id);
+    if (!href) return;
+    shareUrl(currentPhoto.alt || 'Photo', href);
   }, [currentPhoto, onShare]);
 
   const handleBackdropClick = useCallback(

@@ -25,6 +25,7 @@ import type { BundleTier } from '@/lib/bundle-pricing';
 import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import { formatEventDate } from '@/lib/format-date';
 import { resolvePhotoCta } from '@/lib/photo-detail-cta';
+import { buildPhotoShareUrl } from '@/lib/photo-share-url';
 import { shareUrl } from '@/lib/share-url';
 import { cn } from '@/lib/utils';
 
@@ -164,8 +165,11 @@ export function PhotoDetailModal({
       onShare(current.id);
       return;
     }
-    if (!current.url) return;
-    shareUrl(current.alt || 'Photo', current.url);
+    // The PAGE showing this photo, not the image bytes — see
+    // `buildPhotoShareUrl`. The recipient must land somewhere they can buy.
+    const href = buildPhotoShareUrl(current.id);
+    if (!href) return;
+    shareUrl(current.alt || 'Photo', href);
   };
 
   // Per-upload contributor (collaborative events) shows as a plain name;
