@@ -16,6 +16,13 @@ interface StripeDashboardButtonProps {
   errorNotReady: string;
   /** Shown when Stripe could not be reached. */
   errorUnavailable: string;
+  /**
+   * Hover/assistive text. A link would show its destination in the status bar;
+   * this cannot be an anchor, because the URL is minted per click — single-use
+   * and short-lived — so an `href` would have to be generated on every render,
+   * burning a link per page view and leaving a live credential in the DOM.
+   */
+  title: string;
   variant?: ButtonVariant;
   size?: ButtonSize;
   className?: string;
@@ -37,6 +44,7 @@ export function StripeDashboardButton({
   label,
   errorNotReady,
   errorUnavailable,
+  title,
   variant = 'outline',
   size = 'sm',
   className,
@@ -47,7 +55,16 @@ export function StripeDashboardButton({
   function handleClick() {
     setError(null);
     // Claimed here, inside the gesture. See the note above.
-    const tab = window.open('', '_blank', 'noopener,noreferrer');
+    //
+    // ⚠️ NO `noopener` in the features string. By spec `window.open` returns
+    // `null` when it is passed, precisely so the caller gets no handle — which
+    // makes the handle-based flow below silently impossible: the blank tab stays
+    // blank and holds the focus while the fallback navigates the tab the
+    // photographer was already using. The protection it buys is restored two
+    // lines down by clearing `opener` ourselves, while the tab is still
+    // `about:blank` and still ours to touch.
+    const tab = window.open('', '_blank');
+    if (tab) tab.opener = null;
 
     startTransition(async () => {
       const result = await createStripeDashboardLinkAction();
@@ -71,6 +88,7 @@ export function StripeDashboardButton({
         type="button"
         variant={variant}
         size={size}
+        title={title}
         onClick={handleClick}
         disabled={isPending}
       >

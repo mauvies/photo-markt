@@ -53,15 +53,18 @@ describe('the earnings page does not claim an unknown Connect status', () => {
    * `?? null` plus an explicit null check is the whole fix, and `?? 'not_connected'`
    * is exactly as valid to the compiler.
    */
-  const source = read('src/app/[lang]/dashboard/photographer/earnings/earnings-content.tsx');
+  // The fetch lives in `useRevenueData` (earnings-content) and the banner that
+  // reads it lives on the Payouts tab, so the invariant spans two files.
+  const hook = read('src/app/[lang]/dashboard/photographer/earnings/earnings-content.tsx');
+  const banner = read('src/app/[lang]/dashboard/photographer/sales/payouts-content.tsx');
 
   it('falls back to null, never to a definite status', () => {
-    expect(source).toContain('const connectStatus = data?.connectStatus ?? null;');
-    expect(source).not.toContain("data?.connectStatus ?? 'not_connected'");
+    expect(hook).toContain('connectStatus: data?.connectStatus ?? null,');
+    expect(hook).not.toContain("data?.connectStatus ?? 'not_connected'");
   });
 
   it('renders the banner only once the status is known', () => {
-    expect(source).toContain("connectStatus !== null && connectStatus !== 'active'");
+    expect(banner).toContain("connectStatus !== null && connectStatus !== 'active'");
   });
 });
 
