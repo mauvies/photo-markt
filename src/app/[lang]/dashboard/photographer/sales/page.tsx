@@ -4,12 +4,15 @@ import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
 import { EarningsContent } from '../earnings/earnings-content';
+import { PayoutsContent } from './payouts-content';
 import { SalesContent } from './sales-content';
 
-type Tab = 'sales' | 'earnings';
+type Tab = 'sales' | 'earnings' | 'payouts';
 
 function parseTab(value: string | string[] | undefined): Tab {
-  return value === 'earnings' ? 'earnings' : 'sales';
+  if (value === 'earnings') return 'earnings';
+  if (value === 'payouts') return 'payouts';
+  return 'sales';
 }
 
 export default async function SalesEarningsPage({
@@ -35,6 +38,7 @@ export default async function SalesEarningsPage({
         <TabsList>
           <TabsTrigger value="sales">{dict.photographerDashboard.tabSales}</TabsTrigger>
           <TabsTrigger value="earnings">{dict.photographerDashboard.tabEarnings}</TabsTrigger>
+          <TabsTrigger value="payouts">{dict.photographerDashboard.tabPayouts}</TabsTrigger>
         </TabsList>
         <TabsContent value="sales" className="mt-6">
           <TranslationsProvider translations={dict.photographerDashboard}>
@@ -44,6 +48,13 @@ export default async function SalesEarningsPage({
         <TabsContent value="earnings" className="mt-6">
           <TranslationsProvider translations={dict.earnings}>
             <EarningsContent />
+          </TranslationsProvider>
+        </TabsContent>
+        <TabsContent value="payouts" className="mt-6">
+          {/* Same dictionary section as Earnings: the payout copy already lives
+              there, and moving the keys would churn both files for no gain. */}
+          <TranslationsProvider translations={dict.earnings}>
+            <PayoutsContent />
           </TranslationsProvider>
         </TabsContent>
       </Tabs>

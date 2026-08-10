@@ -1,16 +1,12 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { CalendarClock, DollarSign, TrendingUp, Wallet } from 'lucide-react';
-import Link from 'next/link';
+import { DollarSign, TrendingUp, Wallet } from 'lucide-react';
 import { BundleDiscountNote } from '@/components/bundle-discount-note';
 import { BuyerFeeNote } from '@/components/buyer-fee-note';
-import { StripeDashboardButton } from '@/components/stripe-dashboard-button';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { PhotographerEarning } from '@/database/queries/earnings';
 import type { Payout } from '@/database/queries/payouts';
-import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { PLATFORM_CURRENCY_CODE } from '@/lib/currency';
 import type { Dictionary } from '@/lib/i18n/get-dictionary';
 import { useTranslations } from '@/lib/i18n/translations-provider';
@@ -26,7 +22,7 @@ import {
 
 type EarningsT = Dictionary['earnings'];
 
-function formatPrice(cents: number): string {
+export function formatPrice(cents: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: PLATFORM_CURRENCY_CODE,
@@ -62,7 +58,7 @@ interface SummaryCardProps {
   className?: string;
 }
 
-function SummaryCard({ title, value, icon, description, className }: SummaryCardProps) {
+export function SummaryCard({ title, value, icon, description, className }: SummaryCardProps) {
   return (
     <div className={cn('rounded-xl border bg-card p-4 shadow-sm', className)}>
       <div className="flex items-center justify-between">
@@ -96,7 +92,7 @@ const PAYOUT_STATUS_LABEL_KEYS = {
   cancelled: 'payoutStatusCancelled',
 } as const satisfies Record<Payout['status'], keyof EarningsT>;
 
-function PayoutHistory({ payouts, className }: PayoutHistoryProps) {
+export function PayoutHistory({ payouts, className }: PayoutHistoryProps) {
   const { t } = useTranslations<EarningsT>();
 
   // Was `payouts.filter((p) => p.stripe_transfer_id)`, which hid every row that
@@ -222,10 +218,14 @@ function EarningsTable({ earnings, className }: EarningsTableProps) {
   );
 }
 
-export function EarningsContent() {
-  const { t } = useTranslations<EarningsT>();
-  const lp = useLocalizedPath();
-
+/**
+ * The one revenue fetch, shared by the Earnings and Payouts tabs.
+ *
+ * Both tabs read the same six sources, so they share a query key: React Query
+ * serves the second tab from cache instead of firing the whole set again when
+ * the photographer switches.
+ */
+export function useRevenueData() {
   const { data, isFetching } = useQuery({
     queryKey: ['earnings'] as const,
     queryFn: async () => {
@@ -250,40 +250,30 @@ export function EarningsContent() {
     staleTime: 2 * 60 * 1000,
   });
 
-  const summary = data?.summary ?? null;
-  const earnings = data?.earnings ?? [];
-  const payouts = data?.payouts ?? [];
-  // ⚠️ `null` while loading, NOT `'not_connected'`. Defaulting an unknown to the
-  // alarming answer meant every visit flashed "connect your bank account to start
-  // receiving payouts" at photographers whose account is perfectly active, until
-  // the query resolved and it vanished. A loading state must not make claims.
-  const connectStatus = data?.connectStatus ?? null;
-  const stripeBalance = data?.stripeBalance ?? null;
-  const hasBundlePricing = data?.hasBundlePricing ?? false;
-  const isLoading = isFetching && !data;
+  return {
+    summary: data?.summary ?? null,
+    earnings: data?.earnings ?? [],
+    payouts: data?.payouts ?? [],
+    // ⚠️ `null` while loading, NOT `'not_connected'`. Defaulting an unknown to
+    // the alarming answer meant every visit flashed "connect your bank account to
+    // start receiving payouts" at photographers whose account is perfectly
+    // active, until the query resolved and it vanished. A loading state must not
+    // make claims.
+    connectStatus: data?.connectStatus ?? null,
+    stripeBalance: data?.stripeBalance ?? null,
+    hasBundlePricing: data?.hasBundlePricing ?? false,
+    isLoading: isFetching && !data,
+  };
+}
+
+export function EarningsContent() {
+  const { t } = useTranslations<EarningsT>();
+  const { summary, earnings, hasBundlePricing, isLoading } = useRevenueData();
 
   const feePercent = summary ? Math.round(summary.platformFeeRate * 100) : null;
 
   return (
     <div className="space-y-6">
-      {/* Connect account banner — only once we actually know the status */}
-      {connectStatus !== null && connectStatus !== 'active' && (
-        <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-950 flex items-center justify-between gap-4">
-          <p className="text-sm text-yellow-800 dark:text-yellow-200">
-            {connectStatus === 'not_connected'
-              ? t('connectBannerNotConnected')
-              : connectStatus === 'pending'
-                ? t('connectBannerPending')
-                : t('connectBannerRestricted')}
-          </p>
-          <Link href={lp('/dashboard/photographer/settings/payout-profile')}>
-            <Button size="sm" variant="outline">
-              {t('connectBannerButton')}
-            </Button>
-          </Link>
-        </div>
-      )}
-
       {/* Summary Cards */}
       {isLoading && !summary ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -352,54 +342,10 @@ export function EarningsContent() {
             </BundleDiscountNote>
           </div>
 
-          {/* Stripe Connect balance (live from Stripe API) */}
-          {stripeBalance && (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <SummaryCard
-                title={t('stripeAvailable')}
-                value={formatPrice(stripeBalance.available)}
-                icon={<Wallet className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />}
-                description={t('stripeAvailableDesc')}
-              />
-              <SummaryCard
-                title={t('stripePending')}
-                value={formatPrice(stripeBalance.pending)}
-                icon={<CalendarClock className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />}
-                description={t('stripePendingDesc')}
-              />
-            </div>
-          )}
-
-          {/* Payout schedule info.
-              ⚠️ This block used to promise "every Monday" and a "$25 minimum".
-              Neither is true: the platform sets no schedule (in code or in the
-              Stripe dashboard, where connected accounts are allowed to manage
-              their own), and Stripe has no such minimum setting at all. Both
-              numbers were invented, and they were being told to the person whose
-              money it is. What the photographer actually needs is the way IN. */}
-          <div className="rounded-xl border bg-card p-6 shadow-sm flex items-start gap-4">
-            <CalendarClock className="h-6 w-6 text-primary shrink-0 mt-0.5" />
-            <div>
-              <h3 className="font-semibold mb-1">{t('payoutScheduleTitle')}</h3>
-              <p className="text-sm text-muted-foreground">{t('payoutScheduleDesc')}</p>
-              {connectStatus === 'active' && (
-                <StripeDashboardButton
-                  label={t('stripeDashboardButton')}
-                  errorNotReady={t('stripeDashboardNotReady')}
-                  errorUnavailable={t('stripeDashboardUnavailable')}
-                  className="mt-3"
-                />
-              )}
-            </div>
-          </div>
-
-          {/* Earnings Table & Payout History */}
-          <div className="flex flex-col gap-4 xl:flex-row">
-            <EarningsTable earnings={earnings} className="xl:w-[60%]" />
-            <div className="flex-1">
-              <PayoutHistory payouts={payouts} />
-            </div>
-          </div>
+          {/* The Stripe balance, the payout schedule and the payout history all
+              moved to the Payouts tab: this tab answers "what did I earn", that
+              one answers "when do I get it". */}
+          <EarningsTable earnings={earnings} />
         </>
       ) : null}
     </div>

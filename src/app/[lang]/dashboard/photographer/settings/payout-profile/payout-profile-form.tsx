@@ -145,6 +145,7 @@ function StripeConnectCard({ status, lang, translations: t }: StripeConnectCardP
           label={t.openDashboardButton}
           errorNotReady={t.openDashboardNotReady}
           errorUnavailable={t.openDashboardUnavailable}
+          title={t.openDashboardTitle}
         />
       )}
     </div>

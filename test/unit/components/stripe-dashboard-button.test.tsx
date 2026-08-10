@@ -35,6 +35,7 @@ function renderButton() {
       label={LABEL}
       errorNotReady={NOT_READY}
       errorUnavailable={UNAVAILABLE}
+      title="Opens your Stripe account in a new tab"
     />,
   );
 }
@@ -56,6 +57,23 @@ describe('StripeDashboardButton', () => {
     fireEvent.click(screen.getByRole('button', { name: LABEL }));
 
     expect(openSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('never passes noopener, which would return null and strand the blank tab', () => {
+    // Shipped once: `window.open` returns `null` by spec when `noopener` is in
+    // the features string, so the handle-based flow became unreachable — the new
+    // tab stayed blank and focused while the fallback navigated the tab the
+    // photographer was already on. `opener` is cleared explicitly instead.
+    const tab = { location: { href: '' }, close: vi.fn(), opener: {} as unknown };
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+    createLinkMock.mockReturnValue(new Promise(() => {}));
+
+    renderButton();
+    fireEvent.click(screen.getByRole('button', { name: LABEL }));
+
+    const features = openSpy.mock.calls[0]?.[2];
+    expect(features ?? '').not.toContain('noopener');
+    expect(tab.opener).toBeNull();
   });
 
   it('navigates the opened tab to the minted URL', async () => {
