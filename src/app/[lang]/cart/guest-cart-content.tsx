@@ -29,6 +29,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WithdrawalConsentCheckbox } from '@/components/withdrawal-consent-checkbox';
+import { useFixedBottomInset } from '@/hooks/use-fixed-bottom-inset';
 import { useLocalizedPath } from '@/hooks/use-localized-path';
 import { useLoginHref, useSignupHref } from '@/hooks/use-login-href';
 import { priceCartWithBundles } from '@/lib/cart-bundle-pricing';
@@ -105,6 +106,10 @@ export function GuestCartContent() {
   const [consentAccepted, setConsentAccepted] = useState(false);
   // The guest cart item whose photo is open in the close-only lightbox.
   const [lightboxItem, setLightboxItem] = useState<GuestCartItem | null>(null);
+  // The mobile checkout bar is fixed over the list; reserve its measured height
+  // below the items so the last one is always scrollable into view.
+  const { ref: mobileSummaryRef, inset: mobileSummaryInset } =
+    useFixedBottomInset<HTMLDivElement>();
   const { t } = useTranslations<{
     browseEventsDesc: string;
     signInNudgeTitle: string;
@@ -294,7 +299,7 @@ export function GuestCartContent() {
         </div>
       )}
 
-      <div className="flex flex-col md:flex-row gap-6 pb-20 md:pb-0">
+      <div className="flex flex-col md:flex-row gap-6">
         {/* Left — cart items */}
         <div className="flex-2 min-w-0 space-y-3">
           {items.map((item) => {
@@ -323,6 +328,14 @@ export function GuestCartContent() {
               />
             );
           })}
+          {/* Exactly the room the fixed checkout bar takes, measured — see
+              `useFixedBottomInset`. Without it the list ends behind the bar and
+              the items past the second are unreachable. */}
+          <div
+            aria-hidden="true"
+            className="shrink-0 md:hidden"
+            style={{ height: mobileSummaryInset }}
+          />
         </div>
 
         {/* Right — summary sticky (desktop) */}
@@ -368,10 +381,15 @@ export function GuestCartContent() {
         </div>
       </div>
 
-      {/* Mobile sticky footer */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card shadow-lg">
-        <div className="p-4">
-          <div className="mb-3 space-y-2">
+      {/* Mobile sticky footer. Tight by design — the consent sentence is
+          legally required in full, so every pixel saved has to come from
+          spacing rather than copy. */}
+      <div
+        ref={mobileSummaryRef}
+        className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card shadow-lg"
+      >
+        <div className="px-4 pt-2.5 pb-3">
+          <div className="mb-2.5 space-y-1.5">
             <CartTotals
               subtotalCents={subtotalCents}
               bundleDiscountCents={priced.discountCents}

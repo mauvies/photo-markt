@@ -12,8 +12,11 @@ import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
 
+/** The index route lives in the `(index)` route group so its `loading.tsx`
+ *  can't stand in for `/events/[shareCode]`. The group is invisible in the
+ *  URL — `/events` is unchanged. */
 function readPage(): string {
-  return readFileSync(resolve(root, 'src/app/[lang]/events/page.tsx'), 'utf8');
+  return readFileSync(resolve(root, 'src/app/[lang]/events/(index)/page.tsx'), 'utf8');
 }
 
 describe('/events alias route (T-157)', () => {

@@ -25,6 +25,7 @@ import type { BundleTier } from '@/lib/bundle-pricing';
 import { PLATFORM_CURRENCY_SYMBOL } from '@/lib/currency';
 import { formatEventDate } from '@/lib/format-date';
 import { resolvePhotoCta } from '@/lib/photo-detail-cta';
+import { buildPhotoShareUrl } from '@/lib/photo-share-url';
 import { shareUrl } from '@/lib/share-url';
 import { cn } from '@/lib/utils';
 
@@ -164,8 +165,11 @@ export function PhotoDetailModal({
       onShare(current.id);
       return;
     }
-    if (!current.url) return;
-    shareUrl(current.alt || 'Photo', current.url);
+    // The PAGE showing this photo, not the image bytes — see
+    // `buildPhotoShareUrl`. The recipient must land somewhere they can buy.
+    const href = buildPhotoShareUrl(current.id);
+    if (!href) return;
+    shareUrl(current.alt || 'Photo', href);
   };
 
   // Per-upload contributor (collaborative events) shows as a plain name;
@@ -236,6 +240,18 @@ export function PhotoDetailModal({
           onOpenAutoFocus={(e) => {
             e.preventDefault();
             contentRef.current?.focus();
+          }}
+          // The "Added to cart" toast renders from `[lang]/layout.tsx`, i.e.
+          // OUTSIDE this dialog, and above it. Radix treats any pointer-down
+          // outside the content as a dismiss, so dismissing the toast — the ✕
+          // on desktop, a swipe on mobile — also closed the photo. Which is
+          // exactly backwards: the toast confirms the add, and acknowledging it
+          // threw away the photo the buyer was still looking at.
+          onInteractOutside={(event) => {
+            const target = event.detail.originalEvent.target;
+            if (target instanceof Element && target.closest('[data-sonner-toaster]')) {
+              event.preventDefault();
+            }
           }}
           className="fixed top-1/2 left-1/2 z-50 flex max-h-[92dvh] w-[96vw] max-w-[1300px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl bg-white shadow-2xl duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 md:h-[92dvh] md:flex-row"
         >
