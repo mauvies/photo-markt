@@ -50,9 +50,15 @@
  * ordering is what makes the redelivery safe: the money work is idempotent by
  * construction and has already completed.
  *
- * ⚠️ A partial refund reverses PROPORTIONALLY but still revokes the WHOLE order's access:
- * the order is the unit a buyer's entitlement is expressed in, and Stripe refunds are
- * amounts, not line items, so nothing says which photos a partial refund covered.
+ * ⚠️ A partial refund reverses PROPORTIONALLY and does NOT revoke access. Stripe refunds
+ * are amounts, not line items, so nothing says which photos one covered — and revoking the
+ * whole order dropped the entire sale out of the photographer's `net` while only the
+ * refunded fraction left `paidOut`, eating the difference from their unrelated earnings.
+ *
+ * ⚠️ Restoring access is gated by `mayWriteOrderStatus`: `completed` is a COMPUTED result
+ * here, so writing it unguarded promotes any order that merely happens not to be
+ * `completed` — one stuck `pending` on a lost `payment_intent.succeeded`, or a `failed`
+ * one. Revocations always apply; only the way back is restricted to what this flow revoked.
  */
 
 import { revalidatePath, revalidateTag } from 'next/cache';
@@ -206,6 +212,25 @@ function assertOrdersResolved(orders: ResolvedOrders): void {
  * page), so one status write revokes or restores access everywhere at once. That
  * is why T-215 needed no changes to any read path.
  */
+/**
+ * May this flow write `next` over `current`?
+ *
+ * ⚠️ **Restoring is only ever allowed to undo a revocation this flow made.**
+ * `completed` IS access, and it is a computed result here, so the reasonable-looking
+ * "recompute and write" promotes any order that happens not to be `completed` —
+ * including one stuck `pending` because its `payment_intent.succeeded` was lost, or
+ * one that `failed`. A partial refund deliberately resolves to `completed` (it must
+ * not revoke), so that path would hand the photos to someone who never paid for
+ * them. Revocations always apply; only the way back is gated.
+ */
+function mayWriteOrderStatus(
+  current: string,
+  next: 'refunded' | 'disputed' | 'completed',
+): boolean {
+  if (next !== 'completed') return true;
+  return current === 'refunded' || current === 'disputed';
+}
+
 async function moveOrdersTo(
   orders: ResolvedOrders,
   status: 'refunded' | 'disputed' | 'completed',
@@ -222,16 +247,28 @@ async function moveOrdersTo(
   // construction (the reversal keys and `reversed_amount_cents` accounting), and
   // because callers do the money FIRST and the access second.
   if (orders.order && orders.order.status !== status) {
-    await updateOrderStatus(supabaseAdmin, orders.order.id, status, metadata);
-    console.log(`[money] order ${orders.order.id} → ${status}`);
+    if (mayWriteOrderStatus(orders.order.status, status)) {
+      await updateOrderStatus(supabaseAdmin, orders.order.id, status, metadata);
+      console.log(`[money] order ${orders.order.id} → ${status}`);
+    } else {
+      console.warn(
+        `[money] refusing to promote order ${orders.order.id} from '${orders.order.status}' to '${status}'`,
+      );
+    }
   }
   if (orders.guestOrder && orders.guestOrder.status !== status) {
-    await updateGuestOrderStatus(
-      supabaseAdmin as unknown as SupabaseServerClient,
-      orders.guestOrder.id,
-      status,
-    );
-    console.log(`[money] guest order ${orders.guestOrder.id} → ${status}`);
+    if (mayWriteOrderStatus(orders.guestOrder.status, status)) {
+      await updateGuestOrderStatus(
+        supabaseAdmin as unknown as SupabaseServerClient,
+        orders.guestOrder.id,
+        status,
+      );
+      console.log(`[money] guest order ${orders.guestOrder.id} → ${status}`);
+    } else {
+      console.warn(
+        `[money] refusing to promote guest order ${orders.guestOrder.id} from '${orders.guestOrder.status}' to '${status}'`,
+      );
+    }
   }
 }
 
@@ -308,12 +345,19 @@ async function fetchDisputeFacts(
     }
     return { chargebackOpen, chargebackLost, lostAmountCents };
   } catch (err) {
-    // Safe defaults, never a throw. These facts only make the outcome MORE
-    // restrictive — a missed open dispute means we compute `refunded` instead of
-    // `disputed`, and both revoke access — while a missed lost dispute under-claws
-    // the money, which the dispute's own event reconciles moments later. Throwing
-    // would 500 the webhook and make Stripe redeliver a money operation over a
-    // read that was never load-bearing.
+    // ⚠️ These defaults are NOT conservative, and an earlier version of this
+    // comment claimed they were. "No disputes" is the most permissive answer this
+    // function can give: it is what makes `resolveOrderStatus` return `completed`.
+    // Two things keep that from becoming a restored entitlement, and both are
+    // required — do not remove either believing this fallback is safe:
+    //
+    //   1. Each caller folds in what ITS OWN event proves (a `lost` close is
+    //      authoritative that a chargeback was lost, whatever the listing says).
+    //   2. `mayWriteOrderStatus` refuses to promote anything this flow did not
+    //      itself revoke.
+    //
+    // Throwing instead would 500 the webhook and redeliver a money operation over
+    // a read that is not load-bearing for the money half, which is worse.
     console.error(`[money] could not list disputes for charge ${chargeId}:`, err);
     return { chargebackOpen: false, chargebackLost: false, lostAmountCents: 0 };
   }
@@ -1277,12 +1321,24 @@ export async function POST(request: Request) {
         assertOrdersResolved(orders);
         if (charge) {
           const facts = await fetchDisputeFacts(chargeId);
-          await syncOrderAccess(orders, charge, facts, {
-            dispute_id: dispute.id,
-            dispute_status: dispute.status,
-            dispute_closed_at: new Date().toISOString(),
-            ...(lost ? { dispute_fee_cents: disputeFeeCents(dispute) } : {}),
-          });
+          // ⚠️ THIS event is authoritative about THIS dispute, and the listing is
+          // not. `fetchDisputeFacts` swallows a Stripe read error into "no
+          // disputes", and a lost chargeback carries no refund — so on a failed
+          // read the three facts all come back false, `resolveOrderStatus` returns
+          // `completed`, and the buyer who just won a chargeback against us gets
+          // their access back for good, after we already reversed the money and
+          // paid the fee. Fold in what the event itself proves.
+          await syncOrderAccess(
+            orders,
+            charge,
+            { ...facts, chargebackLost: facts.chargebackLost || lost },
+            {
+              dispute_id: dispute.id,
+              dispute_status: dispute.status,
+              dispute_closed_at: new Date().toISOString(),
+              ...(lost ? { dispute_fee_cents: disputeFeeCents(dispute) } : {}),
+            },
+          );
         } else {
           await reportMoneyIncident({
             kind: 'needs-reconciliation',

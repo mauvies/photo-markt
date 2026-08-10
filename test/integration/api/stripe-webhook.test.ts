@@ -2087,6 +2087,94 @@ describe('app/api/stripe/webhook — clawback (T-215)', () => {
     expect(after?.reversed_amount_cents).toBe(250);
   });
 
+  it('KEEPS a lost chargeback revoked even when the dispute listing fails', async () => {
+    // `fetchDisputeFacts` swallows a Stripe read error into "no disputes", and a
+    // lost chargeback carries no refund — so all three facts read false,
+    // `resolveOrderStatus` computes `completed`, and the buyer who just won a
+    // chargeback gets their access back permanently, after we already reversed the
+    // money and paid the fee. The event itself is authoritative and must win.
+    const { sb, order } = await seedCharge({
+      chargeId: 'ch_lost_blind',
+      paymentIntentId: 'pi_lost_blind',
+      amountCents: 2000,
+      payoutStatus: 'paid',
+      payoutAmountCents: 1840,
+    });
+
+    await stubStripeReads({
+      chargeId: 'ch_lost_blind',
+      amount: 2000,
+      disputes: [{ status: 'needs_response', amount: 2000 }],
+    });
+    await POST(
+      disputeRequest({
+        type: 'charge.dispute.created',
+        chargeId: 'ch_lost_blind',
+        paymentIntentId: 'pi_lost_blind',
+        amountCents: 2000,
+        status: 'needs_response',
+      }),
+    );
+    expect(
+      (await sb.from('orders').select('status').eq('id', order.id).single()).data?.status,
+    ).toBe('disputed');
+
+    // The charge still reads, but listing the disputes blows up.
+    const { stripe: stripeClient } = await import('@/lib/stripe/config');
+    vi.spyOn(stripeClient.disputes, 'list').mockRejectedValue(
+      new Error('stripe is having a moment'),
+    );
+
+    expect(
+      (
+        await POST(
+          disputeRequest({
+            type: 'charge.dispute.closed',
+            chargeId: 'ch_lost_blind',
+            paymentIntentId: 'pi_lost_blind',
+            amountCents: 2000,
+            status: 'lost',
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { data: after } = await sb.from('orders').select('status').eq('id', order.id).single();
+    expect(after?.status).toBe('disputed');
+  });
+
+  it('never promotes an order that was never completed', async () => {
+    // `completed` is a COMPUTED result here and `completed` IS access. A partial
+    // refund deliberately resolves to `completed` (it must not revoke), so writing
+    // it unguarded hands the photos to an order stuck `pending` because its
+    // `payment_intent.succeeded` was lost — someone who never paid.
+    const { sb, order } = await seedCharge({
+      chargeId: 'ch_never_paid',
+      paymentIntentId: 'pi_never_paid',
+      amountCents: 2000,
+      payoutStatus: 'pending',
+      payoutAmountCents: 1840,
+    });
+    await sb.from('orders').update({ status: 'pending' }).eq('id', order.id);
+
+    await stubStripeReads({ chargeId: 'ch_never_paid', amount: 2000, amountRefunded: 500 });
+    expect(
+      (
+        await POST(
+          refundRequest({
+            chargeId: 'ch_never_paid',
+            paymentIntentId: 'pi_never_paid',
+            amountCents: 2000,
+            refundedCents: 500,
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { data: after } = await sb.from('orders').select('status').eq('id', order.id).single();
+    expect(after?.status).toBe('pending');
+  });
+
   it('KEEPS a refunded buyer revoked when the dispute they opened is won', async () => {
     // The sequence that broke the old model: dispute opened → refunded to settle
     // it → the bank closes it in our favour. "Restore" then handed a fully
