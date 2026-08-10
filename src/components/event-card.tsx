@@ -164,7 +164,7 @@ function ActivityBadge({
   return (
     <OverlayIconBadge
       label={label}
-      className={`absolute ${position} flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-black/70 backdrop-blur-sm`}
+      className={`absolute ${position} flex h-8 w-8 items-center justify-center rounded-full border bg-white/90 text-black/70 backdrop-blur-sm`}
     >
       <Icon className="h-4 w-4" aria-hidden />
     </OverlayIconBadge>
