@@ -92,7 +92,7 @@ export function StripeDashboardButton({
         onClick={handleClick}
         disabled={isPending}
       >
-        <ExternalLink className="h-4 w-4" aria-hidden />
+        <ExternalLink className="h-4 w-4 mr-1" aria-hidden />
         {label}
       </Button>
       {error && error !== 'not_connected' && (
