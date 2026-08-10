@@ -192,7 +192,7 @@
     "deleteEvent": "Eliminar evento",
     "eventActionsMenuLabel": "Más opciones",
     "galleryEmpty": "Aún no hay fotos en este evento.",
-    "galleryGatedEmpty": "Las fotos de este evento se revelan mediante búsqueda. Sácate una selfie arriba para encontrar las tuyas.",
+    "galleryGatedEmpty": "Las fotos de este evento se revelan mediante búsqueda facial. Búscate con una selfie para encontrar las tuyas.",
     "photosInEvent": "{n} fotos en este evento",
     "loadMore": "Cargar más",
     "loadMoreFailed": "No se pudieron cargar más fotos. Inténtalo de nuevo.",
@@ -1549,7 +1549,12 @@
       "foundCountOne": "Encontramos 1 foto tuya",
       "foundCountMany": "Encontramos {n} fotos tuyas"
     },
-    "gatedNotice": {
+    "gatedPanel": {
+      "searchTitle": "Encuentra tus fotos",
+      "searchDescription": "La galería de este evento no es pública: cada foto solo se muestra a quien aparece en ella. Sácate una selfie y te mostraremos todas las fotos en las que sales.",
+      "searchCta": "Buscar mis fotos",
+      "photoCount": "{count} fotos en este evento",
+      "privacyNote": "Tu selfie solo se usa para encontrar tus fotos. No se guarda ni se comparte.",
       "processingTitle": "Estamos procesando las fotos",
       "processingDescription": "Este evento revela tus fotos mediante búsqueda facial. Aún se está preparando: vuelve en un rato y podrás buscarte.",
       "unavailableTitle": "La búsqueda facial no está disponible",

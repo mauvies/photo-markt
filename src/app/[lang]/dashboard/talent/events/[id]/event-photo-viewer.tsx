@@ -25,6 +25,7 @@ import { useBibSearch, useFaceSearch } from '@/components/event-gallery-with-fac
 import { EventPhotoCountLabel } from '@/components/event-photo-count-label';
 import { type EventPhotoFilter, EventPhotoFilterTabs } from '@/components/event-photo-filter-tabs';
 import { FaceSearchResults } from '@/components/face-search-results';
+import { GatedSearchPanel, type GatedSearchPanelLabels } from '@/components/gated-search-panel';
 import type { PhotoDetailModalLabels } from '@/components/photo-detail-modal';
 import {
   type PhotoAlbumItem,
@@ -52,6 +53,7 @@ import {
   filterEventPhotoPages,
   filterEventPhotos,
 } from '@/lib/event-photo-filter';
+import { resolveEventGalleryView } from '@/lib/find-my-photos';
 import { resolveGalleryCounts } from '@/lib/gallery-photo-count';
 import { useTranslations } from '@/lib/i18n/translations-provider';
 import {
@@ -94,6 +96,10 @@ type EventPhotoViewerProps = {
   bulkDeleteLabels: BulkContributorDeleteLabels;
   /** Labels for the "All photos / My photos" filter (collaborative events). */
   filterLabels: { all: string; mine: string; empty: string };
+  /** Reveal-gated pre-search panel (T-230) — the mirror of the public viewer's
+   *  prop. Present only on a gated event; when nothing is revealed yet it owns
+   *  the whole gallery slot, explanation and search CTA included. */
+  gatedPanel?: { labels: GatedSearchPanelLabels; photoCount?: number | null };
   /** Whether the event has any detected bib numbers yet — drives the bib
    * search empty state ("still processing" vs "no match"). */
   bibHasData?: boolean;
@@ -151,6 +157,7 @@ export function EventPhotoViewer({
   uploadedPhotoIds = new Set(),
   bulkDeleteLabels,
   filterLabels,
+  gatedPanel,
   bibHasData = false,
   bibEmptyLabels,
   menuLabels,
@@ -477,6 +484,13 @@ export function EventPhotoViewer({
     () => filterEventPhotoPages(gridPages, { deletedIds, filter, myPhotoIds: uploadedPhotoIds }),
     [gridPages, deletedIds, filter, uploadedPhotoIds],
   );
+  // Reveal gate (T-230): whether ANYTHING is revealed, deliberately independent
+  // of the All/My filter — a "My photos" tab that simply has no uploads must not
+  // be mistaken for an unproven visitor and answered with the gated panel.
+  const hasGridPhotos = useMemo(
+    () => gridPages.some((page) => page.some((p) => !deletedIds.has(p.id))),
+    [gridPages, deletedIds],
+  );
   const bibVisiblePhotos = useMemo(
     () =>
       filterEventPhotos(bibSearch.matchedPhotos, {
@@ -788,8 +802,31 @@ export function EventPhotoViewer({
     />
   );
 
+  // Which view owns the gallery slot (T-230) — the same resolver the public
+  // viewer uses, so the two surfaces answer one event identically.
+  const galleryView = resolveEventGalleryView({
+    hasPhotos: hasGridPhotos,
+    faceSearchActive: faceSearch.matches !== null,
+    gatedPanel: gatedPanel != null,
+  });
+
+  // ── Reveal-gated pre-search panel (T-230) ──────────────────────────────
+  // A gated event reveals nothing until the visitor proves a match, so this
+  // panel — explanation plus the search CTA — IS the screen, in place of the
+  // mute empty grid that used to point at a button somewhere above it.
+  if (galleryView === 'gated-panel' && gatedPanel) {
+    return (
+      <GatedSearchPanel
+        state="searchable"
+        labels={gatedPanel.labels}
+        photoCount={gatedPanel.photoCount}
+        onSearch={faceSearch.openSearch}
+      />
+    );
+  }
+
   // ── AI face-search results view ────────────────────────────────────────
-  if (faceSearch.matches !== null) {
+  if (galleryView === 'search-results' && faceSearch.matches !== null) {
     return (
       <div className="space-y-3">
         <FaceSearchResults

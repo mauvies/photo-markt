@@ -44,6 +44,7 @@ import type { BundleTier } from '@/lib/bundle-pricing';
 import { showAddedToCartToast } from '@/lib/cart-toast';
 import { type EventBulkActionKey, eventBulkActionKeys } from '@/lib/event-bulk-actions';
 import { filterEventPhotoPages, filterEventPhotos } from '@/lib/event-photo-filter';
+import { resolveEventGalleryView } from '@/lib/find-my-photos';
 import { resolveGalleryCounts } from '@/lib/gallery-photo-count';
 import type { GuestCartItem } from '@/lib/guest-cart';
 import { localizedPath } from '@/lib/i18n/localized-path';
@@ -790,9 +791,20 @@ export function PublicEventPhotoViewer({
   }, [handleBulkAddToCart, faceMatchIds]);
   const canAddAllMatched = canBulkAddToCart && faceMatchIds.length > 0 && bundleLabels != null;
 
+  // Which view owns the gallery slot (T-230) — shared with the talent viewer so
+  // the two surfaces can't disagree. Search results outrank an empty grid: on a
+  // gated event the grid IS empty until a reload carries the proof cookie, so
+  // testing emptiness first hid the matches the visitor had just earned.
+  const galleryView = resolveEventGalleryView({
+    hasPhotos: photos.length > 0,
+    faceSearchActive: faceSearch.matches !== null,
+    gatedPanel: gatedPanel != null,
+    isUploading,
+  });
+
   return (
     <div className="relative">
-      {photos.length === 0 && gatedPanel && !isUploading ? (
+      {galleryView === 'gated-panel' && gatedPanel ? (
         // Gated event, nothing revealed yet (T-230). The panel IS the screen
         // here: it carries the explanation and the search CTA, so the copy no
         // longer has to point the visitor at a button somewhere above it.
@@ -802,7 +814,7 @@ export function PublicEventPhotoViewer({
           photoCount={gatedPanel.photoCount}
           onSearch={faceSearch.openSearch}
         />
-      ) : photos.length === 0 ? (
+      ) : galleryView === 'empty' ? (
         <div className="py-12 text-center">
           <p className="text-muted-foreground">
             {isUploading
@@ -810,7 +822,7 @@ export function PublicEventPhotoViewer({
               : (emptyText ?? 'No photos available yet.')}
           </p>
         </div>
-      ) : faceSearch.matches !== null ? (
+      ) : galleryView === 'search-results' && faceSearch.matches !== null ? (
         <FaceSearchResults
           bucketed={bucketed}
           matchCount={faceSearch.matches.length}

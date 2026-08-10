@@ -11,7 +11,7 @@ import { EventMetaLine } from '@/components/event-meta-line';
 import { EventPricingSection } from '@/components/event-pricing-section';
 import { EventSaveButton } from '@/components/event-save-button';
 import { EventShareButton } from '@/components/event-share-button';
-import { GatedFaceSearchNotice } from '@/components/gated-face-search-notice';
+import { GatedSearchPanel } from '@/components/gated-search-panel';
 import { MarkEventSeen } from '@/components/mark-event-seen';
 import {
   countEventPhotosByStatus,
@@ -278,6 +278,16 @@ export default async function ExploreEventDetailPage({
     aiUsable,
     aiStatus,
   });
+  // Gated pre-search panel copy (T-230) — resolved once for both the page (the
+  // processing / unavailable states) and the viewer (the searchable one), and
+  // mirroring the public page exactly.
+  const gatedPanelLabels = dict.aiSearch.gatedPanel;
+  // The panel carries the event total itself, so the header line below drops
+  // its own copy of it while the panel owns the gallery slot.
+  const gatedPanelOwnsGallery =
+    gated &&
+    eventStatus !== 'upcoming' &&
+    (gatedFaceSearchNotice !== 'none' || photos.length === 0);
 
   // Whether the event has any detected bib numbers yet — drives the bib search
   // empty state ("still processing" vs "no match"). Only relevant when bib
@@ -421,8 +431,10 @@ export default async function ExploreEventDetailPage({
           photographerName={uploaderProfiles[event.user_id]?.username}
         />
         {/* Reveal gate (T-177): total near the header (worth searching); the
-            toolbar counter below reflects only what's revealed. */}
-        {gated && eventStatus !== 'upcoming' ? (
+            toolbar counter below reflects only what's revealed. Dropped while
+            the gated panel renders (T-230) — it states the same total, and
+            printing it twice on one screen reads as a bug. */}
+        {gated && eventStatus !== 'upcoming' && !gatedPanelOwnsGallery ? (
           <p className="mt-1 text-sm text-muted-foreground">
             {dict.events.photosInEvent.replace('{n}', String(totalCount))}
           </p>
@@ -485,8 +497,14 @@ export default async function ExploreEventDetailPage({
       ) : gatedFaceSearchNotice !== 'none' ? (
         // Reveal gate (T-177) dead-end guard (T-184): the event is gated but has
         // no searchable face index yet, so the face-search entry can't render.
-        // Show a clear state instead of a mute empty gallery with no way out.
-        <GatedFaceSearchNotice state={gatedFaceSearchNotice} labels={dict.aiSearch.gatedNotice} />
+        // Show a clear state instead of a mute empty gallery with no way out —
+        // the same panel as the searchable state (T-230), so all three
+        // pre-search states carry equal visual weight.
+        <GatedSearchPanel
+          state={gatedFaceSearchNotice}
+          labels={gatedPanelLabels}
+          photoCount={totalCount}
+        />
       ) : photoItems.length === 0 && !gated ? (
         // Reveal gate (T-177): a gated event ALWAYS renders the gallery wrapper
         // below so the face-search entry mounts — logged-in talents are
@@ -501,6 +519,7 @@ export default async function ExploreEventDetailPage({
           <EventGalleryWithFaceSearch
             shareCode={event.share_code ?? event.id}
             aiSearchEligible={aiSearchEligible}
+            revealGated={gated}
             aiState={aiBannerState}
             modalLabels={dict.aiSearch.modal}
             bibDetectionEnabled={
@@ -553,6 +572,9 @@ export default async function ExploreEventDetailPage({
                     mine: dict.collaborativeEvent.myPhotosMine,
                     empty: dict.collaborativeEvent.myPhotosEmpty,
                   }}
+                  gatedPanel={
+                    gated ? { labels: gatedPanelLabels, photoCount: totalCount } : undefined
+                  }
                   bibHasData={bibHasData}
                   bibEmptyLabels={{
                     pending: dict.bibDetection.searchEmptyPending,

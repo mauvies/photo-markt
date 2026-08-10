@@ -45,7 +45,11 @@ export type GatedSearchPanelState = 'searchable' | 'processing' | 'unavailable';
  * photo URLs. The panel therefore shows nothing derived from individual photos:
  * no thumbnails, no per-photo counts. The event TOTAL is deliberately fine (it
  * is already rendered beside the header on gated events) and is the one true
- * fact that makes searching worth it, which is why it anchors the panel.
+ * fact that makes searching worth it, which is why it anchors the panel — in
+ * every state, since "there are photos here, come back" is exactly what makes
+ * `processing` worth waiting out. Both pages therefore drop their own header
+ * count line while this panel renders, so the same sentence isn't printed twice
+ * on one screen.
  */
 export function GatedSearchPanel({
   state,
@@ -62,7 +66,8 @@ export function GatedSearchPanel({
 }) {
   const isSearchable = state === 'searchable';
   const isProcessing = state === 'processing';
-  const Icon = isSearchable ? ScanFace : isProcessing ? ScanFace : TriangleAlert;
+  // Only the terminal state warns; searching and waiting are both normal.
+  const Icon = state === 'unavailable' ? TriangleAlert : ScanFace;
 
   const title = isSearchable
     ? labels.searchTitle
@@ -75,7 +80,7 @@ export function GatedSearchPanel({
       ? labels.processingDescription
       : labels.unavailableDescription;
 
-  const showCount = isSearchable && typeof photoCount === 'number' && photoCount > 0;
+  const showCount = typeof photoCount === 'number' && photoCount > 0;
 
   return (
     <div className="flex min-h-[22rem] flex-col items-center justify-center rounded-xl border bg-card px-6 py-12 text-center sm:px-10 sm:py-16">
