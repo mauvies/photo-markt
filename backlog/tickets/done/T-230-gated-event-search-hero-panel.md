@@ -1,12 +1,12 @@
 # T-230 · El estado previo a la búsqueda de un evento con reveal gate se ve vacío
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Riesgo:** normal  (solo UI/copy; no toca pagos, BD, auth — pero **no debe aflojar el gate**, ver Notas)
 - **Blockers:** ninguno
 - **Rama:** `design/gated-event-search-hero-panel`  (tipo = design)
 - **OpenSpec change:** —  (cambio de presentación en dos superficies + copy)
-- **PR:** —
+- **PR:** #293
 
 ## Requerimiento
 
@@ -43,21 +43,21 @@ débiles**, y ninguna ancla la vista.
 
 ## Criterio de aceptación (Definition of Done)
 
-- [ ] En un evento con reveal gate y **sin búsqueda hecha**, la zona de la galería muestra un panel
+- [x] En un evento con reveal gate y **sin búsqueda hecha**, la zona de la galería muestra un panel
       destacado (no un párrafo suelto) con título, explicación de por qué la galería no es navegable
       y **el CTA de búsqueda facial dentro del propio panel** — sin texto que remita a "arriba"
-- [ ] Los **tres** estados previos a la búsqueda comparten el mismo peso visual: buscable,
+- [x] Los **tres** estados previos a la búsqueda comparten el mismo peso visual: buscable,
       `processing` y `unavailable` (`resolveGatedFaceSearchNotice`) — no se arregla uno y quedan dos
       mudos
-- [ ] Mismo resultado en las **dos** superficies: página pública `/events/[shareCode]` y vista de
+- [x] Mismo resultado en las **dos** superficies: página pública `/events/[shareCode]` y vista de
       evento del dashboard de talento (CLAUDE.md exige que estén cableadas simétricamente)
-- [ ] Un evento **no** gated no cambia: sigue navegando su galería con el banner de búsqueda donde
+- [x] Un evento **no** gated no cambia: sigue navegando su galería con el banner de búsqueda donde
       está hoy
-- [ ] Tras una búsqueda con match, el panel deja paso a los resultados como hasta ahora
-- [ ] Strings nuevos/reescritos en `en.json` **y** `es.json` (incluido reemplazar el "arriba" de
+- [x] Tras una búsqueda con match, el panel deja paso a los resultados como hasta ahora
+- [x] Strings nuevos/reescritos en `en.json` **y** `es.json` (incluido reemplazar el "arriba" de
       `events.galleryGatedEmpty`)
-- [ ] Test de regresión que falla antes y pasa después
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] Test de regresión que falla antes y pasa después
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
 
