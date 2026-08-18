@@ -370,9 +370,9 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
   (T-249).** A failure there must not throw — a 500 makes Stripe redeliver a payment we may already
   have made — so the failure is invisible by construction unless something surfaces it. It already
   cost a real sale: 2026-07-28, €0.99, `completed` with **zero `payouts` rows**, unnoticed for
-  thirteen days. **Every** exit that can complete an order without paying now calls
+  thirteen days. Seven exits that can complete an order without paying now call
   **`reportMoneyIncident`** (`src/lib/observability/report-money-incident.ts`) with
-  `kind: 'payout-not-recorded'` — two inside `createTransfersForOrderItems` and three *before* it,
+  `kind: 'payout-not-recorded'` — three inside `createTransfersForOrderItems` and four *before* it,
   which are the quieter ones because they never open a row at all:
   - `openPayoutRow` throws — no debt, no transfer, no trace.
   - `createTransfer` throws **and** `holdPayoutRow` throws too, which strands the row `processing`
@@ -383,9 +383,25 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
     and no-op the transfer loop on the empty list, logging *nothing whatsoever*. It is the best
     candidate for the 2026-07-28 incident, and the failure class is not hypothetical: T-239 was a
     schema-cache error on this same table.
+  - the `order_items` read **succeeds but returns nothing** — a completed order with a non-zero
+    total and no items is money charged for photos nobody will be paid for.
+  - an order item names a photographer with **no resolvable `profiles` row**: the transfer loop
+    walks `connectStatuses` while the money lives in `totals`, so that share never reaches the loop.
   - no `chargeId` on the payment intent (authenticated **and** guest), and the guest path's
     catch-all — which is wider than the authenticated one, since it also wraps the PaymentIntent
-    retrieve, the Connect/plan lookups and the status reconcile.
+    retrieve, the Connect/plan lookups and the status reconcile. ⚠️ That alert must **never** claim
+    nothing was paid: `createTransfersForOrderItems` can throw part-way through a multi-photographer
+    cart *after* earlier photographers were transferred and settled, so an operator acting on
+    "nothing was paid" would pay them twice. It names the `payouts` rows as the authority instead.
+
+  ⚠️ **One hole is known and deliberately still open: T-252.** Stripe does not guarantee event
+  ordering, and `createTransfersForOrderItems` is reachable from only two places — the guest path and
+  `payment_intent.succeeded`. If `payment_intent.succeeded` arrives *before*
+  `checkout.session.completed`, `getOrderByPaymentIntentId` returns null, the whole block is skipped,
+  and the authenticated `checkout.session.completed` then creates a `completed` order **without ever
+  transferring**. Closing it means re-driving transfers (safe by construction — `openPayoutRow`'s
+  unique index makes the double-pay impossible), which changes the money flow rather than just
+  observing it, so it is its own ticket.
 
   The alert changes **nothing** about the flow: same `continue`, same 200. The reporter is
   shared with the parked T-215/PR #290 branch (rescued from it rather than rewritten, so the two can't

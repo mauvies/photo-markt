@@ -1613,6 +1613,48 @@ describe('app/api/stripe/webhook — payout ledger (T-216)', () => {
 });
 
 /**
+ * Shared fixture for the two silent-loss describes below: one photographer with
+ * an active Connect account, one 500-cent pending order with a single item.
+ * Deliberately module-scoped — both blocks assert on the same shape, and a
+ * second copy would let them drift apart as the schema changes.
+ */
+async function seedPayableOrder(paymentIntentId: string) {
+  const sb = createServiceClient();
+  const photographer = await createTestUser('PHOTOGRAPHER');
+  const event = await createTestEvent(photographer.id);
+  const photo = await createTestPhoto(event.id);
+  const talent = await createTestUser('TALENT');
+
+  await sb
+    .from('profiles')
+    .update({ stripe_connect_account_id: 'acct_test', stripe_connect_status: 'active' })
+    .eq('id', photographer.id);
+
+  const { data: order } = await sb
+    .from('orders')
+    .insert({
+      user_id: talent.id,
+      status: 'pending',
+      total_amount_cents: 500,
+      currency: 'eur',
+      stripe_payment_intent_id: paymentIntentId,
+    })
+    .select('id')
+    .single();
+  if (!order) throw new Error('order seed failed');
+
+  await sb.from('order_items').insert({
+    order_id: order.id,
+    photo_id: photo.id,
+    photographer_id: photographer.id,
+    unit_price_cents: 500,
+    total_price_cents: 500,
+  });
+
+  return { sb, photographer, order };
+}
+
+/**
  * A sale that skips the photographer's transfer must not do so silently (T-249).
  *
  * The payout ledger is wrapped in `try/catch` + `continue` on purpose — the
@@ -1627,42 +1669,6 @@ describe('app/api/stripe/webhook — silent payout failures are reported (T-249)
     await resetDatabase();
     vi.clearAllMocks();
   });
-
-  async function seedPayableOrder(paymentIntentId: string) {
-    const sb = createServiceClient();
-    const photographer = await createTestUser('PHOTOGRAPHER');
-    const event = await createTestEvent(photographer.id);
-    const photo = await createTestPhoto(event.id);
-    const talent = await createTestUser('TALENT');
-
-    await sb
-      .from('profiles')
-      .update({ stripe_connect_account_id: 'acct_test', stripe_connect_status: 'active' })
-      .eq('id', photographer.id);
-
-    const { data: order } = await sb
-      .from('orders')
-      .insert({
-        user_id: talent.id,
-        status: 'pending',
-        total_amount_cents: 500,
-        currency: 'eur',
-        stripe_payment_intent_id: paymentIntentId,
-      })
-      .select('id')
-      .single();
-    if (!order) throw new Error('order seed failed');
-
-    await sb.from('order_items').insert({
-      order_id: order.id,
-      photo_id: photo.id,
-      photographer_id: photographer.id,
-      unit_price_cents: 500,
-      total_price_cents: 500,
-    });
-
-    return { sb, photographer, order };
-  }
 
   function paymentSucceeded(paymentIntentId: string, chargeId: string) {
     return signedWebhookRequest({
@@ -1810,44 +1816,8 @@ describe('app/api/stripe/webhook — pre-ledger silent losses are reported (T-24
     restore = null;
   });
 
-  async function seedOrder(paymentIntentId: string) {
-    const sb = createServiceClient();
-    const photographer = await createTestUser('PHOTOGRAPHER');
-    const event = await createTestEvent(photographer.id);
-    const photo = await createTestPhoto(event.id);
-    const talent = await createTestUser('TALENT');
-
-    await sb
-      .from('profiles')
-      .update({ stripe_connect_account_id: 'acct_test', stripe_connect_status: 'active' })
-      .eq('id', photographer.id);
-
-    const { data: order } = await sb
-      .from('orders')
-      .insert({
-        user_id: talent.id,
-        status: 'pending',
-        total_amount_cents: 500,
-        currency: 'eur',
-        stripe_payment_intent_id: paymentIntentId,
-      })
-      .select('id')
-      .single();
-    if (!order) throw new Error('order seed failed');
-
-    await sb.from('order_items').insert({
-      order_id: order.id,
-      photo_id: photo.id,
-      photographer_id: photographer.id,
-      unit_price_cents: 500,
-      total_price_cents: 500,
-    });
-
-    return { sb, photographer, order };
-  }
-
   it('reports when the payment intent carries no charge id', async () => {
-    const { order } = await seedOrder('pi_no_charge');
+    const { order } = await seedPayableOrder('pi_no_charge');
 
     const res = await POST(
       signedWebhookRequest({
@@ -1875,7 +1845,7 @@ describe('app/api/stripe/webhook — pre-ledger silent losses are reported (T-24
   });
 
   it('reports when the order items cannot be read at all', async () => {
-    const { sb, photographer, order } = await seedOrder('pi_items_unreadable');
+    const { sb, photographer, order } = await seedPayableOrder('pi_items_unreadable');
 
     // The quietest failure of the lot: the read errors, `orderItems` falls back
     // to `[]`, and the transfer loop no-ops on the empty list. Simulate the

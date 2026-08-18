@@ -20,7 +20,7 @@ import { sendMoneyAlertEmail } from '@/lib/email/send-money-alert';
 
 const incident = {
   to: 'ops@example.com',
-  kind: 'payout-not-recorded',
+  kind: 'payout-not-recorded' as const,
   message: 'Could not open the payout ledger row.',
   context: { photographerId: 'ph_1', chargeId: 'ch_1', netCents: 460 },
 };

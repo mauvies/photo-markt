@@ -161,6 +161,30 @@ async function createTransfersForOrderItems(
     );
   }
 
+  // ⚠️ The loop below walks `connectStatuses`, but the money lives in `totals`.
+  // `getPhotographerConnectStatuses` returns only the `profiles` rows that
+  // exist, so a photographer whose row is missing (or a short read) is money
+  // that never reaches the loop at all — no payout row, no hold, no log (T-249).
+  const unresolved = [...totals.keys()].filter(
+    (id) => !connectStatuses.some((status) => status.id === id),
+  );
+  for (const photographerId of unresolved) {
+    await reportMoneyIncident({
+      kind: 'payout-not-recorded',
+      message:
+        'An order item names a photographer with no resolvable profile, so their share was ' +
+        'never considered for transfer and no debt was recorded.',
+      context: {
+        photographerId,
+        chargeId,
+        orderId,
+        orderKind,
+        grossCents: totals.get(photographerId),
+        currency,
+      },
+    });
+  }
+
   for (const status of connectStatuses) {
     const grossCents = totals.get(status.id) ?? 0;
     if (grossCents === 0) continue;
@@ -515,11 +539,20 @@ export async function POST(request: Request) {
               // than the authenticated path's — it also covers the PaymentIntent
               // retrieve, the Connect/plan lookups and the status reconcile —
               // which is precisely why a bare log here could hide more, not less.
+              //
+              // ⚠️ It must NOT claim nothing was paid. `createTransfersForOrderItems`
+              // can throw part-way through a multi-photographer cart, after
+              // earlier photographers were transferred AND settled. An alert
+              // asserting "nothing was paid" would invite an operator to pay
+              // them a second time — the one outcome this whole ledger exists to
+              // prevent. Say what is certain (it threw) and name the ledger as
+              // the authority on what actually moved.
               await reportMoneyIncident({
                 kind: 'payout-not-recorded',
                 message:
-                  'The guest order transfer path threw before any payout row was opened. The ' +
-                  'order is recorded and nothing was paid or held.',
+                  'The guest order transfer path threw. Some photographers on this order may ' +
+                  'already have been paid and settled before it failed — check the `payouts` ' +
+                  'rows for this charge before reconciling anything by hand.',
                 context: { paymentIntentId: piId, orderId: guestOrder.id },
                 cause: transferErr,
               });
@@ -778,6 +811,26 @@ export async function POST(request: Request) {
                 'order. Nothing was paid and no debt was recorded.',
               context: { orderId: order.id, chargeId, code: orderItemsError.code },
               cause: orderItemsError,
+            });
+            break;
+          }
+
+          // A read that succeeds but returns nothing is its own incident: a
+          // completed order with a non-zero total and no items means somebody
+          // was charged for photos nobody will be paid for. Without this the
+          // empty list reaches the transfer loop, which returns immediately on
+          // `items.length === 0` — as silent as the error branch above.
+          if ((orderItems ?? []).length === 0) {
+            await reportMoneyIncident({
+              kind: 'payout-not-recorded',
+              message:
+                'A completed order has no order items, so no transfer was attempted and no ' +
+                'photographer will be paid for it.',
+              context: {
+                orderId: order.id,
+                chargeId,
+                orderTotalCents: order.total_amount_cents,
+              },
             });
             break;
           }

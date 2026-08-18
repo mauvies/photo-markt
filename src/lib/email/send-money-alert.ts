@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { env } from '@/env.mjs';
+import type { MoneyIncidentKind } from '@/lib/observability/report-money-incident';
 
 const resend = new Resend(env.RESEND_API_KEY);
 
@@ -24,11 +25,18 @@ export async function sendMoneyAlertEmail({
   kind,
   message,
   context,
+  reason,
 }: {
   to: string;
-  kind: string;
+  // Typed against the reporter's union rather than `string`, so a direct caller
+  // that bypasses `reportMoneyIncident` (and with it the throttle, the console
+  // line and the Sentry fingerprint) is a compile error rather than channel
+  // drift discovered later.
+  kind: MoneyIncidentKind;
   message: string;
   context?: Record<string, string | number | null | undefined>;
+  /** Rendered underlying error, when there was one. */
+  reason?: string;
 }): Promise<void> {
   const rows = Object.entries(context ?? {})
     .filter(([, value]) => value !== undefined && value !== null)
@@ -57,6 +65,11 @@ export async function sendMoneyAlertEmail({
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827;">
   <h2 style="margin: 0 0 12px;">Money incident — <code>${escapeHtml(kind)}</code></h2>
   <p style="margin: 0 0 16px; line-height: 1.6;">${escapeHtml(message)}</p>
+  ${
+    reason
+      ? `<p style="margin: 0 0 16px; line-height: 1.6; color: #b91c1c;"><strong>Reason:</strong> <code>${escapeHtml(reason)}</code></p>`
+      : ''
+  }
   ${
     rows
       ? `<table style="border-collapse: collapse; font-size: 14px; margin: 0 0 16px;">${rows}</table>`

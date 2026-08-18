@@ -14,7 +14,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const { captureException, sendMoneyAlertEmail, env } = vi.hoisted(() => ({
   captureException: vi.fn(),
   // Typed args so the throttle test can read back which kind was sent.
-  sendMoneyAlertEmail: vi.fn(async (_payload: { to: string; kind: string }) => undefined),
+  sendMoneyAlertEmail: vi.fn(
+    async (_payload: { to: string; kind: string; reason?: string }) => undefined,
+  ),
   // `env.mjs` validates at import time; stub it so each case can flip
   // MONEY_ALERT_EMAIL without touching the real schema.
   env: { MONEY_ALERT_EMAIL: undefined as string | undefined },
@@ -146,6 +148,62 @@ describe('reportMoneyIncident', () => {
     expect(sendMoneyAlertEmail).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps a hang throttled even though a fast error releases the throttle', async () => {
+    env.MONEY_ALERT_EMAIL = 'ops@example.com';
+    // A Resend that never settles. Releasing the window here would let every
+    // incident in a burst re-claim and wait the full timeout in series, adding
+    // 5s × N to a webhook that must answer inside Stripe's delivery window.
+    sendMoneyAlertEmail.mockImplementationOnce(() => new Promise<never>(() => {}));
+
+    const first = reportMoneyIncident({ kind: 'payout-not-recorded', message: 'hangs' });
+    await vi.advanceTimersByTimeAsync(5_001);
+    await first;
+
+    await reportMoneyIncident({ kind: 'payout-not-recorded', message: 'right after' });
+    expect(sendMoneyAlertEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('explains a PostgREST-shaped cause, which is not an Error instance', async () => {
+    env.MONEY_ALERT_EMAIL = 'ops@example.com';
+
+    await reportMoneyIncident({
+      kind: 'payout-not-recorded',
+      message: 'Could not read the order items.',
+      // Exactly what postgrest-js returns: a plain object, NOT an Error. The
+      // reason would be dropped from both channels without describeCause.
+      cause: { code: 'PGRST002', message: 'schema cache', details: null, hint: null },
+    });
+
+    const [payload] = sendMoneyAlertEmail.mock.calls[0] as [{ reason?: string }];
+    expect(payload.reason).toContain('PGRST002');
+    expect(payload.reason).toContain('schema cache');
+
+    const [, options] = captureException.mock.calls[0] as [Error, { extra: { reason?: string } }];
+    expect(options.extra.reason).toContain('PGRST002');
+  });
+
+  it('does not let a context key shadow the incident message', async () => {
+    await reportMoneyIncident({
+      kind: 'payout-not-recorded',
+      message: 'the real message',
+      context: { message: 'attacker-supplied' },
+    });
+
+    const [, options] = captureException.mock.calls[0] as [Error, { extra: { message: string } }];
+    expect(options.extra.message).toBe('the real message');
+  });
+
+  it('treats an empty MONEY_ALERT_EMAIL as not configured', async () => {
+    // env.mjs accepts '' so that staging the variable with a blank value cannot
+    // throw at import and 500 the whole app; readers must treat it as absent.
+    env.MONEY_ALERT_EMAIL = '';
+
+    await reportMoneyIncident({ kind: 'payout-not-recorded', message: 'ledger write failed' });
+
+    expect(sendMoneyAlertEmail).not.toHaveBeenCalled();
+    expect(captureException).toHaveBeenCalledTimes(1);
+  });
+
   it('sends the identifiers it was given to the email channel', async () => {
     env.MONEY_ALERT_EMAIL = 'ops@example.com';
 
@@ -160,6 +218,7 @@ describe('reportMoneyIncident', () => {
       kind: 'payout-not-recorded',
       message: 'ledger write failed',
       context: { photographerId: 'ph_1', chargeId: 'ch_1', netCents: 91 },
+      reason: undefined,
     });
   });
 });

@@ -53,16 +53,24 @@ const lastEmailAlertMsByKind = new Map<MoneyIncidentKind, number>();
  */
 const EMAIL_SEND_TIMEOUT_MS = 5_000;
 
+/**
+ * ⚠️ Only `payout-not-recorded` has a producer on `main` today. The five
+ * dispute/reversal kinds are **inherited deliberately** from the parked T-215 /
+ * PR #290 branch, which this file was rescued from rather than rewritten:
+ * deleting them would guarantee a conflict when that branch resumes, and would
+ * split the reporter into two divergent implementations — the exact thing
+ * keeping one file avoids. Do not treat them as dead code to prune.
+ */
 export type MoneyIncidentKind =
-  /** A dispute was opened against a purchase. */
+  /** A dispute was opened against a purchase. (T-215 — no producer yet.) */
   | 'dispute-opened'
-  /** A dispute was lost — money and access are gone. */
+  /** A dispute was lost — money and access are gone. (T-215 — no producer yet.) */
   | 'dispute-lost'
-  /** A dispute was won — access restored. */
+  /** A dispute was won — access restored. (T-215 — no producer yet.) */
   | 'dispute-won'
-  /** A transfer reversal could not be created (insufficient balance, API error). */
+  /** A reversal could not be created (insufficient balance, API error). (T-215 — no producer yet.) */
   | 'reversal-failed'
-  /** A payout could not be resolved automatically and needs a human. */
+  /** A payout needs a human to resolve it. (T-215 — no producer yet.) */
   | 'needs-reconciliation'
   /**
    * A sale skipped the photographer's transfer and left no recoverable debt
@@ -91,6 +99,9 @@ export async function reportMoneyIncident(incident: MoneyIncident): Promise<void
 
   // Always log first: the console line is the one channel that cannot itself
   // fail, and it is what a `vercel logs` search finds during an incident.
+  // `context` spread first, for the same reason as the Sentry `extra` below: a
+  // caller's arbitrary key must never shadow `cause`. The two orderings have to
+  // agree, or the same incident reads differently in the two channels.
   console.error(`[money:${kind}] ${message}`, { ...context, cause });
 
   try {
@@ -101,13 +112,37 @@ export async function reportMoneyIncident(incident: MoneyIncident): Promise<void
       // fingerprinting on them would make every occurrence its own issue.
       fingerprint: ['money-incident', kind],
       tags: { subsystem: 'payouts', incident: kind },
-      extra: { message, ...context },
+      // `context` is spread FIRST so a caller can never shadow `message` or
+      // `reason` — the incident's own fields must win over an arbitrary key.
+      extra: { ...context, message, reason: describeCause(cause) },
     });
   } catch (sentryErr) {
     console.error('[money] failed to report incident to Sentry', sentryErr);
   }
 
-  await sendEmailAlert(kind, message, context);
+  await sendEmailAlert(kind, message, context, cause);
+}
+
+/**
+ * Render `cause` as text for the channels that cannot carry an object.
+ *
+ * ⚠️ Not every cause is an `Error`. PostgREST hands back a **plain object**
+ * (`postgrest-js` only builds a `PostgrestError` when `shouldThrowOnError` is
+ * set), so `cause instanceof Error` is false for exactly the database failures
+ * this reporter exists to explain — and its `message`/`details`/`hint` would be
+ * dropped, leaving an alert that says something failed but never why.
+ */
+function describeCause(cause: unknown): string | undefined {
+  if (cause === undefined || cause === null) return undefined;
+  if (cause instanceof Error) return `${cause.name}: ${cause.message}`;
+  if (typeof cause === 'object') {
+    const { message, code, details, hint } = cause as Record<string, unknown>;
+    const parts = [code, message, details, hint].filter(
+      (part): part is string | number => part !== undefined && part !== null && part !== '',
+    );
+    if (parts.length > 0) return parts.join(' · ');
+  }
+  return String(cause);
 }
 
 /**
@@ -123,8 +158,10 @@ async function sendEmailAlert(
   kind: MoneyIncidentKind,
   message: string,
   context: MoneyIncident['context'],
+  cause: unknown,
 ): Promise<void> {
   const to = env.MONEY_ALERT_EMAIL;
+  // `''` is a configured-but-empty value (see env.mjs) and means "not set".
   if (!to) return;
 
   const now = Date.now();
@@ -137,22 +174,38 @@ async function sendEmailAlert(
 
   try {
     const { sendMoneyAlertEmail } = await import('@/lib/email/send-money-alert');
-    await withTimeout(sendMoneyAlertEmail({ to, kind, message, context }), EMAIL_SEND_TIMEOUT_MS);
+    await withTimeout(
+      sendMoneyAlertEmail({ to, kind, message, context, reason: describeCause(cause) }),
+      EMAIL_SEND_TIMEOUT_MS,
+    );
   } catch (emailErr) {
     console.error('[money] failed to send incident alert email', emailErr);
-    // ...but release it on failure, so one bad send doesn't silence the next
-    // incident for a full window. Mirrors how the face-search 50% alert releases
-    // its claim bucket when Resend errors (`events/[shareCode]/actions.ts`).
-    if (lastEmailAlertMsByKind.get(kind) === now) lastEmailAlertMsByKind.delete(kind);
+
+    // ...but release it on a fast failure, so one bad send doesn't silence the
+    // next incident for a full window. The face-search 50% alert releases its
+    // claim bucket the same way (`events/[shareCode]/actions.ts`).
+    //
+    // ⚠️ NOT on a timeout. Releasing there would undo the protection
+    // `EMAIL_SEND_TIMEOUT_MS` exists for: with Resend hanging, every incident in
+    // a burst would re-claim and wait the full timeout in series, adding 5 s × N
+    // to a webhook that must answer inside Stripe's delivery window — and a
+    // redelivered money event is worse than a missed email. A fast API error
+    // costs nothing to retry; a hang is precisely what must stay throttled.
+    if (!(emailErr instanceof AlertTimeoutError) && lastEmailAlertMsByKind.get(kind) === now) {
+      lastEmailAlertMsByKind.delete(kind);
+    }
   }
 }
+
+/** Distinguishes "Resend is hanging" from "Resend said no" for the throttle. */
+class AlertTimeoutError extends Error {}
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
   return Promise.race([
     promise,
     new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms);
+      timer = setTimeout(() => reject(new AlertTimeoutError(`timed out after ${ms}ms`)), ms);
     }),
   ]).finally(() => clearTimeout(timer)) as Promise<T>;
 }
