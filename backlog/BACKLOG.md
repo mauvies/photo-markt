@@ -11,8 +11,8 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-248 | Un evento con precio puede publicarse sin cuenta de cobro — 228 fotos vendibles que nadie puede cobrar | — | todo |
-| 2 | P1 | T-249 | Una venta que se salta la transferencia al fotógrafo no avisa a nadie | — | todo |
+| 1 | P1 | T-249 | Una venta que se salta la transferencia al fotógrafo no avisa a nadie | — | todo |
+| 2 | P2 | T-250 | El fotógrafo que no entra al dashboard no se entera de que tiene dinero esperando | Dep T-248 | todo |
 | 3 | P2 | T-232 | La edición de portada existe pero es inalcanzable desde los tabs del evento | — | todo |
 | 4 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | — | todo |
 | 5 | P2 | T-219 | Podar el esquema muerto (`payment_accounts`, `ai_search_profiles`, columnas fantasma, `profiles.is_admin`) | — | todo |
@@ -78,6 +78,29 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-248** · Fix/Pagos (P1): se podía **publicar y poner precio a un evento sin cuenta de cobro
+  conectada** y el producto no lo decía en ningún sitio. Al ejecutarlo se descubrió que la consecuencia
+  era **peor** de lo que suponía el ticket: los dos checkouts devolvían `photographer_not_connected`, así
+  que esos eventos **no se podían comprar** — 5 de los 6 con precio en producción. Ante eso el usuario
+  decidió lo contrario de lo asumido: **que la venta sí ocurra**. ⚠️ **Y el destino ya estaba
+  construido:** T-216 dejó lista la ruta entera — el webhook abre la fila `payouts` con
+  `hold_reason='connect_inactive'` y `retry-pending-payouts` la drena en cuanto `account.updated` marca
+  la cuenta activa. El gate era **anterior** a T-216 y era lo único que impedía usar esa maquinaria;
+  además leía el estado **cacheado**, así que un `pending` de un webhook rezagado bloqueaba las ventas
+  de una cuenta que funcionaba. `photographer_not_connected` se **borra**, no se deja sin usar: un
+  código inalcanzable invita a resucitar el rechazo por accidente. Al comprador **no se le dice nada**
+  — su compra es correcta y completa, y el estado de Connect del fotógrafo no le da nada accionable.
+  El aviso va al fotógrafo y **en proporción**, decidido en un solo sitio
+  (`src/lib/payouts/payout-readiness.ts`): rojo solo cuando hay dinero de verdad retenido
+  (`money_held`, con la cifra de `getTotalPendingPayouts` — la misma que ya usa Ganancias, para que no
+  puedan discrepar), ámbar cuando aún es un pronóstico (`sales_will_hold`), porque vestir un
+  pronóstico de rojo enseña a ignorar el rojo. Consecuencia a saber: `connect_inactive` deja de ser un
+  caso casi imposible y pasa a ser **la vía normal** por la que nace un hold — el worker de reintentos
+  deja de ser un rescate y pasa a ser cómo se completa una venta corriente. Riesgo aceptado: se retiene
+  dinero de quien quizá nunca conecte, sin reembolso automático (el comprador ya tiene sus fotos).
+  Hueco diferido: quien no entra al dashboard no ve nada — hace falta email, capturado aparte.
+  Sin migración; el rollback es revertir, y los holds creados entretanto siguen siendo válidos — PR #305
 
 - **T-247** · Refactor/Pagos (P2): la pestaña de pagos había acumulado **cuatro cifras, y dos no eran
   saldos**. «Pendiente de enviar» vale €0 en toda cuenta sana —no es una fase por la que pase el dinero,

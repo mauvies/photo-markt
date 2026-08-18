@@ -1,4 +1,6 @@
 import { DashboardHeader } from '@/components/dashboard-header';
+import { countPricedEvents } from '@/database/queries/events';
+import { getTotalPendingPayouts } from '@/database/queries/payouts';
 import { getProfile } from '@/database/queries/profiles';
 import { createClient } from '@/database/server';
 import { requireUser } from '@/lib/auth/require-user';
@@ -32,7 +34,21 @@ export default async function PhotographerDashboardPage({
   const { checkout } = await searchParams;
   const [supabase, dict] = await Promise.all([createClient(), getDictionary(lang as Locale)]);
 
-  const [data, profile] = await Promise.all([getDashboardData(), getProfile(supabase, user.id)]);
+  const [data, profile, pricedEventCount, heldCents] = await Promise.all([
+    getDashboardData(),
+    getProfile(supabase, user.id),
+    // T-248: what is at stake if this photographer can't be paid. Priced events
+    // are the forecast (their sales will be held); `heldCents` is the fact —
+    // money already earned and stuck. The same query feeds the Earnings alert,
+    // so the two surfaces can't quote different amounts for the same money.
+    //
+    // Both throw on a query error, and both feed a BANNER. Letting that reject
+    // would take the whole photographer dashboard down to render a warning
+    // strip, so each degrades to 0 instead: the banner silently softens (or
+    // disappears) while the page it sits on keeps working.
+    countPricedEvents(supabase, user.id).catch(() => 0),
+    getTotalPendingPayouts(supabase, user.id).catch(() => 0),
+  ]);
 
   const storedStatus = (profile?.stripe_connect_status ?? 'not_connected') as StripeConnectStatus;
   // Reconcile a stale cached status (e.g. a `pending` left behind by a
@@ -75,11 +91,16 @@ export default async function PhotographerDashboardPage({
       <StripeConnectBanner
         status={connectStatus}
         lang={lang}
+        pricedEventCount={pricedEventCount}
+        heldCents={heldCents}
         t={{
           connectAccount: dict.stripeConnect.banner.connectAccount,
           pendingReview: dict.stripeConnect.banner.pendingReview,
           actionRequired: dict.stripeConnect.banner.actionRequired,
           goToPayoutProfile: dict.stripeConnect.banner.goToPayoutProfile,
+          salesWillHoldOne: dict.stripeConnect.banner.salesWillHoldOne,
+          salesWillHoldMany: dict.stripeConnect.banner.salesWillHoldMany,
+          moneyHeld: dict.stripeConnect.banner.moneyHeld,
         }}
       />
       <div className="flex flex-1 flex-col gap-4">

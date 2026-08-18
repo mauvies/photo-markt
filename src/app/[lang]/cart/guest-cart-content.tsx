@@ -143,7 +143,6 @@ export function GuestCartContent() {
     viewEvent: string;
     viewPhotographer: string;
     itemsUnavailableRemoved: string;
-    checkoutPhotographerNotConnected: string;
     checkoutRateLimited: string;
     withdrawalConsentLabel: string;
     withdrawalConsentRequired: string;

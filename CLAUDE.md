@@ -575,6 +575,28 @@ law is mandatory and cannot be waived by contract — so the consent is collecte
 - Photo Markt absorbs the Stripe Connect fee (0.5%) — photographer always receives exactly their promised net amount
 - Transfers fire per order, synchronously in the `payment_intent.succeeded` webhook handler — there is no cron or minimum threshold (see `ARCHITECTURE.md` §4.3)
 - Sales and earnings share one tabbed page at `/dashboard/photographer/sales/` (`?tab=earnings` selects earnings); `/ventas`, `/ganancias`, `/earnings` are redirect aliases to it
+- **⚠️ NEITHER CHECKOUT LOOKS AT CONNECT STATUS (T-248). Do not re-add that gate.** Selling and being
+  able to receive the money are separate readiness states: a photographer may publish, price and sell
+  before finishing Stripe onboarding, and the webhook records their net as a `connect_inactive` hold
+  that `retry-pending-payouts` drains the moment `account.updated` reports the account active. Both
+  checkouts used to return **`photographer_not_connected`** — that code is **deleted, not unused**, so
+  reinstating the refusal cannot happen by accident. What it cost: a priced event could not be bought
+  at all (5 of 6 priced events in production), the buyer got a dead-end toast, and the photographer's
+  only signal was a buyer asking why nothing worked. It also read the *cached* status, so a `pending`
+  left by a lagged webhook blocked a working account's sales. The buyer is deliberately told **nothing**
+  about the photographer's payout state — their purchase is complete and correct, and the information
+  is not actionable for them.
+- **The photographer is warned instead, in proportion to what is at stake.** One decision point,
+  **`src/lib/payouts/payout-readiness.ts`**, so no two surfaces can disagree. `resolvePayoutReadiness`
+  returns `money_held` (⚠️ **red — earnings are actually stuck**, `heldCents` from
+  `getTotalPendingPayouts`, the same query behind the Earnings alert so the figures cannot diverge),
+  `sales_will_hold` (amber — priced events exist but nothing has sold; a forecast in red trains people
+  to ignore red), `setup_pending` (amber — nothing priced either), or `null` for an active account.
+  `eventEarningsWillBeHeld` is the one-event variant behind the notice the event page renders above its
+  tabs, so it does not depend on which tab is open and outlives the save that caused it. Free events
+  (`null`/`0`) are exempt — they need no account, so warning about one is noise. The warning surfaces
+  (not the checkouts) read the status through `reconcileAndPersistConnectStatus`, never the raw column:
+  a stale `pending` would otherwise tell a working account its money is stuck
 
 ## Shared Components
 

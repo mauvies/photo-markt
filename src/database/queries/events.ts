@@ -118,6 +118,35 @@ export async function getEventsCreatedCount(
 }
 
 /**
+ * How many of the photographer's live events actually charge for photos (T-248).
+ *
+ * Drives the "your sales will be held" escalation: with a non-`active` Connect
+ * account every one of these events still SELLS — the webhook records the
+ * photographer's net as a `connect_inactive` hold instead of transferring it —
+ * so the count is how much revenue is about to pile up unpaid, not a vanity
+ * metric. ⚠️ Neither checkout looks at Connect status (T-248); do not restate
+ * that it does, and do not reinstate it. Soft-deleted events are excluded —
+ * they sell nothing.
+ */
+export async function countPricedEvents(
+  supabase: SupabaseServerClient,
+  userId: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from('events')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .is('deleted_at', null)
+    .gt('price_per_photo', 0);
+
+  if (error) {
+    throw new Error(`Failed to count priced events: ${getErrorMessage(error)}`);
+  }
+
+  return count ?? 0;
+}
+
+/**
  * Whether the photographer has ever configured volume pricing on any of their
  * events — a rung ladder (`bundle_tiers`) or an all-photos ceiling
  * (`bundle_all_photos_cents`). T-205: it decides whether the Sales and Earnings

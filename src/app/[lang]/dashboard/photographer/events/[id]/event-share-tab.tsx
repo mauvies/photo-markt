@@ -80,7 +80,7 @@ export function EventShareTab({ eventName, shareUrl, isPublic, labels }: EventSh
       </div>
 
       {!isPublic ? (
-        <p className="mt-3 text-xs text-muted-foreground">{labels.privateNote}</p>
+        <p className="mt-2 text-xs text-muted-foreground">{labels.privateNote}</p>
       ) : null}
     </div>
   );

@@ -245,19 +245,21 @@ describe('CartContent — typed checkout failure (T-189 / T-117)', () => {
     await waitFor(() => expect(getCurrentCartMock).toHaveBeenCalled());
   });
 
-  it('shows the localized reason and does NOT refetch on photographer_not_connected', async () => {
+  // Was `photographer_not_connected` until that code was retired — an unpayable
+  // photographer no longer blocks the sale, the money is held instead. The
+  // property under test is unchanged: any error that did NOT mutate the cart
+  // server-side must not trigger a refetch.
+  it('shows the localized reason and does NOT refetch on rate_limited', async () => {
     createCheckoutSessionActionMock.mockResolvedValue({
       ok: false,
-      error: 'photographer_not_connected',
+      error: 'rate_limited',
     });
 
     renderCart();
     tickWithdrawalConsent();
     fireEvent.click(screen.getAllByText('proceedToCheckout')[0]);
 
-    await waitFor(() =>
-      expect(toastMock.error).toHaveBeenCalledWith('checkoutPhotographerNotConnected'),
-    );
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('checkoutRateLimited'));
     // No server-side cart mutation → no needless refetch (getCurrentCart stays
     // pinned to initialData, never invoked).
     expect(getCurrentCartMock).not.toHaveBeenCalled();

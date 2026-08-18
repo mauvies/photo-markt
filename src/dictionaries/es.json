@@ -311,7 +311,6 @@
     "bundleNextTierMany": "Añade {n} fotos más de este evento y paga {price} por {total}.",
     "cartRestored": "Tu carrito ha sido recuperado",
     "itemsUnavailableRemoved": "Uno o más artículos de tu carrito ya no están disponibles y fueron eliminados.",
-    "checkoutPhotographerNotConnected": "Uno o más fotógrafos en tu carrito aún no han configurado sus pagos, así que sus fotos no se pueden comprar por ahora. Por favor intenta más tarde.",
     "checkoutRateLimited": "Demasiados intentos de pago. Espera un momento e inténtalo de nuevo."
   },
   "signup": {
@@ -1364,6 +1363,10 @@
       "connectAccount": "Conecta tu cuenta bancaria para empezar a vender fotos y recibir pagos.",
       "pendingReview": "Tu cuenta de Stripe está en revisión. Los pagos se habilitarán cuando sea aprobada.",
       "actionRequired": "Se requiere acción en tu cuenta de Stripe. Actualiza tu configuración de pagos para continuar vendiendo.",
+      "salesWillHoldOne": "Tienes 1 evento a la venta y todav\u00eda no puedes cobrar. Se puede comprar con normalidad, pero tu dinero quedar\u00e1 guardado hasta que tu cuenta de cobro est\u00e9 lista.",
+      "salesWillHoldMany": "Tienes {count} eventos a la venta y todav\u00eda no puedes cobrar. Se pueden comprar con normalidad, pero tu dinero quedar\u00e1 guardado hasta que tu cuenta de cobro est\u00e9 lista.",
+      "moneyHeld": "Tienes {amount} esperando. Es dinero que ya has ganado: te lo enviamos autom\u00e1ticamente en cuanto tu cuenta de cobro est\u00e9 lista.",
+      "eventSalesHeld": "Este evento tiene precio y todav\u00eda no puedes cobrar. Se puede comprar con normalidad, pero tu dinero quedar\u00e1 guardado hasta que tu cuenta de cobro est\u00e9 lista.",
       "goToPayoutProfile": "Ir a configuración de pagos"
     },
     "sales": {
@@ -1559,7 +1562,7 @@
     },
     "gatedPanel": {
       "searchTitle": "Encuentra tus fotos",
-      "searchDescription": "La galería de este evento no es pública: cada foto solo se muestra a quien aparece en ella. Sácate una selfie y te mostraremos todas las fotos en las que sales.",
+      "searchDescription": "Esta galería es privada. Tómate o sube una selfie a continuación para encontrar tus fotos.",
       "searchCta": "Buscar mis fotos",
       "photoCount": "{count} fotos en este evento",
       "privacyNote": "Tu selfie solo se usa para encontrar tus fotos. No se guarda ni se comparte.",

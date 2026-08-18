@@ -2,8 +2,8 @@
  * Typed checkout error codes (T-189).
  *
  * The cart checkout Server Actions used to `throw new Error(localizedMessage)`
- * for expected, user-facing failures (photographer not payout-ready, rate
- * limited, items no longer available, empty cart). Next.js **redacts** thrown
+ * for expected, user-facing failures (rate limited, items no longer available,
+ * empty cart). Next.js **redacts** thrown
  * Server Action messages in production — the client only sees a generic
  * "An error occurred" — so the buyer never learned *why* checkout was blocked
  * (the reported symptom). Instead of throwing, the actions now RETURN a
@@ -16,8 +16,12 @@
  * `'use server'` code into the client bundle.
  */
 
+// ⚠️ `photographer_not_connected` used to live here. It is gone, not merely
+// unused: a photographer who cannot yet receive money no longer blocks the sale
+// — the webhook records their net as a `connect_inactive` hold and the retry
+// worker pays it on activation. Leaving the code in place would invite a future
+// caller to reinstate a refusal the product deliberately dropped.
 export type CheckoutErrorCode =
-  | 'photographer_not_connected'
   | 'items_unavailable'
   | 'rate_limited'
   | 'cart_empty'
@@ -35,7 +39,6 @@ export type CheckoutResult = { ok: true; url: string } | { ok: false; error: Che
  * client's translation shape.
  */
 export type CartCheckoutMessageKey =
-  | 'checkoutPhotographerNotConnected'
   | 'itemsUnavailableRemoved'
   | 'checkoutRateLimited'
   | 'empty'
@@ -43,8 +46,6 @@ export type CartCheckoutMessageKey =
 
 export function checkoutErrorMessageKey(code: CheckoutErrorCode): CartCheckoutMessageKey {
   switch (code) {
-    case 'photographer_not_connected':
-      return 'checkoutPhotographerNotConnected';
     case 'items_unavailable':
       return 'itemsUnavailableRemoved';
     case 'rate_limited':

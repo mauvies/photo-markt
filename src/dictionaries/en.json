@@ -311,7 +311,6 @@
     "bundleNextTierMany": "Add {n} more photos from this event and pay {price} for {total}.",
     "cartRestored": "Your cart has been restored",
     "itemsUnavailableRemoved": "One or more items in your cart are no longer available and were removed.",
-    "checkoutPhotographerNotConnected": "One or more photographers in your cart have not set up payouts yet, so their photos can't be purchased right now. Please try again later.",
     "checkoutRateLimited": "Too many checkout attempts. Please wait a bit and try again."
   },
   "signup": {
@@ -1364,6 +1363,10 @@
       "connectAccount": "Connect your bank account to start selling photos and receiving payouts.",
       "pendingReview": "Your Stripe account is under review. Payouts will be enabled once approved.",
       "actionRequired": "Action required on your Stripe account. Update your payout settings to continue selling.",
+      "salesWillHoldOne": "You have 1 event on sale and can't be paid yet. It sells normally, but your money is held until your payout account is ready.",
+      "salesWillHoldMany": "You have {count} events on sale and can't be paid yet. They sell normally, but your money is held until your payout account is ready.",
+      "moneyHeld": "You have {amount} waiting. It's money you've already earned \u2014 we'll send it automatically as soon as your payout account is ready.",
+      "eventSalesHeld": "This event has a price and you can't be paid yet. It sells normally, but your money is held until your payout account is ready.",
       "goToPayoutProfile": "Go to payout settings"
     },
     "sales": {
@@ -1559,7 +1562,7 @@
     },
     "gatedPanel": {
       "searchTitle": "Find your photos",
-      "searchDescription": "This event's gallery isn't public: each photo is shown only to the person in it. Take a selfie and we'll show you every photo you appear in.",
+      "searchDescription": "This gallery is private. Take or upload a selfie below to find your photos.",
       "searchCta": "Search my photos",
       "photoCount": "{count} photos in this event",
       "privacyNote": "Your selfie is only used to find your photos. It's never stored or shared.",
