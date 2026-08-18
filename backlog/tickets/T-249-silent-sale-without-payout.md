@@ -1,7 +1,7 @@
 # T-249 · Una venta que se salta la transferencia al fotógrafo no avisa a nadie
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** alto  (pagos)
 - **Blockers:** ninguno
 - **Rama:** `fix/alert-on-sale-without-payout`  (tipo = fix)

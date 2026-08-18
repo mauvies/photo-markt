@@ -366,6 +366,41 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
 - **Only sub-50¢ rows are batched.** Anything that clears the minimum alone transfers individually with `source_transaction`, which both guarantees funding and lets Stripe refuse an over-draw — a double-pay guard that never expires, unlike the 24h key. Batching is grouped `(photographer, currency)` and drops `source_transaction` (Stripe allows one source charge per transfer), so it draws on the *platform* balance; that's tolerable only because those amounts are tiny. Single calc point: `splitPayableRows` in **`src/lib/payouts/batching.ts`**.
 - ⚠️ **The retry worker only considers rows with BOTH `hold_reason` and `stripe_charge_id` set.** That is a security filter: `pending` predates T-216 and an RLS policy used to let photographers INSERT their own rows, which a paying worker would turn into theft.
 - **`payouts` is photographer-read / service-role-write.** The INSERT and pending→cancelled UPDATE policies were dropped in `20260807000000` for exactly that reason; `createPayout` is dead code. Pinned by `test/integration/security/payouts-rls.test.ts`.
+- ⚠️ **The ledger's `try/catch` + `continue` is correct, and that is exactly why it must alert
+  (T-249).** A failure there must not throw — a 500 makes Stripe redeliver a payment we may already
+  have made — so the failure is invisible by construction unless something surfaces it. It already
+  cost a real sale: 2026-07-28, €0.99, `completed` with **zero `payouts` rows**, unnoticed for
+  thirteen days. **Every** exit that can complete an order without paying now calls
+  **`reportMoneyIncident`** (`src/lib/observability/report-money-incident.ts`) with
+  `kind: 'payout-not-recorded'` — two inside `createTransfersForOrderItems` and three *before* it,
+  which are the quieter ones because they never open a row at all:
+  - `openPayoutRow` throws — no debt, no transfer, no trace.
+  - `createTransfer` throws **and** `holdPayoutRow` throws too, which strands the row `processing`
+    with no `transfer_batch_id` — a state **neither** recovery selector picks up (`listPayableHolds`
+    needs `pending` + a `hold_reason`, `listStaleProcessingBatches` needs a batch id), so the debt is
+    real, recorded and permanently unpayable.
+  - ⚠️ **the `order_items` read errors** — this one used to discard its `error`, fall back to `[]`,
+    and no-op the transfer loop on the empty list, logging *nothing whatsoever*. It is the best
+    candidate for the 2026-07-28 incident, and the failure class is not hypothetical: T-239 was a
+    schema-cache error on this same table.
+  - no `chargeId` on the payment intent (authenticated **and** guest), and the guest path's
+    catch-all — which is wider than the authenticated one, since it also wraps the PaymentIntent
+    retrieve, the Connect/plan lookups and the status reconcile.
+
+  The alert changes **nothing** about the flow: same `continue`, same 200. The reporter is
+  shared with the parked T-215/PR #290 branch (rescued from it rather than rewritten, so the two can't
+  diverge) and obeys two absolutes — it **never throws**, and it **never carries buyer PII** (ids and
+  amounts only; `sendDefaultPii: false` is set globally). Two channels: `console.error` + Sentry always
+  (fingerprinted on `kind`, so ids in the message don't shard the issue), plus an ops email when
+  `MONEY_ALERT_EMAIL` is set. Only the **email** is throttled (per-process 60 s, the `rate-limit.ts`
+  precedent) — Sentry groups by fingerprint, but email doesn't, and one DB outage fires the catch once
+  per photographer per order. That throttle is keyed **per `kind`** (a payout alert must not silence a
+  dispute alert — different incidents, not duplicates) and is **released when the send fails**, so a
+  transient Resend error can't suppress the retry. ⚠️ `resend.emails.send` resolves `{ data, error }`
+  and does **not** throw, so `sendMoneyAlertEmail` checks `error` and throws: without that, the one
+  channel whose whole job is not being silent fails silently. The send is also bounded by a 5 s
+  timeout — it rides inside the webhook, and a hung alert must not push the handler past Stripe's
+  delivery timeout and trigger a redelivery.
 - `charge.refunded` **voids outstanding holds** for that charge (a stranded hold used to be accidentally protected *by* being stranded). Refunds still do **not** auto-reverse a transfer already made — T-215. `/api/admin/payouts/[id]` now refuses ledger-managed rows; its future is T-220. See `ARCHITECTURE.md` §4.3
 
 **ai_search_profiles** (legacy — unused)
@@ -845,6 +880,9 @@ REKOGNITION_COLLECTION_PREFIX=       # default "photomarkt"; namespace per env
 FACE_SEARCH_GLOBAL_DAILY_CALLS=      # global/day circuit breaker, default 2000 (~$2/day)
 FACE_SEARCH_EVENT_DAILY_CALLS=       # per-event/day cap, default 1000
 FACE_SEARCH_ALERT_EMAIL=             # 50%-of-global alert recipient; absent ⇒ no alert
+
+# Money incidents (T-249)
+MONEY_ALERT_EMAIL=                   # ops recipient for reportMoneyIncident; absent ⇒ log + Sentry only
 
 # Reveal gate (T-177)
 REVEAL_TOKEN_SECRET=                 # optional; falls back to the service-role key

@@ -44,6 +44,27 @@ vi.mock('@/lib/inngest/client', () => ({
   inngest: { send: vi.fn(async () => ({ ids: [] })) },
 }));
 
+// T-249: the ledger writes stay REAL for every other test in this file —
+// wrapping the actual implementations in `vi.fn` lets the two silent-failure
+// tests force a throw with `mockRejectedValueOnce` without changing behaviour
+// anywhere else.
+vi.mock('@/database/queries/payouts', async () => {
+  const actual = await vi.importActual<typeof import('@/database/queries/payouts')>(
+    '@/database/queries/payouts',
+  );
+  return {
+    ...actual,
+    openPayoutRow: vi.fn(actual.openPayoutRow),
+    holdPayoutRow: vi.fn(actual.holdPayoutRow),
+  };
+});
+
+// T-249: the alert channel itself is unit-tested; here we only assert that the
+// webhook reaches it, so a stub is enough (and keeps Sentry/Resend out of it).
+vi.mock('@/lib/observability/report-money-incident', () => ({
+  reportMoneyIncident: vi.fn(async () => undefined),
+}));
+
 // Mock Resend so neither purchase path tries to send real email.
 vi.mock('@/lib/email/send-guest-purchase-email', () => ({
   sendGuestPurchaseEmail: vi.fn(async () => undefined),
@@ -1588,5 +1609,385 @@ describe('app/api/stripe/webhook — payout ledger (T-216)', () => {
       .eq('photographer_id', photographer.id)
       .single();
     expect(after?.status).toBe('cancelled');
+  });
+});
+
+/**
+ * A sale that skips the photographer's transfer must not do so silently (T-249).
+ *
+ * The payout ledger is wrapped in `try/catch` + `continue` on purpose — the
+ * buyer has already paid, so throwing would make Stripe redeliver a money
+ * operation. The cost of that discipline was invisibility: a real sale on
+ * 2026-07-28 completed with zero `payouts` rows and nobody knew for thirteen
+ * days. These tests pin that the failure now reports, and that reporting it
+ * changed nothing else — same 200, same `continue`.
+ */
+describe('app/api/stripe/webhook — silent payout failures are reported (T-249)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    vi.clearAllMocks();
+  });
+
+  async function seedPayableOrder(paymentIntentId: string) {
+    const sb = createServiceClient();
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(photographer.id);
+    const photo = await createTestPhoto(event.id);
+    const talent = await createTestUser('TALENT');
+
+    await sb
+      .from('profiles')
+      .update({ stripe_connect_account_id: 'acct_test', stripe_connect_status: 'active' })
+      .eq('id', photographer.id);
+
+    const { data: order } = await sb
+      .from('orders')
+      .insert({
+        user_id: talent.id,
+        status: 'pending',
+        total_amount_cents: 500,
+        currency: 'eur',
+        stripe_payment_intent_id: paymentIntentId,
+      })
+      .select('id')
+      .single();
+    if (!order) throw new Error('order seed failed');
+
+    await sb.from('order_items').insert({
+      order_id: order.id,
+      photo_id: photo.id,
+      photographer_id: photographer.id,
+      unit_price_cents: 500,
+      total_price_cents: 500,
+    });
+
+    return { sb, photographer, order };
+  }
+
+  function paymentSucceeded(paymentIntentId: string, chargeId: string) {
+    return signedWebhookRequest({
+      id: `evt_${paymentIntentId}`,
+      type: 'payment_intent.succeeded',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: paymentIntentId,
+          object: 'payment_intent',
+          latest_charge: chargeId,
+          amount: 500,
+        },
+      },
+    });
+  }
+
+  it('reports the incident — and still returns 200 — when the ledger row cannot be opened', async () => {
+    const { sb, photographer } = await seedPayableOrder('pi_ledger_down');
+
+    const { openPayoutRow } = await import('@/database/queries/payouts');
+    vi.mocked(openPayoutRow).mockRejectedValueOnce(new Error('supabase is down'));
+
+    const res = await POST(paymentSucceeded('pi_ledger_down', 'ch_ledger_down'));
+
+    // The 200 is the whole point of the catch: a 500 makes Stripe redeliver a
+    // payment we may already have made. The alert must not change that.
+    expect(res.status).toBe(200);
+
+    const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+    expect(vi.mocked(reportMoneyIncident)).toHaveBeenCalledTimes(1);
+
+    const incident = vi.mocked(reportMoneyIncident).mock.calls[0]?.[0];
+    expect(incident?.kind).toBe('payout-not-recorded');
+    expect(incident?.context).toMatchObject({
+      photographerId: photographer.id,
+      chargeId: 'ch_ledger_down',
+      netCents: 460,
+      currency: 'eur',
+    });
+
+    // Nothing was transferred and no debt exists — which is exactly why the
+    // alert is the only trace, and why it has to fire.
+    const { createTransfer } = await import('@/lib/stripe/connect');
+    expect(vi.mocked(createTransfer)).not.toHaveBeenCalled();
+    const { data: payouts } = await sb
+      .from('payouts')
+      .select('id')
+      .eq('photographer_id', photographer.id);
+    expect(payouts).toHaveLength(0);
+  });
+
+  it('reports the incident when a failed transfer cannot even be parked as a hold', async () => {
+    const { sb, photographer } = await seedPayableOrder('pi_hold_down');
+
+    const { createTransfer } = await import('@/lib/stripe/connect');
+    vi.mocked(createTransfer).mockRejectedValueOnce(new Error('stripe is down'));
+    const { holdPayoutRow } = await import('@/database/queries/payouts');
+    vi.mocked(holdPayoutRow).mockRejectedValueOnce(new Error('supabase is down'));
+
+    expect((await POST(paymentSucceeded('pi_hold_down', 'ch_hold_down'))).status).toBe(200);
+
+    const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+    expect(vi.mocked(reportMoneyIncident)).toHaveBeenCalledTimes(1);
+    const incident = vi.mocked(reportMoneyIncident).mock.calls[0]?.[0];
+    expect(incident?.kind).toBe('payout-not-recorded');
+    expect(incident?.context).toMatchObject({ photographerId: photographer.id });
+
+    // The row survives the failure, and THAT is the problem being alerted on:
+    // stranded `processing` with no batch id is invisible to both recovery
+    // selectors, so without the alert this debt is never paid and never seen.
+    const { data: payouts } = await sb
+      .from('payouts')
+      .select('id, status, hold_reason, transfer_batch_id')
+      .eq('photographer_id', photographer.id);
+    expect(payouts).toHaveLength(1);
+    expect(payouts?.[0]?.status).toBe('processing');
+    expect(payouts?.[0]?.transfer_batch_id).toBeNull();
+
+    // Prove the gap rather than asserting it from the schema: neither selector
+    // returns this row.
+    const { listPayableHolds, listStaleProcessingBatches } = await import(
+      '@/database/queries/payouts'
+    );
+    const payable = await listPayableHolds(sb, 50);
+    expect(payable.map((r) => r.id)).not.toContain(payouts?.[0]?.id);
+    const stale = await listStaleProcessingBatches(sb, new Date(Date.now() + 60_000).toISOString());
+    expect(stale.map((r) => r.id)).not.toContain(payouts?.[0]?.id);
+  });
+
+  it('carries no buyer PII into the alert', async () => {
+    await seedPayableOrder('pi_pii');
+
+    const { openPayoutRow } = await import('@/database/queries/payouts');
+    vi.mocked(openPayoutRow).mockRejectedValueOnce(new Error('supabase is down'));
+
+    await POST(paymentSucceeded('pi_pii', 'ch_pii'));
+
+    const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+    // Assert the call happened before inspecting it — otherwise an absent
+    // report would satisfy every "does not contain" check below vacuously.
+    expect(vi.mocked(reportMoneyIncident)).toHaveBeenCalledTimes(1);
+    const incident = vi.mocked(reportMoneyIncident).mock.calls[0]?.[0];
+    expect(incident?.context).toBeDefined();
+
+    // Ids and amounts are fine; anything identifying the buyer is not. The app
+    // runs `sendDefaultPii: false` (src/lib/observability/sentry.ts) and this
+    // keeps the manual capture honest too.
+    const keys = Object.keys(incident?.context ?? {});
+    expect(keys).not.toContain('email');
+    expect(keys).not.toContain('buyerEmail');
+    expect(keys).not.toContain('name');
+    expect(keys).not.toContain('userId');
+    const serialized = JSON.stringify(incident?.context ?? {});
+    expect(serialized).not.toMatch(/@/);
+  });
+
+  it('does not alert on the happy path', async () => {
+    await seedPayableOrder('pi_quiet');
+
+    expect((await POST(paymentSucceeded('pi_quiet', 'ch_quiet'))).status).toBe(200);
+
+    const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+    expect(vi.mocked(reportMoneyIncident)).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The same money loss, reached by the paths that did not even open a ledger row
+ * (T-249, found by review). Each of these completes an order, pays nobody, and
+ * before this change said nothing at all — which is a worse failure than the one
+ * the ticket started from, because there is not even a `payouts` row to audit.
+ */
+describe('app/api/stripe/webhook — pre-ledger silent losses are reported (T-249)', () => {
+  let restore: (() => void) | null = null;
+
+  beforeEach(async () => {
+    await resetDatabase();
+    vi.clearAllMocks();
+    restore = null;
+  });
+
+  afterEach(() => {
+    restore?.();
+    restore = null;
+  });
+
+  async function seedOrder(paymentIntentId: string) {
+    const sb = createServiceClient();
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    const event = await createTestEvent(photographer.id);
+    const photo = await createTestPhoto(event.id);
+    const talent = await createTestUser('TALENT');
+
+    await sb
+      .from('profiles')
+      .update({ stripe_connect_account_id: 'acct_test', stripe_connect_status: 'active' })
+      .eq('id', photographer.id);
+
+    const { data: order } = await sb
+      .from('orders')
+      .insert({
+        user_id: talent.id,
+        status: 'pending',
+        total_amount_cents: 500,
+        currency: 'eur',
+        stripe_payment_intent_id: paymentIntentId,
+      })
+      .select('id')
+      .single();
+    if (!order) throw new Error('order seed failed');
+
+    await sb.from('order_items').insert({
+      order_id: order.id,
+      photo_id: photo.id,
+      photographer_id: photographer.id,
+      unit_price_cents: 500,
+      total_price_cents: 500,
+    });
+
+    return { sb, photographer, order };
+  }
+
+  it('reports when the payment intent carries no charge id', async () => {
+    const { order } = await seedOrder('pi_no_charge');
+
+    const res = await POST(
+      signedWebhookRequest({
+        id: 'evt_no_charge',
+        type: 'payment_intent.succeeded',
+        created: Math.floor(Date.now() / 1000),
+        data: {
+          object: {
+            id: 'pi_no_charge',
+            object: 'payment_intent',
+            latest_charge: null,
+            amount: 500,
+          },
+        },
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+    expect(vi.mocked(reportMoneyIncident)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(reportMoneyIncident).mock.calls[0]?.[0]).toMatchObject({
+      kind: 'payout-not-recorded',
+      context: { paymentIntentId: 'pi_no_charge', orderId: order.id },
+    });
+  });
+
+  it('reports when the order items cannot be read at all', async () => {
+    const { sb, photographer, order } = await seedOrder('pi_items_unreadable');
+
+    // The quietest failure of the lot: the read errors, `orderItems` falls back
+    // to `[]`, and the transfer loop no-ops on the empty list. Simulate the
+    // PostgREST failure class T-239 actually hit (a schema-cache error) rather
+    // than asserting it from the shape of the code.
+    const { supabaseAdmin } = await import('@/database/supabase-admin');
+    const realFrom = supabaseAdmin.from.bind(supabaseAdmin);
+    const spy = vi
+      .spyOn(supabaseAdmin, 'from')
+      .mockImplementation((table: Parameters<typeof supabaseAdmin.from>[0]) => {
+        if (table !== 'order_items') return realFrom(table);
+        return {
+          select: () => ({
+            eq: async () => ({
+              data: null,
+              error: { code: 'PGRST002', message: 'Could not query the database for the schema' },
+            }),
+          }),
+        } as unknown as ReturnType<typeof supabaseAdmin.from>;
+      });
+    restore = () => spy.mockRestore();
+
+    const res = await POST(
+      signedWebhookRequest({
+        id: 'evt_items_unreadable',
+        type: 'payment_intent.succeeded',
+        created: Math.floor(Date.now() / 1000),
+        data: {
+          object: {
+            id: 'pi_items_unreadable',
+            object: 'payment_intent',
+            latest_charge: 'ch_items_unreadable',
+            amount: 500,
+          },
+        },
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+    expect(vi.mocked(reportMoneyIncident)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(reportMoneyIncident).mock.calls[0]?.[0]).toMatchObject({
+      kind: 'payout-not-recorded',
+      context: { orderId: order.id, chargeId: 'ch_items_unreadable' },
+    });
+
+    spy.mockRestore();
+    const { data: payouts } = await sb
+      .from('payouts')
+      .select('id')
+      .eq('photographer_id', photographer.id);
+    expect(payouts).toHaveLength(0);
+  });
+
+  it('reports when the guest transfer path throws before opening a row', async () => {
+    const sb = createServiceClient();
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    await sb
+      .from('profiles')
+      .update({ stripe_connect_account_id: 'acct_g', stripe_connect_status: 'active' })
+      .eq('id', photographer.id);
+    const event = await createTestEvent(photographer.id);
+    const photo = await createTestPhoto(event.id);
+
+    // This catch is wider than the authenticated one — it also wraps the
+    // PaymentIntent retrieve, so make that the thing that fails.
+    const { stripe: routeStripe } = await import('@/lib/stripe/config');
+    const spy = vi
+      .spyOn(routeStripe.paymentIntents, 'retrieve')
+      .mockRejectedValue(new Error('stripe is down'));
+    restore = () => spy.mockRestore();
+
+    const res = await POST(
+      signedWebhookRequest({
+        id: 'evt_guest_transfer_throws',
+        type: 'checkout.session.completed',
+        created: Math.floor(Date.now() / 1000),
+        data: {
+          object: {
+            id: 'cs_guest_throws',
+            object: 'checkout.session',
+            mode: 'payment',
+            customer: null,
+            customer_email: 'guest@photomarkt.test',
+            customer_details: { email: 'guest@photomarkt.test' },
+            payment_intent: 'pi_guest_throws',
+            amount_total: 500,
+            currency: 'eur',
+            metadata: {
+              is_guest: 'true',
+              cart_count: '1',
+              cart_0: JSON.stringify({ p: photo.id, g: photographer.id, c: 500 }),
+            },
+          },
+        },
+      }),
+    );
+    // The guest order is still created and the buyer still gets their photos —
+    // only the photographer's money went missing, which is why it must alert.
+    expect(res.status).toBe(200);
+
+    const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+    expect(vi.mocked(reportMoneyIncident)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(reportMoneyIncident).mock.calls[0]?.[0]).toMatchObject({
+      kind: 'payout-not-recorded',
+      context: { paymentIntentId: 'pi_guest_throws' },
+    });
+
+    const { count } = await sb
+      .from('guest_orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('stripe_checkout_session_id', 'cs_guest_throws');
+    expect(count).toBe(1);
   });
 });
