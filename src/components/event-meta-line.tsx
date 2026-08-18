@@ -79,7 +79,11 @@ export function EventMetaLine({
   const showPrice = pricePerPhoto != null && !hasBundleSchedule;
 
   return (
-    <div className={cn('text-sm leading-relaxed text-muted-foreground', className)}>
+    // `mt-1` is a BASE class, not a caller's job: all three call sites (public
+    // event page, photographer event page, talent event view) render this
+    // directly under an <h1> with no `space-y-*` on the parent, so a caller
+    // that forgets the margin butts the meta line against the title.
+    <div className={cn('mt-1 text-sm leading-relaxed text-muted-foreground', className)}>
       {formattedDate}
       {formattedTime ? <> • {formattedTime}</> : null}
       {formattedCity ? <> • {formattedCity}</> : null}

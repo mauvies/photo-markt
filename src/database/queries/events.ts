@@ -120,10 +120,13 @@ export async function getEventsCreatedCount(
 /**
  * How many of the photographer's live events actually charge for photos (T-248).
  *
- * Drives the "you have events for sale and cannot be paid" escalation: with a
- * non-`active` Connect account every one of these events is refused at
- * checkout, so the count is the size of the problem, not a vanity metric.
- * Soft-deleted events are excluded — they sell nothing.
+ * Drives the "your sales will be held" escalation: with a non-`active` Connect
+ * account every one of these events still SELLS — the webhook records the
+ * photographer's net as a `connect_inactive` hold instead of transferring it —
+ * so the count is how much revenue is about to pile up unpaid, not a vanity
+ * metric. ⚠️ Neither checkout looks at Connect status (T-248); do not restate
+ * that it does, and do not reinstate it. Soft-deleted events are excluded —
+ * they sell nothing.
  */
 export async function countPricedEvents(
   supabase: SupabaseServerClient,

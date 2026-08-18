@@ -5,6 +5,11 @@
  * the ledger. This pins the escalation, and in particular that only genuinely
  * held money gets the red treatment: a priced event that hasn't sold yet is a
  * forecast, and a red forecast trains the photographer to ignore the colour.
+ *
+ * It also pins that the stake and the Stripe instruction COMPOSE. Replacing the
+ * instruction with the stake told a `restricted` photographer to "connect a
+ * payout account" they had already connected, dropping the only sentence that
+ * said what Stripe was actually waiting for.
  */
 
 import { cleanup, render, screen } from '@testing-library/react';
@@ -60,7 +65,9 @@ describe('StripeConnectBanner', () => {
         t={t}
       />,
     );
-    expect(screen.getByText('3 events on sale; your money will be held.')).toBeTruthy();
+    expect(
+      screen.getByText('3 events on sale; your money will be held. Connect your account.'),
+    ).toBeTruthy();
   });
 
   it('uses the singular copy for exactly one priced event', () => {
@@ -73,7 +80,32 @@ describe('StripeConnectBanner', () => {
         t={t}
       />,
     );
-    expect(screen.getByText('1 event on sale; your money will be held.')).toBeTruthy();
+    expect(screen.getByText(/1 event on sale; your money will be held\./)).toBeTruthy();
+  });
+
+  it('keeps the Stripe instruction when an account exists but cannot receive money', () => {
+    // `restricted` means Stripe wants more documents — telling this photographer
+    // to connect an account they already connected drops the only actionable
+    // sentence. The stake must not evict the instruction.
+    const { container, unmount } = render(
+      <StripeConnectBanner
+        status="restricted"
+        lang="es"
+        pricedEventCount={1}
+        heldCents={0}
+        t={t}
+      />,
+    );
+    expect(container.textContent).toContain('Action required.');
+    expect(container.textContent).not.toContain('Connect your account.');
+    unmount();
+
+    // Same for an account still under review, and for held money.
+    const underReview = render(
+      <StripeConnectBanner status="pending" lang="es" pricedEventCount={0} heldCents={900} t={t} />,
+    );
+    expect(underReview.container.textContent).toContain('You have €9.00 waiting.');
+    expect(underReview.container.textContent).toContain('Under review.');
   });
 
   it('names the formatted amount, and outranks the priced-event forecast, once money is held', () => {
@@ -86,8 +118,8 @@ describe('StripeConnectBanner', () => {
         t={t}
       />,
     );
-    expect(screen.getByText('You have €12.50 waiting.')).toBeTruthy();
-    expect(screen.queryByText('3 events on sale; your money will be held.')).toBeNull();
+    expect(screen.getByText('You have €12.50 waiting. Connect your account.')).toBeTruthy();
+    expect(screen.queryByText(/events on sale/)).toBeNull();
   });
 
   it('always links to the payout settings', () => {

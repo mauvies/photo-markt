@@ -44,22 +44,34 @@ export function StripeConnectBanner({
   });
   if (!readiness) return null;
 
-  let message: string;
+  // What the photographer must actually DO. An account that exists but can't
+  // receive money yet ('pending' review, 'restricted' missing documents) has a
+  // different instruction from one that was never connected — and it is the
+  // only actionable sentence on the strip.
+  const instruction =
+    status === 'pending'
+      ? t.pendingReview
+      : status === 'restricted'
+        ? t.actionRequired
+        : t.connectAccount;
+
+  // The stake (money held / sales that will hold) COMPOSES with the
+  // instruction, never replaces it. Replacing it told a `restricted`
+  // photographer to "connect a payout account" they had already connected,
+  // dropping the one line that said what Stripe was waiting for.
+  let stake: string | null;
   if (readiness === 'money_held') {
-    message = t.moneyHeld.replace('{amount}', formatCents(heldCents));
+    stake = t.moneyHeld.replace('{amount}', formatCents(heldCents));
   } else if (readiness === 'sales_will_hold') {
-    message =
+    stake =
       pricedEventCount === 1
         ? t.salesWillHoldOne
         : t.salesWillHoldMany.replace('{count}', String(pricedEventCount));
   } else {
-    message =
-      status === 'pending'
-        ? t.pendingReview
-        : status === 'restricted'
-          ? t.actionRequired
-          : t.connectAccount;
+    stake = null;
   }
+
+  const message = stake ? `${stake} ${instruction}` : instruction;
 
   return (
     <PayoutAccountAlert

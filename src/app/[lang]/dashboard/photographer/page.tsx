@@ -41,8 +41,13 @@ export default async function PhotographerDashboardPage({
     // are the forecast (their sales will be held); `heldCents` is the fact —
     // money already earned and stuck. The same query feeds the Earnings alert,
     // so the two surfaces can't quote different amounts for the same money.
-    countPricedEvents(supabase, user.id),
-    getTotalPendingPayouts(supabase, user.id),
+    //
+    // Both throw on a query error, and both feed a BANNER. Letting that reject
+    // would take the whole photographer dashboard down to render a warning
+    // strip, so each degrades to 0 instead: the banner silently softens (or
+    // disappears) while the page it sits on keeps working.
+    countPricedEvents(supabase, user.id).catch(() => 0),
+    getTotalPendingPayouts(supabase, user.id).catch(() => 0),
   ]);
 
   const storedStatus = (profile?.stripe_connect_status ?? 'not_connected') as StripeConnectStatus;

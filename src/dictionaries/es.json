@@ -1363,10 +1363,10 @@
       "connectAccount": "Conecta tu cuenta bancaria para empezar a vender fotos y recibir pagos.",
       "pendingReview": "Tu cuenta de Stripe está en revisión. Los pagos se habilitarán cuando sea aprobada.",
       "actionRequired": "Se requiere acción en tu cuenta de Stripe. Actualiza tu configuración de pagos para continuar vendiendo.",
-      "salesWillHoldOne": "Tienes 1 evento a la venta y todav\u00eda no puedes cobrar. Se puede comprar con normalidad, pero tu dinero quedar\u00e1 guardado hasta que conectes tu cuenta de cobro.",
-      "salesWillHoldMany": "Tienes {count} eventos a la venta y todav\u00eda no puedes cobrar. Se pueden comprar con normalidad, pero tu dinero quedar\u00e1 guardado hasta que conectes tu cuenta de cobro.",
-      "moneyHeld": "Tienes {amount} esperando. Es dinero que ya has ganado: conecta tu cuenta de cobro y te lo enviamos autom\u00e1ticamente.",
-      "eventSalesHeld": "Este evento tiene precio y todav\u00eda no puedes cobrar. Se puede comprar con normalidad, pero tu dinero quedar\u00e1 guardado hasta que conectes tu cuenta de cobro.",
+      "salesWillHoldOne": "Tienes 1 evento a la venta y todav\u00eda no puedes cobrar. Se puede comprar con normalidad, pero tu dinero quedar\u00e1 guardado hasta que tu cuenta de cobro est\u00e9 lista.",
+      "salesWillHoldMany": "Tienes {count} eventos a la venta y todav\u00eda no puedes cobrar. Se pueden comprar con normalidad, pero tu dinero quedar\u00e1 guardado hasta que tu cuenta de cobro est\u00e9 lista.",
+      "moneyHeld": "Tienes {amount} esperando. Es dinero que ya has ganado: te lo enviamos autom\u00e1ticamente en cuanto tu cuenta de cobro est\u00e9 lista.",
+      "eventSalesHeld": "Este evento tiene precio y todav\u00eda no puedes cobrar. Se puede comprar con normalidad, pero tu dinero quedar\u00e1 guardado hasta que tu cuenta de cobro est\u00e9 lista.",
       "goToPayoutProfile": "Ir a configuración de pagos"
     },
     "sales": {

@@ -1363,10 +1363,10 @@
       "connectAccount": "Connect your bank account to start selling photos and receiving payouts.",
       "pendingReview": "Your Stripe account is under review. Payouts will be enabled once approved.",
       "actionRequired": "Action required on your Stripe account. Update your payout settings to continue selling.",
-      "salesWillHoldOne": "You have 1 event on sale and can't be paid yet. It sells normally, but your money is held until you connect a payout account.",
-      "salesWillHoldMany": "You have {count} events on sale and can't be paid yet. They sell normally, but your money is held until you connect a payout account.",
-      "moneyHeld": "You have {amount} waiting. It's money you've already earned \u2014 connect your payout account and we'll send it automatically.",
-      "eventSalesHeld": "This event has a price and you can't be paid yet. It sells normally, but your money is held until you connect a payout account.",
+      "salesWillHoldOne": "You have 1 event on sale and can't be paid yet. It sells normally, but your money is held until your payout account is ready.",
+      "salesWillHoldMany": "You have {count} events on sale and can't be paid yet. They sell normally, but your money is held until your payout account is ready.",
+      "moneyHeld": "You have {amount} waiting. It's money you've already earned \u2014 we'll send it automatically as soon as your payout account is ready.",
+      "eventSalesHeld": "This event has a price and you can't be paid yet. It sells normally, but your money is held until your payout account is ready.",
       "goToPayoutProfile": "Go to payout settings"
     },
     "sales": {

@@ -4,10 +4,14 @@ import Link from 'next/link';
 /**
  * Shared "your payout account isn't ready" strip (T-248).
  *
- * `blocked` is used when the photographer already has priced events, i.e. money
- * is being turned away right now — both checkouts refuse those carts. `info` is
- * the ordinary unfinished-setup nudge. One component so the two severities
- * can't drift apart visually between the dashboard and an event page.
+ * `blocked` (red) is used ONLY for `money_held` — earnings that already exist
+ * and are stuck in the ledger. `info` (amber) covers the forecasts: priced
+ * events whose sales will be held, and the plain unfinished-setup nudge.
+ * Dressing a forecast in red teaches the photographer to ignore red.
+ *
+ * ⚠️ No checkout refuses anything over payout state (T-248) — the sale happens
+ * and the money waits. One component so the two severities can't drift apart
+ * visually between the dashboard and an event page.
  */
 export function PayoutAccountAlert({
   severity,
