@@ -205,7 +205,7 @@ export function ScopedEventEditForm({ event, section, labels, bundleT }: ScopedE
         </>
       ) : null}
 
-      <div className="flex justify-end gap-3 border-t pt-4">
+      <div className="flex justify-end gap-3">
         <Button type="button" variant="outline" onClick={() => router.back()} disabled={isPending}>
           {labels.cancel}
         </Button>

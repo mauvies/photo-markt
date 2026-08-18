@@ -187,12 +187,12 @@ function RecentSales({ sales, lang, hasBundlePricing }: RecentSalesProps) {
           T-205: the Amount column is what the buyer was charged, so on a
           bundled sale it is the package price the photographer set — not a
           further deduction. Renders nothing without volume pricing. */}
-      {/* <div className="mt-4 space-y-1"> */}
-      {/* <BuyerFeeNote>{t('buyerFeeNote')}</BuyerFeeNote> */}
-      <BundleDiscountNote hasBundlePricing={hasBundlePricing}>
-        {t('bundleDiscountNote')}
-      </BundleDiscountNote>
-      {/* </div> */}
+      <div className="mt-4">
+        {/* <BuyerFeeNote>{t('buyerFeeNote')}</BuyerFeeNote> */}
+        <BundleDiscountNote hasBundlePricing={hasBundlePricing}>
+          {t('bundleDiscountNote')}
+        </BundleDiscountNote>
+      </div>
     </div>
   );
 }
