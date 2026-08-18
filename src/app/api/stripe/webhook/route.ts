@@ -76,6 +76,7 @@ import { PLATFORM_CURRENCY } from '@/lib/currency';
 import { sendGuestPurchaseEmail } from '@/lib/email/send-guest-purchase-email';
 import { sendPurchaseConfirmationEmail } from '@/lib/email/send-purchase-confirmation-email';
 import { inngest } from '@/lib/inngest/client';
+import { reportMoneyIncident } from '@/lib/observability/report-money-incident';
 import {
   payoutIdempotencyKey,
   payoutTransferGroup,
@@ -160,6 +161,30 @@ async function createTransfersForOrderItems(
     );
   }
 
+  // ⚠️ The loop below walks `connectStatuses`, but the money lives in `totals`.
+  // `getPhotographerConnectStatuses` returns only the `profiles` rows that
+  // exist, so a photographer whose row is missing (or a short read) is money
+  // that never reaches the loop at all — no payout row, no hold, no log (T-249).
+  const unresolved = [...totals.keys()].filter(
+    (id) => !connectStatuses.some((status) => status.id === id),
+  );
+  for (const photographerId of unresolved) {
+    await reportMoneyIncident({
+      kind: 'payout-not-recorded',
+      message:
+        'An order item names a photographer with no resolvable profile, so their share was ' +
+        'never considered for transfer and no debt was recorded.',
+      context: {
+        photographerId,
+        chargeId,
+        orderId,
+        orderKind,
+        grossCents: totals.get(photographerId),
+        currency,
+      },
+    });
+  }
+
   for (const status of connectStatuses) {
     const grossCents = totals.get(status.id) ?? 0;
     if (grossCents === 0) continue;
@@ -210,8 +235,26 @@ async function createTransfersForOrderItems(
       });
     } catch (err) {
       // The buyer has already paid; a ledger failure must not fail the webhook,
-      // or Stripe redelivers and we retry a payment we may have made.
-      console.error(`[payouts] failed to open payout row for photographer ${status.id}:`, err);
+      // or Stripe redelivers and we retry a payment we may have made. That
+      // discipline is right, but it is also what made this silent: without the
+      // row there is no debt, no transfer, and nothing for the retry worker to
+      // find, so the money simply leaves the system (T-249). Alerting is the
+      // only thing that changes here — the `continue` and the 200 both stand.
+      await reportMoneyIncident({
+        kind: 'payout-not-recorded',
+        message:
+          'Could not open the payout ledger row. This sale skipped the transfer entirely and ' +
+          'left no debt for the retry worker to drain — reconcile by hand.',
+        context: {
+          photographerId: status.id,
+          chargeId,
+          orderId,
+          orderKind,
+          netCents,
+          currency,
+        },
+        cause: err,
+      });
       continue;
     }
 
@@ -258,9 +301,29 @@ async function createTransfersForOrderItems(
       // a transfer Stripe did make despite the thrown error is returned rather
       // than duplicated — and once the key expires, the worker's probe catches
       // it instead.
-      await holdPayoutRow(supabaseAdmin, payout.id, 'transfer_failed').catch((holdErr) =>
-        console.error(`[payouts] failed to hold payout ${payout?.id}:`, holdErr),
-      );
+      await holdPayoutRow(supabaseAdmin, payout.id, 'transfer_failed').catch(async (holdErr) => {
+        // Worse than it looks, and the reason this is an alert rather than a log
+        // (T-249): the row stays `processing` with no `transfer_batch_id`, and
+        // NEITHER recovery path picks that up — `listPayableHolds` requires
+        // `pending` + a `hold_reason`, `listStaleProcessingBatches` requires a
+        // batch id. The debt is real, recorded, and permanently invisible.
+        await reportMoneyIncident({
+          kind: 'payout-not-recorded',
+          message:
+            'Transfer failed AND the payout row could not be parked as a hold. It is stranded ' +
+            'in `processing` with no batch id, so no retry path will ever pick it up.',
+          context: {
+            photographerId: status.id,
+            payoutId: payout?.id,
+            chargeId,
+            orderId,
+            orderKind,
+            netCents,
+            currency,
+          },
+          cause: holdErr,
+        });
+      });
     }
   }
 }
@@ -461,10 +524,47 @@ export async function POST(request: Request) {
                   guestOrder.currency,
                   'guest_order',
                 );
+              } else {
+                await reportMoneyIncident({
+                  kind: 'payout-not-recorded',
+                  message:
+                    'No charge id on the guest order payment intent, so no transfer could be ' +
+                    'attempted. The guest order exists and the photographer is owed money.',
+                  context: { paymentIntentId: piId, orderId: guestOrder.id },
+                });
               }
             } catch (transferErr) {
-              console.error('Failed to create transfers for guest order:', transferErr);
+              // A guest sale loses money exactly the same way an authenticated
+              // one does, so it has to be as loud (T-249). This catch is wider
+              // than the authenticated path's — it also covers the PaymentIntent
+              // retrieve, the Connect/plan lookups and the status reconcile —
+              // which is precisely why a bare log here could hide more, not less.
+              //
+              // ⚠️ It must NOT claim nothing was paid. `createTransfersForOrderItems`
+              // can throw part-way through a multi-photographer cart, after
+              // earlier photographers were transferred AND settled. An alert
+              // asserting "nothing was paid" would invite an operator to pay
+              // them a second time — the one outcome this whole ledger exists to
+              // prevent. Say what is certain (it threw) and name the ledger as
+              // the authority on what actually moved.
+              await reportMoneyIncident({
+                kind: 'payout-not-recorded',
+                message:
+                  'The guest order transfer path threw. Some photographers on this order may ' +
+                  'already have been paid and settled before it failed — check the `payouts` ' +
+                  'rows for this charge before reconciling anything by hand.',
+                context: { paymentIntentId: piId, orderId: guestOrder.id },
+                cause: transferErr,
+              });
             }
+          } else {
+            await reportMoneyIncident({
+              kind: 'payout-not-recorded',
+              message:
+                'Guest checkout session carried no payment intent, so no transfer path ran at ' +
+                'all for a recorded guest order.',
+              context: { sessionId: session.id, orderId: guestOrder.id },
+            });
           }
 
           console.log(`Guest order created: ${guestOrder.id} for ${guestEmail}`);
@@ -679,16 +779,61 @@ export async function POST(request: Request) {
               : ((paymentIntent.latest_charge as Stripe.Charge | null)?.id ?? null);
 
           if (!chargeId) {
-            console.error(
-              `No charge ID on payment_intent ${paymentIntent.id} — cannot create transfers`,
-            );
+            // The order is already `completed` above, so bailing here bills the
+            // buyer and pays nobody (T-249). There is no ledger row to fall back
+            // on — we never got far enough to open one.
+            await reportMoneyIncident({
+              kind: 'payout-not-recorded',
+              message:
+                'No charge id on the payment intent, so no transfer could be attempted. The ' +
+                'order is completed and the photographer is owed money with no ledger row.',
+              context: { paymentIntentId: paymentIntent.id, orderId: order.id },
+            });
             break;
           }
 
-          const { data: orderItems } = await supabaseAdmin
+          const { data: orderItems, error: orderItemsError } = await supabaseAdmin
             .from('order_items')
             .select('photographer_id, total_price_cents')
             .eq('order_id', order.id);
+
+          // ⚠️ Discarding this error was the quietest hole of the lot (T-249):
+          // `orderItems` falls back to `[]`, `createTransfersForOrderItems`
+          // returns immediately on the empty list, and the sale completes with
+          // zero payout rows having logged **nothing at all**. That is the exact
+          // shape of the 2026-07-28 incident, and a PostgREST failure here is
+          // not hypothetical — T-239 was a schema-cache error on this very table.
+          if (orderItemsError) {
+            await reportMoneyIncident({
+              kind: 'payout-not-recorded',
+              message:
+                'Could not read the order items, so no transfer was attempted for a completed ' +
+                'order. Nothing was paid and no debt was recorded.',
+              context: { orderId: order.id, chargeId, code: orderItemsError.code },
+              cause: orderItemsError,
+            });
+            break;
+          }
+
+          // A read that succeeds but returns nothing is its own incident: a
+          // completed order with a non-zero total and no items means somebody
+          // was charged for photos nobody will be paid for. Without this the
+          // empty list reaches the transfer loop, which returns immediately on
+          // `items.length === 0` — as silent as the error branch above.
+          if ((orderItems ?? []).length === 0) {
+            await reportMoneyIncident({
+              kind: 'payout-not-recorded',
+              message:
+                'A completed order has no order items, so no transfer was attempted and no ' +
+                'photographer will be paid for it.',
+              context: {
+                orderId: order.id,
+                chargeId,
+                orderTotalCents: order.total_amount_cents,
+              },
+            });
+            break;
+          }
 
           await createTransfersForOrderItems(
             orderItems ?? [],
