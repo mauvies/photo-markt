@@ -216,6 +216,7 @@
     "photosEmptyDescription": "Upload the photos from this event and they'll show up here. Athletes can only find and buy photos once they're uploaded.",
     "photosEmptyCta": "Upload photos",
     "tabPhotos": "Photos",
+    "coverNotForSale": "The cover only presents the event on cards and links — it is not one of the photos you sell.",
     "tabDetails": "Details",
     "tabShare": "Share",
     "shareTabHeading": "Share this event",

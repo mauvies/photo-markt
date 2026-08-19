@@ -1,12 +1,12 @@
 # T-232 · La edición de portada existe pero es inalcanzable desde los tabs del evento
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Riesgo:** normal  (UI + storage; ni pagos ni auth ni migraciones — reusa actions ya existentes)
 - **Blockers:** ninguno
 - **Rama:** `feat/event-cover-in-photos-tab`  (tipo = feat)
 - **OpenSpec change:** —  (toca 2–3 archivos y el patrón ya existe dos veces en el repo; no amerita)
-- **PR:** —
+- **PR:** #311
 
 ## Requerimiento (en palabras del usuario)
 > No hay forma de editar la foto de portada de un evento. Por favor añadir un tab nuevo a la ruta
@@ -49,29 +49,29 @@ visualmente con la cuadrícula, la salida es colapsarlo (bloque compacto con pre
 sacarlo a un tab.
 
 ## Criterio de aceptación (Definition of Done)
-- [ ] El tab **Fotos** de `/dashboard/photographer/events/[id]` muestra un bloque de **portada** con
+- [x] El tab **Fotos** de `/dashboard/photographer/events/[id]` muestra un bloque de **portada** con
       los tres estados: sin portada (subir), con portada (preview + cambiar + quitar), reusando
       `<EventCoverField>` — sin reimplementar la UI ni el estilo.
-- [ ] El bloque se sitúa **encima de la cuadrícula de fotos**, visualmente subordinado a ella (es un
+- [x] El bloque se sitúa **encima de la cuadrícula de fotos**, visualmente subordinado a ella (es un
       control, no la galería), y deja claro que la portada **no** es una foto a la venta del evento.
-- [ ] Persiste llamando a `uploadEventCoverAction` / `removeEventCoverAction` **ya existentes** — no
+- [x] Persiste llamando a `uploadEventCoverAction` / `removeEventCoverAction` **ya existentes** — no
       se crea action nueva, no se toca `updateEventAction`, no hay migración. Guardado inmediato con
       el mismo mensaje ya traducido (`editCoverSavedInstantly`), estado `busy` mientras sube y
       rollback de la preview optimista si el action falla (mismo patrón que `edit-event-form.tsx:163-193`).
-- [ ] Solo el **dueño** del evento ve/usa el bloque: mismo gate que el resto de controles de gestión
+- [x] Solo el **dueño** del evento ve/usa el bloque: mismo gate que el resto de controles de gestión
       del tab (un colaborador/invitado no debe poder cambiar la portada del evento ajeno) — verificar
       qué exige hoy `uploadEventCoverAction` y no aflojarlo.
-- [ ] Tras cambiar/quitar la portada, el cambio se refleja en las event cards y el `og:image`
+- [x] Tras cambiar/quitar la portada, el cambio se refleja en las event cards y el `og:image`
       (invalidación de las tags del evento, igual que hace el flujo actual del `/edit`); la portada
       dedicada sigue **direct-signed** vía `signEventCoverUrls` — no pasa por `/api/watermark/`.
-- [ ] El control del `/edit` completo **sigue funcionando** (no se mueve ni se rompe): esto añade un
+- [x] El control del `/edit` completo **sigue funcionando** (no se mueve ni se rompe): esto añade un
       punto de entrada, no migra el existente.
-- [ ] strings nuevos en `en.json` y `es.json` **solo si hacen falta** — la intención es reusar
+- [x] strings nuevos en `en.json` y `es.json` **solo si hacen falta** — la intención es reusar
       `coverLabel` / `coverDesc` / `coverInfoAria` / `coverSelect` / `coverRemove` y
       `editCoverSavedInstantly`, sin duplicar.
-- [ ] test de regresión/feature que falla antes y pasa después: guard de que el tab de Fotos renderiza
+- [x] test de regresión/feature que falla antes y pasa después: guard de que el tab de Fotos renderiza
       el campo de portada y que cambiarla/quitarla llama al action correspondiente.
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde.
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde.
 
 ## Notas
 - **P2** — no hay pérdida de datos ni dinero en juego y **existe workaround** (menú "…" → Editar

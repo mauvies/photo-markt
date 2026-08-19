@@ -21,6 +21,7 @@ import {
   getEventBibDetectionProgress,
 } from '@/database/queries/bib-numbers';
 import { type AiMatchingStatus, getEventAiIndexingProgress } from '@/database/queries/rekognition';
+import { createSignedUrl } from '@/database/queries/storage';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { redirectToLogin } from '@/lib/auth/redirect-to-login';
@@ -41,6 +42,7 @@ import { getPhotoTags } from './actions';
 import { AiStatusCard } from './ai-status-card';
 import { BibStatusCard } from './bib-status-card';
 import { EventActionsMenu } from './event-actions-menu';
+import { EventCoverSection } from './event-cover-section';
 import { EventInfoCard } from './event-info-card';
 import { EventModerationTabs } from './event-moderation-tabs';
 import { EventPhotoAlbum } from './event-photo-album';
@@ -187,10 +189,23 @@ export default async function EventDetailPage({
   const uploaderUserIds = Array.from(
     new Set(photos.map((p) => p.uploaded_by).filter((v): v is string => Boolean(v))),
   );
-  const [signed, photoTags, uploaderProfiles] = await Promise.all([
+  // The dedicated cover (T-055/T-166) for the Photos tab's cover block (T-232).
+  // Always direct-signed: it is a promotional image, not a for-sale photo, so it
+  // never routes through `/api/watermark/` — and it isn't a `photos` row, so the
+  // route could not resolve a policy for it anyway. `getEvent` selects `*`, so
+  // `cover_path` is present at runtime even though `Event` doesn't declare it
+  // (read defensively, exactly as the edit page does). Signed with the
+  // service-role client — the `photos` bucket is private.
+  const coverPath = (event as unknown as Record<string, unknown>).cover_path as
+    | string
+    | null
+    | undefined;
+
+  const [signed, photoTags, uploaderProfiles, initialCoverUrl] = await Promise.all([
     createPhotoUrlMap(adminClient, 'photos', allPaths, { expiresIn: 60 * 60 }),
     getPhotoTags(photoIds),
     getProfilesByIds(adminClient, uploaderUserIds),
+    coverPath ? createSignedUrl(adminClient, 'photos', coverPath) : Promise.resolve(null),
   ]);
 
   const albumItems = photos
@@ -445,6 +460,31 @@ export default async function EventDetailPage({
 
   const photosTab = (
     <TranslationsProvider translations={dict.events}>
+      {/* Cover management (T-232). The capability shipped with T-166 but hung
+          off the unlabelled "⋮" menu, so photographers navigating by tabs never
+          found it and concluded it did not exist. It sits ABOVE the grid and
+          stays visible when the event has no photos yet — choosing a cover
+          before uploading is a legitimate order of work. */}
+      <div className="mb-4">
+        <EventCoverSection
+          eventId={id}
+          initialCoverUrl={initialCoverUrl}
+          fieldLabels={{
+            label: dict.newEvent.coverLabel,
+            desc: dict.newEvent.coverDesc,
+            infoAria: dict.newEvent.coverInfoAria,
+            select: dict.newEvent.coverSelect,
+            remove: dict.newEvent.coverRemove,
+          }}
+          labels={{
+            savedBadge: dict.eventDetails.editSavedInstantlyBadge,
+            savedHint: dict.eventDetails.editCoverSavedInstantly,
+            notForSaleNote: dict.events.coverNotForSale,
+            tooLarge: dict.newEvent.coverTooLarge,
+            updateFailed: dict.newEvent.coverUpdateFailed,
+          }}
+        />
+      </div>
       {/* Both notices self-hide, so this wrapper collapses to nothing when the
           event is healthy. */}
       <div className="space-y-2 empty:hidden">
