@@ -1,7 +1,7 @@
 # T-232 · La edición de portada existe pero es inalcanzable desde los tabs del evento
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** normal  (UI + storage; ni pagos ni auth ni migraciones — reusa actions ya existentes)
 - **Blockers:** ninguno
 - **Rama:** `feat/event-cover-in-photos-tab`  (tipo = feat)

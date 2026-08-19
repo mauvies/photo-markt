@@ -216,6 +216,7 @@
     "photosEmptyDescription": "Sube las fotos de este evento y aparecerán aquí. Los deportistas solo pueden encontrarlas y comprarlas una vez subidas.",
     "photosEmptyCta": "Subir fotos",
     "tabPhotos": "Fotos",
+    "coverNotForSale": "La portada solo presenta el evento en las tarjetas y los enlaces: no es una de las fotos que vendes.",
     "tabDetails": "Detalles",
     "tabShare": "Compartir",
     "shareTabHeading": "Comparte este evento",
