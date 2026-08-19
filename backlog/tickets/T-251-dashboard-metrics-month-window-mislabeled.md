@@ -1,7 +1,7 @@
 # T-251 · «Fotos subidas» y «Eventos creados» dicen 0 con 35 fotos y 1 evento
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** normal  (`alto` = pagos · BD/migraciones · auth · seguridad → `/work-next` entra en plan mode y espera aprobación antes de escribir, y corre `/code-review`)
 - **Blockers:** ninguno
 - **Rama:** `fix/dashboard-metrics-month-window-mislabeled`

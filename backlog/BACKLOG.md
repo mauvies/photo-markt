@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-251 | «Fotos subidas» y «Eventos creados» dicen 0 con 35 fotos y 1 evento | — | todo |
+| 1 | P1 | T-251 | «Fotos subidas» y «Eventos creados» dicen 0 con 35 fotos y 1 evento | — | doing |
 | 2 | P2 | T-250 | El fotógrafo que no entra al dashboard no se entera de que tiene dinero esperando | Dep T-248 | todo |
 | 3 | P2 | T-232 | La edición de portada existe pero es inalcanzable desde los tabs del evento | — | todo |
 | 4 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | — | todo |
