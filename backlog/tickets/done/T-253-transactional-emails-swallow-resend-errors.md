@@ -1,12 +1,12 @@
 # T-253 · Los tres emails transaccionales tragan los errores de Resend — un comprador puede pagar y no recibir sus fotos
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Riesgo:** normal
 - **Blockers:** ninguno
 - **Rama:** `fix/transactional-email-error-handling`  (tipo = fix)
 - **OpenSpec change:** —
-- **PR:** —
+- **PR:** #308
 
 ## Requerimiento
 
@@ -29,13 +29,13 @@ Hallado por `/code-review xhigh` sobre el PR #306.
 
 ## Criterio de aceptación (Definition of Done)
 
-- [ ] Los tres emisores comprueban `error` y lo propagan (o lo loguean explícitamente)
-- [ ] El fallo de entrega del email de invitado queda **visible** — es entrega de producto, no cortesía
-- [ ] Extraer el cliente + el `{ error }` + el shell HTML + el escapado a un helper compartido
+- [x] Los tres emisores comprueban `error` y lo propagan (o lo loguean explícitamente)
+- [x] El fallo de entrega del email de invitado queda **visible** — es entrega de producto, no cortesía
+- [x] Extraer el cliente + el `{ error }` + el shell HTML + el escapado a un helper compartido
       (`src/lib/email/…`): hoy el FROM y el esqueleto están copiados **cuatro** veces, y
       `escapeHtml` de `send-money-alert.ts` es candidato a quinta copia
-- [ ] Test de regresión por emisor: Resend devuelve `{ error }` ⇒ no se reporta éxito
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] Test de regresión por emisor: Resend devuelve `{ error }` ⇒ no se reporta éxito
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
 

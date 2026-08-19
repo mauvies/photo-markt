@@ -882,18 +882,47 @@ export async function POST(request: Request) {
           ];
 
           try {
-            await sendGuestPurchaseEmail({
-              to: guestEmail,
-              downloadToken: downloadToken.token,
-              photoCount: cartItems.length,
-              eventNames,
-              baseUrl,
-              // Art. 8.7: the confirmation on a durable medium has to restate
-              // the consent that removed the right of withdrawal.
-              withdrawalConsent: guestWithdrawalConsent,
-            });
+            // ⚠️ Bounded like the authenticated confirmation, and for the same
+            // reason (T-252 review): the guest transfers run AFTER this, so a
+            // hung Resend does not merely delay the 200 — it can push the
+            // invocation past Stripe's delivery timeout and strand them.
+            await withWebhookTimeout(
+              sendGuestPurchaseEmail({
+                to: guestEmail,
+                downloadToken: downloadToken.token,
+                photoCount: cartItems.length,
+                eventNames,
+                baseUrl,
+                // Art. 8.7: the confirmation on a durable medium has to restate
+                // the consent that removed the right of withdrawal.
+                withdrawalConsent: guestWithdrawalConsent,
+              }),
+              EMAIL_TIMEOUT_MS,
+            );
           } catch (emailErr) {
-            console.error('Failed to send guest purchase email:', emailErr);
+            // ⚠️ This is not a courtesy email failing (T-253). A guest has no
+            // account: the link in that message is the ONLY way they reach the
+            // photos they just paid for, so a failure here is money in and
+            // nothing out. It stays non-fatal — a 500 would make Stripe
+            // redeliver a payment we have already taken — which is exactly why
+            // it has to be reported instead of logged into the void.
+            //
+            // Context carries ids only, never `guestEmail` and never the
+            // download token: the first is buyer PII, the second is a bearer
+            // credential for the photos. The order id is enough to look both up
+            // and re-send.
+            await reportMoneyIncident({
+              kind: 'purchase-email-not-delivered',
+              message:
+                'The guest purchase email was not confirmed as sent. The buyer has paid and ' +
+                'has no account to recover from — re-send their download link.',
+              context: {
+                guestOrderId: guestOrder.id,
+                sessionId: session.id,
+                photoCount: cartItems.length,
+              },
+              cause: emailErr,
+            });
           }
 
           // Create transfers to photographers for guest orders

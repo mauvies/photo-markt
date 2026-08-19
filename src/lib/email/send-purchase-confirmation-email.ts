@@ -1,9 +1,7 @@
-import { Resend } from 'resend';
-import { env } from '@/env.mjs';
+import { escapeHtml, renderTransactionalEmail } from '@/lib/email/layout';
+import { sendEmail } from '@/lib/email/send-email';
 import { withdrawalConsentEmailBlock } from '@/lib/email/withdrawal-consent-block';
 import type { WithdrawalConsentRecord } from '@/lib/withdrawal-consent';
-
-const resend = new Resend(env.RESEND_API_KEY);
 
 /**
  * Purchase confirmation for a SIGNED-IN buyer (T-228).
@@ -13,14 +11,17 @@ const resend = new Resend(env.RESEND_API_KEY);
  * confirm the contract on a durable medium was unmet for half of all purchases
  * — and there was nowhere to restate the art. 16(m) consent for them.
  *
- * Deliberately mirrors the guest template rather than abstracting a shared one:
- * the two say different things (an account holder has a permanent library, not
- * a 30-day download token) and a premature shared layout would have to be torn
- * apart the first time either diverges. The consent block IS shared, because
- * that wording must not drift.
+ * Deliberately says something different from the guest template rather than
+ * sharing one parameterised message: an account holder has a permanent library,
+ * not a 30-day download token. Only the chrome is shared
+ * (`renderTransactionalEmail`), plus the consent block, whose wording must not
+ * drift between the two.
  *
  * English-only: the webhook has no locale for the buyer, exactly as with the
  * guest email. Localizing both is a separate change.
+ *
+ * Sends through `sendEmail`, so a Resend rejection throws instead of resolving
+ * as a success the caller cannot see (T-253).
  */
 export async function sendPurchaseConfirmationEmail({
   to,
@@ -35,33 +36,16 @@ export async function sendPurchaseConfirmationEmail({
   baseUrl: string;
   withdrawalConsent?: WithdrawalConsentRecord | null;
 }): Promise<void> {
-  const ordersUrl = `${baseUrl}/dashboard/talent/orders`;
-  const eventsText = eventNames.length > 0 ? eventNames.join(', ') : 'your event';
+  const ordersUrl = escapeHtml(`${baseUrl}/dashboard/talent/orders`);
+  // Photographer-typed, so escaped like any other untrusted interpolation.
+  const eventsText = eventNames.length > 0 ? escapeHtml(eventNames.join(', ')) : 'your event';
   const photoLabel = photoCount === 1 ? 'photo' : 'photos';
 
-  await resend.emails.send({
-    from: 'Photo Markt <noreply@photomarkt.com>',
+  await sendEmail({
     to,
+    kind: 'purchase confirmation',
     subject: 'Your Photo Markt order is confirmed',
-    html: `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; margin: 0; padding: 0;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background: #f9fafb; padding: 40px 16px;">
-    <tr>
-      <td align="center">
-        <table width="560" cellpadding="0" cellspacing="0" style="background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb;">
-          <!-- Header -->
-          <tr>
-            <td style="padding: 32px 40px 24px; border-bottom: 1px solid #f3f4f6;">
-              <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #111827;">Photo Markt</h1>
-            </td>
-          </tr>
-
+    html: renderTransactionalEmail(`
           <!-- Body -->
           <tr>
             <td style="padding: 32px 40px;">
@@ -84,17 +68,6 @@ export async function sendPurchaseConfirmationEmail({
               </p>
             </td>
           </tr>
-${withdrawalConsentEmailBlock(withdrawalConsent)}
-        </table>
-
-        <p style="margin: 20px 0 0; color: #9ca3af; font-size: 12px;">
-          You received this email because you purchased photos on Photo Markt.
-        </p>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-    `,
+${withdrawalConsentEmailBlock(withdrawalConsent)}`),
   });
 }
