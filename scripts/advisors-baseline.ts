@@ -33,7 +33,8 @@ export const ADVISORS_BASELINE: AdvisorBaseline = {
     {
       key: 'rls_enabled_no_policy:public.admin_users',
       level: 'INFO',
-      reason: 'Service-role only by design — /api/admin/* gates on it via supabaseAdmin.',
+      reason:
+        'Service-role only by design — the admin service-status page gates on it via supabaseAdmin.',
     },
     {
       key: 'rls_enabled_no_policy:public.rate_limit_buckets',

@@ -73,7 +73,7 @@ flowchart TB
   subgraph AppRouter["Next.js App Router"]
     RSC["React Server Components<br/>page.tsx · layout.tsx"]
     Actions["Server Actions<br/>'use server' files"]
-    ApiRoutes["API Routes<br/>src/app/api/* (Stripe webhook, watermark, admin)"]
+    ApiRoutes["API Routes<br/>src/app/api/* (Stripe webhook, Inngest, watermark)"]
   end
 
   Queries["src/database/queries/*<br/>Domain query layer (events, photos, carts, ...)"]
@@ -105,11 +105,15 @@ flowchart TB
 Conventions enforced by this layout (see `CLAUDE.md`):
 
 - **All mutations go through Server Actions**, not API routes. API routes are
-  reserved for things that must be addressable HTTP endpoints (Stripe
-  webhook, watermark CDN-style URL, admin endpoints).
+  reserved for things that must be addressable HTTP endpoints (Stripe webhook,
+  Inngest worker, watermark CDN-style URL, downloads, health). ⚠️ **There are no
+  admin API routes** — the last one was deleted in T-220; an admin-only surface
+  is a Server Component page gated on `admin_users`
+  (`[lang]/dashboard/admin/status/page.tsx`).
 - **Service role is used only when RLS would block a legitimate operation**
-  (Stripe webhook writes, admin endpoints, watermark API, Inngest face-index writes).
-  Every other path uses the user-scoped client so RLS catches mistakes.
+  (Stripe webhook writes, the admin-gated page, watermark API, Inngest
+  face-index writes). Every other path uses the user-scoped client so RLS
+  catches mistakes.
 
 ### 2.1 Database code layout — two deliberate layers
 
@@ -459,8 +463,32 @@ pair, from whichever of `checkout.session.completed` / `payment_intent.succeeded
 arrives first (T-252). Since **T-216** there *is* a retry
 cron (`retry-pending-payouts`, `10,40 * * * *`), but it only drains money the
 synchronous path could not send — a recovery path, not the normal one.
-`/api/admin/payouts/[id]` still exists and now refuses ledger-managed rows;
-whether it survives at all is T-220's call.
+**There is no administrative payout endpoint** (T-220 deleted it). Payout rows
+are written by three service-role paths and no other: the webhook's transfer
+path, the retry worker, and `voidHoldsForCharge` on `charge.refunded` — the last
+being the one that *does* cancel holds, which is why "who can cancel a hold?"
+must not be answered from the first two alone.
+
+The endpoint it replaced could set any status on any row, and the reason that
+mattered is narrower than "it was unused": **a status change is not a transfer**
+— it wrote a column and called no Stripe API, so its one distinctive power was
+making the ledger claim a payment that never happened, in a system where the
+`payouts` rows are the authority an operator reconciles Stripe against (T-249).
+The actions an admin UI would have offered are either already automated
+(recoverable holds drain via the retry worker; `charge.refunded` voids them) or
+harmful (cancelling a hold by hand makes it permanently unpayable, because
+`payouts_charge_photographer_key` then blocks a replacement row).
+
+⚠️ **"Holds drain automatically" is not universal, and the deleted endpoint was
+never the answer for the exceptions.** A row stranded `processing` with no
+`transfer_batch_id` matches neither recovery selector, and a lone sub-50¢ hold
+simply accumulates until more sales join it. Surfacing those is **T-254**. The
+endpoint could not have touched either, since it refused every row carrying a
+`stripe_charge_id`. Its only reachable targets were pre-T-216 rows with a null
+charge id — **of which production currently has none** (T-236 was closed in
+August 2026 with nothing to sweep); should one ever appear, it is corrected
+through direct DB access, the same tool this project already prescribes for
+seeding admins.
 
 ⚠️ **Since T-248 the checkout no longer filters on Connect status**, so
 `connect_inactive` is the ORDINARY way a hold is born rather than a near-

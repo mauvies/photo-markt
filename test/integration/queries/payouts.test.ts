@@ -1,12 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import type { PayoutStatus } from '@/database/queries/payouts';
 import {
-  createPayout,
   createPayoutFromTransfer,
   getPayout,
   getPayouts,
   getTotalPaidOut,
   getTotalPendingPayouts,
-  updatePayoutStatus,
 } from '@/database/queries/payouts';
 import {
   createServiceClient,
@@ -14,45 +13,55 @@ import {
   resetDatabase,
 } from '../../helpers/supabase-test-client';
 
+/**
+ * ⚠️ Fixtures insert directly rather than through a helper (T-220).
+ *
+ * `createPayout` used to seed these rows, and it was deleted with the manual
+ * approval flow: it wrote `pending` with no charge id and no hold reason —
+ * exactly the shape T-216 had to quarantine — and it was the last writer of the
+ * legacy `payment_accounts.id`, which is why these tests used to seed that table
+ * too. The rows below are still that legacy shape on purpose: these helpers must
+ * keep reading pre-ledger rows correctly, since real ones exist in production.
+ */
+async function seedPayout(
+  sb: ReturnType<typeof createServiceClient>,
+  photographerId: string,
+  amountCents: number,
+  status: PayoutStatus = 'pending',
+): Promise<{ id: string }> {
+  const { data, error } = await sb
+    .from('payouts')
+    .insert({ photographer_id: photographerId, amount_cents: amountCents, status })
+    .select('id')
+    .single();
+  if (error || !data) throw new Error(`seed payout failed: ${error?.message}`);
+  return data as { id: string };
+}
+
 describe('database/queries/payouts', () => {
   beforeEach(async () => {
     await resetDatabase();
   });
 
-  describe('createPayout + getPayout + getPayouts', () => {
-    it('createPayout inserts a pending row and getPayout finds it', async () => {
+  describe('getPayout + getPayouts', () => {
+    it('getPayout finds the photographer their own row', async () => {
       const photographer = await createTestUser('PHOTOGRAPHER');
       const sb = createServiceClient();
-      // payment_account is required by FK — seed one first.
-      const { data: account } = await sb
-        .from('payment_accounts')
-        .insert({
-          photographer_id: photographer.id,
-          type: 'bank_account',
-          display_name: 'Test',
-        })
-        .select('id')
-        .single();
-      if (!account) throw new Error('seed account failed');
 
-      const created = await createPayout(sb, photographer.id, 1500, account.id);
-      expect(created.status).toBe('pending');
-      expect(created.amount_cents).toBe(1500);
+      const created = await seedPayout(sb, photographer.id, 1500);
 
       const found = await getPayout(sb, created.id, photographer.id);
       expect(found?.id).toBe(created.id);
+      expect(found?.amount_cents).toBe(1500);
     });
 
     it('getPayout returns null when another photographer asks', async () => {
       const photographer = await createTestUser('PHOTOGRAPHER');
       const stranger = await createTestUser('PHOTOGRAPHER');
       const sb = createServiceClient();
-      const { data: account } = await sb
-        .from('payment_accounts')
-        .insert({ photographer_id: photographer.id, type: 'bank_account', display_name: 'T' })
-        .select('id')
-        .single();
-      const created = await createPayout(sb, photographer.id, 100, account!.id);
+
+      const created = await seedPayout(sb, photographer.id, 100);
+
       expect(await getPayout(sb, created.id, stranger.id)).toBeNull();
     });
 
@@ -60,59 +69,29 @@ describe('database/queries/payouts', () => {
       const photographer = await createTestUser('PHOTOGRAPHER');
       const stranger = await createTestUser('PHOTOGRAPHER');
       const sb = createServiceClient();
-      const { data: a } = await sb
-        .from('payment_accounts')
-        .insert({ photographer_id: photographer.id, type: 'bank_account', display_name: 'A' })
-        .select('id')
-        .single();
-      const { data: b } = await sb
-        .from('payment_accounts')
-        .insert({ photographer_id: stranger.id, type: 'bank_account', display_name: 'B' })
-        .select('id')
-        .single();
-      await createPayout(sb, photographer.id, 100, a!.id);
-      await createPayout(sb, photographer.id, 200, a!.id);
-      await createPayout(sb, stranger.id, 300, b!.id);
+
+      await seedPayout(sb, photographer.id, 100);
+      await seedPayout(sb, photographer.id, 200);
+      await seedPayout(sb, stranger.id, 300);
 
       const mine = await getPayouts(sb, photographer.id);
       expect(mine).toHaveLength(2);
-      for (const p of mine) expect(p.photographer_id).toBe(photographer.id);
+      expect(mine.every((p) => p.photographer_id === photographer.id)).toBe(true);
     });
 
     it('getPayouts filters by status when provided', async () => {
       const photographer = await createTestUser('PHOTOGRAPHER');
       const sb = createServiceClient();
-      const { data: account } = await sb
-        .from('payment_accounts')
-        .insert({ photographer_id: photographer.id, type: 'bank_account', display_name: 'X' })
-        .select('id')
-        .single();
-      await createPayout(sb, photographer.id, 100, account!.id);
-      const second = await createPayout(sb, photographer.id, 200, account!.id);
-      await updatePayoutStatus(sb, second.id, 'paid');
+
+      await seedPayout(sb, photographer.id, 100, 'pending');
+      await seedPayout(sb, photographer.id, 200, 'paid');
 
       const pending = await getPayouts(sb, photographer.id, 'pending');
       const paid = await getPayouts(sb, photographer.id, 'paid');
       expect(pending).toHaveLength(1);
+      expect(pending[0]?.amount_cents).toBe(100);
       expect(paid).toHaveLength(1);
-      expect(paid[0].id).toBe(second.id);
-    });
-  });
-
-  describe('updatePayoutStatus', () => {
-    it('flips the status and stores admin_notes', async () => {
-      const photographer = await createTestUser('PHOTOGRAPHER');
-      const sb = createServiceClient();
-      const { data: account } = await sb
-        .from('payment_accounts')
-        .insert({ photographer_id: photographer.id, type: 'bank_account', display_name: 'X' })
-        .select('id')
-        .single();
-      const created = await createPayout(sb, photographer.id, 500, account!.id);
-
-      const updated = await updatePayoutStatus(sb, created.id, 'approved', 'looks good');
-      expect(updated.status).toBe('approved');
-      expect(updated.admin_notes).toBe('looks good');
+      expect(paid[0]?.amount_cents).toBe(200);
     });
   });
 
@@ -171,16 +150,10 @@ describe('database/queries/payouts', () => {
     it('getTotalPaidOut sums only paid payouts', async () => {
       const photographer = await createTestUser('PHOTOGRAPHER');
       const sb = createServiceClient();
-      const { data: account } = await sb
-        .from('payment_accounts')
-        .insert({ photographer_id: photographer.id, type: 'bank_account', display_name: 'X' })
-        .select('id')
-        .single();
-      const a = await createPayout(sb, photographer.id, 100, account!.id);
-      const b = await createPayout(sb, photographer.id, 200, account!.id);
-      await createPayout(sb, photographer.id, 999, account!.id); // stays pending — must not count
-      await updatePayoutStatus(sb, a.id, 'paid');
-      await updatePayoutStatus(sb, b.id, 'paid');
+
+      await seedPayout(sb, photographer.id, 100, 'paid');
+      await seedPayout(sb, photographer.id, 200, 'paid');
+      await seedPayout(sb, photographer.id, 999, 'pending'); // must not count
 
       expect(await getTotalPaidOut(sb, photographer.id)).toBe(300);
     });
@@ -188,18 +161,26 @@ describe('database/queries/payouts', () => {
     it('getTotalPendingPayouts sums pending + approved', async () => {
       const photographer = await createTestUser('PHOTOGRAPHER');
       const sb = createServiceClient();
-      const { data: account } = await sb
-        .from('payment_accounts')
-        .insert({ photographer_id: photographer.id, type: 'bank_account', display_name: 'X' })
-        .select('id')
-        .single();
-      await createPayout(sb, photographer.id, 100, account!.id); // pending
-      const b = await createPayout(sb, photographer.id, 200, account!.id);
-      await updatePayoutStatus(sb, b.id, 'approved');
-      const c = await createPayout(sb, photographer.id, 999, account!.id);
-      await updatePayoutStatus(sb, c.id, 'paid'); // paid → excluded
+
+      // `approved` has no writer since T-216, but it is still read here on
+      // purpose: a legacy row in that state is money that has not landed, and
+      // counting it as withdrawable would overstate the balance.
+      await seedPayout(sb, photographer.id, 100, 'pending');
+      await seedPayout(sb, photographer.id, 200, 'approved');
+      await seedPayout(sb, photographer.id, 999, 'paid'); // excluded
 
       expect(await getTotalPendingPayouts(sb, photographer.id)).toBe(100 + 200);
+    });
+
+    it('getTotalPendingPayouts counts money that is mid-transfer', async () => {
+      const photographer = await createTestUser('PHOTOGRAPHER');
+      const sb = createServiceClient();
+
+      // T-216: `processing` must be in the unlanded set, or the earnings
+      // balance presents a transfer in flight as available to withdraw.
+      await seedPayout(sb, photographer.id, 450, 'processing');
+
+      expect(await getTotalPendingPayouts(sb, photographer.id)).toBe(450);
     });
   });
 });

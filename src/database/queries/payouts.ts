@@ -97,61 +97,6 @@ export async function getPayout(
 }
 
 /**
- * Create a new payout request
- */
-export async function createPayout(
-  supabase: SupabaseServerClient,
-  photographerId: string,
-  amountCents: number,
-  paymentAccountId: string,
-): Promise<Payout> {
-  const { data, error } = await supabase
-    .from('payouts')
-    .insert({
-      photographer_id: photographerId,
-      amount_cents: amountCents,
-      payment_account_id: paymentAccountId,
-      status: 'pending',
-    })
-    .select()
-    .single();
-
-  if (error || !data) {
-    throw new Error(`Failed to create payout: ${getErrorMessage(error)}`);
-  }
-
-  return data as Payout;
-}
-
-/**
- * Update payout status (admin function)
- */
-export async function updatePayoutStatus(
-  supabase: SupabaseServerClient,
-  payoutId: string,
-  status: PayoutStatus,
-  adminNotes?: string,
-): Promise<Payout> {
-  const updateData: Partial<Payout> = { status };
-  if (adminNotes !== undefined) {
-    updateData.admin_notes = adminNotes;
-  }
-
-  const { data, error } = await supabase
-    .from('payouts')
-    .update(updateData)
-    .eq('id', payoutId)
-    .select()
-    .single();
-
-  if (error || !data) {
-    throw new Error(`Failed to update payout status: ${getErrorMessage(error)}`);
-  }
-
-  return data as Payout;
-}
-
-/**
  * Log an already-completed Stripe transfer as a paid payout.
  *
  * ⚠️ **`stripe_charge_id` is required, and a unique violation is NOT benign

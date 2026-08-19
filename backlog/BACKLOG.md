@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | — | todo |
+| 1 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | — | doing |
 | 2 | P2 | T-219 | Podar el esquema muerto (`payment_accounts`, `ai_search_profiles`, columnas fantasma, `profiles.is_admin`) | — | todo |
 | 3 | P2 | T-254 | El worker de reintentos de payouts solo escribe en consola — un hold atascado para siempre no avisa a nadie | — | todo |
 | 4 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
@@ -45,10 +45,19 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
   `events/[id]/page.tsx` y el tab de fotos; T-231 (rama `fix/stuck-pending-upload-recovery`, en curso)
   primero — T-232 solo añade un bloque de portada encima de la cuadrícula y no quiere pelear con el
   diff de recuperación de subidas. Mergear T-231 antes de empezar T-232.
-- **Dinero del fotógrafo (payouts):** **T-216 → T-215 → T-220**. Los tres tocan el modelo de estado de
-  `payouts` y el bucle de transferencias del webhook. T-216 va primero porque es quien introduce las
-  filas `pending`: sin ellas, T-220 no tiene nada que decidir y T-215 no tiene dónde registrar una
-  reversión. Mergear cada uno antes de empezar el siguiente.
+- **Dinero del fotógrafo (payouts):** **~~T-216~~ (PR #284) → T-215 (PR #290, parada) → ~~T-220~~
+  (PR #311)**. Los tres tocan el modelo de estado de `payouts` y el bucle de transferencias del
+  webhook. T-216 fue primero porque introduce las filas `pending`.
+  ⚠️ **El orden se rompió: T-220 se ejecutó con T-215 aún sin mergear, y hay conflicto real.** La
+  rama `fix/clawback-disputes-and-refunds` (PR #290, +549/−23 sobre `queries/payouts.ts`) **todavía
+  define `createPayout` y `updatePayoutStatus`**, su copia de
+  `test/integration/queries/payouts.test.ts` sigue importando `updatePayoutStatus`, y su diff de
+  `CLAUDE.md` reescribe justo la viñeta que T-220 acaba de sustituir, reafirmando que la ruta admin
+  «refuses ledger-managed rows; its future is T-220». Al mergear T-220 esa rama **deja de
+  typecheckear**. Al retomar T-215: (1) rebasar sobre `main`, (2) **quedarse con el lado de T-220**
+  en `CLAUDE.md` y en el test, borrando las dos funciones de su diff, y (3) ⚠️ revisar su
+  `openspec/specs/photographer-payout-ledger/spec.md`, que es un archivo **completo** basado en
+  `main` pre-T-220 y puede resucitar el requisito de la ruta borrada.
 - **Seguridad post-incidente (PR #279):** ~~T-226~~ (PR #281) → ~~T-225~~ (PR #282) → **T-227**. T-226 cerró lo que
   quedó abierto del hallazgo (el vuelco del padrón por usuario autenticado, más un oráculo de
   substring sobre el email que solo apareció al revisar el propio arreglo); T-225 puso el linter que
