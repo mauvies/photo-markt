@@ -117,12 +117,14 @@ export default async function PhotographerDashboardPage({
           <>
             <MetricsRow
               metrics={data.metrics}
+              totals={data.totals}
               t={{
                 earningsThisMonth: t.earningsThisMonth,
                 salesThisMonth: t.salesThisMonth,
                 photosUploadedThisMonth: t.photosUploadedThisMonth,
                 eventsCreatedThisMonth: t.eventsCreatedThisMonth,
                 vsLastMonth: t.vsLastMonth,
+                allTimeTotal: t.allTimeTotal,
               }}
             />
 

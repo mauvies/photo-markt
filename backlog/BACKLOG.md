@@ -11,18 +11,17 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-251 | «Fotos subidas» y «Eventos creados» dicen 0 con 35 fotos y 1 evento | — | todo |
-| 2 | P2 | T-250 | El fotógrafo que no entra al dashboard no se entera de que tiene dinero esperando | Dep T-248 | todo |
-| 3 | P2 | T-232 | La edición de portada existe pero es inalcanzable desde los tabs del evento | — | todo |
-| 4 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | — | todo |
-| 5 | P2 | T-219 | Podar el esquema muerto (`payment_accounts`, `ai_search_profiles`, columnas fantasma, `profiles.is_admin`) | — | todo |
-| 6 | P2 | T-254 | El worker de reintentos de payouts solo escribe en consola — un hold atascado para siempre no avisa a nadie | — | todo |
-| 7 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
-| 8 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
-| 9 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
-| 10 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
-| 11 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
-| 12 | P3 | T-223 | Carrito de invitado sin sincronización entre pestañas | — | todo |
+| 1 | P2 | T-250 | El fotógrafo que no entra al dashboard no se entera de que tiene dinero esperando | Dep T-248 | todo |
+| 2 | P2 | T-232 | La edición de portada existe pero es inalcanzable desde los tabs del evento | — | todo |
+| 3 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | — | todo |
+| 4 | P2 | T-219 | Podar el esquema muerto (`payment_accounts`, `ai_search_profiles`, columnas fantasma, `profiles.is_admin`) | — | todo |
+| 5 | P2 | T-254 | El worker de reintentos de payouts solo escribe en consola — un hold atascado para siempre no avisa a nadie | — | todo |
+| 6 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
+| 7 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
+| 8 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
+| 9 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
+| 10 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
+| 11 | P3 | T-223 | Carrito de invitado sin sincronización entre pestañas | — | todo |
 | — | P1 | T-215 | Clawback: reembolsos y disputas revierten transferencia y acceso | **blocked:** aplazado por el usuario (2026-08-10) — **implementado y pusheado en PR #290 (draft)**, verde; falta `/code-review ultra` antes de mergear. Sin ventas reales no hay disputas posibles | blocked |
 | — | P2 | T-237 | Reembolso parcial: proporcional, y cuadrar el saldo | **blocked:** absorbido en T-215 (PR #290) | blocked |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |
@@ -79,6 +78,23 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-251** · Fix/UI (P1): un fotógrafo con un evento y 35 fotos veía «Fotos subidas: 0» y «Eventos
+  creados: 0». **Los números estaban bien; las etiquetas mentían.** Las cuatro tarjetas de
+  `MetricsRow` son cifras **del mes en curso** (`monthBounds`), pero solo dos lo decían: su evento y
+  sus fotos se crearon el 27-jul-2026, así que la ventana de agosto contenía legítimamente cero de
+  cada uno, bajo una etiqueta que prometía un total histórico —la clave del diccionario sí llevaba
+  `ThisMonth`, el texto lo había perdido—. **Y el total que esperaba ya se calculaba y se tiraba a la
+  basura:** `DashboardData.totals` se computaba en cada render y no se pintaba en ninguna parte; su
+  único uso era decidir `isBrandNew`. Ahora las cuatro etiquetas declaran su periodo y los totales
+  llegan a `MetricsRow` como sublabel («35 en total»). ⚠️ **`StatCard` pinta la tendencia *y* el
+  sublabel**, no uno u otro: el caso reportado tiene `trend === null` (el mes anterior también fue 0,
+  así que `computePct` devuelve null), de modo que un sublabel condicionado a la ausencia de
+  tendencia habría desaparecido justo en el escenario que destapó el fallo. De paso, el
+  `photosUploaded` de facturación (un histórico) pasa a «fotos subidas en total», para que dos
+  superficies dejen de llamar casi igual a números distintos. **Las queries y la ventana mensual no
+  se tocan** —ensancharlas a histórico rompería la fila `vs. mes anterior`, lo único que da sentido a
+  la comparación— y `isBrandNew` sigue basándose en los totales. Sin migración — PR #309
 
 - **T-253** · Fix/Email (P1): `resend.emails.send` **resuelve `{ data, error }`; no lanza** en un
   error de API, y los tres emisores anteriores a `send-money-alert.ts` descartaban ese resultado. Un

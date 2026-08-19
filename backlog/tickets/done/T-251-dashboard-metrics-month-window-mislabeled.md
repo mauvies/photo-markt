@@ -1,12 +1,12 @@
 # T-251 · «Fotos subidas» y «Eventos creados» dicen 0 con 35 fotos y 1 evento
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Riesgo:** normal  (`alto` = pagos · BD/migraciones · auth · seguridad → `/work-next` entra en plan mode y espera aprobación antes de escribir, y corre `/code-review`)
 - **Blockers:** ninguno
 - **Rama:** `fix/dashboard-metrics-month-window-mislabeled`
 - **OpenSpec change:** —  (se crea al ejecutar, si el cambio toca >1 archivo o es ambiguo)
-- **PR:** —
+- **PR:** #309
 
 ## Requerimiento
 En la ruta de resumen del dashboard de fotógrafos (`/[lang]/dashboard/photographer`) hay métricas
@@ -52,20 +52,20 @@ fotógrafo **no** cae en el estado `WelcomeEmpty` — ve la fila de métricas co
 justamente el síntoma reportado.
 
 ## Criterio de aceptación (Definition of Done)
-- [ ] Ninguna tarjeta de `MetricsRow` promete un total histórico entregando un conteo mensual: las
+- [x] Ninguna tarjeta de `MetricsRow` promete un total histórico entregando un conteo mensual: las
       cuatro etiquetas declaran su periodo, en `es.json` y `en.json`.
-- [ ] El fotógrafo puede ver desde el resumen su **total histórico** de fotos subidas y eventos
+- [x] El fotógrafo puede ver desde el resumen su **total histórico** de fotos subidas y eventos
       creados (los `totals` que ya se calculan dejan de ser datos muertos). ⚠️ `StatCard` hoy pinta
       `trend` **o** `sublabel`, nunca ambos (`stat-card.tsx:44-64`) — decidir en la implementación si
       se permite pintar los dos o dónde vive el total; el caso reportado tiene `trend === null`
       (mes anterior en 0 ⇒ `computePct` devuelve `null`), así que un `sublabel` a secas taparía el
       bug justo en el escenario que lo destapó.
-- [ ] Con un evento y sus fotos creados el **mes pasado**, la pantalla no puede leerse como «no
+- [x] Con un evento y sus fotos creados el **mes pasado**, la pantalla no puede leerse como «no
       tengo nada»: 0 del mes y el total histórico son distinguibles a simple vista.
-- [ ] `isBrandNew` sigue basándose en los totales (una cuenta con historia nunca ve `WelcomeEmpty`).
-- [ ] strings nuevos en `en.json` y `es.json` (si hay UI)
-- [ ] test de regresión/feature que falla antes y pasa después
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] `isBrandNew` sigue basándose en los totales (una cuenta con historia nunca ve `WelcomeEmpty`).
+- [x] strings nuevos en `en.json` y `es.json` (si hay UI)
+- [x] test de regresión/feature que falla antes y pasa después
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
 - **Archivos:** `src/app/[lang]/dashboard/photographer/_components/metrics-row.tsx`,
