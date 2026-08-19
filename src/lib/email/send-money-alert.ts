@@ -1,8 +1,6 @@
-import { Resend } from 'resend';
-import { env } from '@/env.mjs';
+import { escapeHtml, renderOpsAlertEmail } from '@/lib/email/layout';
+import { sendEmail } from '@/lib/email/send-email';
 import type { MoneyIncidentKind } from '@/lib/observability/report-money-incident';
-
-const resend = new Resend(env.RESEND_API_KEY);
 
 /**
  * Operational alert for a money incident (T-249).
@@ -15,10 +13,12 @@ const resend = new Resend(env.RESEND_API_KEY);
  * PII: the caller passes identifiers and amounts only. This function renders
  * whatever `context` it is given, so it is the caller's job — not this one's —
  * to keep buyer emails and names out of it (see the `MoneyIncident.context`
- * contract). FROM mirrors the other two senders in this directory.
+ * contract).
  *
  * Best-effort: `reportMoneyIncident` wraps this in try/catch, so a Resend
- * failure never breaks the webhook it is reporting on.
+ * failure never breaks the webhook it is reporting on — but the failure is
+ * thrown (by `sendEmail`) rather than swallowed, so the reporter can log the
+ * non-delivery and release its throttle.
  */
 export async function sendMoneyAlertEmail({
   to,
@@ -49,20 +49,11 @@ export async function sendMoneyAlertEmail({
     )
     .join('');
 
-  // ⚠️ `resend.emails.send` resolves `{ data, error }` — it does NOT throw on an
-  // API error. Ignoring the result would let an invalid key, an unverified
-  // sender domain or a rate limit resolve "successfully", so the one channel
-  // whose entire job is to not be silent would fail silently. Throw so
-  // `reportMoneyIncident` logs the non-delivery and releases its throttle.
-  const { error } = await resend.emails.send({
-    from: 'Photo Markt <noreply@photomarkt.com>',
+  await sendEmail({
     to,
+    kind: 'money alert',
     subject: `🚨 Money incident: ${kind}`,
-    html: `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8" /></head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827;">
+    html: renderOpsAlertEmail(`
   <h2 style="margin: 0 0 12px;">Money incident — <code>${escapeHtml(kind)}</code></h2>
   <p style="margin: 0 0 16px; line-height: 1.6;">${escapeHtml(message)}</p>
   ${
@@ -77,28 +68,22 @@ export async function sendMoneyAlertEmail({
   }
   <p style="margin: 0; color: #6b7280; font-size: 13px;">
     The webhook still returned 200 — this alert does not change the payment flow,
-    it only makes the failure visible. Reconcile against Stripe and the
-    <code>payouts</code> table.
-  </p>
-</body>
-</html>
-    `,
+    it only makes the failure visible. ${remediationFor(kind)}
+  </p>`),
   });
-
-  if (error) {
-    throw new Error(`Resend rejected the money alert: ${error.message}`);
-  }
 }
 
 /**
- * Escape the interpolated values. `message` and `context` carry ids and error
- * text that we do not control, and this HTML is assembled by hand.
+ * What the operator is supposed to do next. Kept per kind rather than generic:
+ * an undelivered purchase email is not reconciled against the `payouts` table,
+ * and telling someone to look there wastes the minutes that matter.
  */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+function remediationFor(kind: MoneyIncidentKind): string {
+  if (kind === 'purchase-email-not-delivered') {
+    return (
+      'The buyer has paid and their order exists — what failed is the delivery ' +
+      'email. Look the order up and re-send it before they have to ask.'
+    );
+  }
+  return 'Reconcile against Stripe and the <code>payouts</code> table.';
 }

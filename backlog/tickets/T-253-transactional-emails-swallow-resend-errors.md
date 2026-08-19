@@ -1,7 +1,7 @@
 # T-253 · Los tres emails transaccionales tragan los errores de Resend — un comprador puede pagar y no recibir sus fotos
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** normal
 - **Blockers:** ninguno
 - **Rama:** `fix/transactional-email-error-handling`  (tipo = fix)

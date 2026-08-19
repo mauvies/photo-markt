@@ -444,11 +444,17 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
   precedent) — Sentry groups by fingerprint, but email doesn't, and one DB outage fires the catch once
   per photographer per order. That throttle is keyed **per `kind`** (a payout alert must not silence a
   dispute alert — different incidents, not duplicates) and is **released when the send fails**, so a
-  transient Resend error can't suppress the retry. ⚠️ `resend.emails.send` resolves `{ data, error }`
-  and does **not** throw, so `sendMoneyAlertEmail` checks `error` and throws: without that, the one
-  channel whose whole job is not being silent fails silently. The send is also bounded by a 5 s
+  transient Resend error can't suppress the retry. The send is also bounded by a 5 s
   timeout — it rides inside the webhook, and a hung alert must not push the handler past Stripe's
   delivery timeout and trigger a redelivery.
+- **`purchase-email-not-delivered` (T-253) is the second live kind.** Raised when the **guest**
+  delivery email is not confirmed as sent. That email is the *product*, not a receipt — a guest has
+  no account, so the link it carries is the only route to what they paid for — yet the send must stay
+  non-fatal (a 500 makes Stripe redeliver a payment already taken), which is precisely why it has to
+  alert. Its context is ids only: never the buyer's address (PII) and never the download token (a
+  bearer credential for the photos). It carries its own remediation text and a `subsystem: 'delivery'`
+  Sentry tag — nothing here is reconciled against the `payouts` table. The send is bounded by the
+  same `EMAIL_TIMEOUT_MS` as the authenticated one, because the guest transfers run *after* it.
 - `charge.refunded` **voids outstanding holds** for that charge (a stranded hold used to be accidentally protected *by* being stranded). Refunds still do **not** auto-reverse a transfer already made — T-215. `/api/admin/payouts/[id]` now refuses ledger-managed rows; its future is T-220. See `ARCHITECTURE.md` §4.3
 
 **ai_search_profiles** (legacy — unused)
@@ -652,6 +658,23 @@ law is mandatory and cannot be waived by contract — so the consent is collecte
   no confirmation on a durable medium. Both templates share `withdrawalConsentEmailBlock` so the
   wording can't drift, and both are English-only (neither receives the buyer's locale — localizing
   them is a separate change).
+
+### Sending email (T-253)
+⚠️ **`resend.emails.send` resolves `{ data, error }` — it does NOT throw on an API error.** An invalid
+key, an unverified sender domain, a rate limit or a malformed `to` all come back as a *resolved*
+promise, so a caller that discards the result reports success for a message that was never sent. Three
+of the four senders did exactly that until T-253, and the guest one is the sharp case: the buyer paid,
+got nothing, and the webhook's `catch` never fired.
+- **Every send goes through `sendEmail` (`src/lib/email/send-email.ts`)**, which checks `error` and
+  throws `EmailDeliveryError`. It also owns the Resend client (constructed lazily, so importing a
+  sender doesn't build one) and the single `EMAIL_FROM`. Do not call `resend.emails.send` directly —
+  that is how the check gets forgotten again.
+- **Only the chrome is shared** (`src/lib/email/layout.ts`): `renderTransactionalEmail` (buyer-facing
+  card) and `renderOpsAlertEmail` (bare, for the money and face-search alerts), plus `escapeHtml`,
+  which had been copied per template. The **messages** stay per sender on purpose — the guest email
+  offers a 30-day token, the signed-in one a permanent library.
+- `escapeHtml` is applied to **event names** in both buyer templates: those are photographer-typed and
+  land in hand-assembled HTML.
 
 ### Photographer Payouts (Stripe Connect)
 - Photographers connect Stripe Express accounts in `/dashboard/photographer/settings/payout-profile/`
@@ -945,7 +968,7 @@ INNGEST_SIGNING_KEY=                 # verifies inbound webhook payloads at /api
 
 # Email
 RESEND_API_KEY=
-# Sender is hardcoded ('Photo Markt <noreply@photomarkt.com>') in src/lib/email/*.ts
+# Sender is hardcoded ('Photo Markt <noreply@photomarkt.com>') as EMAIL_FROM in src/lib/email/send-email.ts
 
 # Sentry error monitoring (all optional — SDK is a no-op without a DSN)
 SENTRY_DSN=                          # server/edge DSN; absent ⇒ no server error capture

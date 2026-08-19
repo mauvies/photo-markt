@@ -670,6 +670,92 @@ describe('app/api/stripe/webhook — checkout.session.completed (guest mode)', (
       .eq('stripe_checkout_session_id', 'cs_guest_dup');
     expect(count).toBe(1);
   });
+
+  // T-253 — the guest email is the delivery, not a receipt: a guest has no
+  // account, so the link it carries is the only route to the photos they paid
+  // for. The send stays non-fatal (a 500 makes Stripe redeliver a payment we
+  // have taken), which is exactly why the failure has to be REPORTED rather
+  // than logged into the void, as it was before this ticket.
+  it('reports an incident when the guest delivery email cannot be sent', async () => {
+    vi.clearAllMocks();
+    const sb = createServiceClient();
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    await sb
+      .from('profiles')
+      .update({ stripe_connect_account_id: 'acct_g', stripe_connect_status: 'active' })
+      .eq('id', photographer.id);
+    const event = await createTestEvent(photographer.id);
+    const photo = await createTestPhoto(event.id);
+
+    const { stripe: routeStripe } = await import('@/lib/stripe/config');
+    const spy = vi.spyOn(routeStripe.paymentIntents, 'retrieve').mockResolvedValue({
+      id: 'pi_guest_email_fails',
+      object: 'payment_intent',
+      latest_charge: 'ch_guest_email_fails',
+    } as never);
+    restoreRetrieve = () => spy.mockRestore();
+
+    const { sendGuestPurchaseEmail } = await import('@/lib/email/send-guest-purchase-email');
+    vi.mocked(sendGuestPurchaseEmail).mockRejectedValueOnce(
+      new Error('Resend rejected the guest purchase email: Invalid `to` field'),
+    );
+
+    const res = await POST(
+      signedWebhookRequest({
+        id: 'evt_guest_email_fails',
+        type: 'checkout.session.completed',
+        created: Math.floor(Date.now() / 1000),
+        data: {
+          object: {
+            id: 'cs_guest_email_fails',
+            object: 'checkout.session',
+            mode: 'payment',
+            customer: null,
+            customer_email: 'guest@photomarkt.test',
+            customer_details: { email: 'guest@photomarkt.test' },
+            payment_intent: 'pi_guest_email_fails',
+            amount_total: 500,
+            currency: 'eur',
+            metadata: {
+              is_guest: 'true',
+              cart_count: '1',
+              cart_0: JSON.stringify({ p: photo.id, g: photographer.id, c: 500 }),
+            },
+          },
+        },
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const { data: guestOrder } = await sb
+      .from('guest_orders')
+      .select('id')
+      .eq('stripe_checkout_session_id', 'cs_guest_email_fails')
+      .single();
+    expect(guestOrder?.id).toBeTruthy();
+
+    const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+    const emailIncidents = vi
+      .mocked(reportMoneyIncident)
+      .mock.calls.map(([incident]) => incident)
+      .filter((incident) => incident.kind === 'purchase-email-not-delivered');
+    expect(emailIncidents).toHaveLength(1);
+    expect(emailIncidents[0]).toMatchObject({
+      context: { guestOrderId: guestOrder?.id, sessionId: 'cs_guest_email_fails' },
+    });
+    // Ids only — the buyer's address and the bearer download token must never
+    // ride along in an alert.
+    const contextValues = Object.values(emailIncidents[0]?.context ?? {}).map(String);
+    expect(contextValues.some((value) => value.includes('@'))).toBe(false);
+
+    // The order still completes and the photographer is still paid — only the
+    // delivery email failed.
+    const { data: payouts } = await sb
+      .from('payouts')
+      .select('id')
+      .eq('photographer_id', photographer.id);
+    expect(payouts).toHaveLength(1);
+  });
 });
 
 describe('app/api/stripe/webhook — payment_intent.payment_failed', () => {

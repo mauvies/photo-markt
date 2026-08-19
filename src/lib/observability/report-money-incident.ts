@@ -54,7 +54,8 @@ const lastEmailAlertMsByKind = new Map<MoneyIncidentKind, number>();
 const EMAIL_SEND_TIMEOUT_MS = 5_000;
 
 /**
- * ⚠️ Only `payout-not-recorded` has a producer on `main` today. The five
+ * ⚠️ Only `payout-not-recorded` (T-249) and `purchase-email-not-delivered`
+ * (T-253) have producers on `main` today. The five
  * dispute/reversal kinds are **inherited deliberately** from the parked T-215 /
  * PR #290 branch, which this file was rescued from rather than rewritten:
  * deleting them would guarantee a conflict when that branch resumes, and would
@@ -79,7 +80,16 @@ export type MoneyIncidentKind =
    * `transfer_batch_id`, which neither `listPayableHolds` nor
    * `listStaleProcessingBatches` will ever pick up.
    */
-  | 'payout-not-recorded';
+  | 'payout-not-recorded'
+  /**
+   * A paid order's delivery email could not be sent (T-253).
+   *
+   * The guest case is the sharp one: a guest has no account, so that email IS
+   * the delivery of what they paid for — money in, nothing out, and no trace
+   * unless this fires. Not a payout failure, so it carries its own remediation
+   * text and subsystem tag.
+   */
+  | 'purchase-email-not-delivered';
 
 export interface MoneyIncident {
   kind: MoneyIncidentKind;
@@ -111,7 +121,7 @@ export async function reportMoneyIncident(incident: MoneyIncident): Promise<void
       // Group by incident kind, not by message: the messages carry ids, so
       // fingerprinting on them would make every occurrence its own issue.
       fingerprint: ['money-incident', kind],
-      tags: { subsystem: 'payouts', incident: kind },
+      tags: { subsystem: subsystemFor(kind), incident: kind },
       // `context` is spread FIRST so a caller can never shadow `message` or
       // `reason` — the incident's own fields must win over an arbitrary key.
       extra: { ...context, message, reason: describeCause(cause) },
@@ -121,6 +131,14 @@ export async function reportMoneyIncident(incident: MoneyIncident): Promise<void
   }
 
   await sendEmailAlert(kind, message, context, cause);
+}
+
+/**
+ * Sentry tag. Every kind but one is a payout-path failure; the delivery email is
+ * a different subsystem and a wrong tag is worse than a coarse one.
+ */
+function subsystemFor(kind: MoneyIncidentKind): string {
+  return kind === 'purchase-email-not-delivered' ? 'delivery' : 'payouts';
 }
 
 /**
