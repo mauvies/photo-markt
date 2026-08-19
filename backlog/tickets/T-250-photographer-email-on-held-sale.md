@@ -1,7 +1,7 @@
 # T-250 · El fotógrafo que no entra al dashboard no se entera de que tiene dinero esperando
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** normal  (plantilla de email + un envío best-effort; no toca el cálculo ni el movimiento del dinero)
 - **Blockers:** ninguno  (Dep T-248 / PR #305 — mergear antes, es quien crea el caso)
 - **Rama:** `feat/photographer-held-sale-email`  (tipo = feat)

@@ -1,4 +1,4 @@
-import { escapeHtml, renderTransactionalEmail } from '@/lib/email/layout';
+import { BUYER_FOOTNOTE, escapeHtml, renderTransactionalEmail } from '@/lib/email/layout';
 import { sendEmail } from '@/lib/email/send-email';
 import { withdrawalConsentEmailBlock } from '@/lib/email/withdrawal-consent-block';
 import type { WithdrawalConsentRecord } from '@/lib/withdrawal-consent';
@@ -45,7 +45,8 @@ export async function sendPurchaseConfirmationEmail({
     to,
     kind: 'purchase confirmation',
     subject: 'Your Photo Markt order is confirmed',
-    html: renderTransactionalEmail(`
+    html: renderTransactionalEmail(
+      `
           <!-- Body -->
           <tr>
             <td style="padding: 32px 40px;">
@@ -68,6 +69,8 @@ export async function sendPurchaseConfirmationEmail({
               </p>
             </td>
           </tr>
-${withdrawalConsentEmailBlock(withdrawalConsent)}`),
+${withdrawalConsentEmailBlock(withdrawalConsent)}`,
+      BUYER_FOOTNOTE,
+    ),
   });
 }

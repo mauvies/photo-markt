@@ -511,3 +511,42 @@ export async function getTotalPendingPayouts(
 
   return (data ?? []).reduce((sum, payout) => sum + payout.amount_cents, 0);
 }
+
+/**
+ * How many `connect_inactive` holds this photographer currently has outstanding
+ * (T-250).
+ *
+ * Backs the anti-spam rule for the "you sold something but can't be paid yet"
+ * email: it is sent only when the row that was just opened is the **only** one
+ * outstanding — i.e. this sale *starts* a holding streak. A photographer who
+ * sells 40 photos while disconnected gets one email, not 40.
+ *
+ * The rule needs no new column and no new table because the ledger already
+ * carries the state, and it **self-resets**: once `retry-pending-payouts` drains
+ * the streak (the rows flip to `paid`), a later hold starts a new streak and is
+ * worth telling them about again.
+ *
+ * Deliberately narrower than `getTotalPendingPayouts`, which counts every
+ * unlanded status: this asks "are they already in the state this email
+ * announces?", and a `below_minimum` or `transfer_failed` hold is a different
+ * state with a different remedy.
+ */
+export async function countOutstandingConnectInactiveHolds(
+  supabase: SupabaseServerClient,
+  photographerId: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from('payouts')
+    .select('id', { count: 'exact', head: true })
+    .eq('photographer_id', photographerId)
+    .eq('status', 'pending')
+    .eq('hold_reason', 'connect_inactive');
+
+  if (error) {
+    throw new Error(
+      `Failed to count outstanding connect_inactive holds: ${getErrorMessage(error)}`,
+    );
+  }
+
+  return count ?? 0;
+}

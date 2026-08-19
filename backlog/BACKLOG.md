@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-250 | El fotógrafo que no entra al dashboard no se entera de que tiene dinero esperando | Dep T-248 | todo |
+| 1 | P2 | T-250 | El fotógrafo que no entra al dashboard no se entera de que tiene dinero esperando | Dep T-248 | doing |
 | 2 | P2 | T-232 | La edición de portada existe pero es inalcanzable desde los tabs del evento | — | todo |
 | 3 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | — | todo |
 | 4 | P2 | T-219 | Podar el esquema muerto (`payment_accounts`, `ai_search_profiles`, columnas fantasma, `profiles.is_admin`) | — | todo |

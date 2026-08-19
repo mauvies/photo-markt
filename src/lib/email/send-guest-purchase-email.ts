@@ -1,4 +1,4 @@
-import { escapeHtml, renderTransactionalEmail } from '@/lib/email/layout';
+import { BUYER_FOOTNOTE, escapeHtml, renderTransactionalEmail } from '@/lib/email/layout';
 import { sendEmail } from '@/lib/email/send-email';
 import { withdrawalConsentEmailBlock } from '@/lib/email/withdrawal-consent-block';
 import type { WithdrawalConsentRecord } from '@/lib/withdrawal-consent';
@@ -42,7 +42,8 @@ export async function sendGuestPurchaseEmail({
     to,
     kind: 'guest purchase',
     subject: 'Your Photo Markt photos are ready to download!',
-    html: renderTransactionalEmail(`
+    html: renderTransactionalEmail(
+      `
           <!-- Body -->
           <tr>
             <td style="padding: 32px 40px;">
@@ -83,6 +84,8 @@ ${withdrawalConsentEmailBlock(withdrawalConsent)}
                 Create your free account →
               </a>
             </td>
-          </tr>`),
+          </tr>`,
+      BUYER_FOOTNOTE,
+    ),
   });
 }

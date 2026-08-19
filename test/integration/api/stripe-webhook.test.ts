@@ -72,6 +72,12 @@ vi.mock('@/lib/email/send-guest-purchase-email', () => ({
 vi.mock('@/lib/email/send-purchase-confirmation-email', () => ({
   sendPurchaseConfirmationEmail: vi.fn(async () => undefined),
 }));
+// T-250: only the SEND is stubbed. `notifyPhotographerOfHeldSale` itself stays
+// real, so the anti-spam rule is exercised against the real ledger rows and the
+// address is resolved through the real RPC.
+vi.mock('@/lib/email/send-held-sale-email', () => ({
+  sendHeldSaleEmail: vi.fn(async () => undefined),
+}));
 
 // `next/cache` helpers (revalidatePath, revalidateTag) require the Next.js
 // render-store context which doesn't exist when calling the route handler
@@ -1419,6 +1425,159 @@ describe('app/api/stripe/webhook — payout ledger (T-216)', () => {
     const { listPayableHolds } = await import('@/database/queries/payouts');
     const payable = await listPayableHolds(sb, 50);
     expect(payable.map((row) => row.stripe_charge_id)).toContain('ch_hold_inactive');
+  });
+
+  /**
+   * T-250 — every warning about a `connect_inactive` hold is in-app, and the
+   * photographer it concerns is by definition the one who has not finished
+   * onboarding, so they are the least likely to be looking at a dashboard.
+   */
+  it('emails the photographer when their first sale is held for an inactive account', async () => {
+    const { photographer } = await seedOrder({
+      connectStatus: 'pending',
+      connectAccountId: null,
+      totalPriceCents: 500,
+      paymentIntentId: 'pi_notify_first',
+    });
+
+    const res = await POST(
+      paymentSucceededRequest({
+        paymentIntentId: 'pi_notify_first',
+        chargeId: 'ch_notify_first',
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const { sendHeldSaleEmail } = await import('@/lib/email/send-held-sale-email');
+    expect(vi.mocked(sendHeldSaleEmail)).toHaveBeenCalledTimes(1);
+    const [payload] = vi.mocked(sendHeldSaleEmail).mock.calls[0];
+    // Resolved server-side from the id, via the existing service-role RPC.
+    expect(payload.to).toBe(photographer.email);
+    // 500 gross → 460 net on the Free plan; the same figure the dashboard quotes.
+    expect(payload.heldAmount).toContain('4.60');
+  });
+
+  it('does not email again while the photographer is already in a holding streak', async () => {
+    // The anti-spam rule: a photographer who sells 40 photos while
+    // disconnected gets one email, not 40.
+    const { sb, photographer } = await seedOrder({
+      connectStatus: 'pending',
+      connectAccountId: null,
+      totalPriceCents: 500,
+      paymentIntentId: 'pi_notify_streak_1',
+    });
+
+    expect(
+      (
+        await POST(
+          paymentSucceededRequest({
+            paymentIntentId: 'pi_notify_streak_1',
+            chargeId: 'ch_notify_streak_1',
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    // A second, separate sale for the same photographer, still unable to be paid.
+    const event = await createTestEvent(photographer.id);
+    const photo = await createTestPhoto(event.id);
+    const talent = await createTestUser('TALENT');
+    const { data: second } = await sb
+      .from('orders')
+      .insert({
+        user_id: talent.id,
+        status: 'pending',
+        total_amount_cents: 500,
+        currency: 'eur',
+        stripe_payment_intent_id: 'pi_notify_streak_2',
+      })
+      .select('id')
+      .single();
+    if (!second) throw new Error('second order seed failed');
+    await sb.from('order_items').insert({
+      order_id: second.id,
+      photo_id: photo.id,
+      photographer_id: photographer.id,
+      unit_price_cents: 500,
+      total_price_cents: 500,
+    });
+
+    expect(
+      (
+        await POST(
+          paymentSucceededRequest({
+            paymentIntentId: 'pi_notify_streak_2',
+            chargeId: 'ch_notify_streak_2',
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    // Two holds, one email.
+    const { data: payouts } = await sb
+      .from('payouts')
+      .select('id')
+      .eq('photographer_id', photographer.id)
+      .eq('hold_reason', 'connect_inactive');
+    expect(payouts).toHaveLength(2);
+
+    const { sendHeldSaleEmail } = await import('@/lib/email/send-held-sale-email');
+    expect(vi.mocked(sendHeldSaleEmail)).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the 200 and the hold when the notice cannot be sent', async () => {
+    // The buyer has already paid. A Resend failure must not become a 500, or
+    // Stripe redelivers a money event.
+    const { sendHeldSaleEmail } = await import('@/lib/email/send-held-sale-email');
+    vi.mocked(sendHeldSaleEmail).mockRejectedValueOnce(new Error('Resend is down'));
+
+    const { sb, photographer } = await seedOrder({
+      connectStatus: 'pending',
+      connectAccountId: null,
+      totalPriceCents: 500,
+      paymentIntentId: 'pi_notify_fails',
+    });
+
+    const res = await POST(
+      paymentSucceededRequest({
+        paymentIntentId: 'pi_notify_fails',
+        chargeId: 'ch_notify_fails',
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const { data: payouts } = await sb
+      .from('payouts')
+      .select('status, hold_reason, amount_cents')
+      .eq('photographer_id', photographer.id);
+    expect(payouts).toHaveLength(1);
+    expect(payouts?.[0]?.hold_reason).toBe('connect_inactive');
+    expect(payouts?.[0]?.amount_cents).toBe(460);
+  });
+
+  it('does not email for a hold the photographer cannot clear', async () => {
+    // `below_minimum` drains on its own once more sales accumulate — there is
+    // nothing for them to do, so telling them would be noise.
+    await seedOrder({
+      connectStatus: 'active',
+      connectAccountId: 'acct_test',
+      totalPriceCents: 50,
+      paymentIntentId: 'pi_notify_small',
+    });
+
+    expect(
+      (
+        await POST(
+          paymentSucceededRequest({
+            paymentIntentId: 'pi_notify_small',
+            chargeId: 'ch_notify_small',
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { sendHeldSaleEmail } = await import('@/lib/email/send-held-sale-email');
+    expect(vi.mocked(sendHeldSaleEmail)).not.toHaveBeenCalled();
   });
 
   it('records a hold when the net is below the Stripe transfer minimum', async () => {
