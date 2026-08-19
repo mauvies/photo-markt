@@ -11,17 +11,16 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-250 | El fotógrafo que no entra al dashboard no se entera de que tiene dinero esperando | Dep T-248 | doing |
-| 2 | P2 | T-232 | La edición de portada existe pero es inalcanzable desde los tabs del evento | — | todo |
-| 3 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | — | todo |
-| 4 | P2 | T-219 | Podar el esquema muerto (`payment_accounts`, `ai_search_profiles`, columnas fantasma, `profiles.is_admin`) | — | todo |
-| 5 | P2 | T-254 | El worker de reintentos de payouts solo escribe en consola — un hold atascado para siempre no avisa a nadie | — | todo |
-| 6 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
-| 7 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
-| 8 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
-| 9 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
-| 10 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
-| 11 | P3 | T-223 | Carrito de invitado sin sincronización entre pestañas | — | todo |
+| 1 | P2 | T-232 | La edición de portada existe pero es inalcanzable desde los tabs del evento | — | todo |
+| 2 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | — | todo |
+| 3 | P2 | T-219 | Podar el esquema muerto (`payment_accounts`, `ai_search_profiles`, columnas fantasma, `profiles.is_admin`) | — | todo |
+| 4 | P2 | T-254 | El worker de reintentos de payouts solo escribe en consola — un hold atascado para siempre no avisa a nadie | — | todo |
+| 5 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
+| 6 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
+| 7 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
+| 8 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
+| 9 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
+| 10 | P3 | T-223 | Carrito de invitado sin sincronización entre pestañas | — | todo |
 | — | P1 | T-215 | Clawback: reembolsos y disputas revierten transferencia y acceso | **blocked:** aplazado por el usuario (2026-08-10) — **implementado y pusheado en PR #290 (draft)**, verde; falta `/code-review ultra` antes de mergear. Sin ventas reales no hay disputas posibles | blocked |
 | — | P2 | T-237 | Reembolso parcial: proporcional, y cuadrar el saldo | **blocked:** absorbido en T-215 (PR #290) | blocked |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |
@@ -78,6 +77,26 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 <!-- Añade filas con /ticket y recoloca según orden de ejecución (#). -->
 
 ## Archivo (done)
+
+- **T-250** · Feat/Pagos (P2): T-248 quitó el gate de Connect del checkout, así que la venta de un
+  fotógrafo sin cuenta de cobro **sí se cobra** y su neto queda en un hold `connect_inactive` que el
+  worker de reintentos paga solo. Ese cambio se pagó con avisos, pero **todos eran in-app** —banner,
+  aviso del evento, alerta de Ganancias— y el fotógrafo al que le afecta es, por definición, el que
+  no terminó el onboarding: el menos probable de entrar al dashboard. Ahora se le manda un email
+  (`sendHeldSaleEmail`): has vendido, esto te espera, conecta tu cuenta. **Regla anti-spam decidida y
+  documentada:** se envía solo cuando la fila recién abierta es el **único** hold `connect_inactive`
+  vivo, o sea cuando esa venta *inicia* una racha —40 fotos vendidas sin conectar son un email, no
+  40—; se deriva del propio ledger (sin columna nueva) y **se rearma sola** cuando el worker drena la
+  racha. Derivarla de la BD y no de memoria es lo que la hace funcionar: cada entrega del webhook es
+  una invocación serverless distinta. Solo notifica `connect_inactive`; `below_minimum` y
+  `transfer_failed` se drenan solos y no piden nada al fotógrafo. El importe es
+  `getTotalPendingPayouts`, la misma query del banner y de Ganancias, para que el email y la pantalla
+  a la que enlaza no puedan decir cifras distintas. **Sin PII del comprador** (importe y enlace) y
+  **solo en inglés**, dicho explícitamente: `profiles` no guarda idioma, así que no hay locale que
+  leer —el enlace va **sin segmento de idioma** y `src/proxy.ts` resuelve el del lector—.
+  `notifyPhotographerOfHeldSale` **nunca lanza** y el webhook lo acota además con `EMAIL_TIMEOUT_MS`.
+  ⚠️ A propósito **no** se fusiona con `reportMoneyIncident` (T-249): aquel avisa a la plataforma de
+  un fallo, este avisa al fotógrafo de un estado normal. Sin migración — PR #310
 
 - **T-251** · Fix/UI (P1): un fotógrafo con un evento y 35 fotos veía «Fotos subidas: 0» y «Eventos
   creados: 0». **Los números estaban bien; las etiquetas mentían.** Las cuatro tarjetas de
