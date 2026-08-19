@@ -1,12 +1,12 @@
 # T-220 · Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Riesgo:** alto  (pagos)
 - **Blockers:** ninguno
 - **Rama:** `refactor/payout-approval-decision`  (tipo = refactor)
-- **OpenSpec change:** **sí** — decisión de producto
-- **PR:** —
+- **OpenSpec change:** **sí** — `openspec/changes/prune-manual-payout-approval/`
+- **PR:** #312
 - **Dep:** ejecutar junto a T-216
 
 ## Requerimiento
