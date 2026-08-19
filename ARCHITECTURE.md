@@ -369,8 +369,16 @@ The cart lives in Postgres for authenticated users. Checkout creates a Stripe
 Checkout Session; the order is **only** written to the DB after Stripe
 confirms via webhook, so abandoned checkouts produce no order rows. The
 `checkout.session.completed` event writes the order and clears the cart; the
-subsequent `payment_intent.succeeded` flips the status to `completed` *and*
-creates the per-photographer Connect transfers in the same handler.
+subsequent `payment_intent.succeeded` flips the status to `completed`. **Both
+events then drive the per-photographer Connect transfers for authenticated
+orders** through the shared `drivePayoutsForOrder` (T-252) — Stripe does not
+guarantee delivery order, and when only the payment event transferred, a delivery
+that arrived first found no order yet and nobody ever paid. Whichever arrives
+first pays; the second no-ops on `openPayoutRow`'s unique index rather than
+paying twice. A *redelivery* of a session whose order already exists stops
+before the drive: that index is partial on `stripe_charge_id is not null`, so
+pre-T-216 rows are outside it and re-driving an old session would pay twice.
+The guest flow (`checkout.session.completed` only) still has a single driver.
 
 ```mermaid
 sequenceDiagram
@@ -391,8 +399,11 @@ sequenceDiagram
   S->>App: webhook: checkout.session.completed
   App->>SB: createOrder(status='completed') + addOrderItems (service role)
   App->>SB: clearCart(cart_id)
+  App->>S: paymentIntents.retrieve (latest_charge)
+  App->>SB: drivePayoutsForOrder → transfers (T-252)
 
   S->>App: webhook: payment_intent.succeeded
+  Note over App,SB: same drive; openPayoutRow returns null if already paid
   App->>SB: SELECT order_items by order_id
   loop For each (photographer, total_price)
     App->>S: stripe.transfers.create(amount, destination=connect_account, idempotency_key)
@@ -443,8 +454,9 @@ sequenceDiagram
 ### 4.3 Photographer payout (via Stripe Connect transfer)
 
 **Correction to CLAUDE.md:** there is no weekly payout cron. Transfers fire
-**synchronously** with `payment_intent.succeeded` in the Stripe webhook,
-one per (order_item, photographer) pair. Since **T-216** there *is* a retry
+**synchronously** in the Stripe webhook, one per (order_item, photographer)
+pair, from whichever of `checkout.session.completed` / `payment_intent.succeeded`
+arrives first (T-252). Since **T-216** there *is* a retry
 cron (`retry-pending-payouts`, `10,40 * * * *`), but it only drains money the
 synchronous path could not send — a recovery path, not the normal one.
 `/api/admin/payouts/[id]` still exists and now refuses ledger-managed rows;

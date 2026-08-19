@@ -1,7 +1,7 @@
 # T-252 · Si Stripe entrega `payment_intent.succeeded` antes que `checkout.session.completed`, la transferencia no ocurre nunca
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** alto  (pagos)
 - **Blockers:** ninguno
 - **Rama:** `fix/transfers-on-out-of-order-webhook`  (tipo = fix)

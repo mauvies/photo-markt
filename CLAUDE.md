@@ -394,14 +394,46 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
     cart *after* earlier photographers were transferred and settled, so an operator acting on
     "nothing was paid" would pay them twice. It names the `payouts` rows as the authority instead.
 
-  ⚠️ **One hole is known and deliberately still open: T-252.** Stripe does not guarantee event
-  ordering, and `createTransfersForOrderItems` is reachable from only two places — the guest path and
-  `payment_intent.succeeded`. If `payment_intent.succeeded` arrives *before*
-  `checkout.session.completed`, `getOrderByPaymentIntentId` returns null, the whole block is skipped,
-  and the authenticated `checkout.session.completed` then creates a `completed` order **without ever
-  transferring**. Closing it means re-driving transfers (safe by construction — `openPayoutRow`'s
-  unique index makes the double-pay impossible), which changes the money flow rather than just
-  observing it, so it is its own ticket.
+  ⚠️ **BOTH payment events drive the transfers, and that is deliberate (T-252).** Stripe does not
+  guarantee event ordering. When only `payment_intent.succeeded` transferred, a delivery that beat
+  `checkout.session.completed` found no order (`getOrderByPaymentIntentId` → null), skipped the whole
+  block and returned 200 — and the authenticated `checkout.session.completed` then created a
+  `completed` order **without ever transferring**: buyer charged, photographer unpaid, zero `payouts`
+  rows, not one log line. The same shape as the 2026-07-28 incident, and one that T-249 by
+  construction could not catch, since it alerts the exits that *run*. Both handlers now call the
+  shared **`drivePayoutsForOrder`** (order items → `createTransfersForOrderItems`); whichever arrives
+  first pays, and the second no-ops because `openPayoutRow` reserves the row **before** the Stripe
+  call and hands every later writer a `null` on the `(stripe_charge_id, photographer_id)` unique index
+  (T-216). Re-driving is only safe because of that ordering — reverse it and this becomes a
+  double-pay.
+  - ⚠️ **Only the delivery that CREATES the order drives its payouts.** A redelivery whose order
+    already exists still stops at the already-exists guard, and re-driving there is **not** the free
+    win it looks like: the unique index is partial `where stripe_charge_id is not null`, and every
+    row written before T-216 has a null charge id (the old `createPayoutFromTransfer` stored none),
+    so resending an old session — routine here since the T-192 backlog — would open a fresh row
+    under a new idempotency key and **pay twice**. A refunded order would transfer too
+    (`charge.refunded` voids `pending` holds; it cannot un-send a transfer). An order that exists
+    without payouts is `payment_intent.succeeded`'s to recover. Pinned by the redelivery test in
+    `test/integration/api/stripe-webhook.test.ts`, which asserts the second delivery does not even
+    reach the Stripe read.
+  - **An authenticated session that is `unpaid` (delayed payment method) or `no_payment_required`
+    skips the drive** and waits for `payment_intent.succeeded`; any other/absent `payment_status`
+    falls through and *attempts* the transfer, because a premature attempt is refused by Stripe and
+    parked as a recoverable `transfer_failed` hold, while skipping it would be silence. ⚠️ The
+    **guest** branch has no such check and no second driver at all (`getOrderByPaymentIntentId`
+    reads `orders`, and there is no `getGuestOrderByPaymentIntentId`) — its own hole, not this one's.
+  - **Every incident raised inside the shared drive carries `source`.** A genuine failure now alerts
+    once per delivery, from two serverless invocations no per-process throttle can dedupe, so the
+    field is what lets an operator tell a duplicate from a second loss on the same order. For the
+    same reason neither of the drive's alerts may say "nothing was paid" any more: the sibling
+    handler may already have paid part of the order, and the `payouts` rows are the authority.
+  - **The buyer's confirmation email is bounded (5 s).** It now sits *before* the money moves, and
+    Stripe treats a slow response as a failed delivery — an unbounded Resend could push the
+    invocation past that timeout and strand the transfers, since the redelivery stops at the guard.
+  - ⚠️ **A `payment_intent.succeeded` with no order is reported NOWHERE, on purpose.** Subscriptions
+    (they carry an `invoice`) and guest payments (they live in `guest_orders`) legitimately have no
+    `orders` row, and the out-of-order case is now covered by the other handler — alerting on all
+    three would bury the signal the money incidents exist to carry.
 
   The alert changes **nothing** about the flow: same `continue`, same 200. The reporter is
   shared with the parked T-215/PR #290 branch (rescued from it rather than rewritten, so the two can't

@@ -168,8 +168,25 @@ describe('app/api/stripe/webhook — signature verification', () => {
 });
 
 describe('app/api/stripe/webhook — checkout.session.completed (payment mode)', () => {
+  let restoreRetrieve: (() => void) | null = null;
+
   beforeEach(async () => {
     await resetDatabase();
+    // T-252: the authenticated branch now drives the photographer transfers
+    // too, which means resolving the charge off the PaymentIntent exactly as
+    // the guest branch already did. Stub it so these tests stay off the network.
+    const { stripe: routeStripe } = await import('@/lib/stripe/config');
+    const spy = vi.spyOn(routeStripe.paymentIntents, 'retrieve').mockResolvedValue({
+      id: 'pi_stub',
+      object: 'payment_intent',
+      latest_charge: 'ch_stub',
+    } as never);
+    restoreRetrieve = () => spy.mockRestore();
+  });
+
+  afterEach(() => {
+    restoreRetrieve?.();
+    restoreRetrieve = null;
   });
 
   it('creates an order + order_items from the buyer cart and clears it', async () => {
@@ -1959,5 +1976,346 @@ describe('app/api/stripe/webhook — pre-ledger silent losses are reported (T-24
       .select('*', { count: 'exact', head: true })
       .eq('stripe_checkout_session_id', 'cs_guest_throws');
     expect(count).toBe(1);
+  });
+});
+
+/**
+ * T-252 — Stripe does not guarantee the order in which it delivers events, and
+ * until this ticket only `payment_intent.succeeded` created transfers. Delivered
+ * first, it found no order (the session event had not created one yet), skipped
+ * the whole block and returned 200; the order then arrived already `completed`
+ * and nobody ever transferred — buyer charged, photographer unpaid, zero
+ * `payouts` rows, not one log line. These tests pin the property that matters:
+ * **both delivery orders converge on the same final state**, and neither pays
+ * twice.
+ */
+describe('app/api/stripe/webhook — out-of-order delivery (T-252)', () => {
+  let restoreRetrieve: (() => void) | null = null;
+
+  beforeEach(async () => {
+    await resetDatabase();
+    vi.clearAllMocks();
+    restoreRetrieve = null;
+  });
+
+  afterEach(() => {
+    restoreRetrieve?.();
+    restoreRetrieve = null;
+  });
+
+  /** One connected photographer, one photo, one talent cart holding it. */
+  async function seedCart() {
+    const sb = createServiceClient();
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    await sb
+      .from('profiles')
+      .update({ stripe_connect_account_id: 'acct_t252', stripe_connect_status: 'active' })
+      .eq('id', photographer.id);
+    const event = await createTestEvent(photographer.id, { price_per_photo: 5 });
+    const photo = await createTestPhoto(event.id);
+    const talent = await createTestUser('TALENT');
+
+    const { data: cart } = await sb
+      .from('carts')
+      .insert({ user_id: talent.id })
+      .select('id')
+      .single();
+    if (!cart) throw new Error('cart seed failed');
+    await sb.from('cart_items').insert({
+      cart_id: cart.id,
+      photo_id: photo.id,
+      photographer_id: photographer.id,
+      unit_price_cents: 500,
+    });
+
+    return { sb, photographer, talent, cart };
+  }
+
+  /** The session payload carries no charge, so the handler retrieves the PI. */
+  async function stubChargeLookup(paymentIntentId: string, chargeId: string) {
+    const { stripe: routeStripe } = await import('@/lib/stripe/config');
+    const spy = vi.spyOn(routeStripe.paymentIntents, 'retrieve').mockResolvedValue({
+      id: paymentIntentId,
+      object: 'payment_intent',
+      latest_charge: chargeId,
+    } as never);
+    restoreRetrieve = () => spy.mockRestore();
+  }
+
+  function sessionCompletedRequest(opts: {
+    sessionId: string;
+    cartId: string;
+    userId: string;
+    paymentIntentId: string;
+  }) {
+    return signedWebhookRequest({
+      id: `evt_${opts.sessionId}`,
+      type: 'checkout.session.completed',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: opts.sessionId,
+          object: 'checkout.session',
+          mode: 'payment',
+          payment_status: 'paid',
+          client_reference_id: opts.cartId,
+          payment_intent: opts.paymentIntentId,
+          amount_total: 500,
+          currency: 'eur',
+          metadata: { user_id: opts.userId, cart_id: opts.cartId },
+        },
+      },
+    });
+  }
+
+  function paymentSucceededRequest(opts: { paymentIntentId: string; chargeId: string }) {
+    return signedWebhookRequest({
+      id: `evt_${opts.paymentIntentId}`,
+      type: 'payment_intent.succeeded',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: opts.paymentIntentId,
+          object: 'payment_intent',
+          latest_charge: opts.chargeId,
+          amount: 500,
+        },
+      },
+    });
+  }
+
+  it('pays the photographer when payment_intent.succeeded is delivered FIRST', async () => {
+    const { sb, photographer, talent, cart } = await seedCart();
+    await stubChargeLookup('pi_t252_out', 'ch_t252_out');
+
+    const { createTransfer } = await import('@/lib/stripe/connect');
+    const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+
+    // 1. The payment lands before the session. There is no order to find yet.
+    expect(
+      (
+        await POST(
+          paymentSucceededRequest({
+            paymentIntentId: 'pi_t252_out',
+            chargeId: 'ch_t252_out',
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { data: earlyPayouts } = await sb
+      .from('payouts')
+      .select('id')
+      .eq('photographer_id', photographer.id);
+    expect(earlyPayouts).toHaveLength(0);
+    expect(vi.mocked(createTransfer)).not.toHaveBeenCalled();
+
+    // A payment intent with no order is ORDINARY (subscriptions, guest orders),
+    // so it must stay quiet — an alert here would bury the real ones.
+    expect(vi.mocked(reportMoneyIncident)).not.toHaveBeenCalled();
+
+    // 2. The session arrives second and must pay. Before T-252 it created the
+    //    order and stopped, and nobody ever transferred.
+    expect(
+      (
+        await POST(
+          sessionCompletedRequest({
+            sessionId: 'cs_t252_out',
+            cartId: cart.id,
+            userId: talent.id,
+            paymentIntentId: 'pi_t252_out',
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { data: order } = await sb
+      .from('orders')
+      .select('id, status')
+      .eq('stripe_checkout_session_id', 'cs_t252_out')
+      .single();
+    expect(order?.status).toBe('completed');
+
+    const { data: payouts } = await sb
+      .from('payouts')
+      .select('status, amount_cents, stripe_charge_id, hold_reason, order_id, order_kind')
+      .eq('photographer_id', photographer.id);
+
+    expect(payouts).toHaveLength(1);
+    expect(payouts?.[0]?.status).toBe('paid');
+    expect(payouts?.[0]?.amount_cents).toBe(460); // 500 gross − 8% Free commission
+    expect(payouts?.[0]?.stripe_charge_id).toBe('ch_t252_out');
+    expect(payouts?.[0]?.hold_reason).toBeNull();
+    expect(payouts?.[0]?.order_id).toBe(order?.id);
+    expect(payouts?.[0]?.order_kind).toBe('order');
+    expect(vi.mocked(createTransfer)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(reportMoneyIncident)).not.toHaveBeenCalled();
+  });
+
+  it('converges on the identical state when the two events arrive in order', async () => {
+    const { sb, photographer, talent, cart } = await seedCart();
+    await stubChargeLookup('pi_t252_in', 'ch_t252_in');
+
+    const { createTransfer } = await import('@/lib/stripe/connect');
+    const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+
+    expect(
+      (
+        await POST(
+          sessionCompletedRequest({
+            sessionId: 'cs_t252_in',
+            cartId: cart.id,
+            userId: talent.id,
+            paymentIntentId: 'pi_t252_in',
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    // The payment event follows and finds the money already sent. It must not
+    // send it again — `openPayoutRow` hands it a null on the unique index.
+    expect(
+      (
+        await POST(
+          paymentSucceededRequest({ paymentIntentId: 'pi_t252_in', chargeId: 'ch_t252_in' }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { data: order } = await sb
+      .from('orders')
+      .select('id, status')
+      .eq('stripe_checkout_session_id', 'cs_t252_in')
+      .single();
+    expect(order?.status).toBe('completed');
+
+    const { data: payouts } = await sb
+      .from('payouts')
+      .select('status, amount_cents, stripe_charge_id, hold_reason, order_id, order_kind')
+      .eq('photographer_id', photographer.id);
+
+    // Identical to the out-of-order run above — that equality IS the fix.
+    expect(payouts).toHaveLength(1);
+    expect(payouts?.[0]?.status).toBe('paid');
+    expect(payouts?.[0]?.amount_cents).toBe(460);
+    expect(payouts?.[0]?.stripe_charge_id).toBe('ch_t252_in');
+    expect(payouts?.[0]?.hold_reason).toBeNull();
+    expect(payouts?.[0]?.order_id).toBe(order?.id);
+    expect(payouts?.[0]?.order_kind).toBe('order');
+    expect(vi.mocked(createTransfer)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(reportMoneyIncident)).not.toHaveBeenCalled();
+  });
+
+  it('does not re-enter the money path when checkout.session.completed is redelivered', async () => {
+    // ⚠️ The redelivery must stop at the already-exists guard and touch NOTHING
+    // — not the transfers, not the email, not the cart. Re-driving the payouts
+    // here looks free (`openPayoutRow` would hand the second writer a null) but
+    // the index backing that guard is partial on `stripe_charge_id is not null`,
+    // and every row written before T-216 has a null charge id: a resent old
+    // session would open a fresh row under a new idempotency key and pay twice.
+    const { sb, photographer, talent, cart } = await seedCart();
+    await stubChargeLookup('pi_t252_dup', 'ch_t252_dup');
+
+    const { sendPurchaseConfirmationEmail } = await import(
+      '@/lib/email/send-purchase-confirmation-email'
+    );
+    const { stripe: routeStripe } = await import('@/lib/stripe/config');
+    const { createTransfer } = await import('@/lib/stripe/connect');
+
+    const build = () =>
+      sessionCompletedRequest({
+        sessionId: 'cs_t252_dup',
+        cartId: cart.id,
+        userId: talent.id,
+        paymentIntentId: 'pi_t252_dup',
+      });
+
+    expect((await POST(build())).status).toBe(200);
+
+    const callsAfterFirst = {
+      transfer: vi.mocked(createTransfer).mock.calls.length,
+      email: vi.mocked(sendPurchaseConfirmationEmail).mock.calls.length,
+      retrieve: vi.mocked(routeStripe.paymentIntents.retrieve).mock.calls.length,
+    };
+
+    expect((await POST(build())).status).toBe(200);
+
+    // Nothing ran a second time — including the live Stripe read the drive needs,
+    // which is the cheapest proof the redelivery never entered the money path.
+    expect(vi.mocked(createTransfer)).toHaveBeenCalledTimes(callsAfterFirst.transfer);
+    expect(vi.mocked(sendPurchaseConfirmationEmail)).toHaveBeenCalledTimes(callsAfterFirst.email);
+    expect(vi.mocked(routeStripe.paymentIntents.retrieve)).toHaveBeenCalledTimes(
+      callsAfterFirst.retrieve,
+    );
+
+    const { count: orderCount } = await sb
+      .from('orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('stripe_checkout_session_id', 'cs_t252_dup');
+    expect(orderCount).toBe(1);
+
+    const { data: payouts } = await sb
+      .from('payouts')
+      .select('status')
+      .eq('photographer_id', photographer.id);
+    expect(payouts).toHaveLength(1);
+  });
+
+  it('leaves the transfers to payment_intent.succeeded while the session is unpaid', async () => {
+    const { sb, photographer, talent, cart } = await seedCart();
+
+    // A delayed payment method completes the session with `payment_status:
+    // 'unpaid'`. There is no money to split yet, and this is not silence: the
+    // payment event drives the transfers once the funds settle.
+    const req = signedWebhookRequest({
+      id: 'evt_cs_t252_unpaid',
+      type: 'checkout.session.completed',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: 'cs_t252_unpaid',
+          object: 'checkout.session',
+          mode: 'payment',
+          payment_status: 'unpaid',
+          client_reference_id: cart.id,
+          payment_intent: 'pi_t252_unpaid',
+          amount_total: 500,
+          currency: 'eur',
+          metadata: { user_id: talent.id, cart_id: cart.id },
+        },
+      },
+    });
+    expect((await POST(req)).status).toBe(200);
+
+    const { createTransfer } = await import('@/lib/stripe/connect');
+    const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+    expect(vi.mocked(createTransfer)).not.toHaveBeenCalled();
+    expect(vi.mocked(reportMoneyIncident)).not.toHaveBeenCalled();
+
+    const { data: payouts } = await sb
+      .from('payouts')
+      .select('id')
+      .eq('photographer_id', photographer.id);
+    expect(payouts).toHaveLength(0);
+
+    // …and it does land once the payment settles.
+    expect(
+      (
+        await POST(
+          paymentSucceededRequest({
+            paymentIntentId: 'pi_t252_unpaid',
+            chargeId: 'ch_t252_unpaid',
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { data: settled } = await sb
+      .from('payouts')
+      .select('status, amount_cents')
+      .eq('photographer_id', photographer.id);
+    expect(settled).toHaveLength(1);
+    expect(settled?.[0]?.status).toBe('paid');
+    expect(settled?.[0]?.amount_cents).toBe(460);
   });
 });

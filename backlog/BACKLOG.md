@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-252 | Si Stripe entrega `payment_intent.succeeded` antes que `checkout.session.completed`, la transferencia no ocurre nunca | — | todo |
+| 1 | P1 | T-252 | Si Stripe entrega `payment_intent.succeeded` antes que `checkout.session.completed`, la transferencia no ocurre nunca | — | doing |
 | 2 | P1 | T-253 | Los tres emails transaccionales tragan los errores de Resend — un comprador puede pagar y no recibir sus fotos | — | todo |
 | 3 | P1 | T-251 | «Fotos subidas» y «Eventos creados» dicen 0 con 35 fotos y 1 evento | — | todo |
 | 4 | P2 | T-250 | El fotógrafo que no entra al dashboard no se entera de que tiene dinero esperando | Dep T-248 | todo |
