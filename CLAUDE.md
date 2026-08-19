@@ -363,6 +363,22 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
 - Transfers fire **per order**, synchronously in the Stripe webhook on `payment_intent.succeeded` (one per `(order_item, photographer)`). Since T-216 a **retry cron** (`retry-pending-payouts`, `10,40 * * * *`) drains what the synchronous path could not send — a recovery path, not the normal one.
 - ⚠️ **The row is created BEFORE the Stripe call and its id IS the idempotency key** (`payout_<row.id>`), used identically by the webhook and the retry worker. **And the parameters must match too** — Stripe compares the *whole request body* against the one stored under a key and 400s on divergence, so `transfer_group` comes from `payoutTransferGroup(row.id)` in **both** writers, never from the order id. That mismatch wedges every `transfer_failed` retry for 24h (looking exactly like a Stripe outage in the logs) and then double-pays once the key expires. That is what makes the partial unique index on **`(stripe_charge_id, photographer_id)`** *prevent* a second payment rather than merely record one. Reverse the order and you get the pre-T-216 bug back: the two writers had separate idempotency namespaces, so a redelivery past Stripe's 24h window paid twice and the swallowed `23505` erased the evidence. `UNIQUE(stripe_transfer_id)` is **gone** (one aggregated transfer settles N rows); the plain lookup index stays.
 - **Three exits used to lose money with a `console.warn`** — Connect not active, net < 50¢, `createTransfer` threw. Each now writes a `pending` row with `hold_reason` (`connect_inactive` / `below_minimum` / `transfer_failed`). `processing` = a Stripe call is in flight.
+- **A `connect_inactive` hold emails the photographer (T-250).** Every other warning about that
+  state is in-app (dashboard banner, event notice, Earnings alert) and its owner is by definition the
+  one who has not finished onboarding — the least likely to be looking at a dashboard. Only that hold
+  reason notifies: `below_minimum` and `transfer_failed` drain on their own and need nothing from
+  them. **Anti-spam rule: send only when the row just opened is the ONLY outstanding
+  `connect_inactive` hold** (`countOutstandingConnectInactiveHolds` === 1), so this sale *starts* a
+  streak — 40 sold photos are one email, not 40. It needs no new column and **self-resets**: once the
+  retry worker drains the streak, a later hold is worth telling them about again. DB-derived on
+  purpose — each delivery is its own serverless invocation, so an in-process flag would dedupe
+  nothing (two truly concurrent first sales could send twice; bounded and far better than the
+  reverse). The amount quoted is `getTotalPendingPayouts`, the same query behind the dashboard and
+  Earnings alerts, so the email and the screen it links to cannot disagree.
+  `notifyPhotographerOfHeldSale` (`src/lib/payouts/notify-held-sale.ts`) **never throws** and the
+  webhook additionally bounds it with `EMAIL_TIMEOUT_MS`. ⚠️ Do not merge it with
+  `reportMoneyIncident`: that alerts **us** about a failure, this tells the **photographer** about a
+  normal state — different recipient, different severity.
 - **Only sub-50¢ rows are batched.** Anything that clears the minimum alone transfers individually with `source_transaction`, which both guarantees funding and lets Stripe refuse an over-draw — a double-pay guard that never expires, unlike the 24h key. Batching is grouped `(photographer, currency)` and drops `source_transaction` (Stripe allows one source charge per transfer), so it draws on the *platform* balance; that's tolerable only because those amounts are tiny. Single calc point: `splitPayableRows` in **`src/lib/payouts/batching.ts`**.
 - ⚠️ **The retry worker only considers rows with BOTH `hold_reason` and `stripe_charge_id` set.** That is a security filter: `pending` predates T-216 and an RLS policy used to let photographers INSERT their own rows, which a paying worker would turn into theft.
 - **`payouts` is photographer-read / service-role-write.** The INSERT and pending→cancelled UPDATE policies were dropped in `20260807000000` for exactly that reason; `createPayout` is dead code. Pinned by `test/integration/security/payouts-rls.test.ts`.
@@ -675,6 +691,15 @@ got nothing, and the webhook's `catch` never fired.
   offers a 30-day token, the signed-in one a permanent library.
 - `escapeHtml` is applied to **event names** in both buyer templates: those are photographer-typed and
   land in hand-assembled HTML.
+- **`renderTransactionalEmail` takes its footnote as a required argument** (T-250). The buyer wording
+  ("because you purchased photos") is plainly wrong on a message to a photographer about their own
+  sale, and a default is exactly how that ships unnoticed. `BUYER_FOOTNOTE` is shared by the two
+  receipts.
+- **All templates are English-only**, now including the photographer-facing one. The buyer receipts
+  never receive a locale; `profiles` stores no language preference at all, so there is nothing to
+  read even if we wanted to. The held-sale CTA link therefore carries **no locale segment** —
+  `src/proxy.ts` resolves one from the reader's own cookie / `Accept-Language`, so the page lands in
+  their language even though the email does not.
 
 ### Photographer Payouts (Stripe Connect)
 - Photographers connect Stripe Express accounts in `/dashboard/photographer/settings/payout-profile/`

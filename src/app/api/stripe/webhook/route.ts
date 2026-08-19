@@ -87,6 +87,7 @@ import {
   payoutTransferGroup,
   STRIPE_MIN_TRANSFER_CENTS,
 } from '@/lib/payouts/batching';
+import { notifyPhotographerOfHeldSale } from '@/lib/payouts/notify-held-sale';
 import { getPhotographerNetCents } from '@/lib/plans';
 import { stripe } from '@/lib/stripe/config';
 import {
@@ -295,6 +296,28 @@ async function createTransfersForOrderItems(
       console.warn(
         `[payouts] held ${netCents} cents for photographer ${status.id} (${holdReason}); payout ${payout.id} awaits retry.`,
       );
+
+      // T-250: tell the photographer their money is waiting. Only for
+      // `connect_inactive` — that is the hold they can actually clear, and the
+      // one whose owner is least likely to be looking at the dashboard, since
+      // by definition they have not finished onboarding. `below_minimum` and
+      // `transfer_failed` drain on their own and need nothing from them.
+      //
+      // Bounded and swallowed, like every third-party call in this handler:
+      // `notifyPhotographerOfHeldSale` never throws, and the timeout covers the
+      // case where Resend hangs instead of failing — this loop still has other
+      // photographers to pay, and a slow response makes Stripe redeliver.
+      if (holdReason === 'connect_inactive') {
+        const outcome = await withWebhookTimeout(
+          notifyPhotographerOfHeldSale(supabaseAdmin, status.id),
+          EMAIL_TIMEOUT_MS,
+        ).catch((err) => {
+          console.error(`[payouts] held-sale notice timed out for photographer ${status.id}:`, err);
+          return 'failed' as const;
+        });
+        console.log(`[payouts] held-sale notice for photographer ${status.id}: ${outcome}`);
+      }
+
       continue;
     }
 

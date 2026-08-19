@@ -10,14 +10,21 @@
  * the same doctype/table/header block was written out four times.
  */
 
+/** Footnote for the two buyer receipts — shared so the wording can't drift. */
+export const BUYER_FOOTNOTE =
+  'You received this email because you purchased photos on Photo Markt.';
+
 /**
- * Buyer-facing wrapper: centred 560px card on a grey page, with the Photo Markt
- * header and the "why you got this" footnote.
+ * Wrapper for a message to a person: centred 560px card on a grey page, with
+ * the Photo Markt header and a "why you got this" footnote.
  *
  * `rowsHtml` is the caller's `<tr>` rows, inserted straight after the header row
- * of the card table.
+ * of the card table. `footnote` is required rather than defaulted (T-250): the
+ * buyer text — "because you purchased photos" — is plainly wrong on an email to
+ * a photographer about their own sale, and a default is exactly how that ships
+ * unnoticed.
  */
-export function renderTransactionalEmail(rowsHtml: string): string {
+export function renderTransactionalEmail(rowsHtml: string, footnote: string): string {
   return `
 <!DOCTYPE html>
 <html>
@@ -40,7 +47,7 @@ ${rowsHtml}
         </table>
 
         <p style="margin: 20px 0 0; color: #9ca3af; font-size: 12px;">
-          You received this email because you purchased photos on Photo Markt.
+          ${footnote}
         </p>
       </td>
     </tr>

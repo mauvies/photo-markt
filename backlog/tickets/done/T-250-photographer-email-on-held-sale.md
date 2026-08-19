@@ -1,12 +1,12 @@
 # T-250 · El fotógrafo que no entra al dashboard no se entera de que tiene dinero esperando
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Riesgo:** normal  (plantilla de email + un envío best-effort; no toca el cálculo ni el movimiento del dinero)
 - **Blockers:** ninguno  (Dep T-248 / PR #305 — mergear antes, es quien crea el caso)
 - **Rama:** `feat/photographer-held-sale-email`  (tipo = feat)
 - **OpenSpec change:** —
-- **PR:** —
+- **PR:** #310
 
 ## Requerimiento
 
@@ -25,18 +25,18 @@ onboarding, así que es el más probable de no entrar.
 
 ## Criterio de aceptación (Definition of Done)
 
-- [ ] Cuando el webhook abre una fila `payouts` con `hold_reason = 'connect_inactive'`, se envía al
+- [x] Cuando el webhook abre una fila `payouts` con `hold_reason = 'connect_inactive'`, se envía al
       fotógrafo un email que dice que ha vendido, cuánto le espera, y que conecte su cuenta para cobrarlo
-- [ ] El envío es **best-effort y no puede tumbar el webhook**: el pago ya ocurrió, y un fallo de Resend
+- [x] El envío es **best-effort y no puede tumbar el webhook**: el pago ya ocurrió, y un fallo de Resend
       no debe provocar que Stripe reentregue el evento (mismo criterio que el `try/catch` de `openPayoutRow`)
-- [ ] **No se repite en cada venta.** Decidir y documentar la regla anti-spam (p. ej. solo en el primer
+- [x] **No se repite en cada venta.** Decidir y documentar la regla anti-spam (p. ej. solo en el primer
       hold, o como mucho uno por día/fotógrafo) — un fotógrafo con 40 fotos vendidas no debe recibir 40 emails
-- [ ] **Sin PII del comprador** en el email: importes e ids, nunca su email ni su nombre
-- [ ] Decidir el locale. Las plantillas actuales son solo inglés porque no reciben el idioma de quien
+- [x] **Sin PII del comprador** en el email: importes e ids, nunca su email ni su nombre
+- [x] Decidir el locale. Las plantillas actuales son solo inglés porque no reciben el idioma de quien
       las recibe; aquí sí hay un `profiles` del que leerlo — si se deja en inglés, decirlo explícitamente
-- [ ] Test de regresión: se abre un hold `connect_inactive` ⇒ se intenta el envío; el envío falla ⇒ el
+- [x] Test de regresión: se abre un hold `connect_inactive` ⇒ se intenta el envío; el envío falla ⇒ el
       webhook sigue devolviendo 200
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
 
