@@ -150,11 +150,11 @@ reads/writes from the app → `src/database/queries/`.
 
 The schema separates clearly into three concerns: identity (`profiles`,
 `admin_users`, `subscriptions`), commerce (`carts → orders → payouts`), and
-AI face matching (`ai_search_profiles`, `photo_faces`). All `*_id` FKs to "users" are
+AI face matching (`photo_faces`). All `*_id` FKs to "users" are
 to Supabase's built-in `auth.users` table (shown collapsed onto `profiles`
 since `profiles.id` is a 1:1 FK to it). Auxiliary tables like
 `talent_photo_tags`, `rate_limit_buckets`, `download_tokens`, `guest_orders`,
-`event_photographers`, `time_sync_tokens`, `user_roles`, `feedback`, and
+`event_photographers`, `user_roles`, `feedback`, and
 `pending_guest_checkouts` exist in the migrations but are omitted here to
 keep the diagram readable — they're described in prose below.
 
@@ -337,31 +337,32 @@ erDiagram
   (`aws_face_id`, `aws_collection_id`, `confidence`, `bounding_box`). Unique on
   `(photo_id, aws_face_id)`. Talent selfie search maps Rekognition face IDs back
   to photos through this table (`src/database/queries/rekognition.ts`).
-- `ai_search_usage` — monthly per-user search counter, unique on
-  `(user_id, period_year, period_month)`. Part of the legacy AI schema and no
-  longer queried from application code; the live per-search/monthly quotas are
-  enforced via `src/lib/rate-limit.ts` + `src/lib/ai/rate-limits.ts`.
 - `download_tokens` — opaque tokens minted on purchase that let guests
   download their photos via `/[lang]/download/[token]` without auth.
 - `guest_orders` / `guest_order_items` / `pending_guest_checkouts` — mirror
   of the authenticated order flow for unauthenticated buyers.
 - `event_photographers` — invitations to additional photographers for
   collaborative "organizer" events.
-- `time_sync_tokens` — backs the camera-time-sync feature.
 - `user_roles` / `user_role_memberships` — set of roles a user may switch
   between (vs `profiles.active_role` which is the *currently selected* role).
 - `feedback` — user-submitted product feedback.
 
-**Legacy AI schema (vestigial):** the original pgvector matching path —
+**Legacy AI schema — gone.** The original pgvector matching path was removed in
+two passes. `20260518000000_drop_legacy_ai_schema.sql` dropped
 `photo_embeddings`, `ai_search_profiles.selfie_embedding`,
-`photos.photo_hash` / `color_signature`, and the
-`search_photos_by_similarity()` RPC — was dropped in migration
-`20260518000000_drop_legacy_ai_schema.sql` and is no longer referenced from
-code. Any remnants that still physically exist (e.g. the `photo_embeddings`
-table or `ai_search_usage` RPCs flagged in `docs/AI_MATCHING_AUDIT.md` for
-permissive `using (true)` policies and un-revoked `SECURITY DEFINER` EXECUTE)
-should be dropped or locked down — they are not part of the live Rekognition
-flow.
+`photos.photo_hash` / `color_signature` and the `search_photos_by_similarity()`
+RPC; `20260820000000_prune_dead_schema.sql` (T-219) finished the job, dropping
+`ai_search_profiles`, `ai_search_usage`, the orphaned
+`set_photo_embeddings_updated_at()` trigger function and the `vector` extension
+itself. The same migration removed the other unfinished features'
+leftovers — `payment_accounts` (superseded by Stripe Connect),
+`time_sync_tokens`, `upload_batches`, `upload_objects`, `profiles.is_admin`
+(authorization is `admin_users`) and the ghost `events` columns
+`start_date` / `end_date` / `time_offset` / `time_sync_enabled` /
+`organizer_fee_per_photo_cents`. Live face matching is AWS Rekognition, which
+stores its embeddings in AWS; the DB keeps only the returned `aws_face_id` per
+photo in `photo_faces`. `test/unit/database/dead-schema-pruned.test.ts` keeps
+any of it from returning.
 
 ---
 

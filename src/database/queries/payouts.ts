@@ -26,7 +26,6 @@ export interface Payout {
   amount_cents: number;
   status: PayoutStatus;
   admin_notes: string | null;
-  payment_account_id: string | null;
   stripe_transfer_id: string | null;
   stripe_charge_id: string | null;
   currency: string | null;

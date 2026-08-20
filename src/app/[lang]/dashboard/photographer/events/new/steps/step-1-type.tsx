@@ -75,7 +75,6 @@ function selectType(form: EventForm, type: EventType) {
     form.setFieldValue('watermark_enabled', false);
     form.setFieldValue('price_per_photo', null);
     form.setFieldValue('allow_guest_upload', true);
-    form.setFieldValue('organizer_fee_per_photo', null);
   } else {
     // Organizer: invite-only, no public access, no anonymous guest uploads.
     form.setFieldValue('is_public', false);

@@ -119,11 +119,14 @@ const EXPECTED_EXPOSURE: Record<string, { anon: boolean; authenticated: boolean;
   // Authenticated access stays — the tag-talent dialog needs it — but the
   // function itself is now bounded by 20260804000000 (min 3 chars, escaped LIKE,
   // limit capped at 50, email never returned); see the describe block below.
-  // Both were dropped and recreated by that migration, which resets grants and
-  // re-grants EXECUTE to PUBLIC by default: these two entries staying false for
-  // anon IS the assertion that the re-revoke was not forgotten.
+  // It was dropped and recreated by that migration, which resets grants and
+  // re-grants EXECUTE to PUBLIC by default: this entry staying false for anon IS
+  // the assertion that the re-revoke was not forgotten.
+  //
+  // ⚠️ `search_user_by_email` used to sit alongside it. T-219 dropped that
+  // function outright (zero callers), so its ABSENCE from this allow-list is now
+  // the guard: the inventory below fails if it ever comes back undeclared.
   search_users_by_text: { anon: false, authenticated: true, why: 'tag-talent search' },
-  search_user_by_email: { anon: false, authenticated: true, why: 'lookup by exact email' },
   get_user_emails_batch: { anon: false, authenticated: true, why: 'buyer emails on sales tab' },
 
   // Rate-limit counters: service-role only. These got the revoke right in
@@ -179,17 +182,6 @@ describe('SECURITY DEFINER RPCs — anon email enumeration regression', () => {
 
     // The exact surfacing varies (42501 permission denied, or PGRST202 "function
     // not found" once EXECUTE is gone). What must hold is that no row comes back.
-    expect(error).not.toBeNull();
-    expect(data ?? []).toEqual([]);
-  });
-
-  it('anon cannot enumerate user emails via search_user_by_email', async () => {
-    const user = await createTestUser('TALENT');
-
-    const { data, error } = await createAnonClient().rpc('search_user_by_email', {
-      search_email: user.email,
-    });
-
     expect(error).not.toBeNull();
     expect(data ?? []).toEqual([]);
   });
@@ -465,22 +457,6 @@ describe('search_users_by_text — bounded for authenticated callers (T-226)', (
 
     expect(error).toBeNull();
     expect((data ?? []).some((r: { id: string }) => r.id === target.id)).toBe(true);
-  });
-
-  it('search_user_by_email inherits the bounds from its delegate', async () => {
-    const target = await createTestUser('TALENT');
-    const caller = await createTestUser('PHOTOGRAPHER');
-    const client = await signInAs(caller.email);
-
-    const dump = await client.rpc('search_user_by_email', { search_email: '@' });
-    expect(dump.error).toBeNull();
-    expect(dump.data ?? []).toEqual([]);
-
-    const exact = await client.rpc('search_user_by_email', { search_email: target.email });
-    expect(exact.error).toBeNull();
-    expect((exact.data ?? []).length).toBe(1);
-    expect((exact.data ?? [])[0]?.id).toBe(target.id);
-    expect(Object.keys((exact.data ?? [])[0] as object)).not.toContain('email');
   });
 });
 

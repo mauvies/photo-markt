@@ -71,7 +71,6 @@ function draftHasUserInput(v: FormValues): boolean {
     v.price_per_photo !== null ||
     v.bundle_tiers !== null ||
     v.bundle_all_photos_cents !== null ||
-    v.organizer_fee_per_photo !== null ||
     v.ai_matching_enabled !== false ||
     v.contains_minors !== false ||
     v.bib_detection_enabled !== false
@@ -180,10 +179,6 @@ export function readStoredState(): StoredWizardState | null {
       // this module's doc describes.
       bundle_tiers: restoreDraftTiers(candidateValues.bundle_tiers),
       bundle_all_photos_cents: restoreDraftAllPhotos(candidateValues.bundle_all_photos_cents),
-      organizer_fee_per_photo:
-        typeof candidateValues.organizer_fee_per_photo === 'number'
-          ? candidateValues.organizer_fee_per_photo
-          : null,
       ai_matching_enabled:
         typeof candidateValues.ai_matching_enabled === 'boolean'
           ? candidateValues.ai_matching_enabled

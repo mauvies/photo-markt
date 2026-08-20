@@ -37,7 +37,6 @@ function makeDraft(overrides: Record<string, unknown> = {}): string {
       allow_guest_upload: true,
       require_upload_approval: false,
       price_per_photo: null,
-      organizer_fee_per_photo: null,
       ai_matching_enabled: false,
       contains_minors: false,
       bib_detection_enabled: false,
@@ -58,6 +57,18 @@ describe('readStoredState', () => {
 
   it('returns null when sessionStorage is empty', () => {
     expect(readStoredState()).toBeNull();
+  });
+
+  it('loads a draft saved before the organizer fee was removed (T-219)', () => {
+    // A draft persisted by the old wizard still carries `organizer_fee_per_photo`.
+    // The field is gone, so the key must be ignored rather than rejected — a
+    // photographer mid-way through creating an event should not lose the draft
+    // because we shipped a removal.
+    sessionStorage.setItem(DRAFT_KEY, makeDraft({ organizer_fee_per_photo: 2 }));
+    const result = readStoredState();
+    expect(result).not.toBeNull();
+    expect(result!.values).not.toHaveProperty('organizer_fee_per_photo');
+    expect(result!.values.name).toBeDefined();
   });
 
   it('restores ai_matching_enabled=true (regression: T-052)', () => {
@@ -158,7 +169,6 @@ const PRISTINE_VALUES: FormValues = {
   price_per_photo: null,
   bundle_tiers: null,
   bundle_all_photos_cents: null,
-  organizer_fee_per_photo: null,
   ai_matching_enabled: false,
   contains_minors: false,
   bib_detection_enabled: false,
@@ -214,7 +224,6 @@ describe('isResumableDraft', () => {
     expect(isResumableDraft(draft({ event_type: 'collaborative' }), false)).toBe(true);
     expect(isResumableDraft(draft({ event_type: 'organizer' }), false)).toBe(true);
     expect(isResumableDraft(draft({ price_per_photo: 10 }), false)).toBe(true);
-    expect(isResumableDraft(draft({ organizer_fee_per_photo: 2 }), false)).toBe(true);
   });
 
   it('ignores whitespace-only text as pristine', () => {

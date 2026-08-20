@@ -1,7 +1,7 @@
 # T-219 · Podar el esquema muerto
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** alto  (BD/migraciones)
 - **Blockers:** ninguno
 - **Rama:** `refactor/prune-dead-schema`  (tipo = refactor)
