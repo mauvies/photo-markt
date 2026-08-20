@@ -98,7 +98,6 @@ src/app/
     thumb/[...path]     # Baked thumbnail serving
     events/[id]/download # Purchased-photo ZIP
     inngest/            # Background-job worker — every function registered here
-    admin/payouts/[id]  # Vestigial manual payout approval
     health/             # + health/ready (token-gated)
 ```
 
@@ -137,7 +136,12 @@ user why anything failed. Codes and their copy: `src/lib/role-action-error.ts`.
 
 **Server Actions for mutations**
 All data mutations use `"use server"` actions in `actions.ts` files colocated next to their page components. Do not create new API routes for mutations — use server actions instead.
-**Exception:** `api/admin/payouts/[id]` (admin, no page). There is **no `api/billing/*`** — the
+**No exceptions remain:** the last one, `api/admin/payouts/[id]`, was deleted in T-220. What is left
+under `src/app/api/` are routes that must be addressable HTTP endpoints for reasons other than being
+a mutation — the Stripe webhook and the Inngest worker (both of which write heavily, but are called
+by a third party, not by our UI), image serving, downloads and health. ⚠️ "Not a user-facing
+mutation" ≠ "read-only": the webhook creates orders and payouts and moves money, and the Inngest
+route dispatches `retry-pending-payouts`. There is **no `api/billing/*`** — the
 pre-Server-Actions `checkout`/`cancel` routes were deleted in T-202 (zero callers, but live `POST`
 endpoints any authed user could hit to create a Stripe customer + `subscriptions` row through a flow
 that had drifted from the action replacing it). Live billing is
@@ -381,7 +385,7 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
   normal state — different recipient, different severity.
 - **Only sub-50¢ rows are batched.** Anything that clears the minimum alone transfers individually with `source_transaction`, which both guarantees funding and lets Stripe refuse an over-draw — a double-pay guard that never expires, unlike the 24h key. Batching is grouped `(photographer, currency)` and drops `source_transaction` (Stripe allows one source charge per transfer), so it draws on the *platform* balance; that's tolerable only because those amounts are tiny. Single calc point: `splitPayableRows` in **`src/lib/payouts/batching.ts`**.
 - ⚠️ **The retry worker only considers rows with BOTH `hold_reason` and `stripe_charge_id` set.** That is a security filter: `pending` predates T-216 and an RLS policy used to let photographers INSERT their own rows, which a paying worker would turn into theft.
-- **`payouts` is photographer-read / service-role-write.** The INSERT and pending→cancelled UPDATE policies were dropped in `20260807000000` for exactly that reason; `createPayout` is dead code. Pinned by `test/integration/security/payouts-rls.test.ts`.
+- **`payouts` is photographer-read / service-role-write.** The INSERT and pending→cancelled UPDATE policies were dropped in `20260807000000` for exactly that reason; `createPayout`, the dead self-insert helper, was deleted outright in T-220. Pinned by `test/integration/security/payouts-rls.test.ts`.
 - ⚠️ **The ledger's `try/catch` + `continue` is correct, and that is exactly why it must alert
   (T-249).** A failure there must not throw — a 500 makes Stripe redeliver a payment we may already
   have made — so the failure is invisible by construction unless something surfaces it. It already
@@ -471,7 +475,19 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
   bearer credential for the photos). It carries its own remediation text and a `subsystem: 'delivery'`
   Sentry tag — nothing here is reconciled against the `payouts` table. The send is bounded by the
   same `EMAIL_TIMEOUT_MS` as the authenticated one, because the guest transfers run *after* it.
-- `charge.refunded` **voids outstanding holds** for that charge (a stranded hold used to be accidentally protected *by* being stranded). Refunds still do **not** auto-reverse a transfer already made — T-215. `/api/admin/payouts/[id]` now refuses ledger-managed rows; its future is T-220. See `ARCHITECTURE.md` §4.3
+- `charge.refunded` **voids outstanding holds** for that charge (a stranded hold used to be accidentally protected *by* being stranded). Refunds still do **not** auto-reverse a transfer already made — T-215. **There is no admin payout endpoint** — T-220 deleted it, because a status flip moves no money: it
+  wrote a column and called no Stripe API, so its one distinctive power was making the ledger claim a
+  payment that never happened. The recoverable holds drain via the retry worker, refunds void them,
+  and cancelling one by hand makes it permanently unpayable (the unique index then blocks a
+  replacement row). ⚠️ **Not every hold self-heals** — a row stranded `processing` with no
+  `transfer_batch_id` is picked up by neither recovery selector, and a lone sub-50¢ hold just
+  accumulates; making that visible is **T-254**, and the deleted endpoint never reached those rows
+  anyway (it refused anything carrying a charge id). `updatePayoutStatus` and `createPayout` went
+  with it; `test/unit/api/dead-admin-payout-route-removed.test.ts` keeps the capability from coming
+  back. ⚠️ **Three writers touch a payout row, not two:** the webhook's transfer path, the retry
+  worker, and `voidHoldsForCharge` (`charge.refunded`), which cancels holds — any "who writes
+  payouts?" answer that names only the first two misses the one that can cancel. See
+  `ARCHITECTURE.md` §4.3
 
 **ai_search_profiles** (legacy — unused)
 `id, user_id, activity_type, country, region, date_from, date_to`
@@ -480,7 +496,9 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
 **admin_users**
 `user_id, granted_at, granted_by`
 - Service-role-only access (RLS enabled, no policies — `anon`/`authenticated` cannot read or write)
-- Used by `/api/admin/*` endpoints to gate access. Look up via `supabaseAdmin`, never via the user-scoped client
+- Gates the admin service-status page (`[lang]/dashboard/admin/status/page.tsx`) — the only
+  admin-gated surface left since T-220 removed `/api/admin/*`. Look up via `supabaseAdmin`, never via
+  the user-scoped client
 - Seed admins via direct DB access (Supabase SQL editor): `insert into admin_users (user_id) values ('<uuid>')`
 
 **rate_limit_buckets**
@@ -846,7 +864,7 @@ Use this instead of `JSON.stringify` whenever embedding structured data in an in
 **`src/lib/rate-limit.ts`** — `rateLimit({ key, limit, windowSec })`
 Postgres-backed fixed-window limiter. Apply to:
 - Endpoints that hit external APIs (Stripe, Resend) on every call
-- Endpoints with sequential or guessable id parameters (admin endpoints)
+- Endpoints with sequential or guessable id parameters (e.g. `/api/download/[token]`)
 - Unauthenticated endpoints with side effects (guest uploads)
 
 Helpers: `getClientIp(headers)` for unauthenticated keying, `retryAfterSeconds(result)` for the `Retry-After` response header. Fails open on backend errors. Backend is pluggable via the `RateLimitBackend` type — currently Postgres, swappable to Upstash/Redis later without touching call sites.
@@ -1054,7 +1072,9 @@ field — keep the two in sync.
 ### Security Conventions
 - File uploads must validate via `src/lib/photo-upload.ts` — never trust client-supplied MIME or extension
 - JSON-LD inside `dangerouslySetInnerHTML` must use `stringifyJsonLd` — never raw `JSON.stringify`
-- Admin endpoints check `admin_users` via `supabaseAdmin` — there is no `profiles.is_admin` column
+- Admin-gated surfaces check `admin_users` via `supabaseAdmin` — there is no `profiles.is_admin`
+  column. Since T-220 removed `/api/admin/*` the only such surface is the service-status page
+  (`[lang]/dashboard/admin/status/page.tsx`), which `notFound()`s a non-admin
 - New `SECURITY DEFINER` functions in the `public` schema must explicitly `revoke execute ... from anon, authenticated` — Supabase grants those by default and `revoke from public` doesn't override role-specific grants. ⚠️ **`drop function` throws the grants away and Postgres re-grants `EXECUTE` to `PUBLIC` on the replacement**, so a migration that drops and recreates one must re-apply the revoke in the same file (`20260804000000`); the inventory test in `test/integration/security/security-definer-rpcs.test.ts` fails if it doesn't
 - A `SECURITY DEFINER` **search** RPC is reachable directly through PostgREST with a user JWT, so the Server Action wrapping it guards nothing: the function itself must escape `%`/`_`/`\` before building its `LIKE` pattern (and pass `escape '\'` on every `like`, `order by` included), require a minimum search length, and **cap the row limit server-side** — the caller controls that argument. `search_users_by_text` (`20260804000000`) is the reference shape
 - ⚠️ **Matching a substring of a secret and returning a stable id is an oracle**, even if the secret is not in the returned columns — the caller learns, one probe at a time, whether a given user's value contains a given string. So `search_users_by_text` neither returns **nor substring-matches** email: it matches email by **exact equality**, keeps substring matching for `username`/`display_name`, and keeps email out of the `order by` (ranking by an email prefix is the same channel). Prefer resolving PII server-side from known ids (`get_user_emails_batch`) over exposing it to a text search at all

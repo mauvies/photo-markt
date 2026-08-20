@@ -233,7 +233,7 @@ src/
       watermark/        # protected preview serving
       thumb/            # baked thumbnail serving
       events/[id]/download/  # purchased-photo ZIP
-      admin/ health/
+      health/
     auth/callback/      # Google OAuth code exchange
   components/           # shared UI (shadcn/ui + app components)
   hooks/                # shared React hooks
