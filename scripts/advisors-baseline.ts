@@ -88,6 +88,22 @@ export const ADVISORS_BASELINE: AdvisorBaseline = {
         'set_subscriptions_updated_at',
         'set_payouts_updated_at',
         'set_payouts_paid_at',
+      ] as const
+    ).map((fn) => ({
+      key: `function_search_path_mutable:public.${fn}`,
+      level: 'WARN',
+      reason:
+        'SECURITY INVOKER trigger function — no privileges to escalate to. Pinning search_path deferred.',
+    })),
+    // Split out from the list above because their acceptance is no longer
+    // "deferred" — these three are DROPPED by 20260820000000_prune_dead_schema
+    // (T-219): two with the tables they served, one an orphan whose table went
+    // in 20260518000000. They stay declared because this gate runs against
+    // STAGING, which does not receive the migration until merge — removing an
+    // entry the linter still reports turns a WARN into a build failure. Prune
+    // all three once the migration has been applied there.
+    ...(
+      [
         'set_payment_accounts_updated_at',
         'set_ai_search_profiles_updated_at',
         'set_photo_embeddings_updated_at',
@@ -96,7 +112,7 @@ export const ADVISORS_BASELINE: AdvisorBaseline = {
       key: `function_search_path_mutable:public.${fn}`,
       level: 'WARN',
       reason:
-        'SECURITY INVOKER trigger function — no privileges to escalate to. Pinning search_path deferred.',
+        'Dropped by 20260820000000_prune_dead_schema (T-219). Still reported until that migration reaches staging — prune this entry then.',
     })),
     {
       key: 'function_search_path_mutable:public.order_has_photographer_items',
@@ -116,7 +132,7 @@ export const ADVISORS_BASELINE: AdvisorBaseline = {
       key: 'extension_in_public:public.vector',
       level: 'WARN',
       reason:
-        'Left over from the removed pgvector matching path (20260518000000); drop it with the dead schema in T-219.',
+        'Dropped by 20260820000000_prune_dead_schema (T-219). Still reported until that migration reaches staging — prune this entry then.',
     },
 
     // ── SECURITY DEFINER exposure (WARN) ──────────────────────────────────────
@@ -144,7 +160,7 @@ export const ADVISORS_BASELINE: AdvisorBaseline = {
       key: 'authenticated_security_definer_function_executable:public.search_user_by_email(search_email text)',
       level: 'WARN',
       reason:
-        'Delegates to search_users_by_text and inherits its bounds; zero callers, dropped in T-219.',
+        'Zero callers; dropped by 20260820000000_prune_dead_schema (T-219). Still reported until that migration reaches staging — prune this entry then.',
     },
     {
       key: 'authenticated_security_definer_function_executable:public.get_user_emails_batch(user_ids uuid[])',

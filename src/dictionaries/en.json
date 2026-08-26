@@ -1115,8 +1115,6 @@
     "eventTypeOrganizer": "Organizer",
     "eventTypeOrganizerDesc": "Invite specific platform photographers to upload.",
     "organizerApprovalDesc": "Hold uploads from invited photographers as pending until you approve them.",
-    "organizerFeeLabel": "Your fee per photo",
-    "organizerFeeDesc": "Charged on top of the platform fee whenever a contributor's photo sells.",
     "organizerNoOwnPhotosTitle": "No upload at this step",
     "organizerNoOwnPhotos": "Invited photographers will upload after accepting your invitation."
   },

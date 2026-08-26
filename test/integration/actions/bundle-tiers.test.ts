@@ -194,7 +194,6 @@ describe('createEvent — bundle ladder', () => {
     const result = await createEvent(
       buildEventFormData({
         event_type: 'organizer',
-        organizer_fee_per_photo: '1.00',
         bundle_tiers: JSON.stringify(LADDER),
       }),
     );

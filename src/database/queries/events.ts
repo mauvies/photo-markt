@@ -27,7 +27,6 @@ export interface Event {
   allow_guest_upload: boolean;
   require_upload_approval: boolean;
   type: 'solo' | 'collaborative' | 'organizer';
-  organizer_fee_per_photo_cents: number | null;
   /**
    * Optional volume-pricing ladder (T-203). Raw jsonb as stored — run it
    * through `parseBundleTiers` before use; never trust the shape here.
@@ -262,7 +261,6 @@ export async function createEvent(
     allow_guest_upload?: boolean;
     require_upload_approval?: boolean;
     type?: 'solo' | 'collaborative' | 'organizer';
-    organizer_fee_per_photo_cents?: number | null;
     ai_matching_enabled?: boolean;
     contains_minors?: boolean;
     bib_detection_enabled?: boolean;
@@ -279,7 +277,6 @@ export async function createEvent(
   // the event being created doesn't depend on those columns.
   const {
     type,
-    organizer_fee_per_photo_cents,
     ai_matching_enabled,
     contains_minors,
     bib_detection_enabled,
@@ -297,9 +294,6 @@ export async function createEvent(
   // Same migration-gating for the T-180 end time.
   if (session_end_time) insertPayload.session_end_time = session_end_time;
   if (type && type !== 'solo') insertPayload.type = type;
-  if (organizer_fee_per_photo_cents !== null && organizer_fee_per_photo_cents !== undefined) {
-    insertPayload.organizer_fee_per_photo_cents = organizer_fee_per_photo_cents;
-  }
   // AI columns ship as part of the AWS Rekognition rollout — only include
   // them when explicitly set so this query still works against older
   // databases that haven't applied the migration.
@@ -325,10 +319,7 @@ export async function createEvent(
     const msg = error ? getErrorMessage(error) : 'Unknown error';
     // Pinpoint the most common deployment-blocker so the message is
     // actionable instead of a raw PostgREST error.
-    if (
-      /organizer_fee_per_photo_cents|column.*"type"|schema cache/i.test(msg) &&
-      type === 'organizer'
-    ) {
+    if (/column.*"type"|schema cache/i.test(msg) && type === 'organizer') {
       throw new Error(
         'Organizer events require the latest database migration. Run `supabase db push` (or apply 20260511000000_add_organizer_event_type.sql) and reload the PostgREST schema cache.',
       );

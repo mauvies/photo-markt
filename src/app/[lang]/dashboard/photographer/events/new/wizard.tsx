@@ -419,19 +419,6 @@ export default function NewEventForm({
     if (parsed.bundle_all_photos_cents !== null) {
       formData.append('bundle_all_photos_cents', String(parsed.bundle_all_photos_cents));
     }
-    if (
-      parsed.event_type === 'organizer' &&
-      parsed.organizer_fee_per_photo !== null &&
-      parsed.organizer_fee_per_photo !== undefined
-    ) {
-      const fee =
-        typeof parsed.organizer_fee_per_photo === 'string'
-          ? Number.parseFloat(parsed.organizer_fee_per_photo)
-          : parsed.organizer_fee_per_photo;
-      if (!Number.isNaN(fee) && fee >= 0) {
-        formData.append('organizer_fee_per_photo', fee.toString());
-      }
-    }
     // Bytes never go through the SA — only metadata. The new flow is:
     //   1. createEvent  → eventId (no files attached)
     //   2. createPhotoUploadUrls → signed URLs
@@ -645,12 +632,12 @@ export default function NewEventForm({
       { label: t('summaryDate'), value: v.date ? format(new Date(v.date), 'PPP') : '' },
       ...(v.city ? [{ label: t('summaryLocation'), value: v.city }] : []),
     ];
-    if (v.event_type === 'organizer') {
-      detailsRows.push({
-        label: t('organizerFeeLabel'),
-        value: formatPrice(v.organizer_fee_per_photo),
-      });
-    } else {
+    // Organizer events carry no price of their own: `createEvent` stores
+    // `price_per_photo: null` for them, and each contributor sells their own
+    // photos. So there is nothing to summarise here — a price row would be a
+    // number the event does not have. (T-219 removed the organizer fee that
+    // used to sit here; it was collected and never applied to any payout.)
+    if (v.event_type !== 'organizer') {
       detailsRows.push({ label: t('summaryPrice'), value: formatPrice(v.price_per_photo) });
       // T-212: only list volume pricing the event will actually be created with.
       // A free event can't carry a ladder, so `createEvent` drops it — and the

@@ -181,7 +181,6 @@ src/database/queries/
   talent-photo-tags.ts # Talent "this is me" tags
   saved-events.ts     # Talent saved events
   subscriptions.ts    # Stripe subscription data
-  payment-accounts.ts # LEGACY — superseded by Stripe Connect
   payouts.ts          # Payout requests
   storage.ts          # Supabase Storage helpers
   rekognition.ts      # photo_faces read/write
@@ -217,17 +216,18 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
 ### Key Tables
 
 **events**
-`id, user_id, name, date, session_time, session_end_time, city, country, state, activity, is_public, share_code, slug, price_per_photo, bundle_tiers, bundle_all_photos_cents, watermark_enabled, reveal_gate_enabled, cover_path, is_collaborative, allow_guest_upload, require_upload_approval, type, organizer_fee_per_photo_cents, ai_matching_enabled, contains_minors, ai_matching_status, bib_detection_enabled, bib_detection_status, lat, lng, deleted_at, created_at, updated_at`
+`id, user_id, name, date, session_time, session_end_time, city, country, state, activity, is_public, share_code, slug, price_per_photo, bundle_tiers, bundle_all_photos_cents, watermark_enabled, reveal_gate_enabled, cover_path, is_collaborative, allow_guest_upload, require_upload_approval, type, ai_matching_enabled, contains_minors, ai_matching_status, bib_detection_enabled, bib_detection_status, lat, lng, deleted_at, created_at, updated_at`
 (canonical shape: the `Event` interface, `src/database/queries/events.ts:8`)
 - Soft delete via `deleted_at`
 - ⚠️ **`state` is the geographic region** (it pairs with `city`/`country`), NOT a status column.
   `upcoming`/`completed` is **derived from `date`** by `getEventStatus()` (`src/lib/event-status.ts:3`) — nothing is stored
-- `start_date`, `end_date`, `time_offset`, `time_sync_enabled` exist in the DB but are **dead
-  columns** — no application code reads or writes them (camera time-sync is off)
 - `type` (`solo`/`collaborative`/`organizer`) + `require_upload_approval` decide whether uploads
   route through a Pending queue — one predicate, `eventUsesModerationQueue` (`src/lib/event-status.ts`).
-  `organizer_fee_per_photo_cents` is written but read by **no** money path
-- `session_time` (nullable `time`) is a **separate** concept — the manual session start time the photographer types, for display only; naive local time-of-day, not tied to `time_offset`/`time_sync_enabled` (T-106). `session_end_time` (nullable `time`, T-180) is its mirror — the manual session end; when both are set the UI shows a range ("09:30 – 12:00") via `formatSessionTimeRange`. App-level rule: an end requires a start and must be after it (`isValidSessionRange`); the column carries no constraint
+  An organizer event carries **no price of its own** (`price_per_photo` is stored `null`); each
+  contributor sells their own photos. ⚠️ There is **no organizer revenue split** — T-219 dropped the
+  `organizer_fee_per_photo_cents` column *and* the wizard field that wrote it, because the field's own
+  copy promised organizers a cut of every contributor sale and no money path ever applied one
+- `session_time` (nullable `time`) is a **separate** concept — the manual session start time the photographer types, for display only; naive local time-of-day, unrelated to any camera time-sync (T-106; the `time_offset` / `time_sync_enabled` columns that idea left behind were dropped in T-219). `session_end_time` (nullable `time`, T-180) is its mirror — the manual session end; when both are set the UI shows a range ("09:30 – 12:00") via `formatSessionTimeRange`. App-level rule: an end requires a start and must be after it (`isValidSessionRange`); the column carries no constraint
 - `share_code` allows access to private events
 - **`bundle_tiers` (nullable `jsonb`, T-203) — volume pricing.** An optional **ladder** of rungs
   `[{minQuantity, totalPriceCents}]`, ascending; null = no bundle. **A bundle is a PRICE, not a PRODUCT:** the
@@ -258,8 +258,9 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
   it**: `buildEventUpdateFormData(parsed, { includeBundlePricing })` omits the field otherwise, so the scoped
   `info`/`settings` sections and the full `/edit` form stay silent. That is what stopped an unrelated save from
   wiping the ladder AND stopped lowering a price from throwing `total_not_a_discount` about a field the section
-  cannot show. Excluded from **organizer** events (several possible sellers, and `organizer_fee_per_photo_cents`
-  is written but read by no money path, so there is no revenue split to charge a discount against) and from free
+  cannot show. Excluded from **organizer** events (several possible sellers, and organizer revenue sharing
+  does not exist — T-219 dropped the fee column that pretended otherwise — so there is no agreed split to
+  charge a discount against) and from free
   events — but an ineligible event **KEEPS its stored ladder** (T-212; it simply cannot apply, and restoring a
   price restores the packs). Write paths gate on **`eventAcceptsBundleConfig`**, never `eventSupportsBundles`:
   the latter folds in the kill switch, so flipping `BUNDLE_PRICING_ENABLED` for a rollback made the next save of
@@ -358,9 +359,12 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
 `orders: id, user_id, cart_id, stripe_payment_intent_id, stripe_checkout_session_id, status, total_amount_cents`
 - Status: `pending`, `completed`, `failed`, `refunded`
 
-**payment_accounts** (legacy — unused)
-`id, photographer_id, type, account_details, is_default, is_verified`
-- Vestigial table from an earlier payout design. **Superseded by Stripe Connect**, whose account id + status live on `profiles.stripe_connect_account_id` / `profiles.stripe_connect_status` (migration `20260501000000_add_stripe_connect.sql`). No code under `src/app` or `src/components` references this table — do not build on it
+**payment_accounts** — ⚠️ **DROPPED (T-219).** An earlier payout design that stored photographer
+bank/PayPal details in a `jsonb` column with zero readers — held data, no product. Superseded by
+Stripe Connect, whose account id + status live on `profiles.stripe_connect_account_id` /
+`profiles.stripe_connect_status` (migration `20260501000000_add_stripe_connect.sql`). The table, its
+query module and `payouts.payment_account_id` went in `20260820000000_prune_dead_schema.sql`;
+`test/unit/database/dead-schema-pruned.test.ts` keeps them from coming back.
 
 **payouts** — the ledger of money owed to photographers (T-216)
 `id, photographer_id, amount_cents, status, stripe_transfer_id, stripe_charge_id, currency, hold_reason, order_id, order_kind, transfer_batch_id, paid_at`
@@ -489,9 +493,13 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
   payouts?" answer that names only the first two misses the one that can cancel. See
   `ARCHITECTURE.md` §4.3
 
-**ai_search_profiles** (legacy — unused)
-`id, user_id, activity_type, country, region, date_from, date_to`
-- ⚠️ **No code references this table anywhere in `src/`** — vestigial like `payment_accounts`; do not build on it. The old `selfie_embedding` column was dropped (migration `20260518000000_drop_legacy_ai_schema.sql`) — selfies are sent to AWS Rekognition per search and never stored. The live per-event gating fields (`ai_matching_enabled`, `contains_minors`, `rekognition_collection_id`, `rekognition_region`, `ai_matching_status`) are on **`events`**, not here
+**ai_search_profiles** — ⚠️ **DROPPED (T-219)**, along with `ai_search_usage`, `time_sync_tokens`,
+`upload_batches`, `upload_objects` and the `vector` extension. The last remnant of the abandoned
+CLIP/pgvector matching path (`selfie_embedding` had already gone in
+`20260518000000_drop_legacy_ai_schema.sql`). Face matching is AWS Rekognition: selfies are sent per
+search and never stored, and the live per-event gating fields (`ai_matching_enabled`,
+`contains_minors`, `rekognition_collection_id`, `rekognition_region`, `ai_matching_status`) are on
+**`events`**.
 
 **admin_users**
 `user_id, granted_at, granted_by`
@@ -1073,7 +1081,11 @@ field — keep the two in sync.
 - File uploads must validate via `src/lib/photo-upload.ts` — never trust client-supplied MIME or extension
 - JSON-LD inside `dangerouslySetInnerHTML` must use `stringifyJsonLd` — never raw `JSON.stringify`
 - Admin-gated surfaces check `admin_users` via `supabaseAdmin` — there is no `profiles.is_admin`
-  column. Since T-220 removed `/api/admin/*` the only such surface is the service-status page
+  column (dropped by `20260513000000`, re-dropped defensively in T-219), and
+  `test/unit/database/dead-schema-pruned.test.ts` now **fails on any `is_admin` reference under
+  `src/`**. ⚠️ That guard is the point: a column named like a gate that gates nothing is how the next
+  bypass gets written in good faith — `profiles` has a public SELECT policy, which is why the flag was
+  moved out of it. Since T-220 removed `/api/admin/*` the only admin surface is the service-status page
   (`[lang]/dashboard/admin/status/page.tsx`), which `notFound()`s a non-admin
 - New `SECURITY DEFINER` functions in the `public` schema must explicitly `revoke execute ... from anon, authenticated` — Supabase grants those by default and `revoke from public` doesn't override role-specific grants. ⚠️ **`drop function` throws the grants away and Postgres re-grants `EXECUTE` to `PUBLIC` on the replacement**, so a migration that drops and recreates one must re-apply the revoke in the same file (`20260804000000`); the inventory test in `test/integration/security/security-definer-rpcs.test.ts` fails if it doesn't
 - A `SECURITY DEFINER` **search** RPC is reachable directly through PostgREST with a user JWT, so the Server Action wrapping it guards nothing: the function itself must escape `%`/`_`/`\` before building its `LIKE` pattern (and pass `escape '\'` on every `like`, `order by` included), require a minimum search length, and **cap the row limit server-side** — the caller controls that argument. `search_users_by_text` (`20260804000000`) is the reference shape

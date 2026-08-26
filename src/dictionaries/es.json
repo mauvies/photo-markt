@@ -1115,8 +1115,6 @@
     "eventTypeOrganizer": "Organizador",
     "eventTypeOrganizerDesc": "Invita a fotógrafos específicos de la plataforma a subir fotos.",
     "organizerApprovalDesc": "Las fotos de los fotógrafos invitados quedan pendientes hasta que las apruebes.",
-    "organizerFeeLabel": "Tu fee por foto",
-    "organizerFeeDesc": "Se cobra encima de la comisión de la plataforma cada vez que se vende una foto de un contribuyente.",
     "organizerNoOwnPhotosTitle": "Sin subida en este paso",
     "organizerNoOwnPhotos": "Los fotógrafos invitados subirán las fotos después de aceptar tu invitación."
   },
