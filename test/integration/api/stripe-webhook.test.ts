@@ -3681,3 +3681,191 @@ describe('app/api/stripe/webhook — a guest order that cannot be assembled (T-2
     expect((payouts ?? []).length).toBeGreaterThan(0);
   });
 });
+
+/**
+ * T-262 — an authenticated sale must not vanish silently, and must not be payable twice.
+ *
+ * Two halves of one hole, both found by the T-257 audit.
+ *
+ * (a) `createAuthenticatedOrder` discarded the `carts` read error in the
+ *     destructuring and lumped `cartItemsError` in with "cart is empty". Both
+ *     paths logged and returned `null`, and the handler answered 200 — so a
+ *     transient PostgREST failure (T-239 was exactly that) left the buyer charged
+ *     with no order, no items, no email, no payout row and no incident.
+ *
+ * (b) The order row is written `completed` BEFORE `addOrderItems` and
+ *     `clearCart`, which both throw. A throw left an order with no items and a
+ *     cart that was never emptied, and the redelivery stopped at the
+ *     already-exists guard — so the buyer saw an empty purchase, still had a full
+ *     cart, and could pay for the same photos again.
+ */
+describe('app/api/stripe/webhook — an authenticated order that cannot be assembled (T-262)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    vi.clearAllMocks();
+  });
+
+  async function seedCartForCheckout(suffix: string) {
+    const sb = createServiceClient();
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    await sb
+      .from('profiles')
+      .update({ stripe_connect_account_id: `acct_${suffix}`, stripe_connect_status: 'active' })
+      .eq('id', photographer.id);
+    const event = await createTestEvent(photographer.id);
+    const photo = await createTestPhoto(event.id);
+    const talent = await createTestUser('TALENT');
+
+    const { data: cart } = await sb
+      .from('carts')
+      .insert({ user_id: talent.id })
+      .select('id')
+      .single();
+    if (!cart) throw new Error('cart seed failed');
+
+    await sb.from('cart_items').insert({
+      cart_id: cart.id,
+      photo_id: photo.id,
+      photographer_id: photographer.id,
+      unit_price_cents: 500,
+    });
+
+    const { stripe: routeStripe } = await import('@/lib/stripe/config');
+    vi.spyOn(routeStripe.paymentIntents, 'retrieve').mockResolvedValue({
+      id: `pi_${suffix}`,
+      object: 'payment_intent',
+      latest_charge: `ch_${suffix}`,
+    } as never);
+
+    return { sb, photographer, talent, cart };
+  }
+
+  function sessionFor(suffix: string, cartId: string, userId: string) {
+    return signedWebhookRequest({
+      id: `evt_${suffix}`,
+      type: 'checkout.session.completed',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: `cs_${suffix}`,
+          object: 'checkout.session',
+          mode: 'payment',
+          client_reference_id: cartId,
+          customer: null,
+          customer_details: { email: `${suffix}@photomarkt.test` },
+          payment_intent: `pi_${suffix}`,
+          amount_total: 500,
+          currency: 'eur',
+          metadata: { user_id: userId, cart_id: cartId },
+        },
+      },
+    });
+  }
+
+  it('reports an incident when the cart items cannot be read, instead of a silent 200', async () => {
+    const { talent, cart } = await seedCartForCheckout('t262_read');
+
+    // Make only the cart_items read fail, leaving the carts read intact.
+    const admin = await import('@/database/supabase-admin');
+    const realFrom = admin.supabaseAdmin.from.bind(admin.supabaseAdmin);
+    const spy = vi.spyOn(admin.supabaseAdmin, 'from').mockImplementation(((table: string) =>
+      table === 'cart_items'
+        ? {
+            select: () => ({
+              eq: async () => ({ data: null, error: { message: 'PGRST205: schema cache miss' } }),
+            }),
+          }
+        : realFrom(table)) as never);
+
+    await expect(POST(sessionFor('t262_read', cart.id, talent.id))).resolves.toBeDefined();
+    spy.mockRestore();
+
+    const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+    expect(vi.mocked(reportMoneyIncident)).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'payout-not-recorded' }),
+    );
+
+    // ids only — never the buyer's email.
+    const reported = vi.mocked(reportMoneyIncident).mock.calls[0]?.[0];
+    expect(JSON.stringify(reported?.context)).not.toContain('@photomarkt.test');
+  });
+
+  it('a redelivery finishes an itemless order and clears the cart', async () => {
+    const { sb, photographer, talent, cart } = await seedCartForCheckout('t262_resume');
+
+    const orders = await import('@/database/queries/orders');
+    const itemsSpy = vi
+      .spyOn(orders, 'addOrderItems')
+      .mockRejectedValueOnce(new Error('transient write failure'));
+
+    await expect(POST(sessionFor('t262_resume', cart.id, talent.id))).resolves.toBeDefined();
+    itemsSpy.mockRestore();
+
+    // First delivery left the order itemless and the cart untouched.
+    const { data: half } = await sb
+      .from('orders')
+      .select('id')
+      .eq('stripe_checkout_session_id', 'cs_t262_resume')
+      .single();
+    const { count: itemsAfterFirst } = await sb
+      .from('order_items')
+      .select('*', { count: 'exact', head: true })
+      .eq('order_id', half?.id ?? '');
+    expect(itemsAfterFirst).toBe(0);
+
+    // Stripe redelivers: the guard must let an itemless order through.
+    expect((await POST(sessionFor('t262_resume', cart.id, talent.id))).status).toBe(200);
+
+    const { count: orderCount } = await sb
+      .from('orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('stripe_checkout_session_id', 'cs_t262_resume');
+    expect(orderCount).toBe(1);
+
+    const { count: itemCount } = await sb
+      .from('order_items')
+      .select('*', { count: 'exact', head: true })
+      .eq('order_id', half?.id ?? '');
+    expect(itemCount).toBe(1);
+
+    // The cart is emptied, so the buyer cannot pay for the same photos again.
+    const { count: cartItemCount } = await sb
+      .from('cart_items')
+      .select('*', { count: 'exact', head: true })
+      .eq('cart_id', cart.id);
+    expect(cartItemCount).toBe(0);
+
+    // And the photographer is paid.
+    const { data: payouts } = await sb
+      .from('payouts')
+      .select('id')
+      .eq('photographer_id', photographer.id);
+    expect((payouts ?? []).length).toBeGreaterThan(0);
+  });
+
+  it('still refuses to re-drive an order that WAS fully assembled', async () => {
+    const { sb, talent, cart } = await seedCartForCheckout('t262_assembled');
+
+    expect((await POST(sessionFor('t262_assembled', cart.id, talent.id))).status).toBe(200);
+
+    const { data: order } = await sb
+      .from('orders')
+      .select('id')
+      .eq('stripe_checkout_session_id', 'cs_t262_assembled')
+      .single();
+    const { data: firstPayouts } = await sb.from('payouts').select('id');
+
+    // A resend of an assembled session must change nothing — this is the guard
+    // that stops an old session from paying a photographer a second time.
+    expect((await POST(sessionFor('t262_assembled', cart.id, talent.id))).status).toBe(200);
+
+    const { count: itemCount } = await sb
+      .from('order_items')
+      .select('*', { count: 'exact', head: true })
+      .eq('order_id', order?.id ?? '');
+    expect(itemCount).toBe(1);
+
+    const { data: secondPayouts } = await sb.from('payouts').select('id');
+    expect((secondPayouts ?? []).length).toBe((firstPayouts ?? []).length);
+  });
+});

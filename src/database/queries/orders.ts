@@ -112,6 +112,34 @@ export async function createOrder(
 /**
  * Add items to an order
  */
+/**
+ * Does this order already have its items? (T-262)
+ *
+ * Two callers, one question. The redelivery guard uses it to tell an order that
+ * was fully assembled — which must NEVER be re-driven, because payout rows
+ * written before T-216 carry a null `stripe_charge_id` and so sit outside the
+ * partial unique index that makes paying exactly once possible — from one whose
+ * `addOrderItems` threw, which is safe to finish and currently is not finished by
+ * anything at all. And the resume path uses it so finishing an order twice does
+ * not write its items twice.
+ */
+export async function orderHasItems(
+  supabase: SupabaseServerClient,
+  orderId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('order_items')
+    .select('id')
+    .eq('order_id', orderId)
+    .limit(1);
+
+  if (error) {
+    throw new Error(`Failed to check order items: ${getErrorMessage(error)}`);
+  }
+
+  return (data ?? []).length > 0;
+}
+
 export async function addOrderItems(
   supabase: SupabaseServerClient,
   orderId: string,
