@@ -514,6 +514,19 @@ query module and `payouts.payment_account_id` went in `20260820000000_prune_dead
     **guest** branch has no such check and no second driver at all (`getOrderByPaymentIntentId`
     reads `orders`, and there is no `getGuestOrderByPaymentIntentId`) — its own hole, not this one's.
     Since T-261 the guest branch recovers a different way: **its own redelivery** (see below).
+  - ⚠️ **`completeGuestOrder` is the LAST thing the guest branch does, after the transfers (T-263).**
+    `completed` is what stops a redelivery from resuming the order, so anything after it is
+    unprotected. It used to run ~100 lines earlier, with a Resend send, a PaymentIntent retrieve and
+    a per-photographer Connect reconcile + `openPayoutRow` + `createTransfer` + `settlePayoutPaid`
+    in between — so a kill in that window was **terminal**: buyer holding their download link, zero
+    `payouts` rows for the photographers not yet reached, and no second driver on the guest path to
+    recover it (`payment_intent.succeeded` reads `orders` only). Written last, the same kill leaves
+    the order `pending` and the redelivery finishes it. The buyer is not held hostage by the
+    reorder: the download page reads through `getGuestOrderWithItems`, which does **not** filter on
+    status, so their link works from the moment the token exists. The route also now sets
+    `maxDuration = 60` (same ceiling as the ZIP routes) — that raises the ceiling, it does not
+    remove it, which is why the ordering is the actual fix. Pinned by a test asserting
+    `openPayoutRow` is invoked before `completeGuestOrder`.
   - ⚠️ **A guest order is born `pending` and only `completeGuestOrder` marks it delivered (T-261),
     and the exists-guard breaks ONLY on `completed`.** `createGuestOrder` used to write `completed`
     before the items and the download token existed — and both of those writes throw. The throw

@@ -3869,3 +3869,156 @@ describe('app/api/stripe/webhook — an authenticated order that cannot be assem
     expect((secondPayouts ?? []).length).toBe((firstPayouts ?? []).length);
   });
 });
+
+/**
+ * T-263 — a guest order is not delivered until the money has moved.
+ *
+ * `completeGuestOrder` used to run ~100 lines before the transfers, with a Resend
+ * send, a PaymentIntent retrieve and a per-photographer Connect reconcile +
+ * `openPayoutRow` + `createTransfer` + `settlePayoutPaid` in between. `completed`
+ * is what stops a redelivery from resuming the order, so a kill in that window was
+ * TERMINAL: buyer holding their download link, zero `payouts` rows for the
+ * photographers not yet reached, and no second driver on the guest path to
+ * recover it.
+ *
+ * Written last, the same kill leaves the order `pending` and the redelivery
+ * finishes it.
+ */
+describe('app/api/stripe/webhook — a guest order completes only after its transfers (T-263)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    vi.clearAllMocks();
+  });
+
+  async function seedGuest(suffix: string) {
+    const sb = createServiceClient();
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    await sb
+      .from('profiles')
+      .update({ stripe_connect_account_id: `acct_${suffix}`, stripe_connect_status: 'active' })
+      .eq('id', photographer.id);
+    const event = await createTestEvent(photographer.id);
+    const photo = await createTestPhoto(event.id);
+
+    const { stripe: routeStripe } = await import('@/lib/stripe/config');
+    vi.spyOn(routeStripe.paymentIntents, 'retrieve').mockResolvedValue({
+      id: `pi_${suffix}`,
+      object: 'payment_intent',
+      latest_charge: `ch_${suffix}`,
+    } as never);
+
+    return { sb, photographer, photo };
+  }
+
+  function guestSession(suffix: string, photoId: string, photographerId: string) {
+    return signedWebhookRequest({
+      id: `evt_${suffix}`,
+      type: 'checkout.session.completed',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: `cs_${suffix}`,
+          object: 'checkout.session',
+          mode: 'payment',
+          customer: null,
+          customer_details: { email: `${suffix}@photomarkt.test` },
+          payment_intent: `pi_${suffix}`,
+          amount_total: 500,
+          currency: 'eur',
+          metadata: {
+            is_guest: 'true',
+            cart_count: '1',
+            cart_0: JSON.stringify({ p: photoId, g: photographerId, c: 500 }),
+          },
+        },
+      },
+    });
+  }
+
+  it('opens the payout rows BEFORE the order is marked completed', async () => {
+    // A process kill cannot be simulated (no catch runs, execution just stops),
+    // so what this pins is the ORDERING that makes such a kill survivable:
+    // `completed` is what stops a redelivery from resuming the order, so
+    // everything that must not be skipped has to happen before it is written.
+    const { photographer, photo } = await seedGuest('t263_order');
+
+    const guestOrders = await import('@/database/queries/guest-orders');
+    const payouts = await import('@/database/queries/payouts');
+    const completeSpy = vi.spyOn(guestOrders, 'completeGuestOrder');
+    const openRowSpy = vi.spyOn(payouts, 'openPayoutRow');
+
+    expect((await POST(guestSession('t263_order', photo.id, photographer.id))).status).toBe(200);
+
+    expect(openRowSpy).toHaveBeenCalled();
+    expect(completeSpy).toHaveBeenCalled();
+    expect(openRowSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      completeSpy.mock.invocationCallOrder[0] as number,
+    );
+
+    openRowSpy.mockRestore();
+    completeSpy.mockRestore();
+  });
+
+  it('a redelivery of an order left pending finishes it and pays the photographer', async () => {
+    const { sb, photographer, photo } = await seedGuest('t263_resume');
+
+    // Stop the first delivery before it can complete the order, the way a kill
+    // inside the transfer window would.
+    const guestOrders = await import('@/database/queries/guest-orders');
+    const completeSpy = vi
+      .spyOn(guestOrders, 'completeGuestOrder')
+      .mockRejectedValueOnce(new Error('function timed out'));
+
+    await expect(
+      POST(guestSession('t263_resume', photo.id, photographer.id)),
+    ).resolves.toBeDefined();
+    completeSpy.mockRestore();
+
+    const { data: afterKill } = await sb
+      .from('guest_orders')
+      .select('id, status')
+      .eq('stripe_checkout_session_id', 'cs_t263_resume')
+      .single();
+    expect(afterKill?.status).toBe('pending');
+
+    // Stripe redelivers: still `pending`, so it resumes and completes.
+    expect((await POST(guestSession('t263_resume', photo.id, photographer.id))).status).toBe(200);
+
+    const { data: afterRetry } = await sb
+      .from('guest_orders')
+      .select('status')
+      .eq('stripe_checkout_session_id', 'cs_t263_resume')
+      .single();
+    expect(afterRetry?.status).toBe('completed');
+
+    const { count: orderCount } = await sb
+      .from('guest_orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('stripe_checkout_session_id', 'cs_t263_resume');
+    expect(orderCount).toBe(1);
+    const { count: itemCount } = await sb
+      .from('guest_order_items')
+      .select('*', { count: 'exact', head: true })
+      .eq('guest_order_id', afterKill?.id ?? '');
+    expect(itemCount).toBe(1);
+  });
+
+  it('the happy path still ends `completed` with the photographer paid', async () => {
+    const { sb, photographer, photo } = await seedGuest('t263_ok');
+
+    expect((await POST(guestSession('t263_ok', photo.id, photographer.id))).status).toBe(200);
+
+    const { data: order } = await sb
+      .from('guest_orders')
+      .select('status')
+      .eq('stripe_checkout_session_id', 'cs_t263_ok')
+      .single();
+    expect(order?.status).toBe('completed');
+
+    const { data: payouts } = await sb
+      .from('payouts')
+      .select('id')
+      .eq('photographer_id', photographer.id);
+    expect((payouts ?? []).length).toBeGreaterThan(0);
+  });
+});
