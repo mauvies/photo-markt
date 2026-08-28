@@ -24,6 +24,12 @@ import {
   resetDatabase,
 } from '../../helpers/supabase-test-client';
 
+// T-264: the alert channel is unit-tested on its own; here we only assert the
+// worker reaches it, so a stub keeps Sentry and Resend out of the run.
+vi.mock('@/lib/observability/report-money-incident', () => ({
+  reportMoneyIncident: vi.fn(async () => undefined),
+}));
+
 const MINUTE_MS = 60 * 1000;
 /** An hour ahead makes anything written "now" older than the 30-minute window. */
 const FUTURE_NOW = Date.now() + 60 * MINUTE_MS;
@@ -661,5 +667,136 @@ describe('retry-pending-payouts — parameter parity with the webhook', () => {
 
     expect(deps.findTransferByGroup).not.toHaveBeenCalled();
     expect(calls).toHaveLength(1);
+  });
+});
+
+/**
+ * T-264 — reversals reserved but never confirmed.
+ *
+ * `reservePayoutReversal` writes BEFORE the Stripe call, deliberately: a crash in
+ * between makes the row claw back LESS next time, never more. The cost is a row
+ * that is permanently wrong and that NOTHING selects — `listPayableHolds` wants
+ * `pending` + a `hold_reason`, the stale-batch selectors want `processing`. And
+ * `listUnconfirmedReversals`, which exists precisely for this, had zero callers.
+ */
+describe('runRetryPendingPayoutsFlow — unconfirmed reversals (T-264)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    vi.clearAllMocks();
+  });
+
+  /** A row whose money left the platform and whose reversal was reserved. */
+  async function seedUnconfirmedReversal(opts: {
+    photographerId: string;
+    amountCents: number;
+    reversedCents: number;
+    status?: string;
+    reversedAt?: string;
+    reversalId?: string | null;
+  }) {
+    const sb = createServiceClient();
+    const { data, error } = await sb
+      .from('payouts')
+      .insert({
+        photographer_id: opts.photographerId,
+        amount_cents: opts.amountCents,
+        currency: 'eur',
+        stripe_charge_id: `ch_${opts.photographerId.slice(0, 8)}_${opts.reversedCents}`,
+        status: opts.status ?? 'paid',
+        stripe_transfer_id: 'tr_seeded',
+        reversed_amount_cents: opts.reversedCents,
+        reversed_at: opts.reversedAt ?? new Date(Date.now() - 3 * 60 * MINUTE_MS).toISOString(),
+        stripe_reversal_id: opts.reversalId ?? null,
+        order_kind: 'order',
+      })
+      .select()
+      .single();
+    if (error || !data) throw new Error(`reversal seed failed: ${error?.message}`);
+    return data as Payout;
+  }
+
+  it('reports a stranded reversal that nothing else would ever select', async () => {
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    const row = await seedUnconfirmedReversal({
+      photographerId: photographer.id,
+      amountCents: 1000,
+      reversedCents: 400,
+    });
+
+    const { deps } = makeDeps();
+    await runRetryPendingPayoutsFlow(passthroughStep, FUTURE_NOW, deps);
+
+    const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+    expect(vi.mocked(reportMoneyIncident)).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'reversal-unconfirmed' }),
+    );
+    const reported = vi.mocked(reportMoneyIncident).mock.calls[0]?.[0];
+    expect(reported?.context?.oldestPayoutId).toBe(row.id);
+    expect(reported?.context?.rowCount).toBe(1);
+  });
+
+  it('does NOT report a hold reduced by a partial refund — the false positive the selector had to exclude', async () => {
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    // `applyReversalToHolds` stamps `reversed_at` on an outstanding hold. There is
+    // no transfer to reverse, so `stripe_reversal_id` will never be set and the
+    // row would match forever without the status filter.
+    await seedUnconfirmedReversal({
+      photographerId: photographer.id,
+      amountCents: 1000,
+      reversedCents: 400,
+      status: 'pending',
+    });
+    await seedUnconfirmedReversal({
+      photographerId: photographer.id,
+      amountCents: 800,
+      reversedCents: 800,
+      status: 'cancelled',
+    });
+
+    const { deps } = makeDeps();
+    await runRetryPendingPayoutsFlow(passthroughStep, FUTURE_NOW, deps);
+
+    const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+    expect(vi.mocked(reportMoneyIncident)).not.toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'reversal-unconfirmed' }),
+    );
+  });
+
+  it('does NOT report a reversal that was confirmed', async () => {
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    await seedUnconfirmedReversal({
+      photographerId: photographer.id,
+      amountCents: 1000,
+      reversedCents: 400,
+      reversalId: 'trr_confirmed',
+    });
+
+    const { deps } = makeDeps();
+    await runRetryPendingPayoutsFlow(passthroughStep, FUTURE_NOW, deps);
+
+    const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+    expect(vi.mocked(reportMoneyIncident)).not.toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'reversal-unconfirmed' }),
+    );
+  });
+
+  it('alerts once per day, not once per cron pass', async () => {
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    await seedUnconfirmedReversal({
+      photographerId: photographer.id,
+      amountCents: 1000,
+      reversedCents: 400,
+    });
+
+    const { deps } = makeDeps();
+    await runRetryPendingPayoutsFlow(passthroughStep, FUTURE_NOW, deps);
+    await runRetryPendingPayoutsFlow(passthroughStep, FUTURE_NOW, deps);
+    await runRetryPendingPayoutsFlow(passthroughStep, FUTURE_NOW, deps);
+
+    const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+    const reversalAlerts = vi
+      .mocked(reportMoneyIncident)
+      .mock.calls.filter(([incident]) => incident.kind === 'reversal-unconfirmed');
+    expect(reversalAlerts).toHaveLength(1);
   });
 });

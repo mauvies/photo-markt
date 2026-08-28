@@ -89,7 +89,23 @@ export type MoneyIncidentKind =
    * unless this fires. Not a payout failure, so it carries its own remediation
    * text and subsystem tag.
    */
-  | 'purchase-email-not-delivered';
+  | 'purchase-email-not-delivered'
+  /**
+   * A reversal was reserved on a payout row but never confirmed with Stripe
+   * (T-264) — the invocation died between `reservePayoutReversal` and
+   * `confirmPayoutReversal`.
+   *
+   * The row over-reports what came back, so `getTotalPaidOut` (net of reversals)
+   * understates the photographer's balance permanently, and every later delta
+   * computes `target − already` = 0, silently no-opping the next legitimate
+   * reversal. Nothing else selects such a row.
+   *
+   * ⚠️ Its OWN kind, not `needs-reconciliation`. The Sentry fingerprint is
+   * `['money-incident', kind]` and the email throttle is keyed per kind, so
+   * sharing one kind across the sweeps would collapse four distinct problems into
+   * one issue and let whichever fires first silence the others.
+   */
+  | 'reversal-unconfirmed';
 
 export interface MoneyIncident {
   kind: MoneyIncidentKind;

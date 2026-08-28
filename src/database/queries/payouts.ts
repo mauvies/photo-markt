@@ -846,6 +846,15 @@ export async function listUnconfirmedReversals(
   const { data, error } = await supabase
     .from('payouts')
     .select('*')
+    // ⚠️ `status` is not decoration (T-264). `applyReversalToHolds` reduces an
+    // outstanding HOLD by stamping `reversed_at` and `reversed_amount_cents` on a
+    // `pending`/`cancelled` row — there is no transfer to reverse and no
+    // `stripe_reversal_id` will ever exist for it, so without this filter every
+    // partially-refunded hold in the table matches and the sweep is pure noise.
+    // Only a row whose money actually left the platform can have an unconfirmed
+    // reversal. Pinned by the false-positive test in
+    // `test/integration/inngest/retry-pending-payouts.test.ts`.
+    .in('status', ['paid', 'reversed'])
     .not('reversed_at', 'is', null)
     .is('stripe_reversal_id', null)
     .lt('reversed_at', staleBeforeIso)

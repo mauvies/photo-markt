@@ -40,6 +40,7 @@ import {
   listPayableHolds,
   listStaleProcessingBatches,
   listStaleProcessingSingles,
+  listUnconfirmedReversals,
   type Payout,
   releaseClaimedPayouts,
   settleBatchAsPaid,
@@ -48,6 +49,7 @@ import {
 import { getPhotographerConnectStatuses } from '@/database/queries/profiles';
 import type { SupabaseServerClient } from '@/database/queries/types';
 import { supabaseAdmin } from '@/database/supabase-admin';
+import { reportMoneyIncident } from '@/lib/observability/report-money-incident';
 import {
   batchTransferGroup,
   type PayableRow,
@@ -56,6 +58,7 @@ import {
   STRIPE_MIN_TRANSFER_CENTS,
   splitPayableRows,
 } from '@/lib/payouts/batching';
+import { rateLimit } from '@/lib/rate-limit';
 import {
   createTransfer,
   findTransferByGroup,
@@ -82,6 +85,21 @@ const MAX_STALE_ROWS_PER_TICK = 500;
  * re-drive it. Long enough that a run still in progress is never clobbered.
  */
 const STALE_BATCH_AGE_MS = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * How long a reserved-but-unconfirmed reversal must sit before it is a problem
+ * rather than a request in flight (T-264). Generous on purpose: `applyClawback`
+ * reserves, calls Stripe, then confirms, and Stripe can be slow.
+ */
+const UNCONFIRMED_REVERSAL_AGE_MS = 60 * 60 * 1000; // 1 hour
+
+/**
+ * The sweep runs 48 times a day and a stranded reversal does not fix itself, so
+ * an alert per pass would be 48 identical emails a day until a human gets to it.
+ * One claim per rolling day, in Postgres so it holds across invocations — the
+ * same shape as the face-search 50%-of-cap alert.
+ */
+const UNCONFIRMED_REVERSAL_ALERT_WINDOW_SEC = 24 * 60 * 60;
 
 export interface RetryPayoutsResult {
   transfersCreated: number;
@@ -302,7 +320,65 @@ export async function runRetryPendingPayoutsFlow(
     return { recovered: staleRows.length };
   });
 
-  // ── 1. Load outstanding holds and resolve who can be paid ────────────────
+  // ── 1. Surface reversals reserved but never confirmed ────────────────────
+  // `reservePayoutReversal` writes BEFORE the Stripe call, deliberately: a crash
+  // in between makes the row claw back LESS next time, never more. The cost is
+  // that such a row is permanently wrong and nothing selects it —
+  // `listPayableHolds` wants `pending` + a `hold_reason`, the stale-batch
+  // selectors want `processing`. `getTotalPaidOut` is net of reversals, so it
+  // understates the photographer's balance for good, and every later delta
+  // computes `target − already` = 0, silently no-opping the next real reversal.
+  //
+  // ⚠️ This REPORTS and does not repair, and that is a decision (T-264). Repairing
+  // means asking Stripe whether the reversal happened, and `findTransferByGroup`
+  // already documents why that answer is not always conclusive (`has_more` ⇒
+  // `unknown`). Concluding wrongly moves money in a direction the next pass
+  // cannot undo — reversing twice, or releasing a reversal that really happened.
+  // A human with the row id, the amount and the transfer group can settle it in
+  // one look at the Stripe dashboard.
+  await step.run('report-unconfirmed-reversals', async () => {
+    const staleReversalsBefore = new Date(nowMs - UNCONFIRMED_REVERSAL_AGE_MS).toISOString();
+    const stranded = await listUnconfirmedReversals(
+      adminClient,
+      staleReversalsBefore,
+      MAX_STALE_ROWS_PER_TICK,
+    );
+
+    if (stranded.length === 0) return null;
+
+    // One alert per rolling day for the whole set, not one per row per pass.
+    // `rateLimit` fails OPEN, so a limiter outage costs a duplicate alert rather
+    // than a missed one — the right direction for a money incident.
+    const claim = await rateLimit({
+      key: 'money-alert:reversal-unconfirmed',
+      limit: 1,
+      windowSec: UNCONFIRMED_REVERSAL_ALERT_WINDOW_SEC,
+    });
+    if (!claim.ok) return null;
+
+    const oldest = stranded[0];
+    await reportMoneyIncident({
+      kind: 'reversal-unconfirmed',
+      message:
+        `${stranded.length} payout row(s) record a reversal that was never confirmed with Stripe. ` +
+        'Each one may or may not have been reversed: the ledger says it was, and until that is ' +
+        "settled by hand the photographer's balance is understated and their next legitimate " +
+        'reversal will silently do nothing.',
+      context: {
+        rowCount: stranded.length,
+        oldestPayoutId: oldest?.id ?? null,
+        oldestReversedAt: oldest?.reversed_at ?? null,
+        oldestReversedCents: oldest?.reversed_amount_cents ?? null,
+        payoutIds: stranded
+          .slice(0, 20)
+          .map((row) => row.id)
+          .join(','),
+      },
+    });
+    return null;
+  });
+
+  // ── 2. Load outstanding holds and resolve who can be paid ────────────────
   const { payableRows, notActive } = await step.run('resolve-payable-holds', async () => {
     const holds = await listPayableHolds(adminClient, MAX_HOLDS_PER_TICK);
     if (holds.length === 0) return { payableRows: [] as Payout[], notActive: 0 };
@@ -355,7 +431,7 @@ export async function runRetryPendingPayoutsFlow(
     );
   }
 
-  // ── 2. Rows that clear the minimum alone → individual transfers ──────────
+  // ── 3. Rows that clear the minimum alone → individual transfers ──────────
   for (const row of split.individual) {
     const destination = destinations[row.photographer_id];
     if (!destination || !row.currency || !row.stripe_charge_id) continue;
@@ -449,7 +525,7 @@ export async function runRetryPendingPayoutsFlow(
     });
   }
 
-  // ── 3. Sub-minimum leftovers → one aggregated, source-less transfer ──────
+  // ── 4. Sub-minimum leftovers → one aggregated, source-less transfer ──────
   for (const group of split.aggregates) {
     const destination = destinations[group.photographerId];
     if (!destination) continue;

@@ -563,6 +563,26 @@ query module and `payouts.payment_account_id` went in `20260820000000_prune_dead
   transient Resend error can't suppress the retry. The send is also bounded by a 5 s
   timeout — it rides inside the webhook, and a hung alert must not push the handler past Stripe's
   delivery timeout and trigger a redelivery.
+- ⚠️ **Every recovery sweep gets its OWN `MoneyIncidentKind` — never a shared `needs-reconciliation`
+  (decided in T-264, binding on T-254/T-255/T-265).** The Sentry fingerprint is
+  `['money-incident', kind]` and the email throttle is keyed per kind, so four sweeps sharing one
+  kind would collapse four distinct problems into a single Sentry issue and let whichever fires
+  first silence the others for the window. `needs-reconciliation` stays reserved for the clawback
+  path that already declares it.
+- ⚠️ **A sweep alerts about a STATE, not about a pass, and the cron runs 48×/day.** One alert per
+  row per pass is 48 identical emails a day until a human acts. `report-unconfirmed-reversals`
+  (`retry-pending-payouts.ts`) is the reference shape: **one aggregated incident** for the whole set
+  (count + oldest + a bounded id list), claimed once per rolling day through `rateLimit`
+  (`money-alert:<kind>`, `limit: 1`, 24 h) — Postgres-backed, so it holds across serverless
+  invocations, unlike the reporter's per-process email damper. `rateLimit` fails **open**, so a
+  limiter outage costs a duplicate alert rather than a missed one.
+- ⚠️ **`listUnconfirmedReversals` must filter `status in ('paid','reversed')` (T-264).**
+  `applyReversalToHolds` stamps `reversed_at` on an outstanding *hold*, where there is no transfer
+  to reverse and no `stripe_reversal_id` will ever appear — so without the filter every
+  partially-refunded hold matches forever. Its sweep **reports and does not repair**, deliberately:
+  repairing means asking Stripe whether the reversal happened, and `findTransferByGroup` already
+  documents why that answer can be `unknown` (`has_more`). Concluding wrongly reverses twice or
+  releases a real reversal, and the next pass cannot undo either.
 - **`purchase-email-not-delivered` (T-253) is the second live kind.** Raised when the **guest**
   delivery email is not confirmed as sent. That email is the *product*, not a receipt — a guest has
   no account, so the link it carries is the only route to what they paid for — yet the send must stay
