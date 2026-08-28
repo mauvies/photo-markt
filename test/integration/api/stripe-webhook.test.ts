@@ -3595,6 +3595,46 @@ describe('app/api/stripe/webhook — a guest order that cannot be assembled (T-2
     tokenSpy.mockRestore();
   });
 
+  it('does NOT resume a guest order that was refunded while unfinished', async () => {
+    // The sharp edge of the resume path (found by the T-257 audit): an assembly
+    // failure leaves the order `pending`, `charge.refunded` moves it straight to
+    // `refunded` (every revocation is allowed through), and Stripe keeps
+    // redelivering for three days. A `completed`-only guard let that redelivery
+    // fall through — re-minting a download token for a refunded buyer and opening
+    // fresh payout rows against money that had already gone back.
+    const { sb, photographer, photo } = await seedGuestPhoto('t261_refunded');
+
+    const tokens = await import('@/database/queries/download-tokens');
+    const tokenSpy = vi
+      .spyOn(tokens, 'createDownloadToken')
+      .mockRejectedValueOnce(new Error('transient'));
+    await expect(
+      POST(guestSession('t261_refunded', photo.id, photographer.id)),
+    ).resolves.toBeDefined();
+    tokenSpy.mockRestore();
+
+    // The money comes back before the redelivery lands.
+    await sb
+      .from('guest_orders')
+      .update({ status: 'refunded' })
+      .eq('stripe_checkout_session_id', 'cs_t261_refunded');
+
+    expect((await POST(guestSession('t261_refunded', photo.id, photographer.id))).status).toBe(200);
+
+    const { data: order } = await sb
+      .from('guest_orders')
+      .select('id, status')
+      .eq('stripe_checkout_session_id', 'cs_t261_refunded')
+      .single();
+    expect(order?.status).toBe('refunded');
+
+    const { data: payouts } = await sb
+      .from('payouts')
+      .select('id')
+      .eq('photographer_id', photographer.id);
+    expect(payouts ?? []).toHaveLength(0);
+  });
+
   it('a redelivery finishes a half-written order instead of returning early', async () => {
     const { sb, photographer, photo } = await seedGuestPhoto('t261_resume');
 
