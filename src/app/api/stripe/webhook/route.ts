@@ -236,6 +236,31 @@ function mayWriteOrderStatus(
   return current === 'refunded' || current === 'disputed';
 }
 
+/**
+ * May `payment_intent.succeeded` promote this order to `completed`? (T-259)
+ *
+ * The mirror image of `mayWriteOrderStatus`, and deliberately a SEPARATE rule
+ * rather than a reuse of it: that one gates a status RECOMPUTED from Stripe's
+ * facts, where `completed` may only undo a revocation this flow itself made, so
+ * it allows exactly `refunded`/`disputed`. Here `completed` means "the payment
+ * went through", which is legitimate from a pre-completion state and never from
+ * a reversal. The two allow-lists are disjoint on purpose.
+ *
+ * ⚠️ The unguarded version resurrected reversed sales. Stripe redelivers for up
+ * to three days, so: buy → the `payment_intent.succeeded` delivery fails and is
+ * queued → `checkout.session.completed` creates the order → the buyer is refunded
+ * an hour later and access is revoked → the queued retry lands and flips the
+ * order back to `completed`. The refunded buyer regains permanent ZIP and library
+ * access (13+ read paths gate on `status = 'completed'`), and the sale re-enters
+ * the photographer's `net` while its payout row sits `cancelled`. A dashboard
+ * event resend reaches the same state, and resends are routine here since T-192.
+ *
+ * `canceled` is excluded too: it is set deliberately, never by this flow.
+ */
+function mayPromoteOnPaymentSuccess(current: string): boolean {
+  return current === 'pending' || current === 'processing' || current === 'failed';
+}
+
 async function moveOrdersTo(
   orders: ResolvedOrders,
   status: 'refunded' | 'disputed' | 'completed',
@@ -1331,7 +1356,7 @@ export async function POST(request: Request) {
 
         const order = await getOrderByPaymentIntentId(supabaseAdmin, paymentIntent.id);
 
-        if (order && order.status !== 'completed') {
+        if (order && mayPromoteOnPaymentSuccess(order.status)) {
           await updateOrderStatus(supabaseAdmin, order.id, 'completed', {
             payment_intent_succeeded_at: new Date().toISOString(),
           });

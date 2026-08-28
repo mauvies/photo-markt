@@ -3405,3 +3405,94 @@ describe('app/api/stripe/webhook — out-of-order delivery (T-252)', () => {
     expect(settled?.[0]?.amount_cents).toBe(460);
   });
 });
+
+/**
+ * T-259 — a reversed sale must not be resurrected by a late payment event.
+ *
+ * `payment_intent.succeeded` promoted any order that merely happened not to be
+ * `completed`. Stripe redelivers for up to three days and a dashboard resend is
+ * routine here (T-192), so a refund landing between the original delivery and
+ * its retry left the retry flipping the order back to `completed` — restoring
+ * permanent ZIP and library access for a buyer who had been refunded, and
+ * putting the sale back in the photographer's `net` while its payout row sat
+ * `cancelled`.
+ *
+ * The money was never at risk (the exactly-once index blocks the re-drive);
+ * access was.
+ */
+describe('app/api/stripe/webhook — a late payment event cannot resurrect a reversal (T-259)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    vi.clearAllMocks();
+  });
+
+  async function seedOrderWithStatus(status: string, paymentIntentId: string) {
+    const sb = createServiceClient();
+    const talent = await createTestUser('TALENT');
+    const { data: order } = await sb
+      .from('orders')
+      .insert({
+        user_id: talent.id,
+        status,
+        total_amount_cents: 500,
+        currency: 'eur',
+        stripe_payment_intent_id: paymentIntentId,
+      })
+      .select('id')
+      .single();
+    if (!order) throw new Error('order seed failed');
+    return { sb, order };
+  }
+
+  function succeeded(paymentIntentId: string, chargeId: string) {
+    return signedWebhookRequest({
+      id: `evt_${paymentIntentId}`,
+      type: 'payment_intent.succeeded',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: paymentIntentId,
+          object: 'payment_intent',
+          latest_charge: chargeId,
+          amount: 500,
+        },
+      },
+    });
+  }
+
+  it('leaves a REFUNDED order refunded', async () => {
+    const { sb, order } = await seedOrderWithStatus('refunded', 'pi_t259_refunded');
+
+    expect((await POST(succeeded('pi_t259_refunded', 'ch_t259_refunded'))).status).toBe(200);
+
+    const { data: after } = await sb.from('orders').select('status').eq('id', order.id).single();
+    expect(after?.status).toBe('refunded');
+  });
+
+  it('leaves a DISPUTED order disputed', async () => {
+    const { sb, order } = await seedOrderWithStatus('disputed', 'pi_t259_disputed');
+
+    expect((await POST(succeeded('pi_t259_disputed', 'ch_t259_disputed'))).status).toBe(200);
+
+    const { data: after } = await sb.from('orders').select('status').eq('id', order.id).single();
+    expect(after?.status).toBe('disputed');
+  });
+
+  it('still promotes an ordinary PENDING order — the guard must not break the happy path', async () => {
+    const { sb, order } = await seedOrderWithStatus('pending', 'pi_t259_pending');
+
+    expect((await POST(succeeded('pi_t259_pending', 'ch_t259_pending'))).status).toBe(200);
+
+    const { data: after } = await sb.from('orders').select('status').eq('id', order.id).single();
+    expect(after?.status).toBe('completed');
+  });
+
+  it('still promotes a FAILED order — a retried payment that finally succeeds', async () => {
+    const { sb, order } = await seedOrderWithStatus('failed', 'pi_t259_failed');
+
+    expect((await POST(succeeded('pi_t259_failed', 'ch_t259_failed'))).status).toBe(200);
+
+    const { data: after } = await sb.from('orders').select('status').eq('id', order.id).single();
+    expect(after?.status).toBe('completed');
+  });
+});

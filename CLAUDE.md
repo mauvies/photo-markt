@@ -406,7 +406,28 @@ query module and `payouts.payment_account_id` went in `20260820000000_prune_dead
   `reportMoneyIncident` (T-249) and rows left for reconciliation — there is no separate clawback
   email channel; a second one would duplicate every incident and skip the T-249 throttle. A
   `processing` row is **probed** with `findTransferByGroup` before anything happens to it; `unknown`
-  means do nothing
+  means do nothing. ⚠️ **`reservePayoutReversal` / `releasePayoutReversal` do their arithmetic in ONE
+  SQL statement** (`reserve_payout_reversal` / `release_payout_reversal`, migration
+  `20260828000000`, service-role only) — **never** read-modify-write from JS (T-260). The caller's
+  delta already comes from an earlier read of `reversed_amount_cents`, so a JS `existing + delta`
+  puts two reads around the arithmetic: `charge.refunded` racing `charge.dispute.closed`-won
+  recorded the delta **twice**. Stripe stayed correct (the idempotency key encodes the cumulative
+  target, so only one reversal happens) — the ledger did not, and permanently: `getTotalPaidOut` is
+  net of reversals, so it understates the balance forever and every later delta computes
+  `target − already` = 0, silently no-opping the next legitimate reversal. The `least`/`greatest`
+  clamps live in SQL **because** that is what keeps it one statement
+- ⚠️ **`completed` is written by two flows with DISJOINT allow-lists, and they must stay disjoint
+  (T-259).** `mayWriteOrderStatus` gates the clawback flow, where the status is RECOMPUTED from
+  Stripe's facts, so `completed` may only undo a revocation this flow itself made (`refunded` /
+  `disputed`). `mayPromoteOnPaymentSuccess` gates `payment_intent.succeeded`, where `completed`
+  means "the payment went through" — legitimate from `pending`/`processing`/`failed`, never from a
+  reversal. That second guard was missing: the handler promoted anything that merely wasn't
+  `completed`, and since Stripe redelivers for up to three days (and a dashboard resend is routine
+  here since T-192), a refund landing between the first delivery and its retry let the retry flip
+  the order back to `completed` — restoring permanent ZIP + library access for a refunded buyer
+  (13+ read paths gate on `status = 'completed'`) and putting the sale back in the photographer's
+  `net` while its payout row sat `cancelled`. The money was safe (the exactly-once index blocks the
+  re-drive); the access was not
 - **`disputed` order status, and access revocation costs nothing.** `charge.dispute.created` /
   `.closed` were handled by **no case at all** before T-215: a lost chargeback pulled the money back,
   charged a ~€15 fee, and left the buyer with permanent download access. Opening a dispute flips
