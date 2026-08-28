@@ -26,6 +26,9 @@ vi.mock('@/lib/stripe/connect', async () => {
   return {
     ...actual,
     createTransfer: vi.fn(async () => ({ id: 'tr_test_mock' }) as unknown),
+    // T-215: clawback reverses a transfer that was already sent. Mocked here so
+    // the webhook can be driven end-to-end without touching the real Stripe API.
+    createTransferReversal: vi.fn(async () => ({ id: 'trr_test_mock' }) as unknown),
     // Default: passthrough (returns the stored status, no heal). Tests
     // exercising stale-status reconciliation override this per-call.
     // `deriveConnectStatus` (used by the account.updated handler) stays real
@@ -94,6 +97,7 @@ vi.mock('next/cache', () => ({
 // here keeps the load order easy to reason about.
 import Stripe from 'stripe';
 import { POST } from '@/app/api/stripe/webhook/route';
+import { getTotalPendingPayouts, listPayableHolds } from '@/database/queries/payouts';
 import {
   createServiceClient,
   createTestEvent,
@@ -521,6 +525,10 @@ describe('app/api/stripe/webhook — charge.refunded', () => {
           id: 'ch_test_refund',
           object: 'charge',
           payment_intent: 'pi_test_refund',
+          // A real charge always carries both; the total is the denominator of
+          // every clawback proportion and the proof that a refund was FULL.
+          amount: 500,
+          amount_refunded: 500,
           refunded: true,
         },
       },
@@ -1859,6 +1867,7 @@ describe('app/api/stripe/webhook — payout ledger (T-216)', () => {
           id: 'ch_refund',
           object: 'charge',
           payment_intent: 'pi_refund',
+          amount: 500,
           amount_refunded: 500,
         },
       },
@@ -1871,6 +1880,838 @@ describe('app/api/stripe/webhook — payout ledger (T-216)', () => {
       .eq('photographer_id', photographer.id)
       .single();
     expect(after?.status).toBe('cancelled');
+  });
+});
+
+/**
+ * T-215 (+T-237) — clawback, after the redesign.
+ *
+ * The first implementation applied a delta once per event. Two review passes
+ * found fifteen money defects in it, so these tests pin the properties the
+ * delta model could not have: the same event applied repeatedly moves money
+ * once, refunds and disputes compose in any order, an unknown charge total
+ * moves nothing at all, and an inquiry is not a chargeback.
+ */
+describe('app/api/stripe/webhook — clawback (T-215)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    vi.clearAllMocks();
+  });
+
+  let restoreStripeReads: (() => void) | null = null;
+
+  afterEach(() => {
+    restoreStripeReads?.();
+    restoreStripeReads = null;
+  });
+
+  /**
+   * Stub the two Stripe reads the clawback makes: the charge (its total is the
+   * denominator of every proportion) and the dispute list (the access facts).
+   * Both are fetched rather than read off the event, because `dispute.amount` is
+   * the DISPUTED amount — the SDK documents it as "usually the amount of the
+   * charge, but it can differ" — and because a stored flag cannot survive
+   * redelivery and out-of-order events.
+   *
+   * Restored in `afterEach`, never by the caller: a test that fails before a
+   * manual restore leaves the spy installed, and the next `clearAllMocks` empties
+   * its implementation, so the charge read returns `undefined` and every later
+   * test sees the clawback correctly refusing to guess — test pollution that
+   * reads exactly like a product bug.
+   */
+  async function stubStripeReads(opts: {
+    chargeId: string;
+    amount: number;
+    amountRefunded?: number;
+    disputes?: Array<{ status: string; amount: number }>;
+  }) {
+    const { stripe: stripeClient } = await import('@/lib/stripe/config');
+    const chargeSpy = vi.spyOn(stripeClient.charges, 'retrieve').mockResolvedValue({
+      id: opts.chargeId,
+      amount: opts.amount,
+      amount_refunded: opts.amountRefunded ?? 0,
+    } as never);
+    const disputeSpy = vi
+      .spyOn(stripeClient.disputes, 'list')
+      .mockResolvedValue({ data: opts.disputes ?? [] } as never);
+    restoreStripeReads = () => {
+      chargeSpy.mockRestore();
+      disputeSpy.mockRestore();
+    };
+  }
+
+  /** A completed sale with one payout row: `paid` = money sent, `pending` = held. */
+  async function seedCharge(opts: {
+    chargeId: string;
+    paymentIntentId: string;
+    amountCents: number;
+    payoutStatus: 'paid' | 'pending';
+    payoutAmountCents: number;
+    holdReason?: string;
+  }) {
+    const sb = createServiceClient();
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    const talent = await createTestUser('TALENT');
+
+    await sb
+      .from('profiles')
+      .update({ stripe_connect_account_id: 'acct_test', stripe_connect_status: 'active' })
+      .eq('id', photographer.id);
+
+    const { data: order } = await sb
+      .from('orders')
+      .insert({
+        user_id: talent.id,
+        status: 'completed',
+        total_amount_cents: opts.amountCents,
+        currency: 'eur',
+        stripe_payment_intent_id: opts.paymentIntentId,
+      })
+      .select('id')
+      .single();
+    if (!order) throw new Error('order seed failed');
+
+    const { data: payout } = await sb
+      .from('payouts')
+      .insert({
+        photographer_id: photographer.id,
+        amount_cents: opts.payoutAmountCents,
+        currency: 'eur',
+        status: opts.payoutStatus,
+        stripe_charge_id: opts.chargeId,
+        order_id: order.id,
+        order_kind: 'order',
+        ...(opts.payoutStatus === 'paid'
+          ? { stripe_transfer_id: `tr_${opts.chargeId}` }
+          : { hold_reason: opts.holdReason ?? 'connect_inactive' }),
+      })
+      .select('id')
+      .single();
+    if (!payout) throw new Error('payout seed failed');
+
+    return { sb, photographer, order, payout };
+  }
+
+  function refundRequest(opts: {
+    chargeId: string;
+    paymentIntentId: string;
+    amountCents: number;
+    refundedCents: number;
+    eventId?: string;
+  }) {
+    return signedWebhookRequest({
+      id: opts.eventId ?? `evt_refund_${opts.chargeId}`,
+      type: 'charge.refunded',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: opts.chargeId,
+          object: 'charge',
+          payment_intent: opts.paymentIntentId,
+          amount: opts.amountCents,
+          amount_refunded: opts.refundedCents,
+        },
+      },
+    });
+  }
+
+  function disputeRequest(opts: {
+    type: 'charge.dispute.created' | 'charge.dispute.updated' | 'charge.dispute.closed';
+    chargeId: string;
+    paymentIntentId: string;
+    amountCents: number;
+    status: string;
+  }) {
+    return signedWebhookRequest({
+      id: `evt_${opts.type}_${opts.chargeId}_${opts.status}`,
+      type: opts.type,
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: `dp_${opts.chargeId}`,
+          object: 'dispute',
+          charge: opts.chargeId,
+          payment_intent: opts.paymentIntentId,
+          amount: opts.amountCents,
+          reason: 'fraudulent',
+          status: opts.status,
+          balance_transactions: [{ fee: 1500 }],
+        },
+      },
+    });
+  }
+
+  it('reverses in full and voids the hold on a FULL refund', async () => {
+    const { sb, payout } = await seedCharge({
+      chargeId: 'ch_full_refund',
+      paymentIntentId: 'pi_full_refund',
+      amountCents: 2000,
+      payoutStatus: 'paid',
+      payoutAmountCents: 1840,
+    });
+    await stubStripeReads({ chargeId: 'ch_full_refund', amount: 2000, amountRefunded: 2000 });
+
+    const res = await POST(
+      refundRequest({
+        chargeId: 'ch_full_refund',
+        paymentIntentId: 'pi_full_refund',
+        amountCents: 2000,
+        refundedCents: 2000,
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const { createTransferReversal } = await import('@/lib/stripe/connect');
+    expect(vi.mocked(createTransferReversal)).toHaveBeenCalledWith(
+      expect.objectContaining({ amountCents: 1840 }),
+    );
+
+    const { data: after } = await sb
+      .from('payouts')
+      .select('status, reversed_amount_cents')
+      .eq('id', payout.id)
+      .single();
+    expect(after?.status).toBe('reversed');
+    expect(after?.reversed_amount_cents).toBe(1840);
+  });
+
+  it('IS IDEMPOTENT: three redeliveries of one partial refund claw back once', async () => {
+    // The defect this replaces: the reduction was computed from the row's CURRENT
+    // amount, so each redelivery reduced it again — 2000 → 1500 → 1125 → 844 on a
+    // single €5 refund. Redelivery is routine here, because the access half
+    // deliberately fails the request on a transient DB error.
+    const { sb, payout } = await seedCharge({
+      chargeId: 'ch_idem',
+      paymentIntentId: 'pi_idem',
+      amountCents: 2000,
+      payoutStatus: 'pending',
+      payoutAmountCents: 1000,
+    });
+    await stubStripeReads({ chargeId: 'ch_idem', amount: 2000, amountRefunded: 500 });
+
+    for (let i = 0; i < 3; i += 1) {
+      const res = await POST(
+        refundRequest({
+          chargeId: 'ch_idem',
+          paymentIntentId: 'pi_idem',
+          amountCents: 2000,
+          refundedCents: 500,
+        }),
+      );
+      expect(res.status).toBe(200);
+    }
+
+    const { data: after } = await sb
+      .from('payouts')
+      .select('status, amount_cents, reversed_amount_cents')
+      .eq('id', payout.id)
+      .single();
+    // `amount_cents` is immutable; the clawback lives in `reversed_amount_cents`.
+    expect(after?.amount_cents).toBe(1000);
+    expect(after?.reversed_amount_cents).toBe(250);
+    expect(after?.status).toBe('pending');
+  });
+
+  it('does NOT revoke access on a partial refund', async () => {
+    // Stripe refunds are amounts, not line items, so nothing says which photos a
+    // partial refund covers — and revoking the whole order dropped the entire
+    // sale out of the photographer's `net` while only the refunded fraction left
+    // `paidOut`, eating the difference from their other earnings.
+    const { sb, order } = await seedCharge({
+      chargeId: 'ch_part_access',
+      paymentIntentId: 'pi_part_access',
+      amountCents: 2000,
+      payoutStatus: 'paid',
+      payoutAmountCents: 1840,
+    });
+    await stubStripeReads({ chargeId: 'ch_part_access', amount: 2000, amountRefunded: 500 });
+
+    await POST(
+      refundRequest({
+        chargeId: 'ch_part_access',
+        paymentIntentId: 'pi_part_access',
+        amountCents: 2000,
+        refundedCents: 500,
+      }),
+    );
+
+    const { data: after } = await sb.from('orders').select('status').eq('id', order.id).single();
+    expect(after?.status).toBe('completed');
+  });
+
+  it('freezes the payout but KEEPS access when an inquiry is opened', async () => {
+    // Inquiries arrive through the same event as chargebacks. Revoking a paying
+    // buyer's photos over a bank's suspicion — one that often closes by itself —
+    // was real damage, and `warning_closed` restored nothing.
+    const { sb, order, payout, photographer } = await seedCharge({
+      chargeId: 'ch_inquiry',
+      paymentIntentId: 'pi_inquiry',
+      amountCents: 500,
+      payoutStatus: 'pending',
+      payoutAmountCents: 460,
+    });
+    await stubStripeReads({
+      chargeId: 'ch_inquiry',
+      amount: 500,
+      disputes: [{ status: 'warning_needs_response', amount: 500 }],
+    });
+
+    expect(
+      (
+        await POST(
+          disputeRequest({
+            type: 'charge.dispute.created',
+            chargeId: 'ch_inquiry',
+            paymentIntentId: 'pi_inquiry',
+            amountCents: 500,
+            status: 'warning_needs_response',
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { data: duringOrder } = await sb
+      .from('orders')
+      .select('status')
+      .eq('id', order.id)
+      .single();
+    expect(duringOrder?.status).toBe('completed');
+
+    // ⚠️ The row stays `pending`. Cancelling it here took the hold out of
+    // `getTotalPendingPayouts` while the sale stayed in `net` (the order is still
+    // `completed`, deliberately) — so opening an inquiry RAISED the photographer's
+    // withdrawable balance by exactly the amount just frozen.
+    const { data: duringPayout } = await sb
+      .from('payouts')
+      .select('status, frozen_by_dispute_id')
+      .eq('id', payout.id)
+      .single();
+    expect(duringPayout?.status).toBe('pending');
+    expect(duringPayout?.frozen_by_dispute_id).toBe('dp_ch_inquiry');
+
+    // The balance does not move …
+    expect(await getTotalPendingPayouts(sb, photographer.id)).toBe(460);
+    // … and the frozen hold is still not payable, which is the point of freezing.
+    const payable = await listPayableHolds(sb);
+    expect(payable.map((row) => row.id)).not.toContain(payout.id);
+
+    // Closing it releases the freeze and still never touches access.
+    await stubStripeReads({ chargeId: 'ch_inquiry', amount: 500, disputes: [] });
+    expect(
+      (
+        await POST(
+          disputeRequest({
+            type: 'charge.dispute.closed',
+            chargeId: 'ch_inquiry',
+            paymentIntentId: 'pi_inquiry',
+            amountCents: 500,
+            status: 'warning_closed',
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { data: afterPayout } = await sb
+      .from('payouts')
+      .select('status, frozen_by_dispute_id')
+      .eq('id', payout.id)
+      .single();
+    expect(afterPayout?.status).toBe('pending');
+    expect(afterPayout?.frozen_by_dispute_id).toBeNull();
+
+    const { data: afterOrder } = await sb
+      .from('orders')
+      .select('status')
+      .eq('id', order.id)
+      .single();
+    expect(afterOrder?.status).toBe('completed');
+  });
+
+  it('revokes access when a real chargeback is opened', async () => {
+    const { sb, order } = await seedCharge({
+      chargeId: 'ch_disp_open',
+      paymentIntentId: 'pi_disp_open',
+      amountCents: 500,
+      payoutStatus: 'pending',
+      payoutAmountCents: 460,
+    });
+    await stubStripeReads({
+      chargeId: 'ch_disp_open',
+      amount: 500,
+      disputes: [{ status: 'needs_response', amount: 500 }],
+    });
+
+    const res = await POST(
+      disputeRequest({
+        type: 'charge.dispute.created',
+        chargeId: 'ch_disp_open',
+        paymentIntentId: 'pi_disp_open',
+        amountCents: 500,
+        status: 'needs_response',
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const { data: after } = await sb.from('orders').select('status').eq('id', order.id).single();
+    expect(after?.status).toBe('disputed');
+  });
+
+  it('revokes access when an inquiry ESCALATES to a chargeback', async () => {
+    // The escalation does not arrive as a new event: it is `charge.dispute.updated`
+    // carrying a status that has left the `warning_*` family. Handling only
+    // `created` left the buyer downloading for the whole chargeback — weeks —
+    // because the inquiry branch leaves access alone by design and nothing
+    // revisited it before `closed`.
+    const { sb, order, payout, photographer } = await seedCharge({
+      chargeId: 'ch_escalate',
+      paymentIntentId: 'pi_escalate',
+      amountCents: 500,
+      payoutStatus: 'pending',
+      payoutAmountCents: 460,
+    });
+
+    await stubStripeReads({
+      chargeId: 'ch_escalate',
+      amount: 500,
+      disputes: [{ status: 'warning_needs_response', amount: 500 }],
+    });
+    expect(
+      (
+        await POST(
+          disputeRequest({
+            type: 'charge.dispute.created',
+            chargeId: 'ch_escalate',
+            paymentIntentId: 'pi_escalate',
+            amountCents: 500,
+            status: 'warning_needs_response',
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { data: asInquiry } = await sb
+      .from('orders')
+      .select('status')
+      .eq('id', order.id)
+      .single();
+    expect(asInquiry?.status).toBe('completed');
+
+    // The bank escalates: same dispute, real chargeback now.
+    await stubStripeReads({
+      chargeId: 'ch_escalate',
+      amount: 500,
+      disputes: [{ status: 'needs_response', amount: 500 }],
+    });
+    expect(
+      (
+        await POST(
+          disputeRequest({
+            type: 'charge.dispute.updated',
+            chargeId: 'ch_escalate',
+            paymentIntentId: 'pi_escalate',
+            amountCents: 500,
+            status: 'needs_response',
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { data: escalated } = await sb
+      .from('orders')
+      .select('status')
+      .eq('id', order.id)
+      .single();
+    expect(escalated?.status).toBe('disputed');
+
+    // And the money follows access out: the sale has left `net`, so the hold has to
+    // leave `pending` with it or the same money is subtracted twice.
+    const { data: heldRow } = await sb
+      .from('payouts')
+      .select('status, frozen_by_dispute_id')
+      .eq('id', payout.id)
+      .single();
+    expect(heldRow?.status).toBe('cancelled');
+    expect(heldRow?.frozen_by_dispute_id).toBe('dp_ch_escalate');
+    expect(await getTotalPendingPayouts(sb, photographer.id)).toBe(0);
+  });
+
+  it('reverses only its own proportion when a PARTIAL dispute is lost', async () => {
+    // `dispute.amount` is the disputed amount, not the charge total. Using it as
+    // both made every proportion exactly 1, so a partial chargeback clawed back
+    // 100% of the payout.
+    const { sb, payout } = await seedCharge({
+      chargeId: 'ch_disp_partial',
+      paymentIntentId: 'pi_disp_partial',
+      amountCents: 2000,
+      payoutStatus: 'paid',
+      payoutAmountCents: 1000,
+    });
+    await stubStripeReads({
+      chargeId: 'ch_disp_partial',
+      amount: 2000,
+      disputes: [{ status: 'lost', amount: 500 }],
+    });
+
+    expect(
+      (
+        await POST(
+          disputeRequest({
+            type: 'charge.dispute.closed',
+            chargeId: 'ch_disp_partial',
+            paymentIntentId: 'pi_disp_partial',
+            amountCents: 500,
+            status: 'lost',
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { createTransferReversal } = await import('@/lib/stripe/connect');
+    expect(vi.mocked(createTransferReversal)).toHaveBeenCalledWith(
+      expect.objectContaining({ amountCents: 250 }),
+    );
+
+    const { data: after } = await sb
+      .from('payouts')
+      .select('status, reversed_amount_cents')
+      .eq('id', payout.id)
+      .single();
+    expect(after?.status).toBe('paid');
+    expect(after?.reversed_amount_cents).toBe(250);
+  });
+
+  it('KEEPS a lost chargeback revoked even when the dispute listing fails', async () => {
+    // `fetchDisputeFacts` swallows a Stripe read error into "no disputes", and a
+    // lost chargeback carries no refund — so all three facts read false,
+    // `resolveOrderStatus` computes `completed`, and the buyer who just won a
+    // chargeback gets their access back permanently, after we already reversed the
+    // money and paid the fee. The event itself is authoritative and must win.
+    const { sb, order } = await seedCharge({
+      chargeId: 'ch_lost_blind',
+      paymentIntentId: 'pi_lost_blind',
+      amountCents: 2000,
+      payoutStatus: 'paid',
+      payoutAmountCents: 1840,
+    });
+
+    await stubStripeReads({
+      chargeId: 'ch_lost_blind',
+      amount: 2000,
+      disputes: [{ status: 'needs_response', amount: 2000 }],
+    });
+    await POST(
+      disputeRequest({
+        type: 'charge.dispute.created',
+        chargeId: 'ch_lost_blind',
+        paymentIntentId: 'pi_lost_blind',
+        amountCents: 2000,
+        status: 'needs_response',
+      }),
+    );
+    expect(
+      (await sb.from('orders').select('status').eq('id', order.id).single()).data?.status,
+    ).toBe('disputed');
+
+    // The charge still reads, but listing the disputes blows up.
+    const { stripe: stripeClient } = await import('@/lib/stripe/config');
+    vi.spyOn(stripeClient.disputes, 'list').mockRejectedValue(
+      new Error('stripe is having a moment'),
+    );
+
+    expect(
+      (
+        await POST(
+          disputeRequest({
+            type: 'charge.dispute.closed',
+            chargeId: 'ch_lost_blind',
+            paymentIntentId: 'pi_lost_blind',
+            amountCents: 2000,
+            status: 'lost',
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { data: after } = await sb.from('orders').select('status').eq('id', order.id).single();
+    expect(after?.status).toBe('disputed');
+  });
+
+  it('never promotes an order that was never completed', async () => {
+    // `completed` is a COMPUTED result here and `completed` IS access. A partial
+    // refund deliberately resolves to `completed` (it must not revoke), so writing
+    // it unguarded hands the photos to an order stuck `pending` because its
+    // `payment_intent.succeeded` was lost — someone who never paid.
+    const { sb, order } = await seedCharge({
+      chargeId: 'ch_never_paid',
+      paymentIntentId: 'pi_never_paid',
+      amountCents: 2000,
+      payoutStatus: 'pending',
+      payoutAmountCents: 1840,
+    });
+    await sb.from('orders').update({ status: 'pending' }).eq('id', order.id);
+
+    await stubStripeReads({ chargeId: 'ch_never_paid', amount: 2000, amountRefunded: 500 });
+    expect(
+      (
+        await POST(
+          refundRequest({
+            chargeId: 'ch_never_paid',
+            paymentIntentId: 'pi_never_paid',
+            amountCents: 2000,
+            refundedCents: 500,
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { data: after } = await sb.from('orders').select('status').eq('id', order.id).single();
+    expect(after?.status).toBe('pending');
+  });
+
+  it('KEEPS a refunded buyer revoked when the dispute they opened is won', async () => {
+    // The sequence that broke the old model: dispute opened → refunded to settle
+    // it → the bank closes it in our favour. "Restore" then handed a fully
+    // refunded buyer permanent access and re-paid the photographer.
+    const { sb, order, payout } = await seedCharge({
+      chargeId: 'ch_settle',
+      paymentIntentId: 'pi_settle',
+      amountCents: 2000,
+      payoutStatus: 'pending',
+      payoutAmountCents: 1840,
+    });
+
+    await stubStripeReads({
+      chargeId: 'ch_settle',
+      amount: 2000,
+      disputes: [{ status: 'needs_response', amount: 2000 }],
+    });
+    await POST(
+      disputeRequest({
+        type: 'charge.dispute.created',
+        chargeId: 'ch_settle',
+        paymentIntentId: 'pi_settle',
+        amountCents: 2000,
+        status: 'needs_response',
+      }),
+    );
+
+    // Refund in full to settle it.
+    await stubStripeReads({
+      chargeId: 'ch_settle',
+      amount: 2000,
+      amountRefunded: 2000,
+      disputes: [{ status: 'needs_response', amount: 2000 }],
+    });
+    await POST(
+      refundRequest({
+        chargeId: 'ch_settle',
+        paymentIntentId: 'pi_settle',
+        amountCents: 2000,
+        refundedCents: 2000,
+      }),
+    );
+
+    // The bank closes it in our favour.
+    await stubStripeReads({
+      chargeId: 'ch_settle',
+      amount: 2000,
+      amountRefunded: 2000,
+      disputes: [{ status: 'won', amount: 2000 }],
+    });
+    expect(
+      (
+        await POST(
+          disputeRequest({
+            type: 'charge.dispute.closed',
+            chargeId: 'ch_settle',
+            paymentIntentId: 'pi_settle',
+            amountCents: 2000,
+            status: 'won',
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    // Access stays revoked — the buyer got their money back.
+    const { data: afterOrder } = await sb
+      .from('orders')
+      .select('status')
+      .eq('id', order.id)
+      .single();
+    expect(afterOrder?.status).toBe('refunded');
+
+    // And the photographer is not paid for a fully refunded sale.
+    const { data: afterPayout } = await sb
+      .from('payouts')
+      .select('status, reversed_amount_cents')
+      .eq('id', payout.id)
+      .single();
+    expect(afterPayout?.status).toBe('cancelled');
+    expect(afterPayout?.reversed_amount_cents).toBe(1840);
+  });
+
+  it('claws back NOTHING when the charge total cannot be resolved', async () => {
+    // The previous "fail closed" passed `?? 0`, which reads as "nothing was
+    // refunded" — so the hold stayed fully payable while the alert said the
+    // transfer had been reversed. There is no numeric fallback any more.
+    const { sb, payout } = await seedCharge({
+      chargeId: 'ch_unknown',
+      paymentIntentId: 'pi_unknown',
+      amountCents: 500,
+      payoutStatus: 'pending',
+      payoutAmountCents: 460,
+    });
+
+    const { stripe: stripeClient } = await import('@/lib/stripe/config');
+    const chargeSpy = vi
+      .spyOn(stripeClient.charges, 'retrieve')
+      .mockRejectedValue(new Error('stripe is having a bad minute'));
+    const disputeSpy = vi
+      .spyOn(stripeClient.disputes, 'list')
+      .mockResolvedValue({ data: [{ status: 'lost', amount: 500 }] } as never);
+    restoreStripeReads = () => {
+      chargeSpy.mockRestore();
+      disputeSpy.mockRestore();
+    };
+
+    expect(
+      (
+        await POST(
+          disputeRequest({
+            type: 'charge.dispute.closed',
+            chargeId: 'ch_unknown',
+            paymentIntentId: 'pi_unknown',
+            amountCents: 500,
+            status: 'lost',
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { createTransferReversal } = await import('@/lib/stripe/connect');
+    expect(vi.mocked(createTransferReversal)).not.toHaveBeenCalled();
+
+    const { data: after } = await sb
+      .from('payouts')
+      .select('status, amount_cents, reversed_amount_cents')
+      .eq('id', payout.id)
+      .single();
+    expect(after?.amount_cents).toBe(460);
+    expect(after?.reversed_amount_cents).toBe(0);
+  });
+
+  it('voids a transfer_failed hold rather than partially reducing it', async () => {
+    // Its idempotency key is spent at the original amount, so the only transfer
+    // the worker could make is bigger than what is now owed.
+    const { sb, payout } = await seedCharge({
+      chargeId: 'ch_tf_partial',
+      paymentIntentId: 'pi_tf_partial',
+      amountCents: 2000,
+      payoutStatus: 'pending',
+      payoutAmountCents: 1000,
+      holdReason: 'transfer_failed',
+    });
+    await stubStripeReads({ chargeId: 'ch_tf_partial', amount: 2000, amountRefunded: 500 });
+
+    expect(
+      (
+        await POST(
+          refundRequest({
+            chargeId: 'ch_tf_partial',
+            paymentIntentId: 'pi_tf_partial',
+            amountCents: 2000,
+            refundedCents: 500,
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { data: after } = await sb
+      .from('payouts')
+      .select('status, amount_cents, reversed_amount_cents')
+      .eq('id', payout.id)
+      .single();
+    expect(after?.status).toBe('cancelled');
+    expect(after?.amount_cents).toBe(1000);
+    expect(after?.reversed_amount_cents).toBe(0);
+  });
+
+  it('acknowledges the webhook even when the reversal fails', async () => {
+    // A 500 would make Stripe redeliver a money operation for up to three days.
+    const { sb, payout } = await seedCharge({
+      chargeId: 'ch_rev_fail',
+      paymentIntentId: 'pi_rev_fail',
+      amountCents: 500,
+      payoutStatus: 'paid',
+      payoutAmountCents: 460,
+    });
+    await stubStripeReads({ chargeId: 'ch_rev_fail', amount: 500, amountRefunded: 500 });
+
+    const { createTransferReversal } = await import('@/lib/stripe/connect');
+    vi.mocked(createTransferReversal).mockRejectedValueOnce(new Error('balance_insufficient'));
+
+    expect(
+      (
+        await POST(
+          refundRequest({
+            chargeId: 'ch_rev_fail',
+            paymentIntentId: 'pi_rev_fail',
+            amountCents: 500,
+            refundedCents: 500,
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    // The reservation is released, so a later reconcile retries with full
+    // information rather than believing money came back that never did.
+    const { data: after } = await sb
+      .from('payouts')
+      .select('status, reversed_amount_cents')
+      .eq('id', payout.id)
+      .single();
+    expect(after?.status).toBe('paid');
+    expect(after?.reversed_amount_cents).toBe(0);
+  });
+
+  it('marks a GUEST order too', async () => {
+    // The refund path only ever consulted `orders`, so a refunded guest kept a
+    // working download-token page until it expired.
+    const sb = createServiceClient();
+    const { data: guestOrder } = await sb
+      .from('guest_orders')
+      .insert({
+        guest_email: 'guest@photomarkt.test',
+        stripe_checkout_session_id: 'cs_guest_refund',
+        stripe_payment_intent_id: 'pi_guest_refund',
+        status: 'completed',
+        total_amount_cents: 500,
+        currency: 'eur',
+      })
+      .select('id')
+      .single();
+    if (!guestOrder) throw new Error('guest order seed failed');
+    await stubStripeReads({ chargeId: 'ch_guest_refund', amount: 500, amountRefunded: 500 });
+
+    expect(
+      (
+        await POST(
+          refundRequest({
+            chargeId: 'ch_guest_refund',
+            paymentIntentId: 'pi_guest_refund',
+            amountCents: 500,
+            refundedCents: 500,
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const { data: after } = await sb
+      .from('guest_orders')
+      .select('status')
+      .eq('id', guestOrder.id)
+      .single();
+    expect(after?.status).toBe('refunded');
   });
 });
 
@@ -2562,6 +3403,97 @@ describe('app/api/stripe/webhook — out-of-order delivery (T-252)', () => {
     expect(settled).toHaveLength(1);
     expect(settled?.[0]?.status).toBe('paid');
     expect(settled?.[0]?.amount_cents).toBe(460);
+  });
+});
+
+/**
+ * T-259 — a reversed sale must not be resurrected by a late payment event.
+ *
+ * `payment_intent.succeeded` promoted any order that merely happened not to be
+ * `completed`. Stripe redelivers for up to three days and a dashboard resend is
+ * routine here (T-192), so a refund landing between the original delivery and
+ * its retry left the retry flipping the order back to `completed` — restoring
+ * permanent ZIP and library access for a buyer who had been refunded, and
+ * putting the sale back in the photographer's `net` while its payout row sat
+ * `cancelled`.
+ *
+ * The money was never at risk (the exactly-once index blocks the re-drive);
+ * access was.
+ */
+describe('app/api/stripe/webhook — a late payment event cannot resurrect a reversal (T-259)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    vi.clearAllMocks();
+  });
+
+  async function seedOrderWithStatus(status: string, paymentIntentId: string) {
+    const sb = createServiceClient();
+    const talent = await createTestUser('TALENT');
+    const { data: order } = await sb
+      .from('orders')
+      .insert({
+        user_id: talent.id,
+        status,
+        total_amount_cents: 500,
+        currency: 'eur',
+        stripe_payment_intent_id: paymentIntentId,
+      })
+      .select('id')
+      .single();
+    if (!order) throw new Error('order seed failed');
+    return { sb, order };
+  }
+
+  function succeeded(paymentIntentId: string, chargeId: string) {
+    return signedWebhookRequest({
+      id: `evt_${paymentIntentId}`,
+      type: 'payment_intent.succeeded',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: paymentIntentId,
+          object: 'payment_intent',
+          latest_charge: chargeId,
+          amount: 500,
+        },
+      },
+    });
+  }
+
+  it('leaves a REFUNDED order refunded', async () => {
+    const { sb, order } = await seedOrderWithStatus('refunded', 'pi_t259_refunded');
+
+    expect((await POST(succeeded('pi_t259_refunded', 'ch_t259_refunded'))).status).toBe(200);
+
+    const { data: after } = await sb.from('orders').select('status').eq('id', order.id).single();
+    expect(after?.status).toBe('refunded');
+  });
+
+  it('leaves a DISPUTED order disputed', async () => {
+    const { sb, order } = await seedOrderWithStatus('disputed', 'pi_t259_disputed');
+
+    expect((await POST(succeeded('pi_t259_disputed', 'ch_t259_disputed'))).status).toBe(200);
+
+    const { data: after } = await sb.from('orders').select('status').eq('id', order.id).single();
+    expect(after?.status).toBe('disputed');
+  });
+
+  it('still promotes an ordinary PENDING order — the guard must not break the happy path', async () => {
+    const { sb, order } = await seedOrderWithStatus('pending', 'pi_t259_pending');
+
+    expect((await POST(succeeded('pi_t259_pending', 'ch_t259_pending'))).status).toBe(200);
+
+    const { data: after } = await sb.from('orders').select('status').eq('id', order.id).single();
+    expect(after?.status).toBe('completed');
+  });
+
+  it('still promotes a FAILED order — a retried payment that finally succeeds', async () => {
+    const { sb, order } = await seedOrderWithStatus('failed', 'pi_t259_failed');
+
+    expect((await POST(succeeded('pi_t259_failed', 'ch_t259_failed'))).status).toBe(200);
+
+    const { data: after } = await sb.from('orders').select('status').eq('id', order.id).single();
+    expect(after?.status).toBe('completed');
   });
 });
 

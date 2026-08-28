@@ -14,7 +14,16 @@ export type OrderStatus =
   | 'completed'
   | 'failed'
   | 'canceled'
-  | 'refunded';
+  | 'refunded'
+  /**
+   * A chargeback is open against this purchase (T-215). Set the moment
+   * `charge.dispute.created` arrives rather than when the dispute closes — a
+   * dispute is forced unilaterally through the buyer's bank, bypassing our terms
+   * entirely, so it is exactly the route someone would take to download and not
+   * pay. Every purchased-photo read gates on `completed`, so this one value
+   * revokes access everywhere; winning the dispute sets it back.
+   */
+  | 'disputed';
 
 export interface Order {
   id: string;

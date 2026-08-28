@@ -34,9 +34,12 @@
  */
 
 import {
+  claimPayoutForTransfer,
   claimPayoutsForBatch,
+  holdPayoutRow,
   listPayableHolds,
   listStaleProcessingBatches,
+  listStaleProcessingSingles,
   type Payout,
   releaseClaimedPayouts,
   settleBatchAsPaid,
@@ -127,15 +130,30 @@ export const retryPendingPayouts = inngest.createFunction(
 );
 
 /** A payout row is a `PayableRow` plus the fields only the DB layer needs. */
+/**
+ * Project a ledger row into what the batching maths needs.
+ *
+ * ⚠️ `amount_cents` is the amount the sale ORIGINALLY owed; what is still payable
+ * is `amount_cents - reversed_amount_cents` (T-215). The column is immutable so
+ * that a partial clawback is idempotent under Stripe redelivery and so the
+ * recovery probe can still recognise a transfer made at the original amount — the
+ * price of that is that every consumer must subtract, here and at the two sites
+ * below that read raw rows.
+ */
 function toPayableRow(row: Payout): PayableRow {
   return {
     id: row.id,
     photographer_id: row.photographer_id,
-    amount_cents: row.amount_cents,
+    amount_cents: payableCents(row),
     currency: row.currency,
     stripe_charge_id: row.stripe_charge_id,
     hold_reason: row.hold_reason,
   };
+}
+
+/** What is still owed on a row after any clawback. */
+function payableCents(row: Pick<Payout, 'amount_cents' | 'reversed_amount_cents'>): number {
+  return Math.max(0, row.amount_cents - (row.reversed_amount_cents ?? 0));
 }
 
 /**
@@ -185,7 +203,7 @@ export async function runRetryPendingPayoutsFlow(
       const destination = connect?.stripe_connect_account_id;
       if (!destination) continue;
 
-      const totalCents = rows.reduce((sum, row) => sum + row.amount_cents, 0);
+      const totalCents = rows.reduce((sum, row) => sum + payableCents(row), 0);
       const probe = await deps.findTransferByGroup({
         transferGroup: batchTransferGroup(batchId),
         destination,
@@ -234,6 +252,54 @@ export async function runRetryPendingPayoutsFlow(
     }
 
     return { batches: batches.size };
+  });
+
+  // ── 0b. Recover individually-claimed rows abandoned mid-flight ───────────
+  // The mirror of the step above for rows claimed by `claimPayoutForTransfer`
+  // (no batch id). Without it, claiming would swap a double-payment window for a
+  // permanent stranding: a `processing` row is invisible to `listPayableHolds`.
+  await step.run('recover-stale-singles', async () => {
+    const staleRows = await listStaleProcessingSingles(
+      adminClient,
+      staleBefore,
+      MAX_STALE_ROWS_PER_TICK,
+    );
+
+    for (const row of staleRows) {
+      const [connect] = await getPhotographerConnectStatuses(adminClient, [row.photographer_id]);
+      const destination = connect?.stripe_connect_account_id;
+      if (!destination) continue;
+
+      // The ORIGINAL amount, like every other probe: that is what the transfer
+      // would have been made for and what the idempotency key describes.
+      const probe = await deps.findTransferByGroup({
+        transferGroup: payoutTransferGroup(row.id),
+        destination,
+        amountCents: row.amount_cents,
+      });
+
+      if (probe.outcome === 'found') {
+        await settlePayoutPaid(adminClient, row.id, probe.transfer.id);
+        result.rowsPaid += 1;
+        result.centsPaid += payableCents(row);
+        console.log(
+          `[retry-payouts] payout ${row.id} recovered from transfer ${probe.transfer.id}`,
+        );
+        continue;
+      }
+
+      if (probe.outcome === 'unknown') {
+        // A read blip is never "nothing was sent". Leave it claimed for next tick.
+        console.warn(`[retry-payouts] payout ${row.id}: stale-claim lookup inconclusive`);
+        continue;
+      }
+
+      // Provably nothing was sent, so hand the claim back for the normal path.
+      await holdPayoutRow(adminClient, row.id, 'transfer_failed');
+      result.releasedClaims += 1;
+    }
+
+    return { recovered: staleRows.length };
   });
 
   // ── 1. Load outstanding holds and resolve who can be paid ────────────────
@@ -304,6 +370,13 @@ export async function runRetryPendingPayoutsFlow(
       // the charge's remaining headroom. So probe first, exactly as the batch
       // path does.
       if (row.hold_reason === 'transfer_failed') {
+        // ⚠️ `row.amount_cents` here is the PAYABLE amount, and the probe must
+        // match the ORIGINAL — that is what the spent idempotency key describes.
+        // The two only diverge when a clawback partially reduced this row, and
+        // `applyReversalToHolds` voids such rows precisely because neither the
+        // key nor the probe can express the new amount. Rows that reach here are
+        // therefore un-clawed-back, and the guard in `resolve-payable-holds`
+        // keeps it that way.
         const probe = await deps.findTransferByGroup({
           transferGroup: payoutTransferGroup(row.id),
           destination,
@@ -328,6 +401,17 @@ export async function runRetryPendingPayoutsFlow(
         }
       }
 
+      // ⚠️ Claim BEFORE calling Stripe, exactly as the batch path does. Leaving the
+      // row `pending` across its own transfer meant a run that paid and then failed
+      // to record it left a paid row looking unpaid — hidden for 24h by the
+      // idempotency key, and paid a second time on the first tick after the key
+      // expired. A row we cannot claim is one somebody else is already handling.
+      const claimed = await claimPayoutForTransfer(adminClient, row.id);
+      if (!claimed) {
+        console.log(`[retry-payouts] payout ${row.id} was claimed elsewhere, skipping`);
+        return null;
+      }
+
       try {
         const transfer = await deps.createTransfer({
           amountCents: row.amount_cents,
@@ -350,10 +434,16 @@ export async function runRetryPendingPayoutsFlow(
           `[retry-payouts] paid ${row.amount_cents} cents to photographer ${row.photographer_id} (payout ${row.id})`,
         );
       } catch (err) {
-        // Stay `pending` and try again next tick under the same key. Nothing to
-        // undo: the key, `source_transaction` and the probe above all make a
-        // retry safe.
         console.error(`[retry-payouts] transfer for payout ${row.id} failed:`, err);
+        // Hand the claim back so the next tick can retry — and hand it back as
+        // `transfer_failed`, which is the truth: the call was made and we never saw
+        // its answer. That reason is what makes the next tick PROBE before
+        // re-driving, instead of blindly re-sending money Stripe may already have
+        // moved. Leaving the row `processing` would strand it until the stale
+        // sweep, which is slower for no gain.
+        await holdPayoutRow(adminClient, row.id, 'transfer_failed').catch((holdErr) =>
+          console.error(`[retry-payouts] failed to release claim on payout ${row.id}:`, holdErr),
+        );
       }
       return null;
     });
@@ -380,7 +470,7 @@ export async function runRetryPendingPayoutsFlow(
       // ⚠️ Recompute from what we ACTUALLY claimed. A concurrent run may have
       // taken part of the group, and transferring the pre-claim total would send
       // money for rows we don't own.
-      const claimedCents = claimed.reduce((sum, row) => sum + row.amount_cents, 0);
+      const claimedCents = claimed.reduce((sum, row) => sum + payableCents(row), 0);
 
       if (claimedCents < STRIPE_MIN_TRANSFER_CENTS) {
         // Stripe would reject this and cache the error under the batch key for

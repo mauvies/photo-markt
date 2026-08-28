@@ -103,6 +103,7 @@ const PAYOUT_STATUS_LABEL_KEYS = {
   processing: 'payoutStatusProcessing',
   paid: 'payoutStatusPaid',
   cancelled: 'payoutStatusCancelled',
+  reversed: 'payoutStatusReversed',
 } as const satisfies Record<Payout['status'], keyof EarningsT>;
 
 export function PayoutHistory({ payouts, className }: PayoutHistoryProps) {
@@ -132,7 +133,13 @@ export function PayoutHistory({ payouts, className }: PayoutHistoryProps) {
             className="flex items-center justify-between rounded-lg border bg-background p-4"
           >
             <div className="flex-1">
-              <p className="font-semibold">{formatPrice(payout.amount_cents)}</p>
+              {/* Net of clawbacks (T-215): `amount_cents` is what the sale owed, and it
+                    is immutable — a refunded or charged-back share lives in
+                    `reversed_amount_cents`, so rendering the raw column would tell the
+                    photographer they kept money that went back to the buyer. */}
+              <p className="font-semibold">
+                {formatPrice(payout.amount_cents - (payout.reversed_amount_cents ?? 0))}
+              </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {payout.status === 'paid' ? t('paidLabel') : t('requestedLabel')}{' '}
                 {payout.status === 'paid' && payout.paid_at

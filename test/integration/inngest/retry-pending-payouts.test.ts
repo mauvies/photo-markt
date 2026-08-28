@@ -445,6 +445,104 @@ describe('runRetryPendingPayoutsFlow', () => {
       expect((await readPayout(a.id))?.status).toBe('processing');
     });
   });
+
+  /**
+   * An individual transfer now claims its row out of `pending` before calling
+   * Stripe, which closes a real double-payment window: a run that transferred and
+   * then failed to write `settlePayoutPaid` used to leave a paid row looking
+   * unpaid. The idempotency key hides that for 24h and then expires — the row does
+   * not — so the next tick sent the money again.
+   *
+   * The claim only helps if abandoned claims are recovered, or it trades that
+   * window for a permanent one: a `processing` row is invisible to
+   * `listPayableHolds` and nothing else looks for it. These pin the recovery.
+   */
+  describe('stale single-row claim recovery', () => {
+    it('settles from an existing transfer instead of sending a second one', async () => {
+      const photographer = await makePhotographer({});
+      const a = await seedHold({
+        photographerId: photographer.id,
+        amountCents: 900,
+        chargeId: 'ch_stale_single',
+        holdReason: 'connect_inactive',
+        status: 'processing',
+      });
+
+      const { deps, calls } = makeDeps({
+        findTransferByGroup: vi.fn(
+          async () => ({ outcome: 'found', transfer: { id: 'tr_single_already_sent' } }) as never,
+        ),
+      });
+      await runRetryPendingPayoutsFlow(passthroughStep, FUTURE_NOW, deps);
+
+      expect(calls).toHaveLength(0);
+      const after = await readPayout(a.id);
+      expect(after?.status).toBe('paid');
+      expect(after?.stripe_transfer_id).toBe('tr_single_already_sent');
+    });
+
+    it('hands the claim back as a hold when Stripe confirms nothing was sent', async () => {
+      const photographer = await makePhotographer({});
+      const a = await seedHold({
+        photographerId: photographer.id,
+        amountCents: 900,
+        chargeId: 'ch_stale_single_none',
+        holdReason: 'connect_inactive',
+        status: 'processing',
+      });
+
+      const { deps, calls } = makeDeps();
+      const result = await runRetryPendingPayoutsFlow(passthroughStep, FUTURE_NOW, deps);
+
+      // The claim is handed back rather than left stranded …
+      expect(result.releasedClaims).toBeGreaterThan(0);
+      // … and the same tick then pays it through the normal path, which is safe
+      // because the release marks it `transfer_failed` and that reason makes the
+      // payer PROBE before sending. Exactly one transfer, never two.
+      expect(calls).toHaveLength(1);
+      const after = await readPayout(a.id);
+      expect(after?.status).toBe('paid');
+      expect(after?.status).not.toBe('processing');
+    });
+
+    it('does NOT release a claim when the lookup is inconclusive', async () => {
+      // Same rule as everywhere else on this path: a Stripe read blip is never
+      // "nothing was sent".
+      const photographer = await makePhotographer({});
+      const a = await seedHold({
+        photographerId: photographer.id,
+        amountCents: 900,
+        chargeId: 'ch_stale_single_unknown',
+        holdReason: 'connect_inactive',
+        status: 'processing',
+      });
+
+      const { deps, calls } = makeDeps({
+        findTransferByGroup: vi.fn(async () => ({ outcome: 'unknown' }) as never),
+      });
+      await runRetryPendingPayoutsFlow(passthroughStep, FUTURE_NOW, deps);
+
+      expect(calls).toHaveLength(0);
+      expect((await readPayout(a.id))?.status).toBe('processing');
+    });
+
+    it('leaves a freshly-claimed row alone', async () => {
+      const photographer = await makePhotographer({});
+      const a = await seedHold({
+        photographerId: photographer.id,
+        amountCents: 900,
+        chargeId: 'ch_fresh_single',
+        holdReason: 'connect_inactive',
+        status: 'processing',
+      });
+
+      const { deps, calls } = makeDeps();
+      await runRetryPendingPayoutsFlow(passthroughStep, Date.now(), deps);
+
+      expect(calls).toHaveLength(0);
+      expect((await readPayout(a.id))?.status).toBe('processing');
+    });
+  });
 });
 
 /**

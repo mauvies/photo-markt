@@ -56,8 +56,9 @@ export const env = createEnv({
     // and 500 every route. An optional alert recipient must never be able to
     // take the site down. Readers treat `''` as absent, like `undefined`.
     FACE_SEARCH_ALERT_EMAIL: z.union([z.email(), z.literal('')]).optional(),
-    // Recipient of money-incident alerts (T-249) — a sale that skipped the
-    // photographer's transfer and left no recoverable debt. Absent ⇒
+    // Recipient of money-incident alerts (T-249, T-215) — a sale that skipped the
+    // photographer's transfer and left no recoverable debt, or a refund/dispute
+    // clawback that could not be resolved automatically. Absent ⇒
     // `reportMoneyIncident` still logs and still reports to Sentry, it just
     // sends no email (same no-op shape as FACE_SEARCH_ALERT_EMAIL).
     MONEY_ALERT_EMAIL: z.union([z.email(), z.literal('')]).optional(),
