@@ -584,9 +584,52 @@ batch, which spans several charges and so cannot carry it; that path exists
 solely because a sub-50-cent net can never clear Stripe's floor alone, which
 keeps its amounts tiny by construction.
 
-**Refunds:** `charge.refunded` now voids any *outstanding* hold for that charge,
-so unsent money is never sent. A transfer already made still needs a manual
-reversal — T-215 owns automating that.
+**Refunds and disputes — the clawback path (T-215).** A purchase that comes back is
+unwound on both sides, through one shared function (`applyClawback`,
+`src/lib/payouts/apply-clawback.ts`) used by refunds *and* lost disputes, so the two
+cannot drift the way T-216's two writers did.
+
+- **Money not sent yet** (`pending` holds) is reduced **proportionally**, and voided
+  only on a full reversal. It used to be voided outright on any `charge.refunded` —
+  and Stripe fires that for partial refunds too, so refunding €5 of a €20 sale
+  destroyed the photographer's net on the other €15, irrecoverably (the exactly-once
+  index blocks inserting a replacement row). That was T-237.
+- **Money already sent** is reversed at Stripe for the proportional delta and recorded
+  on the row (`reversed_amount_cents`, `stripe_reversal_id`, and status `reversed`
+  once nothing is left). `getTotalPaidOut` is net of reversals, without which
+  `withdrawable = net − paidOut − pending` understates the balance by exactly the
+  clawed-back amount, permanently: the sale leaves `net` when its order stops being
+  `completed`, so `paidOut` has to fall with it.
+- **A `processing` row is probed, never guessed.** Its transfer may or may not exist;
+  `findTransferByGroup` decides, and `unknown` means do nothing — same fail-closed rule
+  as the retry worker.
+- **The reversal idempotency key is `(payout row, CUMULATIVE reversed amount)`**, not
+  `(transfer, charge)`. That pair is constant across successive partial refunds, so
+  the second one would reuse the first's key and Stripe would return the first
+  reversal — the photographer silently keeping money the buyer got back.
+- **Proportions are taken against `charge.amount`, fee included.** Stripe refunds are
+  amounts, not line items, so nothing says which part of the cart a partial refund
+  covered; proportional-on-total is the predictable guess, and it is documented in
+  `src/lib/payouts/clawback.ts` rather than left to be rediscovered.
+- **Nothing here throws.** A 500 from the webhook makes Stripe redeliver a money
+  operation for up to three days, so every failure becomes an alert (Sentry via
+  `reportMoneyIncident` + an optional `OPS_ALERT_EMAIL`) and a row left for
+  reconciliation.
+
+**Disputes** (`charge.dispute.created` / `.closed`) were handled by *nothing* before
+T-215 — a lost chargeback took the money back, charged a ~€15 fee, and left the buyer
+with permanent access. Now: opening one flips the order (and the **guest** order) to
+`disputed`, which revokes access through the `status = 'completed'` gates that already
+exist on every read path, and freezes outstanding holds with `void_reason = 'dispute'`;
+losing it reverses the transfer and records the fee as a **platform** cost, never
+charged to the photographer; winning it restores the order to `completed` and un-voids
+exactly the holds the dispute voided (an UPDATE, which the exactly-once index permits —
+it constrains INSERTs). The **dispute fee is absorbed by the platform** by decision: the
+photographer controls neither the buyer's fraud nor the dispute process.
+
+⚠️ **Access revocation is prospective.** Signed storage URLs already handed out stay
+valid until they expire (600 s for the ZIP route, 3600 s for a page); the clawback stops
+new ones being minted, it does not chase issued ones.
 
 **Connect API version — Accounts v1 (deliberate, T-164).** Our entire Connect
 surface uses **Accounts v1**: `accounts.retrieve/create`, `accountLinks.create`,

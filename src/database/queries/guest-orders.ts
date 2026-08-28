@@ -8,7 +8,15 @@ import type { WithdrawalConsentRecord } from '@/lib/withdrawal-consent';
 import type { SupabaseServerClient } from './types';
 import { getErrorMessage } from './types';
 
-export type GuestOrderStatus = 'pending' | 'completed' | 'failed' | 'canceled' | 'refunded';
+export type GuestOrderStatus =
+  | 'pending'
+  | 'completed'
+  | 'failed'
+  | 'canceled'
+  | 'refunded'
+  /** A chargeback is open against this purchase (T-215). Access is revoked while
+   *  it lasts, and restored only if the dispute is won. */
+  | 'disputed';
 
 export interface GuestOrder {
   id: string;
@@ -194,6 +202,54 @@ export async function getGuestOrderBySessionId(
   }
 
   return (data as GuestOrder) ?? null;
+}
+
+/**
+ * Resolve a guest order from its payment intent (T-215).
+ *
+ * The gap this closes: `charge.refunded` only ever looked orders up through
+ * `getOrderByPaymentIntentId`, which reads the `orders` table. No lookup by
+ * payment intent existed for `guest_orders` at all, so a refunded GUEST purchase
+ * was never flipped — its download-token page keeps checking
+ * `status === 'completed'` and keeps minting fresh unwatermarked signed URLs
+ * until the token expires. The same hole would have swallowed every dispute.
+ *
+ * `maybeSingle` is right here: `stripe_payment_intent_id` is UNIQUE on the table,
+ * and a charge with no guest order behind it (the authenticated case) is an
+ * ordinary outcome the caller branches on, not an error.
+ */
+export async function getGuestOrderByPaymentIntentId(
+  supabase: SupabaseServerClient,
+  paymentIntentId: string,
+): Promise<GuestOrder | null> {
+  const { data, error } = await supabase
+    .from('guest_orders')
+    .select('*')
+    .eq('stripe_payment_intent_id', paymentIntentId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to get guest order by payment intent: ${getErrorMessage(error)}`);
+  }
+
+  return (data as GuestOrder) ?? null;
+}
+
+/**
+ * Set a guest order's status (T-215). Guest orders have no `updateOrderStatus`
+ * equivalent because, until disputes and refunds needed to revoke access, nothing
+ * ever changed one after checkout wrote it as `completed`.
+ */
+export async function updateGuestOrderStatus(
+  supabase: SupabaseServerClient,
+  guestOrderId: string,
+  status: GuestOrderStatus,
+): Promise<void> {
+  const { error } = await supabase.from('guest_orders').update({ status }).eq('id', guestOrderId);
+
+  if (error) {
+    throw new Error(`Failed to update guest order status: ${getErrorMessage(error)}`);
+  }
 }
 
 export async function getGuestOrderWithItems(

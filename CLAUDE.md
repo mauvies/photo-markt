@@ -390,6 +390,57 @@ query module and `payouts.payment_account_id` went in `20260820000000_prune_dead
 - **Only sub-50¢ rows are batched.** Anything that clears the minimum alone transfers individually with `source_transaction`, which both guarantees funding and lets Stripe refuse an over-draw — a double-pay guard that never expires, unlike the 24h key. Batching is grouped `(photographer, currency)` and drops `source_transaction` (Stripe allows one source charge per transfer), so it draws on the *platform* balance; that's tolerable only because those amounts are tiny. Single calc point: `splitPayableRows` in **`src/lib/payouts/batching.ts`**.
 - ⚠️ **The retry worker only considers rows with BOTH `hold_reason` and `stripe_charge_id` set.** That is a security filter: `pending` predates T-216 and an RLS policy used to let photographers INSERT their own rows, which a paying worker would turn into theft.
 - **`payouts` is photographer-read / service-role-write.** The INSERT and pending→cancelled UPDATE policies were dropped in `20260807000000` for exactly that reason; `createPayout`, the dead self-insert helper, was deleted outright in T-220. Pinned by `test/integration/security/payouts-rls.test.ts`.
+- **Clawback (T-215, absorbing T-237) — `applyClawback` (`src/lib/payouts/apply-clawback.ts`) is
+  the ONE path** used by both `charge.refunded` and a lost dispute, so the two can't drift the way
+  T-216's two writers did. It unwinds **both** kinds of money: an outstanding hold is **reduced
+  proportionally** (voided only on a full reversal — voiding it outright on a *partial* refund is
+  what destroyed the photographer's net on the un-refunded part, T-237), and a transfer **already
+  sent** is reversed at Stripe and recorded on the row (`reversed_amount_cents`,
+  `stripe_reversal_id`, status `reversed` once nothing is left). Pure math in
+  **`src/lib/payouts/clawback.ts`**, all integer cents — a float ratio would leave a phantom cent on
+  a fully reversed sale. ⚠️ **The reversal idempotency key is `(payout row, CUMULATIVE reversed
+  amount)`, never `(transfer, charge)`:** that pair is constant across successive partial refunds,
+  so the second one would reuse the first's key and Stripe would return the first reversal — the
+  photographer silently keeping money the buyer got back. ⚠️ **Nothing on this path throws** — a 500
+  makes Stripe redeliver a *money* operation — so failures become alerts through the same
+  `reportMoneyIncident` (T-249) and rows left for reconciliation — there is no separate clawback
+  email channel; a second one would duplicate every incident and skip the T-249 throttle. A
+  `processing` row is **probed** with `findTransferByGroup` before anything happens to it; `unknown`
+  means do nothing. ⚠️ **`reservePayoutReversal` / `releasePayoutReversal` do their arithmetic in ONE
+  SQL statement** (`reserve_payout_reversal` / `release_payout_reversal`, migration
+  `20260828000000`, service-role only) — **never** read-modify-write from JS (T-260). The caller's
+  delta already comes from an earlier read of `reversed_amount_cents`, so a JS `existing + delta`
+  puts two reads around the arithmetic: `charge.refunded` racing `charge.dispute.closed`-won
+  recorded the delta **twice**. Stripe stayed correct (the idempotency key encodes the cumulative
+  target, so only one reversal happens) — the ledger did not, and permanently: `getTotalPaidOut` is
+  net of reversals, so it understates the balance forever and every later delta computes
+  `target − already` = 0, silently no-opping the next legitimate reversal. The `least`/`greatest`
+  clamps live in SQL **because** that is what keeps it one statement
+- ⚠️ **`completed` is written by two flows with DISJOINT allow-lists, and they must stay disjoint
+  (T-259).** `mayWriteOrderStatus` gates the clawback flow, where the status is RECOMPUTED from
+  Stripe's facts, so `completed` may only undo a revocation this flow itself made (`refunded` /
+  `disputed`). `mayPromoteOnPaymentSuccess` gates `payment_intent.succeeded`, where `completed`
+  means "the payment went through" — legitimate from `pending`/`processing`/`failed`, never from a
+  reversal. That second guard was missing: the handler promoted anything that merely wasn't
+  `completed`, and since Stripe redelivers for up to three days (and a dashboard resend is routine
+  here since T-192), a refund landing between the first delivery and its retry let the retry flip
+  the order back to `completed` — restoring permanent ZIP + library access for a refunded buyer
+  (13+ read paths gate on `status = 'completed'`) and putting the sale back in the photographer's
+  `net` while its payout row sat `cancelled`. The money was safe (the exactly-once index blocks the
+  re-drive); the access was not
+- **`disputed` order status, and access revocation costs nothing.** `charge.dispute.created` /
+  `.closed` were handled by **no case at all** before T-215: a lost chargeback pulled the money back,
+  charged a ~€15 fee, and left the buyer with permanent download access. Opening a dispute flips
+  `orders` **and `guest_orders`** to `disputed`; because 13+ read paths already gate on
+  `status = 'completed'`, that single value revokes access everywhere with **zero reader changes** —
+  and `won` sets it back. ⚠️ The **guest** side needed a new `getGuestOrderByPaymentIntentId`: the
+  refund path only ever consulted `orders`, so a refunded guest kept a working download-token page.
+  A lost dispute reverses the transfer and records the fee as a **platform** cost (never charged to
+  the photographer — they control neither the fraud nor the dispute); a won one un-voids exactly the
+  holds it froze, scoped by `void_reason = 'dispute'` so a refund-voided hold stays voided. Restoring
+  works because the exactly-once index constrains **INSERTs, not UPDATEs** — the row never went away.
+  There is no admin endpoint that could race this (T-220 already deleted `/api/admin/payouts/[id]`).
+  See `ARCHITECTURE.md` §4.3
 - ⚠️ **The ledger's `try/catch` + `continue` is correct, and that is exactly why it must alert
   (T-249).** A failure there must not throw — a 500 makes Stripe redeliver a payment we may already
   have made — so the failure is invisible by construction unless something surfaces it. It already
@@ -1003,7 +1054,7 @@ FACE_SEARCH_GLOBAL_DAILY_CALLS=      # global/day circuit breaker, default 2000 
 FACE_SEARCH_EVENT_DAILY_CALLS=       # per-event/day cap, default 1000
 FACE_SEARCH_ALERT_EMAIL=             # 50%-of-global alert recipient; absent ⇒ no alert
 
-# Money incidents (T-249)
+# Money incidents (T-249, T-215)
 MONEY_ALERT_EMAIL=                   # ops recipient for reportMoneyIncident; absent ⇒ log + Sentry only
 
 # Reveal gate (T-177)

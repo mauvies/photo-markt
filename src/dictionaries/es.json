@@ -826,6 +826,7 @@
     "payoutStatusProcessing": "Enviando",
     "payoutStatusPaid": "Pagado",
     "payoutStatusCancelled": "Cancelado",
+    "payoutStatusReversed": "Revertido",
     "requestPayoutTitle": "Solicitar retiro",
     "requestPayoutDesc": "Retira tu saldo disponible. Los pagos son procesados manualmente por nuestro equipo.",
     "requestPayoutButton": "Solicitar retiro",
