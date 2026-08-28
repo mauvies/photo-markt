@@ -11,22 +11,21 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-262 | `createAuthenticatedOrder` se traga errores de lectura y nunca alerta | — | todo |
-| 2 | P1 | T-263 | El pedido de invitado se marca `completed` antes de que se mueva el dinero | — | todo |
-| 3 | P1 | T-264 | `listUnconfirmedReversals` no tiene ni un llamador — la barrida que promete no existe | — | todo |
-| 4 | P1 | T-265 | Un freeze/restore de disputa que falla deja la fila impagable para siempre, en silencio | — | todo |
-| 5 | P1 | T-256 | Deriva entorno↔repo: nada comprueba que lo desplegado sea lo que dice el repo | — | todo |
-| 6 | P1 | T-255 | Nadie reconcilia: un pedido `completed` sin filas en `payouts` no lo detecta nada | — | todo |
-| 7 | P2 | T-254 | El worker de reintentos de payouts solo escribe en consola — un hold atascado para siempre no avisa a nadie | — | todo |
-| 8 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
-| 9 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
-| 10 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
-| 11 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
-| 12 | P2 | T-258 | `CLAUDE.md` pesa ~29k tokens y se carga entero en cada sesión | — | todo |
-| 13 | P2 | T-266 | El canal de alertas de dinero es opcional, no verificado, y degrada en silencio | — | todo |
-| 14 | P2 | T-267 | Un carrito de invitado de más de ~46 fotos no puede pagar, y nadie se entera | — | todo |
-| 15 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
-| 16 | P3 | T-223 | Carrito de invitado sin sincronización entre pestañas | — | todo |
+| 1 | P1 | T-263 | El pedido de invitado se marca `completed` antes de que se mueva el dinero | — | todo |
+| 2 | P1 | T-264 | `listUnconfirmedReversals` no tiene ni un llamador — la barrida que promete no existe | — | todo |
+| 3 | P1 | T-265 | Un freeze/restore de disputa que falla deja la fila impagable para siempre, en silencio | — | todo |
+| 4 | P1 | T-256 | Deriva entorno↔repo: nada comprueba que lo desplegado sea lo que dice el repo | — | todo |
+| 5 | P1 | T-255 | Nadie reconcilia: un pedido `completed` sin filas en `payouts` no lo detecta nada | — | todo |
+| 6 | P2 | T-254 | El worker de reintentos de payouts solo escribe en consola — un hold atascado para siempre no avisa a nadie | — | todo |
+| 7 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
+| 8 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
+| 9 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
+| 10 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
+| 11 | P2 | T-258 | `CLAUDE.md` pesa ~29k tokens y se carga entero en cada sesión | — | todo |
+| 12 | P2 | T-266 | El canal de alertas de dinero es opcional, no verificado, y degrada en silencio | — | todo |
+| 13 | P2 | T-267 | Un carrito de invitado de más de ~46 fotos no puede pagar, y nadie se entera | — | todo |
+| 14 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
+| 15 | P3 | T-223 | Carrito de invitado sin sincronización entre pestañas | — | todo |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |
@@ -199,6 +198,18 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
   (`events.coverNotForSale`), porque el tooltip existente no dice que la portada no es una foto a la
   venta; el resto se reusa. `/edit` conserva su control: esto **añade** un punto de entrada, no migra
   el existente. Sin migración — PR #311
+
+- **T-262** · Fix/Pagos (P1): dos mitades de un mismo agujero en `createAuthenticatedOrder`. (a) El
+  `error` de la lectura de `carts` se perdía **en la desestructuración**, y `cartItemsError` iba
+  agrupado con «carrito vacío»: un fallo transitorio de PostgREST (T-239 fue exactamente eso) era
+  indistinguible de «no hay carrito», y los dos devolvían `null` con un 200 — comprador cobrado, sin
+  pedido, sin email, sin payout y **sin incidente**. Ahora un error de **lectura** alerta y **lanza**
+  (el 500 es el reintento); una fila realmente ausente alerta y se rinde. (b) El pedido nacía
+  `completed` **antes** de `addOrderItems`/`clearCart`, que lanzan: quedaba sin ítems y con el carrito
+  **sin vaciar**, y la reentrega cortaba en el guard ⇒ el comprador podía pagar dos veces lo mismo. El
+  guard se estrecha por **un solo caso** — una orden sin `order_items` nunca se ensambló, así que no
+  tiene payouts que duplicar — vía `orderHasItems`, **nunca** vía `status` (la fila se escribe
+  `completed` desde el principio). Hallazgo de la auditoría T-257. Sin migración — PR #318
 
 - **T-257** · Chore/Auditoría (P1): auditoría de la ruta del dinero sobre `main` ya con T-215
   dentro — tres subagentes en paralelo, lentes de refutación, ~7.000 líneas. 14 hallazgos brutos, 10

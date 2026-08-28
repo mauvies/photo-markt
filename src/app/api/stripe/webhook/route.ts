@@ -86,6 +86,7 @@ import {
   getOrderByCheckoutSessionId,
   getOrderByPaymentIntentId,
   type Order,
+  orderHasItems,
   updateOrderStatus,
 } from '@/database/queries/orders';
 import {
@@ -767,7 +768,10 @@ async function drivePayoutsForOrder(params: {
  * on every "nothing to do" exit — each one logs its own reason, exactly as the
  * inline `break`s it replaces did.
  */
-async function createAuthenticatedOrder(session: Stripe.Checkout.Session): Promise<Order | null> {
+async function createAuthenticatedOrder(
+  session: Stripe.Checkout.Session,
+  existingUnfinishedOrder: Order | null = null,
+): Promise<Order | null> {
   const userId = session.metadata?.user_id;
   const cartId = session.client_reference_id ?? session.metadata?.cart_id;
 
@@ -781,15 +785,43 @@ async function createAuthenticatedOrder(session: Stripe.Checkout.Session): Promi
     return null;
   }
 
-  const { data: cart } = await supabaseAdmin
+  // ⚠️ The `error` is CAPTURED, and that is the whole point of T-262. It used to be
+  // discarded in the destructuring (`const { data: cart } = …`), which made a
+  // transient PostgREST failure indistinguishable from "no such cart" — both
+  // logged and returned `null`, and the handler answered 200. The buyer was
+  // charged and got no order, no items, no email and no payout row, with nothing
+  // anywhere to say so. That failure class is not hypothetical: T-239 was a
+  // schema-cache error on `order_items`.
+  const { data: cart, error: cartError } = await supabaseAdmin
     .from('carts')
     .select('*')
     .eq('id', cartId)
     .eq('user_id', userId)
     .maybeSingle();
 
+  // A READ that failed is transient and worth retrying, so it throws: the 500
+  // makes Stripe redeliver, and the redelivery is the recovery.
+  if (cartError) {
+    await reportMoneyIncident({
+      kind: 'payout-not-recorded',
+      message:
+        "A paid checkout session's cart could not be read, so no order was created. The buyer has been charged and nothing has been paid out. A Stripe redelivery will retry.",
+      context: { sessionId: session.id, cartId, userId },
+      cause: cartError,
+    });
+    throw cartError;
+  }
+
+  // No cart, no error: the row is genuinely gone. Retrying cannot bring it back,
+  // so this reports and gives up rather than throwing into a redelivery loop —
+  // but it MUST report, because the buyer has paid for something they will not get.
   if (!cart) {
-    console.error(`Cart ${cartId} not found or doesn't belong to user ${userId}`);
+    await reportMoneyIncident({
+      kind: 'payout-not-recorded',
+      message:
+        'A paid checkout session referenced a cart that no longer exists, so no order was created. The buyer has been charged and nothing has been paid out; this needs a human.',
+      context: { sessionId: session.id, cartId, userId },
+    });
     return null;
   }
 
@@ -815,8 +847,26 @@ async function createAuthenticatedOrder(session: Stripe.Checkout.Session): Promi
     )
     .eq('cart_id', cartId);
 
-  if (cartItemsError || !cartItemsData || cartItemsData.length === 0) {
-    console.error('Cart is empty or error fetching cart items:', cartItemsError);
+  // Same split as the cart read above: a failed read is retryable, an empty cart
+  // is not — and lumping them together is what hid the first one.
+  if (cartItemsError) {
+    await reportMoneyIncident({
+      kind: 'payout-not-recorded',
+      message:
+        "A paid checkout session's cart items could not be read, so no order was created. The buyer has been charged and nothing has been paid out. A Stripe redelivery will retry.",
+      context: { sessionId: session.id, cartId, userId },
+      cause: cartItemsError,
+    });
+    throw cartItemsError;
+  }
+
+  if (!cartItemsData || cartItemsData.length === 0) {
+    await reportMoneyIncident({
+      kind: 'payout-not-recorded',
+      message:
+        'A paid checkout session had an empty cart at delivery time, so no order was created. The buyer has been charged and nothing has been paid out; this needs a human.',
+      context: { sessionId: session.id, cartId, userId },
+    });
     return null;
   }
 
@@ -877,34 +927,67 @@ async function createAuthenticatedOrder(session: Stripe.Checkout.Session): Promi
   // already paid, so the order is created with NULL columns.
   const withdrawalConsent = parseWithdrawalConsentMetadata(session.metadata);
 
-  const order = await createOrder(supabaseAdmin, userId, {
-    cart_id: cartId,
-    stripe_checkout_session_id: session.id,
-    stripe_payment_intent_id:
-      typeof session.payment_intent === 'string' ? session.payment_intent : undefined,
-    stripe_customer_id: typeof session.customer === 'string' ? session.customer : undefined,
-    status: 'completed',
-    total_amount_cents: totalAmountCents,
-    metadata: {
-      stripe_session_id: session.id,
-      amount_total: session.amount_total,
-      currency: session.currency,
-    },
-    withdrawal_consent: withdrawalConsent,
-  });
+  // Reuse an order this session already produced but never finished assembling,
+  // rather than minting a second one — the checkout session identifies the
+  // purchase. `existingUnfinishedOrder` is only ever non-null on a redelivery
+  // that the guard let through, i.e. an order with no items.
+  const order =
+    existingUnfinishedOrder ??
+    (await createOrder(supabaseAdmin, userId, {
+      cart_id: cartId,
+      stripe_checkout_session_id: session.id,
+      stripe_payment_intent_id:
+        typeof session.payment_intent === 'string' ? session.payment_intent : undefined,
+      stripe_customer_id: typeof session.customer === 'string' ? session.customer : undefined,
+      status: 'completed',
+      total_amount_cents: totalAmountCents,
+      metadata: {
+        stripe_session_id: session.id,
+        amount_total: session.amount_total,
+        currency: session.currency,
+      },
+      withdrawal_consent: withdrawalConsent,
+    }));
 
-  await addOrderItems(
-    supabaseAdmin,
-    order.id,
-    cartItems.map((item) => ({
-      photo_id: item.photo_id,
-      photographer_id: item.photographer_id,
-      unit_price_cents: item.unit_price_cents,
-      quantity: 1,
-    })),
-  );
+  // ⚠️ Assembly is allowed to throw, and MUST report before it does (T-262).
+  // `addOrderItems` and `clearCart` both throw on any Postgres error, and the
+  // order row already exists by now — so a throw here used to leave an order with
+  // no items and a cart that was never emptied. The redelivery then stopped at
+  // the already-exists guard, so the state was permanent: the buyer saw a
+  // purchase with nothing in it, their cart still full, and could pay for the
+  // same photos a second time. The guard now lets an itemless order through, so
+  // the 500 is the recovery — but only if something says it happened.
+  try {
+    if (!(await orderHasItems(supabaseAdmin, order.id))) {
+      await addOrderItems(
+        supabaseAdmin,
+        order.id,
+        cartItems.map((item) => ({
+          photo_id: item.photo_id,
+          photographer_id: item.photographer_id,
+          unit_price_cents: item.unit_price_cents,
+          quantity: 1,
+        })),
+      );
+    }
 
-  await clearCart(supabaseAdmin, cartId);
+    await clearCart(supabaseAdmin, cartId);
+  } catch (assemblyErr) {
+    await reportMoneyIncident({
+      kind: 'payout-not-recorded',
+      message:
+        'A paid order could not be assembled; the buyer has been charged and no transfers have run for it yet. It stays itemless until a Stripe redelivery completes it.',
+      context: {
+        orderId: order.id,
+        sessionId: session.id,
+        cartId,
+        totalAmountCents,
+        itemCount: cartItems.length,
+      },
+      cause: assemblyErr,
+    });
+    throw assemblyErr;
+  }
 
   // T-228 / art. 8.7: confirmation of the contract on a durable medium,
   // restating the consent that removed the right of withdrawal. Until
@@ -1393,12 +1476,30 @@ export async function POST(request: Request) {
         // need this: only the delivery that CREATES the order drives its payouts,
         // and an order that exists without them is `payment_intent.succeeded`'s
         // to recover.
-        if (existingOrder) {
+        //
+        // ⚠️ T-262 narrows this by exactly one case, and the narrowing is what
+        // keeps the paragraph above true. An order with NO `order_items` was
+        // never assembled — `addOrderItems` threw — so it has no payout rows to
+        // pay twice, and re-driving it cannot resend anything. Every order the
+        // reasoning above is about (an old resent session, a refunded one) is
+        // fully assembled and still stops here. `orderHasItems` is the whole
+        // distinction; `existingOrder.status` is deliberately NOT used, because
+        // the row is written `completed` from the start.
+        const existingOrderIsAssembled =
+          existingOrder !== null && (await orderHasItems(supabaseAdmin, existingOrder.id));
+
+        if (existingOrder && existingOrderIsAssembled) {
           console.log(`Order already exists for session ${session.id}`);
           break;
         }
 
-        const order = await createAuthenticatedOrder(session);
+        if (existingOrder) {
+          console.log(
+            `Order ${existingOrder.id} for session ${session.id} has no items — resuming assembly`,
+          );
+        }
+
+        const order = await createAuthenticatedOrder(session, existingOrder);
 
         // Nothing to pay for — the creation path already logged why it gave up.
         if (!order) break;

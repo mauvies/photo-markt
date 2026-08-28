@@ -490,7 +490,23 @@ query module and `payouts.payment_account_id` went in `20260820000000_prune_dead
     (`charge.refunded` voids `pending` holds; it cannot un-send a transfer). An order that exists
     without payouts is `payment_intent.succeeded`'s to recover. Pinned by the redelivery test in
     `test/integration/api/stripe-webhook.test.ts`, which asserts the second delivery does not even
-    reach the Stripe read.
+    reach the Stripe read. ⚠️ **T-262 narrows this guard by exactly one case, and the narrowing is
+    what keeps the paragraph above true:** an order with **no `order_items`** was never assembled
+    (`addOrderItems` threw), so it has no payout rows to pay twice and re-driving it can resend
+    nothing — it is resumed. Everything the paragraph is actually about (an old resent session, a
+    refunded one) is fully assembled and still stops. The distinction is **`orderHasItems`**, never
+    `existingOrder.status`: the row is written `completed` from the start, so status says nothing
+    about whether delivery finished.
+  - ⚠️ **`createAuthenticatedOrder` distinguishes a failed READ from an absent ROW, and reports both
+    (T-262).** It used to discard the `carts` error in the destructuring (`const { data: cart } = …`)
+    and lump `cartItemsError` in with "cart is empty" — so a transient PostgREST failure (T-239 was
+    exactly that, on `order_items`) was indistinguishable from "no such cart": both logged, returned
+    `null`, and answered **200**. Buyer charged, no order, no items, no email, no payout row, no
+    incident. Now a **read error** alerts and **throws** (the 500 is the retry), while a genuinely
+    missing row alerts and gives up (retrying cannot bring it back). Assembly —
+    `addOrderItems` + `clearCart` — is wrapped the same way, because a throw there used to leave an
+    order with no items **and a cart that was never emptied**, so the buyer saw an empty purchase and
+    could pay for the same photos again.
   - **An authenticated session that is `unpaid` (delayed payment method) or `no_payment_required`
     skips the drive** and waits for `payment_intent.succeeded`; any other/absent `payment_status`
     falls through and *attempts* the transfer, because a premature attempt is refused by Stripe and
