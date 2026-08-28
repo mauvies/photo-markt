@@ -135,8 +135,16 @@ export async function createGuestOrder(
       stripe_customer_id: data.stripe_customer_id ?? null,
       total_amount_cents: data.total_amount_cents,
       currency: data.currency ?? PLATFORM_CURRENCY,
-      status: 'completed',
-      completed_at: new Date().toISOString(),
+      // ⚠️ Born `pending`, NOT `completed` (T-261). The row used to be written
+      // `completed` before its items and download token existed — and both of
+      // those writes throw. A throw became a 500, Stripe redelivered, and the
+      // redelivery hit the "guest order already exists" guard and returned
+      // early, so the transfer loop never ran on EITHER delivery: buyer charged,
+      // no items, no token, no `payouts` row, no alert. `completeGuestOrder`
+      // stamps this once delivery is actually assembled, which also makes the
+      // exists-guard able to tell a finished order from an abandoned one.
+      status: 'pending',
+      completed_at: null,
       metadata: data.metadata ?? {},
       withdrawal_consent_at: data.withdrawal_consent?.acceptedAt ?? null,
       withdrawal_consent_version: data.withdrawal_consent?.version ?? null,
@@ -149,6 +157,51 @@ export async function createGuestOrder(
   }
 
   return row as GuestOrder;
+}
+
+/**
+ * Mark a guest order delivered (T-261).
+ *
+ * Called only once its items and download token are on disk, so `completed` means
+ * "the buyer can actually reach what they paid for" rather than "a row exists".
+ * Every buyer-facing read gates on `status = 'completed'`, so an order that never
+ * reaches this stays correctly invisible instead of being a dead link.
+ */
+export async function completeGuestOrder(
+  supabase: SupabaseServerClient,
+  guestOrderId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('guest_orders')
+    .update({ status: 'completed', completed_at: new Date().toISOString() })
+    .eq('id', guestOrderId);
+
+  if (error) {
+    throw new Error(`Failed to complete guest order: ${getErrorMessage(error)}`);
+  }
+}
+
+/**
+ * Does this guest order already have its items? (T-261)
+ *
+ * Guards the resume path: a redelivery finishing a half-written order must not
+ * insert a second copy of the items the first delivery managed to write.
+ */
+export async function guestOrderHasItems(
+  supabase: SupabaseServerClient,
+  guestOrderId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('guest_order_items')
+    .select('id')
+    .eq('guest_order_id', guestOrderId)
+    .limit(1);
+
+  if (error) {
+    throw new Error(`Failed to check guest order items: ${getErrorMessage(error)}`);
+  }
+
+  return (data ?? []).length > 0;
 }
 
 export async function addGuestOrderItems(

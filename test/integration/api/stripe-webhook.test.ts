@@ -2564,3 +2564,148 @@ describe('app/api/stripe/webhook — out-of-order delivery (T-252)', () => {
     expect(settled?.[0]?.amount_cents).toBe(460);
   });
 });
+
+/**
+ * T-261 — a paid guest order must never end up silently undeliverable.
+ *
+ * `createGuestOrder` wrote the row `completed` before its items and download
+ * token existed, and both of those writes throw. A throw became a 500, Stripe
+ * redelivered, and the redelivery hit the "guest order already exists" guard and
+ * returned early — so the transfer block ran on NEITHER delivery. The result was
+ * a `guest_orders` row marked `completed` with the buyer charged, no items, no
+ * token, no `payouts` row, and not one log line.
+ *
+ * The failure class is not hypothetical: T-239 was a PostgREST schema-cache error
+ * on `order_items`, and `guest_order_items` / `download_tokens` are equally
+ * exposed.
+ *
+ * Two properties are pinned here: the failure REPORTS, and the row stays
+ * `pending` so a redelivery can finish it.
+ */
+describe('app/api/stripe/webhook — a guest order that cannot be assembled (T-261)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    vi.clearAllMocks();
+  });
+
+  async function seedGuestPhoto(suffix: string) {
+    const sb = createServiceClient();
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    await sb
+      .from('profiles')
+      .update({ stripe_connect_account_id: `acct_${suffix}`, stripe_connect_status: 'active' })
+      .eq('id', photographer.id);
+    const event = await createTestEvent(photographer.id);
+    const photo = await createTestPhoto(event.id);
+
+    const { stripe: routeStripe } = await import('@/lib/stripe/config');
+    vi.spyOn(routeStripe.paymentIntents, 'retrieve').mockResolvedValue({
+      id: `pi_${suffix}`,
+      object: 'payment_intent',
+      latest_charge: `ch_${suffix}`,
+    } as never);
+
+    return { sb, photographer, photo };
+  }
+
+  function guestSession(suffix: string, photoId: string, photographerId: string) {
+    return signedWebhookRequest({
+      id: `evt_${suffix}`,
+      type: 'checkout.session.completed',
+      created: Math.floor(Date.now() / 1000),
+      data: {
+        object: {
+          id: `cs_${suffix}`,
+          object: 'checkout.session',
+          mode: 'payment',
+          customer: null,
+          customer_details: { email: `${suffix}@photomarkt.test` },
+          payment_intent: `pi_${suffix}`,
+          amount_total: 500,
+          currency: 'eur',
+          metadata: {
+            is_guest: 'true',
+            cart_count: '1',
+            cart_0: JSON.stringify({ p: photoId, g: photographerId, c: 500 }),
+          },
+        },
+      },
+    });
+  }
+
+  it('reports an incident and leaves the order pending when the download token cannot be written', async () => {
+    const { sb, photographer, photo } = await seedGuestPhoto('t261_fail');
+
+    const tokens = await import('@/database/queries/download-tokens');
+    const tokenSpy = vi
+      .spyOn(tokens, 'createDownloadToken')
+      .mockRejectedValueOnce(new Error('PGRST205: schema cache miss on download_tokens'));
+
+    await expect(POST(guestSession('t261_fail', photo.id, photographer.id))).resolves.toBeDefined();
+
+    const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+    expect(vi.mocked(reportMoneyIncident)).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'payout-not-recorded' }),
+    );
+
+    // The incident carries ids and amounts only — never the buyer's email.
+    const reported = vi.mocked(reportMoneyIncident).mock.calls[0]?.[0];
+    expect(JSON.stringify(reported?.context)).not.toContain('@photomarkt.test');
+
+    // And the row is left resumable, not falsely marked delivered.
+    const { data: order } = await sb
+      .from('guest_orders')
+      .select('status')
+      .eq('stripe_checkout_session_id', 'cs_t261_fail')
+      .single();
+    expect(order?.status).toBe('pending');
+
+    tokenSpy.mockRestore();
+  });
+
+  it('a redelivery finishes a half-written order instead of returning early', async () => {
+    const { sb, photographer, photo } = await seedGuestPhoto('t261_resume');
+
+    const tokens = await import('@/database/queries/download-tokens');
+    const tokenSpy = vi
+      .spyOn(tokens, 'createDownloadToken')
+      .mockRejectedValueOnce(new Error('transient'));
+
+    // First delivery fails part-way.
+    await expect(
+      POST(guestSession('t261_resume', photo.id, photographer.id)),
+    ).resolves.toBeDefined();
+    tokenSpy.mockRestore();
+
+    // Stripe redelivers; this one must complete the order rather than break.
+    expect((await POST(guestSession('t261_resume', photo.id, photographer.id))).status).toBe(200);
+
+    const { data: order } = await sb
+      .from('guest_orders')
+      .select('id, status')
+      .eq('stripe_checkout_session_id', 'cs_t261_resume')
+      .single();
+    expect(order?.status).toBe('completed');
+
+    // Exactly one order, and its items written exactly once — the resume must not
+    // duplicate what the first delivery managed to write.
+    const { count: orderCount } = await sb
+      .from('guest_orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('stripe_checkout_session_id', 'cs_t261_resume');
+    expect(orderCount).toBe(1);
+
+    const { count: itemCount } = await sb
+      .from('guest_order_items')
+      .select('*', { count: 'exact', head: true })
+      .eq('guest_order_id', order?.id ?? '');
+    expect(itemCount).toBe(1);
+
+    // And the photographer is finally paid — the whole point.
+    const { data: payouts } = await sb
+      .from('payouts')
+      .select('id')
+      .eq('photographer_id', photographer.id);
+    expect((payouts ?? []).length).toBeGreaterThan(0);
+  });
+});
