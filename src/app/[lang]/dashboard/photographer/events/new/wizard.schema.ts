@@ -64,10 +64,6 @@ export const eventSchema = z
       .default(null),
     /** "All photos" flat price in cents (T-203) — a ceiling, no threshold. */
     bundle_all_photos_cents: z.number().int().nullable().default(null),
-    // Per-photo fee (in dollars; converted to cents in the server action) that
-    // the organizer charges on top of the platform fee. Only applies when
-    // event_type === 'organizer'.
-    organizer_fee_per_photo: priceSchema,
     // AWS Rekognition face matching opt-in. When ON, photos uploaded to this
     // event are indexed so talents can later find their photos via selfie.
     // Forced to false when `contains_minors` is true (compliance).

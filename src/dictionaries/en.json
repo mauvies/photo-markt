@@ -216,6 +216,7 @@
     "photosEmptyDescription": "Upload the photos from this event and they'll show up here. Athletes can only find and buy photos once they're uploaded.",
     "photosEmptyCta": "Upload photos",
     "tabPhotos": "Photos",
+    "coverNotForSale": "The cover only presents the event on cards and links — it is not one of the photos you sell.",
     "tabDetails": "Details",
     "tabShare": "Share",
     "shareTabHeading": "Share this event",
@@ -311,7 +312,6 @@
     "bundleNextTierMany": "Add {n} more photos from this event and pay {price} for {total}.",
     "cartRestored": "Your cart has been restored",
     "itemsUnavailableRemoved": "One or more items in your cart are no longer available and were removed.",
-    "checkoutPhotographerNotConnected": "One or more photographers in your cart have not set up payouts yet, so their photos can't be purchased right now. Please try again later.",
     "checkoutRateLimited": "Too many checkout attempts. Please wait a bit and try again."
   },
   "signup": {
@@ -344,15 +344,14 @@
   },
   "download": {
     "expiredTitle": "Download link expired",
-    "expiredDesc": "This download link has expired. If you have a Photo Markt account, your photos are still available in your library.",
-    "login": "Log in",
-    "createAccount": "Create account",
-    "expiresSoon": "Your photos expire in",
+    "expiredDesc": "This download link is no longer valid. Get in touch and we'll send you a fresh one — your purchase is safe.",
+    "contactSupport": "Contact us",
+    "expiresSoon": "Your download link expires in",
     "day": "day",
     "days": "days",
-    "keepPermanently": "Create a free account to keep them in your library permanently.",
-    "createFreeAccount": "Create free account",
+    "saveThemNow": "Save your photos to your device before then.",
     "yourPhotos": "Your photos",
+    "downloadAll": "Download all",
     "readyToDownload": "ready to download",
     "linksValid": "Links valid for 1 hour (refresh page if expired)",
     "noPhotosFound": "No photos found for this order.",
@@ -460,7 +459,7 @@
     "billingPlanDesc": "Manage your subscription and billing information",
     "currentPlan": "Current Plan",
     "storageUsage": "Storage Usage",
-    "photosUploaded": "photos uploaded",
+    "photosUploaded": "photos uploaded in total",
     "storageLimitReached": "Storage limit reached — upgrade to add more photos",
     "eventLimitReached": "You've reached the event limit for your plan ({current}/{max}). Upgrade to create more.",
     "eventLimitReachedShort": "Event limit reached — upgrade your plan to create more.",
@@ -561,9 +560,10 @@
     "bundleDiscountNote": "When a buyer takes one of your volume packages, the amount shown is the package price you set — what they actually paid. The discount is your own price reduction: Photo Markt deducts nothing extra for it, and it has nothing to do with the buyer's service fee.",
     "earningsThisMonth": "Earnings this month",
     "salesThisMonth": "Sales this month",
-    "photosUploadedThisMonth": "Photos uploaded",
-    "eventsCreatedThisMonth": "Events created",
+    "photosUploadedThisMonth": "Photos uploaded this month",
+    "eventsCreatedThisMonth": "Events created this month",
     "vsLastMonth": "vs last month",
+    "allTimeTotal": "{count} all time",
     "recentEvents": "Recent events",
     "viewAll": "View all",
     "range7d": "7 days",
@@ -812,21 +812,16 @@
     "connectBannerPending": "Your Stripe account is under review. You'll receive payouts once approved.",
     "connectBannerRestricted": "Action required on your Stripe account. Please update your payout settings.",
     "connectBannerButton": "Go to payout settings",
-    "stripeAvailable": "Stripe Available Balance",
-    "stripeAvailableDesc": "Ready for automatic payout",
-    "stripePending": "Stripe Pending Balance",
-    "stripePendingDesc": "In Stripe fraud-check window",
-    "payoutScheduleTitle": "Automatic Payouts",
-    "payoutScheduleDesc": "Payouts are sent automatically every Monday to your connected bank account.",
-    "payoutMinimumThreshold": "Minimum balance required: $25",
+    "stripeDashboardButton": "Open my Stripe dashboard",
+    "stripeDashboardTitle": "Opens your Stripe account in a new tab",
+    "stripeDashboardNotReady": "Finish setting up your Stripe account first — you'll be able to open it from here once it's active.",
+    "stripeDashboardUnavailable": "We couldn't reach Stripe just now. Please try again in a moment.",
     "netEarnings": "Net Earnings",
     "afterPlatformFees": "After platform fees",
     "buyerFeeNote": "Buyers also pay a service fee at checkout. It goes to Photo Markt and is neither added to nor deducted from your earnings.",
     "bundleDiscountNote": "When a buyer takes one of your volume packages, the gross shown is the package price you set — what they actually paid. The discount is your own price reduction: Photo Markt deducts nothing extra for it, and it has nothing to do with the buyer's service fee.",
     "availableBalance": "Available Balance",
     "readyToWithdraw": "Ready to withdraw",
-    "pendingPayout": "Pending Payout",
-    "pendingPayoutDesc": "Earned, not sent yet — paid automatically",
     "payoutStatusPending": "Pending",
     "payoutStatusProcessing": "Sending",
     "payoutStatusPaid": "Paid",
@@ -917,7 +912,17 @@
     "payoutProfileBannerButton": "Complete Profile",
     "payoutMethodCardTitle": "Payout Method",
     "payoutMethodCardDesc": "Manage your bank account or payment method for receiving payouts.",
-    "payoutMethodCardButton": "Manage Payout Method"
+    "payoutMethodCardButton": "Manage Payout Method",
+    "availableOn": "Available on",
+    "arrivesOn": "Arrives in your bank on",
+    "yourMoney": "Your money",
+    "paidAutomatically": "Stripe pays it into your bank account automatically.",
+    "moneyReady": "Ready — Stripe will send it on your account's next payout",
+    "noMoneyInFlight": "No money on its way right now. Your sales will show up here.",
+    "unsentTitle": "couldn't be sent yet",
+    "unsentDesc": "This is money you've earned. It will be sent automatically as soon as your payout account can receive it.",
+    "stripeAccountTitle": "Your Stripe account",
+    "noMoneyInFlightShort": "Nothing on its way right now"
   },
   "payoutProfile": {
     "pageTitle": "Complete Payout Profile",
@@ -1111,8 +1116,6 @@
     "eventTypeOrganizer": "Organizer",
     "eventTypeOrganizerDesc": "Invite specific platform photographers to upload.",
     "organizerApprovalDesc": "Hold uploads from invited photographers as pending until you approve them.",
-    "organizerFeeLabel": "Your fee per photo",
-    "organizerFeeDesc": "Charged on top of the platform fee whenever a contributor's photo sells.",
     "organizerNoOwnPhotosTitle": "No upload at this step",
     "organizerNoOwnPhotos": "Invited photographers will upload after accepting your invitation."
   },
@@ -1341,13 +1344,17 @@
       "active": "Connected",
       "restricted": "Action required"
     },
-    "notConnectedDescription": "Connect your bank account to receive automatic weekly payouts for your photo sales.",
+    "notConnectedDescription": "Connect your bank account to receive automatic payouts for your photo sales.",
     "pendingDescription": "Your Stripe setup isn't complete yet. Click the button below to return to Stripe and finish the process, including identity verification.",
-    "activeDescription": "Your bank account is connected. You will receive automatic weekly payouts every Monday.",
+    "activeDescription": "Your bank account is connected. Stripe pays your earnings out automatically, on the payout schedule set on your Stripe account.",
     "restrictedDescription": "Stripe requires additional information to enable payouts. Please update your account.",
     "connectButton": "Connect with Stripe",
     "completeSetupButton": "Complete setup on Stripe",
     "updateAccountButton": "Update on Stripe",
+    "openDashboardButton": "Open my Stripe dashboard",
+    "openDashboardTitle": "Opens your Stripe account in a new tab",
+    "openDashboardNotReady": "Finish setting up your Stripe account first — you'll be able to open it from here once it's active.",
+    "openDashboardUnavailable": "We couldn't reach Stripe just now. Please try again in a moment.",
     "poweredByStripe": "Secure payouts powered by Stripe",
     "onboarding": {
       "successBanner": "Bank account connected! You'll receive automatic payouts for your photo sales.",
@@ -1357,6 +1364,10 @@
       "connectAccount": "Connect your bank account to start selling photos and receiving payouts.",
       "pendingReview": "Your Stripe account is under review. Payouts will be enabled once approved.",
       "actionRequired": "Action required on your Stripe account. Update your payout settings to continue selling.",
+      "salesWillHoldOne": "You have 1 event on sale and can't be paid yet. It sells normally, but your money is held until your payout account is ready.",
+      "salesWillHoldMany": "You have {count} events on sale and can't be paid yet. They sell normally, but your money is held until your payout account is ready.",
+      "moneyHeld": "You have {amount} waiting. It's money you've already earned \u2014 we'll send it automatically as soon as your payout account is ready.",
+      "eventSalesHeld": "This event has a price and you can't be paid yet. It sells normally, but your money is held until your payout account is ready.",
       "goToPayoutProfile": "Go to payout settings"
     },
     "sales": {
@@ -1552,7 +1563,7 @@
     },
     "gatedPanel": {
       "searchTitle": "Find your photos",
-      "searchDescription": "This event's gallery isn't public: each photo is shown only to the person in it. Take a selfie and we'll show you every photo you appear in.",
+      "searchDescription": "This gallery is private. Take or upload a selfie below to find your photos.",
       "searchCta": "Search my photos",
       "photoCount": "{count} photos in this event",
       "privacyNote": "Your selfie is only used to find your photos. It's never stored or shared.",
@@ -1912,15 +1923,36 @@
     "submitSuccess": "Ticket submitted — we'll be in touch soon.",
     "submitError": "Something went wrong. Please try again.",
     "quickActionsTalent": [
-      { "title": "Missing photo", "description": "Report a photo you expected but cannot find" },
-      { "title": "Download access", "description": "Fix issues with downloading purchased photos" },
-      { "title": "Order help", "description": "Questions about charges, receipts, or refunds" },
-      { "title": "Profile privacy", "description": "Control who can see your profile and photos" }
+      {
+        "title": "Missing photo",
+        "description": "Report a photo you expected but cannot find"
+      },
+      {
+        "title": "Download access",
+        "description": "Fix issues with downloading purchased photos"
+      },
+      {
+        "title": "Order help",
+        "description": "Questions about charges, receipts, or refunds"
+      },
+      {
+        "title": "Profile privacy",
+        "description": "Control who can see your profile and photos"
+      }
     ],
     "quickActionsPhotographer": [
-      { "title": "Payout status", "description": "Check the status of your sales and payouts" },
-      { "title": "Upload error", "description": "Resolve failed or stuck photo uploads" },
-      { "title": "Pricing settings", "description": "Help configuring per-photo prices" },
+      {
+        "title": "Payout status",
+        "description": "Check the status of your sales and payouts"
+      },
+      {
+        "title": "Upload error",
+        "description": "Resolve failed or stuck photo uploads"
+      },
+      {
+        "title": "Pricing settings",
+        "description": "Help configuring per-photo prices"
+      },
       {
         "title": "Copyright & watermarks",
         "description": "Protect your work and manage watermark rules"

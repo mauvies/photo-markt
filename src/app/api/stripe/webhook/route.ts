@@ -3,8 +3,12 @@
  * POST /api/stripe/webhook
  *
  * Handles Stripe webhook events:
- * - checkout.session.completed: Create order/order_items (payment) or update subscription (subscription)
+ * - checkout.session.completed: Create order/order_items (payment) or update subscription
+ *   (subscription) + create Stripe transfers to photographers
  * - payment_intent.succeeded: Update order status + create Stripe transfers to photographers
+ *   ⚠️ Both payment events drive the transfers (T-252). Stripe does not guarantee delivery
+ *   order, and whichever arrives first has to be the one that pays; the second no-ops on
+ *   `openPayoutRow`'s unique index rather than paying twice (T-216).
  * - payment_intent.payment_failed: Update order status
  * - customer.subscription.created: Create/update subscription
  * - customer.subscription.updated: Update subscription
@@ -79,6 +83,7 @@ import {
   createOrder,
   getOrderByCheckoutSessionId,
   getOrderByPaymentIntentId,
+  type Order,
   updateOrderStatus,
 } from '@/database/queries/orders';
 import {
@@ -100,7 +105,6 @@ import type { SupabaseServerClient } from '@/database/queries/types';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { env } from '@/env.mjs';
 import { PLATFORM_CURRENCY } from '@/lib/currency';
-import { sendClawbackAlertEmail } from '@/lib/email/send-clawback-alert';
 import { sendGuestPurchaseEmail } from '@/lib/email/send-guest-purchase-email';
 import { sendPurchaseConfirmationEmail } from '@/lib/email/send-purchase-confirmation-email';
 import { inngest } from '@/lib/inngest/client';
@@ -112,6 +116,7 @@ import {
   STRIPE_MIN_TRANSFER_CENTS,
 } from '@/lib/payouts/batching';
 import { isChargeback, isDisputeOpen, resolveClawbackTarget } from '@/lib/payouts/clawback';
+import { notifyPhotographerOfHeldSale } from '@/lib/payouts/notify-held-sale';
 import {
   type ClawbackOrderStatus,
   isFullyRefunded,
@@ -388,6 +393,27 @@ function disputeFeeCents(dispute: Stripe.Dispute): number {
 }
 
 /**
+ * Hard ceiling for anything that rides inside the webhook and talks to a third
+ * party we do not control.
+ *
+ * Stripe treats a slow response as a failed delivery and redelivers, so an
+ * unbounded call here does not just cost latency — it can duplicate the whole
+ * handler. Mirrors `sendMoneyAlertEmail`'s budget in
+ * `src/lib/observability/report-money-incident.ts`.
+ */
+const EMAIL_TIMEOUT_MS = 5_000;
+
+function withWebhookTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms);
+    }),
+  ]).finally(() => clearTimeout(timer)) as Promise<T>;
+}
+
+/**
  * Create Stripe transfers for the photographers in an order, and record a
  * durable debt for every euro that could not be sent (T-216).
  *
@@ -435,6 +461,30 @@ async function createTransfersForOrderItems(
       item.photographer_id,
       (totals.get(item.photographer_id) ?? 0) + item.total_price_cents,
     );
+  }
+
+  // ⚠️ The loop below walks `connectStatuses`, but the money lives in `totals`.
+  // `getPhotographerConnectStatuses` returns only the `profiles` rows that
+  // exist, so a photographer whose row is missing (or a short read) is money
+  // that never reaches the loop at all — no payout row, no hold, no log (T-249).
+  const unresolved = [...totals.keys()].filter(
+    (id) => !connectStatuses.some((status) => status.id === id),
+  );
+  for (const photographerId of unresolved) {
+    await reportMoneyIncident({
+      kind: 'payout-not-recorded',
+      message:
+        'An order item names a photographer with no resolvable profile, so their share was ' +
+        'never considered for transfer and no debt was recorded.',
+      context: {
+        photographerId,
+        chargeId,
+        orderId,
+        orderKind,
+        grossCents: totals.get(photographerId),
+        currency,
+      },
+    });
   }
 
   for (const status of connectStatuses) {
@@ -487,8 +537,26 @@ async function createTransfersForOrderItems(
       });
     } catch (err) {
       // The buyer has already paid; a ledger failure must not fail the webhook,
-      // or Stripe redelivers and we retry a payment we may have made.
-      console.error(`[payouts] failed to open payout row for photographer ${status.id}:`, err);
+      // or Stripe redelivers and we retry a payment we may have made. That
+      // discipline is right, but it is also what made this silent: without the
+      // row there is no debt, no transfer, and nothing for the retry worker to
+      // find, so the money simply leaves the system (T-249). Alerting is the
+      // only thing that changes here — the `continue` and the 200 both stand.
+      await reportMoneyIncident({
+        kind: 'payout-not-recorded',
+        message:
+          'Could not open the payout ledger row. This sale skipped the transfer entirely and ' +
+          'left no debt for the retry worker to drain — reconcile by hand.',
+        context: {
+          photographerId: status.id,
+          chargeId,
+          orderId,
+          orderKind,
+          netCents,
+          currency,
+        },
+        cause: err,
+      });
       continue;
     }
 
@@ -503,6 +571,28 @@ async function createTransfersForOrderItems(
       console.warn(
         `[payouts] held ${netCents} cents for photographer ${status.id} (${holdReason}); payout ${payout.id} awaits retry.`,
       );
+
+      // T-250: tell the photographer their money is waiting. Only for
+      // `connect_inactive` — that is the hold they can actually clear, and the
+      // one whose owner is least likely to be looking at the dashboard, since
+      // by definition they have not finished onboarding. `below_minimum` and
+      // `transfer_failed` drain on their own and need nothing from them.
+      //
+      // Bounded and swallowed, like every third-party call in this handler:
+      // `notifyPhotographerOfHeldSale` never throws, and the timeout covers the
+      // case where Resend hangs instead of failing — this loop still has other
+      // photographers to pay, and a slow response makes Stripe redeliver.
+      if (holdReason === 'connect_inactive') {
+        const outcome = await withWebhookTimeout(
+          notifyPhotographerOfHeldSale(supabaseAdmin, status.id),
+          EMAIL_TIMEOUT_MS,
+        ).catch((err) => {
+          console.error(`[payouts] held-sale notice timed out for photographer ${status.id}:`, err);
+          return 'failed' as const;
+        });
+        console.log(`[payouts] held-sale notice for photographer ${status.id}: ${outcome}`);
+      }
+
       continue;
     }
 
@@ -535,10 +625,399 @@ async function createTransfersForOrderItems(
       // a transfer Stripe did make despite the thrown error is returned rather
       // than duplicated — and once the key expires, the worker's probe catches
       // it instead.
-      await holdPayoutRow(supabaseAdmin, payout.id, 'transfer_failed').catch((holdErr) =>
-        console.error(`[payouts] failed to hold payout ${payout?.id}:`, holdErr),
-      );
+      await holdPayoutRow(supabaseAdmin, payout.id, 'transfer_failed').catch(async (holdErr) => {
+        // Worse than it looks, and the reason this is an alert rather than a log
+        // (T-249): the row stays `processing` with no `transfer_batch_id`, and
+        // NEITHER recovery path picks that up — `listPayableHolds` requires
+        // `pending` + a `hold_reason`, `listStaleProcessingBatches` requires a
+        // batch id. The debt is real, recorded, and permanently invisible.
+        await reportMoneyIncident({
+          kind: 'payout-not-recorded',
+          message:
+            'Transfer failed AND the payout row could not be parked as a hold. It is stranded ' +
+            'in `processing` with no batch id, so no retry path will ever pick it up.',
+          context: {
+            photographerId: status.id,
+            payoutId: payout?.id,
+            chargeId,
+            orderId,
+            orderKind,
+            netCents,
+            currency,
+          },
+          cause: holdErr,
+        });
+      });
     }
+  }
+}
+
+/**
+ * Read an order's items and drive the transfer loop over them.
+ *
+ * Extracted in T-252 because **both** webhook events that can complete an
+ * authenticated order have to be able to run it. Stripe does not guarantee event
+ * ordering, and until now only `payment_intent.succeeded` transferred: when it
+ * arrived BEFORE `checkout.session.completed` there was no order to find, the
+ * whole block was skipped, and the order the session event created moments later
+ * paid nobody — no transfer, no ledger row, not one log line.
+ *
+ * Running it from two places is safe by construction, which is what makes
+ * re-driving the fix rather than a race: `openPayoutRow` reserves the row BEFORE
+ * the Stripe call, and the partial unique index on `(stripe_charge_id,
+ * photographer_id)` hands every other writer a `null` (T-216).
+ *
+ * Reads `order_items`, so this is authenticated orders only — the guest path
+ * builds its items from session metadata and calls the transfer loop itself.
+ */
+async function drivePayoutsForOrder(params: {
+  orderId: string;
+  chargeId: string;
+  currency: string;
+  orderTotalCents: number;
+  /**
+   * Which webhook event is driving. Carried into every incident raised here
+   * because the drive now runs from two handlers: a genuine failure alerts once
+   * per delivery, from two different serverless invocations that no per-process
+   * throttle can dedupe, and an operator has to be able to tell a duplicate from
+   * a second loss on the same order.
+   */
+  source: 'checkout.session.completed' | 'payment_intent.succeeded';
+}): Promise<void> {
+  const { orderId, chargeId, currency, orderTotalCents, source } = params;
+
+  const { data: orderItems, error: orderItemsError } = await supabaseAdmin
+    .from('order_items')
+    .select('photographer_id, total_price_cents')
+    .eq('order_id', orderId);
+
+  // ⚠️ Discarding this error was the quietest hole of the lot (T-249):
+  // `orderItems` falls back to `[]`, `createTransfersForOrderItems`
+  // returns immediately on the empty list, and the sale completes with
+  // zero payout rows having logged **nothing at all**. That is the exact
+  // shape of the 2026-07-28 incident, and a PostgREST failure here is
+  // not hypothetical — T-239 was a schema-cache error on this very table.
+  if (orderItemsError) {
+    await reportMoneyIncident({
+      kind: 'payout-not-recorded',
+      message:
+        'Could not read the order items, so this delivery attempted no transfer for a completed ' +
+        'order. ⚠️ Do NOT assume nothing was paid: the other payment event drives the same ' +
+        'step and may already have paid and settled part or all of this order. The `payouts` ' +
+        'rows for this charge are the authority.',
+      context: { orderId, chargeId, source, code: orderItemsError.code },
+      cause: orderItemsError,
+    });
+    return;
+  }
+
+  // A read that succeeds but returns nothing is its own incident: a
+  // completed order with a non-zero total and no items means somebody
+  // was charged for photos nobody will be paid for. Without this the
+  // empty list reaches the transfer loop, which returns immediately on
+  // `items.length === 0` — as silent as the error branch above.
+  if ((orderItems ?? []).length === 0) {
+    await reportMoneyIncident({
+      kind: 'payout-not-recorded',
+      message:
+        'A completed order has no order items, so no transfer was attempted for it. Either the ' +
+        'buyer was charged for photos nobody will be paid for, or this delivery raced the ' +
+        'handler that writes the items — check the `payouts` rows and the order items before ' +
+        'acting.',
+      context: { orderId, chargeId, source, orderTotalCents },
+    });
+    return;
+  }
+
+  await createTransfersForOrderItems(orderItems ?? [], chargeId, orderId, currency, 'order');
+}
+
+/**
+ * Create the authenticated cart order for a completed Checkout session.
+ *
+ * Split out of the switch in T-252 so the caller can fall through to the payout
+ * drive whether the order was created just now or already existed. Returns `null`
+ * on every "nothing to do" exit — each one logs its own reason, exactly as the
+ * inline `break`s it replaces did.
+ */
+async function createAuthenticatedOrder(session: Stripe.Checkout.Session): Promise<Order | null> {
+  const userId = session.metadata?.user_id;
+  const cartId = session.client_reference_id ?? session.metadata?.cart_id;
+
+  if (!userId) {
+    console.error('Missing user_id in session metadata');
+    return null;
+  }
+
+  if (!cartId) {
+    console.error('Missing cart_id in session');
+    return null;
+  }
+
+  const { data: cart } = await supabaseAdmin
+    .from('carts')
+    .select('*')
+    .eq('id', cartId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (!cart) {
+    console.error(`Cart ${cartId} not found or doesn't belong to user ${userId}`);
+    return null;
+  }
+
+  const { data: cartItemsData, error: cartItemsError } = await supabaseAdmin
+    .from('cart_items')
+    .select(
+      `
+      id,
+      cart_id,
+      photo_id,
+      photographer_id,
+      unit_price_cents,
+      allocated_price_cents,
+      created_at,
+      photos!inner(
+        original_url,
+        events(
+          name,
+          date
+        )
+      )
+    `,
+    )
+    .eq('cart_id', cartId);
+
+  if (cartItemsError || !cartItemsData || cartItemsData.length === 0) {
+    console.error('Cart is empty or error fetching cart items:', cartItemsError);
+    return null;
+  }
+
+  const cartItems = (cartItemsData ?? []).map(
+    (item: {
+      id: string;
+      cart_id: string;
+      photo_id: string;
+      photographer_id: string;
+      unit_price_cents: number;
+      allocated_price_cents: number | null;
+      created_at: string;
+      photos:
+        | Array<{
+            original_url: string | null;
+            events:
+              | Array<{ name: string | null; date: string | null }>
+              | { name: string | null; date: string | null }
+              | null;
+          }>
+        | {
+            original_url: string | null;
+            events:
+              | Array<{ name: string | null; date: string | null }>
+              | { name: string | null; date: string | null }
+              | null;
+          }
+        | null;
+    }) => {
+      const photo = Array.isArray(item.photos) ? item.photos[0] : item.photos;
+      const event = photo ? (Array.isArray(photo.events) ? photo.events[0] : photo.events) : null;
+      return {
+        id: item.id,
+        cart_id: item.cart_id,
+        photo_id: item.photo_id,
+        photographer_id: item.photographer_id,
+        // T-204: prefer the allocation the checkout COMMITTED before the
+        // session was created — this photo's share of a bundle-discounted
+        // total. Absent (null) means no bundle applied, or a session
+        // created before this deploy, and the list price is exactly right.
+        // Never recomputed from the event's tiers: they are editable at
+        // any moment, and a recompute between charge and delivery would
+        // build an order that disagrees with the buyer's card statement.
+        unit_price_cents: item.allocated_price_cents ?? item.unit_price_cents,
+        created_at: item.created_at,
+        photo_url: photo?.original_url ?? null,
+        photographer_name: null,
+        event_name: event?.name ?? null,
+        event_date: event?.date ?? null,
+      };
+    },
+  );
+
+  const totalAmountCents = cartItems.reduce((sum, item) => sum + item.unit_price_cents, 0);
+
+  // T-228 — same fail-open rule as the guest branch above: a session
+  // created before the gate shipped carries no consent, and the buyer has
+  // already paid, so the order is created with NULL columns.
+  const withdrawalConsent = parseWithdrawalConsentMetadata(session.metadata);
+
+  const order = await createOrder(supabaseAdmin, userId, {
+    cart_id: cartId,
+    stripe_checkout_session_id: session.id,
+    stripe_payment_intent_id:
+      typeof session.payment_intent === 'string' ? session.payment_intent : undefined,
+    stripe_customer_id: typeof session.customer === 'string' ? session.customer : undefined,
+    status: 'completed',
+    total_amount_cents: totalAmountCents,
+    metadata: {
+      stripe_session_id: session.id,
+      amount_total: session.amount_total,
+      currency: session.currency,
+    },
+    withdrawal_consent: withdrawalConsent,
+  });
+
+  await addOrderItems(
+    supabaseAdmin,
+    order.id,
+    cartItems.map((item) => ({
+      photo_id: item.photo_id,
+      photographer_id: item.photographer_id,
+      unit_price_cents: item.unit_price_cents,
+      quantity: 1,
+    })),
+  );
+
+  await clearCart(supabaseAdmin, cartId);
+
+  // T-228 / art. 8.7: confirmation of the contract on a durable medium,
+  // restating the consent that removed the right of withdrawal. Until
+  // now only guests got an email — the signed-in buyer got nothing, so
+  // the confirmation obligation was unmet for half the purchases.
+  // Non-fatal, like the guest one: a Resend outage must not fail the
+  // webhook and lose the order.
+  const buyerEmail =
+    session.customer_details?.email ??
+    (typeof session.customer_email === 'string' ? session.customer_email : null);
+  if (buyerEmail) {
+    try {
+      // ⚠️ Bounded (T-252 review). `sendPurchaseConfirmationEmail` is a bare
+      // `resend.emails.send` with no timeout of its own, and since this handler
+      // now moves money AFTER it, a hung Resend does not merely delay the 200 —
+      // it can push the whole invocation past Stripe's delivery timeout and
+      // strand the transfers, because the redelivery stops at the
+      // already-exists guard. Same reasoning and same budget as
+      // `sendMoneyAlertEmail`.
+      await withWebhookTimeout(
+        sendPurchaseConfirmationEmail({
+          to: buyerEmail,
+          photoCount: cartItems.length,
+          eventNames: [
+            ...new Set(
+              cartItems
+                .map((item) => item.event_name)
+                .filter((name): name is string => name !== null),
+            ),
+          ],
+          baseUrl: env.SITE_URL,
+          withdrawalConsent,
+        }),
+        EMAIL_TIMEOUT_MS,
+      );
+    } catch (emailErr) {
+      console.error('Failed to send purchase confirmation email:', emailErr);
+    }
+  } else {
+    console.error(`No buyer email on session ${session.id}; confirmation email skipped`);
+  }
+
+  revalidatePath('/[lang]/dashboard/talent/cart', 'page');
+  revalidatePath('/[lang]/dashboard/talent/orders', 'page');
+  revalidatePath('/[lang]/dashboard/talent/profile', 'page');
+
+  console.log(`Order created: ${order.id} for user ${userId}`);
+
+  return order;
+}
+
+/**
+ * Drive the photographer transfers for a completed authenticated Checkout
+ * session (T-252).
+ *
+ * The authenticated branch used to create the order and stop there, leaving the
+ * transfers to `payment_intent.succeeded` alone — which is a bet on Stripe's
+ * delivery order that Stripe explicitly does not take.
+ */
+async function drivePayoutsForCheckoutSession(
+  session: Stripe.Checkout.Session,
+  order: Order,
+): Promise<void> {
+  // No money to split yet. A delayed payment method leaves the session `unpaid`
+  // until the funds settle, and a zero-amount one is `no_payment_required`.
+  // Neither is the silence this ticket is about: when an async payment does
+  // settle, `payment_intent.succeeded` fires, finds the order this handler has
+  // already created, and drives the transfers then. Any other (or absent) value
+  // falls through and ATTEMPTS the transfer — the safe direction, because a
+  // premature attempt is refused by Stripe and parked as a recoverable
+  // `transfer_failed` hold, never lost.
+  if (session.payment_status === 'unpaid' || session.payment_status === 'no_payment_required') {
+    console.log(
+      `[payouts] session ${session.id} is ${session.payment_status}; transfers wait for payment_intent.succeeded.`,
+    );
+    return;
+  }
+
+  const piId = typeof session.payment_intent === 'string' ? session.payment_intent : null;
+
+  if (!piId) {
+    await reportMoneyIncident({
+      kind: 'payout-not-recorded',
+      message:
+        'A paid checkout session carried no payment intent, so no transfer path ran at all for ' +
+        'a recorded order.',
+      context: { sessionId: session.id, orderId: order.id },
+    });
+    return;
+  }
+
+  try {
+    // The session payload carries no charge, so it has to be resolved off the
+    // PaymentIntent — the same extra call the guest branch already pays.
+    //
+    // This is the one place the exactly-once key is derived from a live read
+    // rather than from the event payload `payment_intent.succeeded` carries. In
+    // Checkout `mode: 'payment'` the two agree: the session only completes on a
+    // successful charge, and no further charge is created on that intent
+    // afterwards. A flow that could add one would break the `(charge,
+    // photographer)` guard, so keep this in mind before reusing the helper.
+    const pi = await stripe.paymentIntents.retrieve(piId, { expand: ['latest_charge'] });
+    const chargeId =
+      typeof pi.latest_charge === 'string'
+        ? pi.latest_charge
+        : ((pi.latest_charge as Stripe.Charge | null)?.id ?? null);
+
+    if (!chargeId) {
+      await reportMoneyIncident({
+        kind: 'payout-not-recorded',
+        message:
+          'No charge id on the payment intent of a completed checkout session, so no transfer ' +
+          'could be attempted. The order is completed and the photographer is owed money.',
+        context: { paymentIntentId: piId, orderId: order.id },
+      });
+      return;
+    }
+
+    await drivePayoutsForOrder({
+      orderId: order.id,
+      chargeId,
+      currency: order.currency,
+      orderTotalCents: order.total_amount_cents,
+      source: 'checkout.session.completed',
+    });
+  } catch (err) {
+    // ⚠️ Same discipline as the guest catch (T-249): never claim nothing was
+    // paid. `createTransfersForOrderItems` can throw part-way through a
+    // multi-photographer cart, after earlier photographers were transferred AND
+    // settled, so an operator acting on "nothing was paid" would pay them a
+    // second time. Say what is certain and name the ledger as the authority.
+    await reportMoneyIncident({
+      kind: 'payout-not-recorded',
+      message:
+        'The transfer path for a completed checkout session threw. Some photographers on this ' +
+        'order may already have been paid and settled before it failed — check the `payouts` ' +
+        'rows for this charge before reconciling anything by hand.',
+      context: { sessionId: session.id, paymentIntentId: piId, orderId: order.id },
+      cause: err,
+    });
   }
 }
 
@@ -701,18 +1180,47 @@ export async function POST(request: Request) {
           ];
 
           try {
-            await sendGuestPurchaseEmail({
-              to: guestEmail,
-              downloadToken: downloadToken.token,
-              photoCount: cartItems.length,
-              eventNames,
-              baseUrl,
-              // Art. 8.7: the confirmation on a durable medium has to restate
-              // the consent that removed the right of withdrawal.
-              withdrawalConsent: guestWithdrawalConsent,
-            });
+            // ⚠️ Bounded like the authenticated confirmation, and for the same
+            // reason (T-252 review): the guest transfers run AFTER this, so a
+            // hung Resend does not merely delay the 200 — it can push the
+            // invocation past Stripe's delivery timeout and strand them.
+            await withWebhookTimeout(
+              sendGuestPurchaseEmail({
+                to: guestEmail,
+                downloadToken: downloadToken.token,
+                photoCount: cartItems.length,
+                eventNames,
+                baseUrl,
+                // Art. 8.7: the confirmation on a durable medium has to restate
+                // the consent that removed the right of withdrawal.
+                withdrawalConsent: guestWithdrawalConsent,
+              }),
+              EMAIL_TIMEOUT_MS,
+            );
           } catch (emailErr) {
-            console.error('Failed to send guest purchase email:', emailErr);
+            // ⚠️ This is not a courtesy email failing (T-253). A guest has no
+            // account: the link in that message is the ONLY way they reach the
+            // photos they just paid for, so a failure here is money in and
+            // nothing out. It stays non-fatal — a 500 would make Stripe
+            // redeliver a payment we have already taken — which is exactly why
+            // it has to be reported instead of logged into the void.
+            //
+            // Context carries ids only, never `guestEmail` and never the
+            // download token: the first is buyer PII, the second is a bearer
+            // credential for the photos. The order id is enough to look both up
+            // and re-send.
+            await reportMoneyIncident({
+              kind: 'purchase-email-not-delivered',
+              message:
+                'The guest purchase email was not confirmed as sent. The buyer has paid and ' +
+                'has no account to recover from — re-send their download link.',
+              context: {
+                guestOrderId: guestOrder.id,
+                sessionId: session.id,
+                photoCount: cartItems.length,
+              },
+              cause: emailErr,
+            });
           }
 
           // Create transfers to photographers for guest orders
@@ -738,10 +1246,47 @@ export async function POST(request: Request) {
                   guestOrder.currency,
                   'guest_order',
                 );
+              } else {
+                await reportMoneyIncident({
+                  kind: 'payout-not-recorded',
+                  message:
+                    'No charge id on the guest order payment intent, so no transfer could be ' +
+                    'attempted. The guest order exists and the photographer is owed money.',
+                  context: { paymentIntentId: piId, orderId: guestOrder.id },
+                });
               }
             } catch (transferErr) {
-              console.error('Failed to create transfers for guest order:', transferErr);
+              // A guest sale loses money exactly the same way an authenticated
+              // one does, so it has to be as loud (T-249). This catch is wider
+              // than the authenticated path's — it also covers the PaymentIntent
+              // retrieve, the Connect/plan lookups and the status reconcile —
+              // which is precisely why a bare log here could hide more, not less.
+              //
+              // ⚠️ It must NOT claim nothing was paid. `createTransfersForOrderItems`
+              // can throw part-way through a multi-photographer cart, after
+              // earlier photographers were transferred AND settled. An alert
+              // asserting "nothing was paid" would invite an operator to pay
+              // them a second time — the one outcome this whole ledger exists to
+              // prevent. Say what is certain (it threw) and name the ledger as
+              // the authority on what actually moved.
+              await reportMoneyIncident({
+                kind: 'payout-not-recorded',
+                message:
+                  'The guest order transfer path threw. Some photographers on this order may ' +
+                  'already have been paid and settled before it failed — check the `payouts` ' +
+                  'rows for this charge before reconciling anything by hand.',
+                context: { paymentIntentId: piId, orderId: guestOrder.id },
+                cause: transferErr,
+              });
             }
+          } else {
+            await reportMoneyIncident({
+              kind: 'payout-not-recorded',
+              message:
+                'Guest checkout session carried no payment intent, so no transfer path ran at ' +
+                'all for a recorded guest order.',
+              context: { sessionId: session.id, orderId: guestOrder.id },
+            });
           }
 
           console.log(`Guest order created: ${guestOrder.id} for ${guestEmail}`);
@@ -751,189 +1296,33 @@ export async function POST(request: Request) {
         // Handle authenticated payment checkout (cart-based orders)
         const existingOrder = await getOrderByCheckoutSessionId(supabaseAdmin, session.id);
 
+        // ⚠️ A redelivery of a session whose order already exists STOPS HERE, and
+        // that is a money decision, not laziness (T-252 review). Re-driving the
+        // transfers from here reads as free — `openPayoutRow` hands a second
+        // writer a `null` — but that guard is the partial unique index on
+        // `(stripe_charge_id, photographer_id)`, and it is partial precisely
+        // `where stripe_charge_id is not null`. Every payout row written BEFORE
+        // T-216 has a null charge id (the old `createPayoutFromTransfer` never
+        // stored one), so those rows are NOT in the index: an operator resending
+        // an old `checkout.session.completed` — routine here since the T-192
+        // delivery backlog — would open a fresh row under a brand-new
+        // idempotency key and pay the photographer a second time. A refunded
+        // order would transfer too: `charge.refunded` voids `pending` holds but
+        // cannot un-send a transfer. The out-of-order hole T-252 fixes does not
+        // need this: only the delivery that CREATES the order drives its payouts,
+        // and an order that exists without them is `payment_intent.succeeded`'s
+        // to recover.
         if (existingOrder) {
           console.log(`Order already exists for session ${session.id}`);
           break;
         }
 
-        const userId = session.metadata?.user_id;
-        const cartId = session.client_reference_id ?? session.metadata?.cart_id;
+        const order = await createAuthenticatedOrder(session);
 
-        if (!userId) {
-          console.error('Missing user_id in session metadata');
-          break;
-        }
+        // Nothing to pay for — the creation path already logged why it gave up.
+        if (!order) break;
 
-        if (!cartId) {
-          console.error('Missing cart_id in session');
-          break;
-        }
-
-        const { data: cart } = await supabaseAdmin
-          .from('carts')
-          .select('*')
-          .eq('id', cartId)
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        if (!cart) {
-          console.error(`Cart ${cartId} not found or doesn't belong to user ${userId}`);
-          break;
-        }
-
-        const { data: cartItemsData, error: cartItemsError } = await supabaseAdmin
-          .from('cart_items')
-          .select(
-            `
-            id,
-            cart_id,
-            photo_id,
-            photographer_id,
-            unit_price_cents,
-            allocated_price_cents,
-            created_at,
-            photos!inner(
-              original_url,
-              events(
-                name,
-                date
-              )
-            )
-          `,
-          )
-          .eq('cart_id', cartId);
-
-        if (cartItemsError || !cartItemsData || cartItemsData.length === 0) {
-          console.error('Cart is empty or error fetching cart items:', cartItemsError);
-          break;
-        }
-
-        const cartItems = (cartItemsData ?? []).map(
-          (item: {
-            id: string;
-            cart_id: string;
-            photo_id: string;
-            photographer_id: string;
-            unit_price_cents: number;
-            allocated_price_cents: number | null;
-            created_at: string;
-            photos:
-              | Array<{
-                  original_url: string | null;
-                  events:
-                    | Array<{ name: string | null; date: string | null }>
-                    | { name: string | null; date: string | null }
-                    | null;
-                }>
-              | {
-                  original_url: string | null;
-                  events:
-                    | Array<{ name: string | null; date: string | null }>
-                    | { name: string | null; date: string | null }
-                    | null;
-                }
-              | null;
-          }) => {
-            const photo = Array.isArray(item.photos) ? item.photos[0] : item.photos;
-            const event = photo
-              ? Array.isArray(photo.events)
-                ? photo.events[0]
-                : photo.events
-              : null;
-            return {
-              id: item.id,
-              cart_id: item.cart_id,
-              photo_id: item.photo_id,
-              photographer_id: item.photographer_id,
-              // T-204: prefer the allocation the checkout COMMITTED before the
-              // session was created — this photo's share of a bundle-discounted
-              // total. Absent (null) means no bundle applied, or a session
-              // created before this deploy, and the list price is exactly right.
-              // Never recomputed from the event's tiers: they are editable at
-              // any moment, and a recompute between charge and delivery would
-              // build an order that disagrees with the buyer's card statement.
-              unit_price_cents: item.allocated_price_cents ?? item.unit_price_cents,
-              created_at: item.created_at,
-              photo_url: photo?.original_url ?? null,
-              photographer_name: null,
-              event_name: event?.name ?? null,
-              event_date: event?.date ?? null,
-            };
-          },
-        );
-
-        const totalAmountCents = cartItems.reduce((sum, item) => sum + item.unit_price_cents, 0);
-
-        // T-228 — same fail-open rule as the guest branch above: a session
-        // created before the gate shipped carries no consent, and the buyer has
-        // already paid, so the order is created with NULL columns.
-        const withdrawalConsent = parseWithdrawalConsentMetadata(session.metadata);
-
-        const order = await createOrder(supabaseAdmin, userId, {
-          cart_id: cartId,
-          stripe_checkout_session_id: session.id,
-          stripe_payment_intent_id:
-            typeof session.payment_intent === 'string' ? session.payment_intent : undefined,
-          stripe_customer_id: typeof session.customer === 'string' ? session.customer : undefined,
-          status: 'completed',
-          total_amount_cents: totalAmountCents,
-          metadata: {
-            stripe_session_id: session.id,
-            amount_total: session.amount_total,
-            currency: session.currency,
-          },
-          withdrawal_consent: withdrawalConsent,
-        });
-
-        await addOrderItems(
-          supabaseAdmin,
-          order.id,
-          cartItems.map((item) => ({
-            photo_id: item.photo_id,
-            photographer_id: item.photographer_id,
-            unit_price_cents: item.unit_price_cents,
-            quantity: 1,
-          })),
-        );
-
-        await clearCart(supabaseAdmin, cartId);
-
-        // T-228 / art. 8.7: confirmation of the contract on a durable medium,
-        // restating the consent that removed the right of withdrawal. Until
-        // now only guests got an email — the signed-in buyer got nothing, so
-        // the confirmation obligation was unmet for half the purchases.
-        // Non-fatal, like the guest one: a Resend outage must not fail the
-        // webhook and lose the order.
-        const buyerEmail =
-          session.customer_details?.email ??
-          (typeof session.customer_email === 'string' ? session.customer_email : null);
-        if (buyerEmail) {
-          try {
-            await sendPurchaseConfirmationEmail({
-              to: buyerEmail,
-              photoCount: cartItems.length,
-              eventNames: [
-                ...new Set(
-                  cartItems
-                    .map((item) => item.event_name)
-                    .filter((name): name is string => name !== null),
-                ),
-              ],
-              baseUrl: env.SITE_URL,
-              withdrawalConsent,
-            });
-          } catch (emailErr) {
-            console.error('Failed to send purchase confirmation email:', emailErr);
-          }
-        } else {
-          console.error(`No buyer email on session ${session.id}; confirmation email skipped`);
-        }
-
-        revalidatePath('/[lang]/dashboard/talent/cart', 'page');
-        revalidatePath('/[lang]/dashboard/talent/orders', 'page');
-        revalidatePath('/[lang]/dashboard/talent/profile', 'page');
-
-        console.log(`Order created: ${order.id} for user ${userId}`);
+        await drivePayoutsForCheckoutSession(session, order);
         break;
       }
 
@@ -948,7 +1337,14 @@ export async function POST(request: Request) {
           });
         }
 
-        // Create Stripe transfers to photographers for authenticated orders
+        // Create Stripe transfers to photographers for authenticated orders.
+        //
+        // No order is a perfectly ordinary outcome and deliberately reported
+        // NOWHERE (T-252): a subscription payment has no `orders` row at all, a
+        // guest payment lives in `guest_orders`, and an out-of-order delivery
+        // that beats `checkout.session.completed` here now gets its transfers
+        // from that handler instead. Alerting on all three would bury the signal
+        // the money incidents exist to carry.
         if (order) {
           const chargeId =
             typeof paymentIntent.latest_charge === 'string'
@@ -956,24 +1352,26 @@ export async function POST(request: Request) {
               : ((paymentIntent.latest_charge as Stripe.Charge | null)?.id ?? null);
 
           if (!chargeId) {
-            console.error(
-              `No charge ID on payment_intent ${paymentIntent.id} — cannot create transfers`,
-            );
+            // The order is already `completed` above, so bailing here bills the
+            // buyer and pays nobody (T-249). There is no ledger row to fall back
+            // on — we never got far enough to open one.
+            await reportMoneyIncident({
+              kind: 'payout-not-recorded',
+              message:
+                'No charge id on the payment intent, so no transfer could be attempted. The ' +
+                'order is completed and the photographer is owed money with no ledger row.',
+              context: { paymentIntentId: paymentIntent.id, orderId: order.id },
+            });
             break;
           }
 
-          const { data: orderItems } = await supabaseAdmin
-            .from('order_items')
-            .select('photographer_id, total_price_cents')
-            .eq('order_id', order.id);
-
-          await createTransfersForOrderItems(
-            orderItems ?? [],
+          await drivePayoutsForOrder({
+            orderId: order.id,
             chargeId,
-            order.id,
-            order.currency,
-            'order',
-          );
+            currency: order.currency,
+            orderTotalCents: order.total_amount_cents,
+            source: 'payment_intent.succeeded',
+          });
         }
         break;
       }
@@ -1149,24 +1547,6 @@ export async function POST(request: Request) {
             orderId: orderRef,
           },
         });
-        try {
-          await sendClawbackAlertEmail({
-            kind: 'dispute-opened',
-            summary: chargeback
-              ? 'A chargeback was opened. Buyer access is revoked pending the outcome.'
-              : 'An inquiry was opened. Payouts are frozen; the buyer keeps their photos.',
-            details: {
-              chargeId,
-              disputeId: dispute.id,
-              disputeStatus: dispute.status,
-              amountCents: dispute.amount,
-              reason: dispute.reason,
-            },
-          });
-        } catch (err) {
-          console.error('[money] failed to send dispute-opened alert', err);
-        }
-
         // ⚠️ Access moves only for a REAL chargeback. Inquiries arrive through this
         // same event, and revoking a paying buyer's photos over a bank's suspicion
         // — one that frequently closes by itself — is real damage; `warning_closed`
@@ -1248,24 +1628,6 @@ export async function POST(request: Request) {
                 needsReconciliation: outcome.needsReconciliation,
               },
             });
-            try {
-              await sendClawbackAlertEmail({
-                kind: 'dispute-lost',
-                summary:
-                  'A chargeback was lost. The photographer transfer was reversed and the platform absorbed the dispute fee.',
-                details: {
-                  chargeId,
-                  disputeId: dispute.id,
-                  orderId: orderRef,
-                  amountCents: dispute.amount,
-                  disputeFeeCents: feeCents,
-                  reversedCents: outcome.reversedCents,
-                  needsReconciliation: outcome.needsReconciliation,
-                },
-              });
-            } catch (err) {
-              console.error('[money] failed to send dispute-lost alert', err);
-            }
           }
         } else {
           // Not lost: release the freeze this dispute put on. Scoped by dispute id,

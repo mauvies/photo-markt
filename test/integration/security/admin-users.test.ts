@@ -3,16 +3,21 @@
  *
  * The audit found `/api/admin/payouts/[id]` only checked that the caller
  * was authenticated — any logged-in photographer could mark any payout as
- * paid. The fix introduced a dedicated `admin_users` table that:
+ * paid. ⚠️ **That route no longer exists** (T-220 deleted the manual payout
+ * approval flow: payout rows are written only by the transfer path and the
+ * retry worker, and a status flip moves no money). The gate it introduced is
+ * still live and still matters — `dashboard/admin/status/page.tsx` uses the
+ * same lookup — so these tests stay, pinning the primitive rather than the
+ * route. The fix introduced a dedicated `admin_users` table that:
  *
  *   1. is service-role-only (RLS enabled, no policies)
- *   2. is read via supabaseAdmin in the admin endpoint
+ *   2. is read via supabaseAdmin in the admin-gated surface
  *   3. cannot leak the list of admins through public PostgREST queries
  *      (which an earlier attempt with `profiles.is_admin` *did* leak via
  *      the public photographer profile policy)
  *
  * These tests pin those three properties at the data-layer. They do NOT
- * hit the Next.js route handler — that needs a running server. The
+ * render the admin page — that needs a running server. The
  * underlying primitive (admin_users + the lookup pattern) is what carries
  * the security guarantee, so testing it directly is both lower-overhead
  * and more thorough.
@@ -88,7 +93,7 @@ describe('admin_users — C1 regression', () => {
   });
 
   it('the admin lookup pattern returns null for non-admins (gate denies)', async () => {
-    // Mirrors the actual code in app/api/admin/payouts/[id]/route.ts:
+    // Mirrors the actual code in [lang]/dashboard/admin/status/page.tsx:
     //   supabaseAdmin.from('admin_users').select('user_id').eq('user_id', user.id).maybeSingle()
     //   if (!admin) → 403
     const admin = await createTestUser('PHOTOGRAPHER');

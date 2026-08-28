@@ -283,73 +283,12 @@ export function Step3Details({ form, submitAttempted, bundleT, eventType }: Step
 
         <form.Subscribe selector={(state) => state.values.event_type}>
           {(eventType) =>
-            eventType === 'organizer' ? (
-              <form.Field
-                name="organizer_fee_per_photo"
-                validators={{
-                  onChange: ({ value }) => {
-                    if (value === undefined || value === null) return undefined;
-                    const num = typeof value === 'string' ? Number.parseFloat(value) : value;
-                    if (Number.isNaN(num)) return t('priceInvalidNumber');
-                    if (num < 0) return t('priceNegative');
-                    return undefined;
-                  },
-                }}
-              >
-                {(field) => {
-                  const showFeedback = submitAttempted || field.state.meta.isTouched;
-                  const error = showFeedback ? field.state.meta.errors?.[0] : null;
-                  const isInvalid = showFeedback && !field.state.meta.isValid;
-                  return (
-                    <div className="grid gap-2">
-                      <Label htmlFor="organizer_fee_per_photo">{t('organizerFeeLabel')}</Label>
-                      <div className="relative">
-                        {/* T-203: was a hardcoded `$` while checkout charges in
-                              EUR — a leftover the T-193 currency migration missed. */}
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                          {PLATFORM_CURRENCY_SYMBOL}
-                        </span>
-                        <Input
-                          id="organizer_fee_per_photo"
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={
-                            field.state.value === null || field.state.value === undefined
-                              ? ''
-                              : typeof field.state.value === 'string'
-                                ? field.state.value
-                                : field.state.value.toString()
-                          }
-                          onChange={(event) => {
-                            const val = event.target.value;
-                            if (val === '') {
-                              field.handleChange(null);
-                            } else {
-                              const num = Number.parseFloat(val);
-                              if (!Number.isNaN(num)) {
-                                field.handleChange(num);
-                              } else {
-                                field.handleChange(val as unknown as number);
-                              }
-                            }
-                          }}
-                          onBlur={field.handleBlur}
-                          placeholder="0.00"
-                          aria-invalid={isInvalid}
-                          className="pl-7 text-sm"
-                          suppressHydrationWarning
-                        />
-                      </div>
-                      <p className="text-xs text-muted-foreground">{t('organizerFeeDesc')}</p>
-                      {isInvalid && error && (
-                        <p className="min-h-4 text-xs text-destructive">{error}</p>
-                      )}
-                    </div>
-                  );
-                }}
-              </form.Field>
-            ) : (
+            // T-219: an organizer event stores `price_per_photo: null` — each
+            // contributor sells their own photos — so it gets no price input at
+            // all. The fee-per-photo field that used to sit here was collected
+            // and applied by no money path, and its copy promised organizers a
+            // cut that never moved. Removed until the revenue split is real.
+            eventType === 'organizer' ? null : (
               <form.Field
                 name="price_per_photo"
                 validators={{
@@ -424,7 +363,9 @@ export function Step3Details({ form, submitAttempted, bundleT, eventType }: Step
               and on mobile it stacks right after the price. Grouping it with the
               price is the point: they are one decision.
               Nested Fields so the editor sees the LIVE price as it is typed.
-              Organizer events price via an organizer fee and carry no ladder. */}
+              Organizer events carry no ladder and no price of their own: several
+              contributors sell into one event, so there is no agreed way to
+              apportion a discount (T-219). */}
         {eventType === 'organizer' ? null : (
           <div className="md:col-start-2">
             <form.Field name="price_per_photo">

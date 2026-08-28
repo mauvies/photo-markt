@@ -49,12 +49,19 @@ export const env = createEnv({
     FACE_SEARCH_EVENT_DAILY_CALLS: z.coerce.number().int().positive().default(1000),
     // Recipient of the 50%-of-global-cap alert. Optional: absent ⇒ the alert
     // is a safe no-op (like SENTRY_DSN / HEALTH_CHECK_TOKEN).
-    FACE_SEARCH_ALERT_EMAIL: z.email().optional(),
-    // Recipient of money-incident alerts — a lost dispute, a failed transfer
-    // reversal, a payout that needs manual reconciliation (T-215). Optional for
-    // the same reason as the address above: absent ⇒ the email is a no-op, and
-    // the incident is still reported to Sentry and the logs.
-    OPS_ALERT_EMAIL: z.email().optional(),
+    // ⚠️ `''` is accepted alongside a real address, and it is not pedantry:
+    // `createEnv` runs no `emptyStringAsUndefined`, so a bare `z.email()` would
+    // REJECT the empty string — and adding the variable in the Vercel dashboard
+    // with an empty value (the ordinary way to stage one) would throw at import
+    // and 500 every route. An optional alert recipient must never be able to
+    // take the site down. Readers treat `''` as absent, like `undefined`.
+    FACE_SEARCH_ALERT_EMAIL: z.union([z.email(), z.literal('')]).optional(),
+    // Recipient of money-incident alerts (T-249, T-215) — a sale that skipped the
+    // photographer's transfer and left no recoverable debt, or a refund/dispute
+    // clawback that could not be resolved automatically. Absent ⇒
+    // `reportMoneyIncident` still logs and still reports to Sentry, it just
+    // sends no email (same no-op shape as FACE_SEARCH_ALERT_EMAIL).
+    MONEY_ALERT_EMAIL: z.union([z.email(), z.literal('')]).optional(),
     // HMAC key for the reveal-gate proof cookie (T-177). Optional: absent ⇒
     // `src/lib/reveal-token.ts` falls back to SUPABASE_SERVICE_ROLE_KEY, so the
     // feature works without a dedicated secret and the app still boots. Set a
@@ -111,7 +118,7 @@ export const env = createEnv({
     FACE_SEARCH_GLOBAL_DAILY_CALLS: process.env.FACE_SEARCH_GLOBAL_DAILY_CALLS,
     FACE_SEARCH_EVENT_DAILY_CALLS: process.env.FACE_SEARCH_EVENT_DAILY_CALLS,
     FACE_SEARCH_ALERT_EMAIL: process.env.FACE_SEARCH_ALERT_EMAIL,
-    OPS_ALERT_EMAIL: process.env.OPS_ALERT_EMAIL,
+    MONEY_ALERT_EMAIL: process.env.MONEY_ALERT_EMAIL,
     REVEAL_TOKEN_SECRET: process.env.REVEAL_TOKEN_SECRET,
   },
 });

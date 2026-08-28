@@ -1,6 +1,7 @@
 import { Images, ScanFace } from 'lucide-react';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { EventMetaLine } from '@/components/event-meta-line';
+import { PayoutAccountAlert } from '@/components/payout-account-alert';
 import { PhotosEmptyState } from '@/components/photos-empty-state';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -10,6 +11,7 @@ import {
   getEventPhotographers,
   getEventPhotos,
   getEventPhotosPage,
+  getProfileStripeConnect,
   getProfilesByIds,
   isApprovedEventPhotographer,
   type SupabaseServerClient,
@@ -19,6 +21,7 @@ import {
   getEventBibDetectionProgress,
 } from '@/database/queries/bib-numbers';
 import { type AiMatchingStatus, getEventAiIndexingProgress } from '@/database/queries/rekognition';
+import { createSignedUrl } from '@/database/queries/storage';
 import { createClient } from '@/database/server';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { redirectToLogin } from '@/lib/auth/redirect-to-login';
@@ -32,11 +35,14 @@ import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { localizedPath } from '@/lib/i18n/localized-path';
 import { localizedRedirect } from '@/lib/i18n/redirect';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
+import { eventEarningsWillBeHeld, isPricedEvent } from '@/lib/payouts/payout-readiness';
 import { getShareableEventPath } from '@/lib/shareable-event-url';
+import { reconcileAndPersistConnectStatus } from '@/lib/stripe/connect';
 import { getPhotoTags } from './actions';
 import { AiStatusCard } from './ai-status-card';
 import { BibStatusCard } from './bib-status-card';
 import { EventActionsMenu } from './event-actions-menu';
+import { EventCoverSection } from './event-cover-section';
 import { EventInfoCard } from './event-info-card';
 import { EventModerationTabs } from './event-moderation-tabs';
 import { EventPhotoAlbum } from './event-photo-album';
@@ -183,10 +189,23 @@ export default async function EventDetailPage({
   const uploaderUserIds = Array.from(
     new Set(photos.map((p) => p.uploaded_by).filter((v): v is string => Boolean(v))),
   );
-  const [signed, photoTags, uploaderProfiles] = await Promise.all([
+  // The dedicated cover (T-055/T-166) for the Photos tab's cover block (T-232).
+  // Always direct-signed: it is a promotional image, not a for-sale photo, so it
+  // never routes through `/api/watermark/` — and it isn't a `photos` row, so the
+  // route could not resolve a policy for it anyway. `getEvent` selects `*`, so
+  // `cover_path` is present at runtime even though `Event` doesn't declare it
+  // (read defensively, exactly as the edit page does). Signed with the
+  // service-role client — the `photos` bucket is private.
+  const coverPath = (event as unknown as Record<string, unknown>).cover_path as
+    | string
+    | null
+    | undefined;
+
+  const [signed, photoTags, uploaderProfiles, initialCoverUrl] = await Promise.all([
     createPhotoUrlMap(adminClient, 'photos', allPaths, { expiresIn: 60 * 60 }),
     getPhotoTags(photoIds),
     getProfilesByIds(adminClient, uploaderUserIds),
+    coverPath ? createSignedUrl(adminClient, 'photos', coverPath) : Promise.resolve(null),
   ]);
 
   const albumItems = photos
@@ -223,6 +242,28 @@ export default async function EventDetailPage({
     (eventRecord.ai_matching_status as AiMatchingStatus | undefined) ?? 'idle';
   const bibDetectionStatus =
     (eventRecord.bib_detection_status as BibDetectionEventStatus | undefined) ?? 'idle';
+  // T-248 — a priced event whose owner has no active Connect account still
+  // sells; its earnings are held in the ledger until the account can receive
+  // them. The warning therefore stays on the event for as long as both are
+  // true, rather than firing once at save time. Reconciled against Stripe
+  // rather than read raw, so a `pending` left behind by a lagged
+  // `account.updated` webhook doesn't tell a working account its money is stuck.
+  // Only a priced event can hold anything, so a free event costs no query here.
+  let earningsWillBeHeld = false;
+  if (isPricedEvent(event.price_per_photo)) {
+    const connect = await getProfileStripeConnect(supabase, user.id);
+    const connectStatus = await reconcileAndPersistConnectStatus({
+      client: supabase,
+      userId: user.id,
+      accountId: connect?.stripe_connect_account_id,
+      storedStatus: connect?.stripe_connect_status ?? 'not_connected',
+    });
+    earningsWillBeHeld = eventEarningsWillBeHeld({
+      pricePerPhoto: event.price_per_photo,
+      connectStatus,
+    });
+  }
+
   const [aiProgress, bibProgress] = await Promise.all([
     role === 'owner' && aiMatchingEnabled
       ? getEventAiIndexingProgress(adminClient, id)
@@ -419,6 +460,31 @@ export default async function EventDetailPage({
 
   const photosTab = (
     <TranslationsProvider translations={dict.events}>
+      {/* Cover management (T-232). The capability shipped with T-166 but hung
+          off the unlabelled "⋮" menu, so photographers navigating by tabs never
+          found it and concluded it did not exist. It sits ABOVE the grid and
+          stays visible when the event has no photos yet — choosing a cover
+          before uploading is a legitimate order of work. */}
+      <div className="mb-4">
+        <EventCoverSection
+          eventId={id}
+          initialCoverUrl={initialCoverUrl}
+          fieldLabels={{
+            label: dict.newEvent.coverLabel,
+            desc: dict.newEvent.coverDesc,
+            infoAria: dict.newEvent.coverInfoAria,
+            select: dict.newEvent.coverSelect,
+            remove: dict.newEvent.coverRemove,
+          }}
+          labels={{
+            savedBadge: dict.eventDetails.editSavedInstantlyBadge,
+            savedHint: dict.eventDetails.editCoverSavedInstantly,
+            notForSaleNote: dict.events.coverNotForSale,
+            tooLarge: dict.newEvent.coverTooLarge,
+            updateFailed: dict.newEvent.coverUpdateFailed,
+          }}
+        />
+      </div>
       {/* Both notices self-hide, so this wrapper collapses to nothing when the
           event is healthy. */}
       <div className="space-y-2 empty:hidden">
@@ -572,7 +638,6 @@ export default async function EventDetailPage({
           {/* Event details under the title — same shared meta line the talent
               event view uses, so the two never diverge in field order/format. */}
           <EventMetaLine
-            className="mt-1"
             date={event.date}
             sessionTime={event.session_time}
             sessionEndTime={event.session_end_time}
@@ -589,6 +654,21 @@ export default async function EventDetailPage({
           <EventActionsMenu eventId={id} t={dict.events} />
         </div>
       </div>
+      {/* T-248 — sits above the tabs, not inside one, because it is true of the
+          whole event and must not depend on which tab is open. */}
+      {earningsWillBeHeld ? (
+        <div className="mt-4">
+          <PayoutAccountAlert
+            // Informational, not an emergency: the event works, the money is
+            // simply waiting. The red treatment is reserved for the dashboard
+            // banner once earnings are actually stuck.
+            severity="info"
+            message={dict.stripeConnect.banner.eventSalesHeld}
+            ctaHref={localizedPath(lang, '/dashboard/photographer/settings/payout-profile')}
+            ctaLabel={dict.stripeConnect.banner.goToPayoutProfile}
+          />
+        </div>
+      ) : null}
       <EventTabs
         initialTab={initialTab}
         labels={{

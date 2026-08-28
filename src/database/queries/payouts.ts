@@ -46,7 +46,6 @@ export interface Payout {
   amount_cents: number;
   status: PayoutStatus;
   admin_notes: string | null;
-  payment_account_id: string | null;
   stripe_transfer_id: string | null;
   stripe_charge_id: string | null;
   currency: string | null;
@@ -121,61 +120,6 @@ export async function getPayout(
   }
 
   return data as Payout | null;
-}
-
-/**
- * Create a new payout request
- */
-export async function createPayout(
-  supabase: SupabaseServerClient,
-  photographerId: string,
-  amountCents: number,
-  paymentAccountId: string,
-): Promise<Payout> {
-  const { data, error } = await supabase
-    .from('payouts')
-    .insert({
-      photographer_id: photographerId,
-      amount_cents: amountCents,
-      payment_account_id: paymentAccountId,
-      status: 'pending',
-    })
-    .select()
-    .single();
-
-  if (error || !data) {
-    throw new Error(`Failed to create payout: ${getErrorMessage(error)}`);
-  }
-
-  return data as Payout;
-}
-
-/**
- * Update payout status (admin function)
- */
-export async function updatePayoutStatus(
-  supabase: SupabaseServerClient,
-  payoutId: string,
-  status: PayoutStatus,
-  adminNotes?: string,
-): Promise<Payout> {
-  const updateData: Partial<Payout> = { status };
-  if (adminNotes !== undefined) {
-    updateData.admin_notes = adminNotes;
-  }
-
-  const { data, error } = await supabase
-    .from('payouts')
-    .update(updateData)
-    .eq('id', payoutId)
-    .select()
-    .single();
-
-  if (error || !data) {
-    throw new Error(`Failed to update payout status: ${getErrorMessage(error)}`);
-  }
-
-  return data as Payout;
 }
 
 /**
@@ -1036,4 +980,43 @@ export async function getTotalPendingPayouts(
     (sum, payout) => sum + payout.amount_cents - (payout.reversed_amount_cents ?? 0),
     0,
   );
+}
+
+/**
+ * How many `connect_inactive` holds this photographer currently has outstanding
+ * (T-250).
+ *
+ * Backs the anti-spam rule for the "you sold something but can't be paid yet"
+ * email: it is sent only when the row that was just opened is the **only** one
+ * outstanding — i.e. this sale *starts* a holding streak. A photographer who
+ * sells 40 photos while disconnected gets one email, not 40.
+ *
+ * The rule needs no new column and no new table because the ledger already
+ * carries the state, and it **self-resets**: once `retry-pending-payouts` drains
+ * the streak (the rows flip to `paid`), a later hold starts a new streak and is
+ * worth telling them about again.
+ *
+ * Deliberately narrower than `getTotalPendingPayouts`, which counts every
+ * unlanded status: this asks "are they already in the state this email
+ * announces?", and a `below_minimum` or `transfer_failed` hold is a different
+ * state with a different remedy.
+ */
+export async function countOutstandingConnectInactiveHolds(
+  supabase: SupabaseServerClient,
+  photographerId: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from('payouts')
+    .select('id', { count: 'exact', head: true })
+    .eq('photographer_id', photographerId)
+    .eq('status', 'pending')
+    .eq('hold_reason', 'connect_inactive');
+
+  if (error) {
+    throw new Error(
+      `Failed to count outstanding connect_inactive holds: ${getErrorMessage(error)}`,
+    );
+  }
+
+  return count ?? 0;
 }

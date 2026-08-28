@@ -216,6 +216,7 @@
     "photosEmptyDescription": "Sube las fotos de este evento y aparecerán aquí. Los deportistas solo pueden encontrarlas y comprarlas una vez subidas.",
     "photosEmptyCta": "Subir fotos",
     "tabPhotos": "Fotos",
+    "coverNotForSale": "La portada solo presenta el evento en las tarjetas y los enlaces: no es una de las fotos que vendes.",
     "tabDetails": "Detalles",
     "tabShare": "Compartir",
     "shareTabHeading": "Comparte este evento",
@@ -311,7 +312,6 @@
     "bundleNextTierMany": "Añade {n} fotos más de este evento y paga {price} por {total}.",
     "cartRestored": "Tu carrito ha sido recuperado",
     "itemsUnavailableRemoved": "Uno o más artículos de tu carrito ya no están disponibles y fueron eliminados.",
-    "checkoutPhotographerNotConnected": "Uno o más fotógrafos en tu carrito aún no han configurado sus pagos, así que sus fotos no se pueden comprar por ahora. Por favor intenta más tarde.",
     "checkoutRateLimited": "Demasiados intentos de pago. Espera un momento e inténtalo de nuevo."
   },
   "signup": {
@@ -344,15 +344,14 @@
   },
   "download": {
     "expiredTitle": "Enlace de descarga caducado",
-    "expiredDesc": "Este enlace de descarga ha caducado. Si tienes una cuenta de Photo Markt, tus fotos siguen disponibles en tu biblioteca.",
-    "login": "Iniciar sesión",
-    "createAccount": "Crear cuenta",
-    "expiresSoon": "Tus fotos caducan en",
+    "expiredDesc": "Este enlace de descarga ya no es válido. Escríbenos y te enviamos uno nuevo — tu compra está a salvo.",
+    "contactSupport": "Contactar con nosotros",
+    "expiresSoon": "Tu enlace de descarga caduca en",
     "day": "día",
     "days": "días",
-    "keepPermanently": "Crea una cuenta gratuita para guardarlas en tu biblioteca de forma permanente.",
-    "createFreeAccount": "Crear cuenta gratis",
+    "saveThemNow": "Guarda tus fotos en tu dispositivo antes de esa fecha.",
     "yourPhotos": "Tus fotos",
+    "downloadAll": "Descargar todas",
     "readyToDownload": "listas para descargar",
     "linksValid": "Enlaces válidos por 1 hora (recarga la página si caducan)",
     "noPhotosFound": "No se encontraron fotos para este pedido.",
@@ -460,7 +459,7 @@
     "billingPlanDesc": "Administra tu suscripción e información de facturación",
     "currentPlan": "Plan actual",
     "storageUsage": "Uso de almacenamiento",
-    "photosUploaded": "fotos subidas",
+    "photosUploaded": "fotos subidas en total",
     "storageLimitReached": "Límite de almacenamiento alcanzado — mejora tu plan para agregar más fotos",
     "eventLimitReached": "Has alcanzado el límite de eventos de tu plan ({current}/{max}). Mejora tu plan para crear más.",
     "eventLimitReachedShort": "Límite de eventos alcanzado — mejora tu plan para crear más.",
@@ -561,9 +560,10 @@
     "bundleDiscountNote": "Cuando un comprador se lleva uno de tus packs por volumen, el importe que ves es el precio del pack que tú fijaste: lo que realmente pagó. El descuento es una rebaja tuya; Photo Markt no descuenta nada extra por él y no tiene nada que ver con la tarifa de servicio del comprador.",
     "earningsThisMonth": "Ingresos del mes",
     "salesThisMonth": "Ventas del mes",
-    "photosUploadedThisMonth": "Fotos subidas",
-    "eventsCreatedThisMonth": "Eventos creados",
+    "photosUploadedThisMonth": "Fotos subidas del mes",
+    "eventsCreatedThisMonth": "Eventos creados del mes",
     "vsLastMonth": "vs. mes anterior",
+    "allTimeTotal": "{count} en total",
     "recentEvents": "Eventos recientes",
     "viewAll": "Ver todo",
     "range7d": "7 días",
@@ -812,21 +812,16 @@
     "connectBannerPending": "Tu cuenta de Stripe está en revisión. Recibirás pagos cuando sea aprobada.",
     "connectBannerRestricted": "Se requiere acción en tu cuenta de Stripe. Actualiza tu configuración de pagos.",
     "connectBannerButton": "Ir a configuración de pagos",
-    "stripeAvailable": "Balance disponible en Stripe",
-    "stripeAvailableDesc": "Listo para pago automático",
-    "stripePending": "Balance pendiente en Stripe",
-    "stripePendingDesc": "En revisión de fraude de Stripe",
-    "payoutScheduleTitle": "Pagos automáticos",
-    "payoutScheduleDesc": "Los pagos se envían automáticamente cada lunes a tu cuenta bancaria conectada.",
-    "payoutMinimumThreshold": "Balance mínimo requerido: $25",
+    "stripeDashboardButton": "Abrir mi panel de Stripe",
+    "stripeDashboardTitle": "Abre tu cuenta de Stripe en una pestaña nueva",
+    "stripeDashboardNotReady": "Termina de configurar tu cuenta de Stripe primero — en cuanto esté activa podrás abrirla desde aquí.",
+    "stripeDashboardUnavailable": "No hemos podido contactar con Stripe ahora mismo. Inténtalo de nuevo en un momento.",
     "netEarnings": "Ganancias netas",
     "afterPlatformFees": "Después de comisiones",
     "buyerFeeNote": "Los compradores pagan además una tarifa de servicio al pagar. Va para Photo Markt y no se suma ni se descuenta de tus ganancias.",
     "bundleDiscountNote": "Cuando un comprador se lleva uno de tus packs por volumen, el bruto que ves es el precio del pack que tú fijaste: lo que realmente pagó. El descuento es una rebaja tuya; Photo Markt no descuenta nada extra por él y no tiene nada que ver con la tarifa de servicio del comprador.",
     "availableBalance": "Saldo disponible",
     "readyToWithdraw": "Listo para retirar",
-    "pendingPayout": "Pago pendiente",
-    "pendingPayoutDesc": "Ganado, aún no enviado — se paga automáticamente",
     "payoutStatusPending": "Pendiente",
     "payoutStatusProcessing": "Enviando",
     "payoutStatusPaid": "Pagado",
@@ -917,7 +912,17 @@
     "payoutProfileBannerButton": "Completar perfil",
     "payoutMethodCardTitle": "Método de cobro",
     "payoutMethodCardDesc": "Administra tu cuenta bancaria o método de pago para recibir retiros.",
-    "payoutMethodCardButton": "Administrar método de cobro"
+    "payoutMethodCardButton": "Administrar método de cobro",
+    "availableOn": "Disponible el",
+    "arrivesOn": "Llega a tu banco el",
+    "yourMoney": "Tu dinero",
+    "paidAutomatically": "Stripe lo ingresa en tu cuenta bancaria automáticamente.",
+    "moneyReady": "Listo — Stripe lo enviará en el próximo pago de tu cuenta",
+    "noMoneyInFlight": "No hay dinero en camino ahora mismo. Tus ventas aparecerán aquí.",
+    "unsentTitle": "aún no se han podido enviar",
+    "unsentDesc": "Es dinero que has ganado. Se enviará automáticamente en cuanto tu cuenta de cobro pueda recibirlo.",
+    "stripeAccountTitle": "Tu cuenta de Stripe",
+    "noMoneyInFlightShort": "Nada en camino ahora mismo"
   },
   "payoutProfile": {
     "pageTitle": "Completar perfil de cobro",
@@ -1111,8 +1116,6 @@
     "eventTypeOrganizer": "Organizador",
     "eventTypeOrganizerDesc": "Invita a fotógrafos específicos de la plataforma a subir fotos.",
     "organizerApprovalDesc": "Las fotos de los fotógrafos invitados quedan pendientes hasta que las apruebes.",
-    "organizerFeeLabel": "Tu fee por foto",
-    "organizerFeeDesc": "Se cobra encima de la comisión de la plataforma cada vez que se vende una foto de un contribuyente.",
     "organizerNoOwnPhotosTitle": "Sin subida en este paso",
     "organizerNoOwnPhotos": "Los fotógrafos invitados subirán las fotos después de aceptar tu invitación."
   },
@@ -1341,13 +1344,17 @@
       "active": "Conectada",
       "restricted": "Acción requerida"
     },
-    "notConnectedDescription": "Conecta tu cuenta bancaria para recibir pagos automáticos semanales por tus ventas de fotos.",
+    "notConnectedDescription": "Conecta tu cuenta bancaria para recibir pagos automáticos por tus ventas de fotos.",
     "pendingDescription": "Tu configuración de Stripe no está completa. Haz clic en el botón de abajo para volver a Stripe y terminar el proceso, incluyendo la verificación de identidad.",
-    "activeDescription": "Tu cuenta bancaria está conectada. Recibirás pagos automáticos semanales cada lunes.",
+    "activeDescription": "Tu cuenta bancaria está conectada. Stripe envía tus ganancias automáticamente, según la frecuencia de pagos configurada en tu cuenta de Stripe.",
     "restrictedDescription": "Stripe requiere información adicional para habilitar los pagos. Por favor actualiza tu cuenta.",
     "connectButton": "Conectar con Stripe",
     "completeSetupButton": "Completar configuración en Stripe",
     "updateAccountButton": "Actualizar en Stripe",
+    "openDashboardButton": "Abrir mi panel de Stripe",
+    "openDashboardTitle": "Abre tu cuenta de Stripe en una pestaña nueva",
+    "openDashboardNotReady": "Termina de configurar tu cuenta de Stripe primero — en cuanto esté activa podrás abrirla desde aquí.",
+    "openDashboardUnavailable": "No hemos podido contactar con Stripe ahora mismo. Inténtalo de nuevo en un momento.",
     "poweredByStripe": "Pagos seguros gestionados por Stripe",
     "onboarding": {
       "successBanner": "¡Cuenta bancaria conectada! Recibirás pagos automáticos por tus ventas de fotos.",
@@ -1357,6 +1364,10 @@
       "connectAccount": "Conecta tu cuenta bancaria para empezar a vender fotos y recibir pagos.",
       "pendingReview": "Tu cuenta de Stripe está en revisión. Los pagos se habilitarán cuando sea aprobada.",
       "actionRequired": "Se requiere acción en tu cuenta de Stripe. Actualiza tu configuración de pagos para continuar vendiendo.",
+      "salesWillHoldOne": "Tienes 1 evento a la venta y todav\u00eda no puedes cobrar. Se puede comprar con normalidad, pero tu dinero quedar\u00e1 guardado hasta que tu cuenta de cobro est\u00e9 lista.",
+      "salesWillHoldMany": "Tienes {count} eventos a la venta y todav\u00eda no puedes cobrar. Se pueden comprar con normalidad, pero tu dinero quedar\u00e1 guardado hasta que tu cuenta de cobro est\u00e9 lista.",
+      "moneyHeld": "Tienes {amount} esperando. Es dinero que ya has ganado: te lo enviamos autom\u00e1ticamente en cuanto tu cuenta de cobro est\u00e9 lista.",
+      "eventSalesHeld": "Este evento tiene precio y todav\u00eda no puedes cobrar. Se puede comprar con normalidad, pero tu dinero quedar\u00e1 guardado hasta que tu cuenta de cobro est\u00e9 lista.",
       "goToPayoutProfile": "Ir a configuración de pagos"
     },
     "sales": {
@@ -1552,7 +1563,7 @@
     },
     "gatedPanel": {
       "searchTitle": "Encuentra tus fotos",
-      "searchDescription": "La galería de este evento no es pública: cada foto solo se muestra a quien aparece en ella. Sácate una selfie y te mostraremos todas las fotos en las que sales.",
+      "searchDescription": "Esta galería es privada. Tómate o sube una selfie a continuación para encontrar tus fotos.",
       "searchCta": "Buscar mis fotos",
       "photoCount": "{count} fotos en este evento",
       "privacyNote": "Tu selfie solo se usa para encontrar tus fotos. No se guarda ni se comparte.",
@@ -1912,19 +1923,28 @@
     "submitSuccess": "Ticket enviado — te contactaremos pronto.",
     "submitError": "Algo salió mal. Inténtalo de nuevo.",
     "quickActionsTalent": [
-      { "title": "Foto faltante", "description": "Reporta una foto que esperabas y no encuentras" },
+      {
+        "title": "Foto faltante",
+        "description": "Reporta una foto que esperabas y no encuentras"
+      },
       {
         "title": "Acceso a descargas",
         "description": "Soluciona problemas al descargar fotos compradas"
       },
-      { "title": "Ayuda con pedidos", "description": "Dudas sobre cargos, recibos o reembolsos" },
+      {
+        "title": "Ayuda con pedidos",
+        "description": "Dudas sobre cargos, recibos o reembolsos"
+      },
       {
         "title": "Privacidad del perfil",
         "description": "Controla quién puede ver tu perfil y tus fotos"
       }
     ],
     "quickActionsPhotographer": [
-      { "title": "Estado de pagos", "description": "Consulta el estado de tus ventas y pagos" },
+      {
+        "title": "Estado de pagos",
+        "description": "Consulta el estado de tus ventas y pagos"
+      },
       {
         "title": "Error de subida",
         "description": "Resuelve subidas de fotos fallidas o atascadas"

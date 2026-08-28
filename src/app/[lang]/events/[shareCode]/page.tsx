@@ -630,11 +630,10 @@ export default async function EventPage({
         }}
       >
         <div className="mx-auto max-w-[1300px] w-full flex-1 px-3 py-4 sm:py-6 sm:px-6 lg:px-8">
-          <div className="mb-6 flex items-start justify-between gap-4">
+          <div className="mb-5 flex items-start justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold">{event.name}</h1>
               <EventMetaLine
-                className="mt-2"
                 date={event.date}
                 sessionTime={event.session_time}
                 sessionEndTime={event.session_end_time}
@@ -672,7 +671,7 @@ export default async function EventPage({
               so one event can never quote two different prices. Renders nothing
               for a free event or one without a ladder. */}
           <EventPricingSection
-            className="mb-6"
+            className="mb-4"
             pricePerPhoto={event.price_per_photo}
             bundleTiers={bundleTiers}
             bundleAllPhotosCents={bundleAllPhotosCents}
@@ -704,7 +703,7 @@ export default async function EventPage({
           ) : null}
 
           {showContributeLockedNotice ? (
-            <div className="mb-6 rounded-lg border border-dashed border-input bg-muted/30 p-4 text-sm text-muted-foreground">
+            <div className="mb-4 rounded-lg border border-dashed border-input bg-muted/30 p-4 text-sm text-muted-foreground">
               {dict.collaborativeEvent.contributeOpensOn.replace(
                 '{date}',
                 new Date(event.date).toDateString().split(' ').slice(1).join(' '),

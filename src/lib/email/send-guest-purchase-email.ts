@@ -1,10 +1,18 @@
-import { Resend } from 'resend';
-import { env } from '@/env.mjs';
+import { BUYER_FOOTNOTE, escapeHtml, renderTransactionalEmail } from '@/lib/email/layout';
+import { sendEmail } from '@/lib/email/send-email';
 import { withdrawalConsentEmailBlock } from '@/lib/email/withdrawal-consent-block';
 import type { WithdrawalConsentRecord } from '@/lib/withdrawal-consent';
 
-const resend = new Resend(env.RESEND_API_KEY);
-
+/**
+ * Delivery of the purchase for a GUEST buyer.
+ *
+ * ⚠️ This email is the product, not a receipt: a guest has no account, so the
+ * download link it carries is the only way they ever reach the photos they paid
+ * for. It therefore goes through `sendEmail`, which turns Resend's resolved
+ * `{ error }` into a throw — before T-253 a rejected message resolved happily
+ * and the buyer was left with nothing, silently (the webhook's `catch` never
+ * fired and the log line said the order had been created).
+ */
 export async function sendGuestPurchaseEmail({
   to,
   downloadToken,
@@ -21,36 +29,21 @@ export async function sendGuestPurchaseEmail({
   /** T-228 / art. 8.7 — absent ⇒ the consent block is omitted entirely. */
   withdrawalConsent?: WithdrawalConsentRecord | null;
 }): Promise<void> {
-  const downloadUrl = `${baseUrl}/download/${downloadToken}`;
-  const signupUrl = `${baseUrl}/signup?token=${downloadToken}`;
+  const downloadUrl = escapeHtml(`${baseUrl}/download/${downloadToken}`);
+  const signupUrl = escapeHtml(`${baseUrl}/signup?token=${downloadToken}`);
 
-  const eventsText = eventNames.length > 0 ? eventNames.join(', ') : 'your event';
+  // Event names are typed by the photographer, so they are escaped like any
+  // other untrusted value interpolated into this hand-written HTML.
+  const eventsText = eventNames.length > 0 ? escapeHtml(eventNames.join(', ')) : 'your event';
 
   const photoLabel = photoCount === 1 ? 'photo' : 'photos';
 
-  await resend.emails.send({
-    from: 'Photo Markt <noreply@photomarkt.com>',
+  await sendEmail({
     to,
+    kind: 'guest purchase',
     subject: 'Your Photo Markt photos are ready to download!',
-    html: `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; margin: 0; padding: 0;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background: #f9fafb; padding: 40px 16px;">
-    <tr>
-      <td align="center">
-        <table width="560" cellpadding="0" cellspacing="0" style="background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb;">
-          <!-- Header -->
-          <tr>
-            <td style="padding: 32px 40px 24px; border-bottom: 1px solid #f3f4f6;">
-              <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #111827;">Photo Markt</h1>
-            </td>
-          </tr>
-
+    html: renderTransactionalEmail(
+      `
           <!-- Body -->
           <tr>
             <td style="padding: 32px 40px;">
@@ -91,17 +84,8 @@ ${withdrawalConsentEmailBlock(withdrawalConsent)}
                 Create your free account →
               </a>
             </td>
-          </tr>
-        </table>
-
-        <p style="margin: 20px 0 0; color: #9ca3af; font-size: 12px;">
-          You received this email because you purchased photos on Photo Markt.
-        </p>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-    `,
+          </tr>`,
+      BUYER_FOOTNOTE,
+    ),
   });
 }

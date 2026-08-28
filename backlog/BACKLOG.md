@@ -11,22 +11,15 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P0 | T-239 | El worker de payouts no ve las columnas del ledger: `transfer_batch_id does not exist` en una BD ya migrada | — | todo |
-| 2 | P1 | T-240 | Las fotos de un evento no terminan de procesarse (evento `e5ae2822`) | Diagnosticar tras T-239 | todo |
-| 3 | P2 | T-236 | Barrido de órdenes sin payout: las varadas que T-216 no cubre | Dep T-239 (arreglar la causa antes de barrer) | todo |
-| 4 | P2 | T-242 | El header y la barra de selección usan fondos distintos al pasar el contenido por debajo | — | todo |
-| 5 | P2 | T-232 | La edición de portada existe pero es inalcanzable desde los tabs del evento | — | todo |
-| 6 | P2 | T-220 | Decidir el flujo de payouts `pending` o eliminar la ruta admin vestigial | Dep T-216 | todo |
-| 7 | P2 | T-219 | Podar el esquema muerto (`payment_accounts`, `ai_search_profiles`, columnas fantasma, `profiles.is_admin`) | — | todo |
-| 8 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
-| 9 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
-| 10 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
-| 11 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
-| 12 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
-| 13 | P3 | T-223 | Carrito de invitado sin sincronización entre pestañas | — | todo |
-| — | P1 | T-215 | Clawback: reembolsos y disputas revierten transferencia y acceso | **blocked:** aplazado por el usuario (2026-08-10) — **implementado y pusheado en PR #290 (draft)**, verde; falta solo `/code-review ultra` antes de mergear. Sin ventas reales no hay disputas posibles, así que la exposición es cero hasta validar producto | blocked |
-| — | P2 | T-237 | Reembolso parcial: proporcional, y cuadrar el saldo que eso rompe | **blocked:** absorbido en T-215 (mismo PR #290) | blocked |
-| — | P1 | T-243 | Ciclo de vida de disputas: chargebacks, inquiries y su escalado | **blocked:** absorbido en T-215 (mismo PR #290) | blocked |
+| 1 | P2 | T-254 | El worker de reintentos de payouts solo escribe en consola — un hold atascado para siempre no avisa a nadie | — | todo |
+| 2 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
+| 3 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
+| 4 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
+| 5 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
+| 6 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
+| 7 | P3 | T-223 | Carrito de invitado sin sincronización entre pestañas | — | todo |
+| — | P1 | T-215 | Clawback: reembolsos y disputas revierten transferencia y acceso | **blocked:** aplazado por el usuario (2026-08-10) — **implementado y pusheado en PR #290 (draft)**, verde; falta `/code-review ultra` antes de mergear. Sin ventas reales no hay disputas posibles | blocked |
+| — | P2 | T-237 | Reembolso parcial: proporcional, y cuadrar el saldo | **blocked:** absorbido en T-215 (PR #290) | blocked |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |
@@ -35,22 +28,6 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | — | P2 | T-001 | Subir concurrencia de indexado de caras (10–50) tras pasar a Inngest Pro | **blocked:** Inngest Pro | blocked |
 
 ### Clusters (tocan el mismo código — ejecutar contiguos y en orden)
-- **Orden actual (2026-08-07), decidido por el usuario:** primero los seis de `Riesgo: normal`
-  (T-241 → T-242), que salen rápido y no tocan dinero; después el bloque de diagnóstico de payouts
-  (T-239 P0 → T-240 → T-236); y al final el bloque de pagos partido (T-215 → T-243 → T-237). ⚠️ Esto
-  deja **T-239 (P0) por debajo de seis P2** a propósito: es una decisión de ritmo, no un olvido. Lo que
-  sí sigue siendo cierto es que T-239 bloquea el *despliegue* de T-215 y que T-240 pide diagnosticarse
-  después de él.
-
-- **Partición de T-215 (2026-08-07).** El ticket llevaba reembolso total, reembolso parcial y todo el
-  ciclo de disputas a la vez. Tres pasadas de `/code-review` encontraron ~25 defectos de dinero entre
-  las tres, y **cada ronda de arreglos introdujo fail-opens nuevos** (3 en la 2ª pasada, 2 en la 3ª).
-  El problema no era la dificultad de cada defecto sino el alcance: los tres casos tienen invariantes
-  distintos. Ahora **T-215** = solo reembolso total (el caso donde la orden entera y el payout entero se
-  mueven juntos, así que la identidad del saldo se mantiene sola), **T-237** = parcial + cuadrar el
-  saldo, **T-243** = disputas. Lección para el próximo ticket de pagos: si un alcance mezcla varios
-  invariantes de dinero, partirlo **antes** de implementar, no después de la tercera revisión.
-
 - **Lecturas que salen vacías:** ✅ completado — ~~T-234~~ (PR #286) → ~~T-235~~ (PR #287). La
   hipótesis era una **causa raíz común** (los dos errores de prod, a 64 s uno del otro, parecían el
   mismo `auth.uid()` sin resolver en el cliente de las Server Actions). **Resultó falsa, y por partida
@@ -66,10 +43,19 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
   `events/[id]/page.tsx` y el tab de fotos; T-231 (rama `fix/stuck-pending-upload-recovery`, en curso)
   primero — T-232 solo añade un bloque de portada encima de la cuadrícula y no quiere pelear con el
   diff de recuperación de subidas. Mergear T-231 antes de empezar T-232.
-- **Dinero del fotógrafo (payouts):** **T-216 → T-215 → T-220**. Los tres tocan el modelo de estado de
-  `payouts` y el bucle de transferencias del webhook. T-216 va primero porque es quien introduce las
-  filas `pending`: sin ellas, T-220 no tiene nada que decidir y T-215 no tiene dónde registrar una
-  reversión. Mergear cada uno antes de empezar el siguiente.
+- **Dinero del fotógrafo (payouts):** **~~T-216~~ (PR #284) → T-215 (PR #290, parada) → ~~T-220~~
+  (PR #311)**. Los tres tocan el modelo de estado de `payouts` y el bucle de transferencias del
+  webhook. T-216 fue primero porque introduce las filas `pending`.
+  ⚠️ **El orden se rompió: T-220 se ejecutó con T-215 aún sin mergear, y hay conflicto real.** La
+  rama `fix/clawback-disputes-and-refunds` (PR #290, +549/−23 sobre `queries/payouts.ts`) **todavía
+  define `createPayout` y `updatePayoutStatus`**, su copia de
+  `test/integration/queries/payouts.test.ts` sigue importando `updatePayoutStatus`, y su diff de
+  `CLAUDE.md` reescribe justo la viñeta que T-220 acaba de sustituir, reafirmando que la ruta admin
+  «refuses ledger-managed rows; its future is T-220». Al mergear T-220 esa rama **deja de
+  typecheckear**. Al retomar T-215: (1) rebasar sobre `main`, (2) **quedarse con el lado de T-220**
+  en `CLAUDE.md` y en el test, borrando las dos funciones de su diff, y (3) ⚠️ revisar su
+  `openspec/specs/photographer-payout-ledger/spec.md`, que es un archivo **completo** basado en
+  `main` pre-T-220 y puede resucitar el requisito de la ruta borrada.
 - **Seguridad post-incidente (PR #279):** ~~T-226~~ (PR #281) → ~~T-225~~ (PR #282) → **T-227**. T-226 cerró lo que
   quedó abierto del hallazgo (el vuelco del padrón por usuario autenticado, más un oráculo de
   substring sobre el email que solo apareció al revisar el propio arreglo); T-225 puso el linter que
@@ -98,13 +84,312 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 ## Archivo (done)
 
-- **T-241** · Fix/Perfil (P2): guardar el perfil mostraba un banner de error con el texto literal
-  `NEXT_REDIRECT` y **acto seguido** guardaba bien. No había ningún error: `updateProfileAction` termina
-  en `localizedRedirect(...)`, y **Next implementa `redirect()` lanzando** una excepción especial que el
-  `catch` genérico del formulario tomaba por un guardado fallido, renderizando `error.message`. Se le
-  estaba enseñando al usuario el mecanismo interno de un guardado **correcto**, con la palabra «error»
-  delante. El ticket se fichó en la rama de T-215 y el arreglo se shipeó por su cuenta desde `main` —
-  PR #292
+- **T-219** · Refactor/BD (P2, `Riesgo: alto` → plan mode + OpenSpec + `/code-review high`): capa
+  arqueológica documentada como muerta y nunca eliminada, que **no era inerte**. `payment_accounts`
+  guardaba datos bancarios/PayPal de fotógrafos en un `jsonb` con **cero lectores** (superseded por
+  Stripe Connect): datos retenidos sin producto detrás. `events.organizer_fee_per_photo_cents` lo
+  escribía un **campo VIVO del wizard** cuyo propio copy prometía al organizador que se cobraba
+  «encima de la comisión de la plataforma cada vez que se vende una foto de un contribuyente» —
+  **ningún camino de dinero lo aplicaba jamás**; decidido lo que el ticket exigía decidir: se quita
+  el campo entero (input, validación, persistencia del borrador, fila del review, ambos strings i18n)
+  y la columna, y el reparto real de ingresos de organizer queda como feature aparte.
+  `profiles.is_admin` era el caso peligroso: la autorización real es `admin_users`, y una columna
+  *llamada* como un gate que no gatea nada es exactamente cómo se escribe el próximo bypass de buena
+  fe — el `drop` es cinturón y tirantes, **la guardia real es el test** que falla ante cualquier
+  referencia a `is_admin` bajo `src/`. También fuera: `ai_search_profiles`, `ai_search_usage`,
+  `time_sync_tokens`, `upload_batches`, `upload_objects`, las columnas fantasma de time-sync en
+  `events`, tres trigger functions huérfanas, la RPC sin llamadores `search_user_by_email` y la
+  extensión `vector` — features sin terminar que seguían con grants DML para `anon`. **Las dos
+  últimas las había nominado por nombre `scripts/advisors-baseline.ts` para este ticket.**
+  ⚠️ **El inventario del propio ticket estaba desfasado en dos puntos, y el `db:reset` lo demostró:**
+  `ai_search_usage` y `profiles.is_admin` ya los habían borrado migraciones anteriores
+  (`20260622000000`, `20260513000000`) — por eso *cada* sentencia es `if exists`. **Findings del
+  review, reales los tres:** (1) los dependientes conocidos de `vector` (`photo_embeddings`, las dos
+  sobrecargas de `search_photos_by_similarity`) se limpian ahora **antes** de la extensión, y
+  **guardados** por que la extensión exista — nombrar un tipo en un `drop function` falla cuando ese
+  tipo ya no está, que habría roto la migración justo en la BD ya podada que los `if exists` existen
+  para tolerar; (2) el comentario que afirmaba que un fallo del `drop extension` «falla ruidosamente»
+  era **falso**: `migrate.yml` corre `psql -f` **sin `ON_ERROR_STOP`** y registra la versión en la
+  línea siguiente pase lo que pase, así que un error imprime en un job verde y la migración queda
+  marcada como aplicada — corregido el comentario y acotado el peor caso; (3) un comentario stale
+  sobre el fee de organizer en `step-3-details.tsx`. Verde: typecheck + lint + **2225 tests / 302
+  files** + `pnpm build`; re-aplicar la migración sobre la BD podada bajo `ON_ERROR_STOP=1` es un
+  no-op. ⚠️ **Antes de mergear:** contar filas de `payment_accounts` en **producción** (el borrado es
+  irreversible; «rollback is inert» vale para el código, no para los datos) y, tras el merge,
+  confirmar que `vector` desapareció de verdad. Desbloquea **T-227** — PR #313
+
+- **T-220** · Refactor/Pagos (P2, `Riesgo: alto` → plan mode + `/code-review max`): **el
+  planteamiento del ticket quedó obsoleto al mergearse T-216**, y eso decidió el resultado. De los
+  tres elementos que pedía decidir, dos ya no eran decidibles: la política RLS «los fotógrafos pueden
+  cancelar sus payouts pendientes» **ya la había eliminado** la migración `20260807000000`, y el
+  estado `pending` **es ahora el núcleo del ledger** (el hold que drena `retry-pending-payouts`), así
+  que quitarlo destruiría T-216. Quedaba solo la ruta `/api/admin/payouts/[id]`. **No se eligió (a)**
+  pese a que las Notas la daban por natural —su premisa era que T-216 necesitaría filas `pending` que
+  un humano aprobara, y T-216 les dio sentido **sin** la ruta— **ni se ejecutó (b) al pie de la
+  letra**, porque borrar `pending` hoy es romper el ledger. Se borró la ruta (y con ella
+  `src/app/api/admin/` entero) más `updatePayoutStatus` y `createPayout`. ⚠️ **La razón de fondo no es
+  «estaba sin uso» sino que un cambio de estado NO es una transferencia:** escribía una columna y no
+  llamaba a Stripe, así que su único poder distintivo era hacer que el ledger —la autoridad contra la
+  que un operador reconcilia Stripe (T-249)— afirmara un pago que nunca ocurrió; además ya era inerte
+  para toda fila con `stripe_charge_id`, que son todas las que crea `openPayoutRow`, y **producción no
+  tiene ninguna fila pre-T-216** (T-236 se cerró sin nada que barrer). **El guard es de capacidad, no
+  de ruta:** ningún `from('payouts')` fuera de `queries/payouts.ts` —porque CLAUDE.md obliga a Server
+  Actions, así que el flujo volvería como action y un test de ruta no lo vería— verificado plantando
+  un archivo infractor; y fija que `retryPendingPayouts` siga **registrado** en la ruta de Inngest,
+  que existir el archivo no es correr el worker (prod ya tuvo funciones sin sincronizar con crons
+  muertos). Ledger intacto: estados, hold reasons, índices, RLS, worker, webhook. Única migración,
+  **solo metadatos**: el comentario de tabla de `admin_users` seguía anunciando los endpoints
+  borrados y una migración ya aplicada no se re-ejecuta. `/code-review max` encontró errores reales
+  del primer pase, todos corregidos: los escritores de `payouts` son **tres** y no dos
+  (`voidHoldsForCharge` cancela holds), «los holds drenan solos» no es universal (una fila varada en
+  `processing` y un hold sub-50¢ solo, → T-254), y el webhook de Stripe y la ruta de Inngest no son
+  «superficies sin mutación» sino las rutas de escritura más pesadas de la app; además
+  `scripts/advisors-baseline.ts` (gate de CI **vivo**), `README.md` y `ARCHITECTURE.md` §2 seguían
+  citando `/api/admin/*`. ⚠️ **Choca con PR #290 (T-215), que sigue abierta y dejará de typecheckear
+  al mergear esto** — resolución anotada en la sección anti-conflicto. Migración solo de comentario —
+  PR #312
+
+- **T-232** · Feat/UI (P2): **no era una feature ausente, era un hueco de descubribilidad.** La
+  edición de portada ya existía y funcionaba (T-166, PR #225), pero ningún tab llevaba a ella: los
+  tabs `details` y `pricing` abren la edición **acotada**, que por diseño no toca fotos ni portada, y
+  el formulario completo `/edit` —el único que muestra la portada— colgaba del menú «⋮», un dropdown
+  de icono sin etiqueta al lado de «Eliminar evento». El fotógrafo que gestiona por tabs concluía que
+  no se podía cambiar, y el coste es real: la portada es lo único que decide cómo se ve el evento en
+  las event cards y en el `og:image`. Ahora `EventCoverSection` va **encima de la cuadrícula** en el
+  tab de Fotos, reusando `<EventCoverField>` con sus tres estados y persistiendo por
+  `uploadEventCover` (directo a Storage, T-238) y `removeEventCoverAction` — **sin action nueva, sin
+  tocar `updateEventAction` y sin migración**, así que el gate de dueño y la invalidación que refresca
+  cards y `og:image` son exactamente los que ya tenía `/edit`, y la portada dedicada sigue
+  direct-signed. **Dentro de Fotos y no un quinto tab**, como pedía el ticket: T-210 ya había movido
+  la portada al paso de *fotos* del wizard, así que gestionar un evento queda alineado con crearlo, y
+  un tab entero para un solo control engordaría la `TabsList` que peor escala en móvil. El gate de
+  dueño **sale gratis**: un colaborador recibe una vista mínima que retorna *antes* de los tabs, y
+  ambas actions revalidan la propiedad en servidor. El bloque se muestra también **sin fotos aún**
+  (definir portada antes de subir es un orden legítimo). Un único string nuevo
+  (`events.coverNotForSale`), porque el tooltip existente no dice que la portada no es una foto a la
+  venta; el resto se reusa. `/edit` conserva su control: esto **añade** un punto de entrada, no migra
+  el existente. Sin migración — PR #311
+
+- **T-250** · Feat/Pagos (P2): T-248 quitó el gate de Connect del checkout, así que la venta de un
+  fotógrafo sin cuenta de cobro **sí se cobra** y su neto queda en un hold `connect_inactive` que el
+  worker de reintentos paga solo. Ese cambio se pagó con avisos, pero **todos eran in-app** —banner,
+  aviso del evento, alerta de Ganancias— y el fotógrafo al que le afecta es, por definición, el que
+  no terminó el onboarding: el menos probable de entrar al dashboard. Ahora se le manda un email
+  (`sendHeldSaleEmail`): has vendido, esto te espera, conecta tu cuenta. **Regla anti-spam decidida y
+  documentada:** se envía solo cuando la fila recién abierta es el **único** hold `connect_inactive`
+  vivo, o sea cuando esa venta *inicia* una racha —40 fotos vendidas sin conectar son un email, no
+  40—; se deriva del propio ledger (sin columna nueva) y **se rearma sola** cuando el worker drena la
+  racha. Derivarla de la BD y no de memoria es lo que la hace funcionar: cada entrega del webhook es
+  una invocación serverless distinta. Solo notifica `connect_inactive`; `below_minimum` y
+  `transfer_failed` se drenan solos y no piden nada al fotógrafo. El importe es
+  `getTotalPendingPayouts`, la misma query del banner y de Ganancias, para que el email y la pantalla
+  a la que enlaza no puedan decir cifras distintas. **Sin PII del comprador** (importe y enlace) y
+  **solo en inglés**, dicho explícitamente: `profiles` no guarda idioma, así que no hay locale que
+  leer —el enlace va **sin segmento de idioma** y `src/proxy.ts` resuelve el del lector—.
+  `notifyPhotographerOfHeldSale` **nunca lanza** y el webhook lo acota además con `EMAIL_TIMEOUT_MS`.
+  ⚠️ A propósito **no** se fusiona con `reportMoneyIncident` (T-249): aquel avisa a la plataforma de
+  un fallo, este avisa al fotógrafo de un estado normal. Sin migración — PR #310
+
+- **T-251** · Fix/UI (P1): un fotógrafo con un evento y 35 fotos veía «Fotos subidas: 0» y «Eventos
+  creados: 0». **Los números estaban bien; las etiquetas mentían.** Las cuatro tarjetas de
+  `MetricsRow` son cifras **del mes en curso** (`monthBounds`), pero solo dos lo decían: su evento y
+  sus fotos se crearon el 27-jul-2026, así que la ventana de agosto contenía legítimamente cero de
+  cada uno, bajo una etiqueta que prometía un total histórico —la clave del diccionario sí llevaba
+  `ThisMonth`, el texto lo había perdido—. **Y el total que esperaba ya se calculaba y se tiraba a la
+  basura:** `DashboardData.totals` se computaba en cada render y no se pintaba en ninguna parte; su
+  único uso era decidir `isBrandNew`. Ahora las cuatro etiquetas declaran su periodo y los totales
+  llegan a `MetricsRow` como sublabel («35 en total»). ⚠️ **`StatCard` pinta la tendencia *y* el
+  sublabel**, no uno u otro: el caso reportado tiene `trend === null` (el mes anterior también fue 0,
+  así que `computePct` devuelve null), de modo que un sublabel condicionado a la ausencia de
+  tendencia habría desaparecido justo en el escenario que destapó el fallo. De paso, el
+  `photosUploaded` de facturación (un histórico) pasa a «fotos subidas en total», para que dos
+  superficies dejen de llamar casi igual a números distintos. **Las queries y la ventana mensual no
+  se tocan** —ensancharlas a histórico rompería la fila `vs. mes anterior`, lo único que da sentido a
+  la comparación— y `isBrandNew` sigue basándose en los totales. Sin migración — PR #309
+
+- **T-253** · Fix/Email (P1): `resend.emails.send` **resuelve `{ data, error }`; no lanza** en un
+  error de API, y los tres emisores anteriores a `send-money-alert.ts` descartaban ese resultado. Un
+  dominio sin verificar, un rate limit o un `to` inválido resolvían «bien». En el caso del invitado
+  eso no es un recibo que falta: **no tiene cuenta desde la que recuperar nada**, así que ese email
+  *es* la entrega de lo que pagó — dinero dentro, nada fuera, y el `catch` del webhook nunca saltaba.
+  Ahora todo envío pasa por **`sendEmail`** (`src/lib/email/send-email.ts`), que comprueba `error` y
+  lanza `EmailDeliveryError`, y que además posee el cliente Resend (construido en diferido) y el
+  único `EMAIL_FROM`; el esqueleto HTML copiado cuatro veces y `escapeHtml` viven en
+  `src/lib/email/layout.ts`. **Solo se comparte el chrome:** los mensajes siguen separados a
+  propósito, porque el email de invitado ofrece un token de 30 días y el del usuario registrado una
+  biblioteca permanente. Los nombres de evento (los escribe el fotógrafo) ya se escapan en ambas
+  plantillas. El fallo de entrega al invitado se reporta como el nuevo incidente
+  **`purchase-email-not-delivered`** (consola + Sentry + email de ops, vía T-249): sigue siendo no
+  fatal —un 500 haría que Stripe reentregara un cobro ya hecho—, que es justo la razón por la que
+  tiene que ser visible; el contexto lleva **solo ids**, nunca la dirección del comprador (PII) ni el
+  token de descarga (credencial al portador). Ese envío queda además acotado por `EMAIL_TIMEOUT_MS`,
+  igual que el autenticado: las transferencias del invitado corren **después**, así que un Resend
+  colgado podía dejarlas varadas (el mismo riesgo que acotó la revisión de T-252). La confirmación al
+  comprador registrado conserva su `console.error` —sus fotos ya están en su biblioteca, ese email es
+  registro y no entrega—, pero ahora ese log salta de verdad cuando Resend rechaza. Sin migración —
+  PR #308
+
+- **T-252** · Fix/Pagos (P1): **Stripe no garantiza el orden de entrega**, y solo
+  `payment_intent.succeeded` creaba transferencias para pedidos autenticados. Entregado primero, no
+  encontraba pedido (`getOrderByPaymentIntentId` → null), se saltaba el bloque entero y devolvía 200;
+  `checkout.session.completed` creaba después un pedido ya `completed` y **nadie transfería jamás** —
+  comprador cobrado, fotógrafo sin pagar, cero filas en `payouts` y ni un log. La misma forma que el
+  incidente del 28-jul-2026, y que **T-249 no podía cubrir por construcción**: T-249 alerta las
+  salidas que se ejecutan, y ésta consiste en no ejecutar ninguna. Ahora los dos handlers llaman al
+  **`drivePayoutsForOrder`** compartido: el primero que llega paga y el segundo no hace nada, porque
+  `openPayoutRow` reserva la fila **antes** de la llamada a Stripe y el índice único
+  `(stripe_charge_id, photographer_id)` le devuelve `null` (T-216). ⚠️ **La re-entrega de una sesión
+  cuyo pedido ya existe sigue cortando antes del pago, y eso lo decidió `/code-review ultra`**: el
+  plan aprobado sí re-conducía ahí, pero el índice es **parcial** (`where stripe_charge_id is not
+  null`) y **todas** las filas anteriores a T-216 tienen ese campo nulo — reenviar una sesión vieja
+  (rutina aquí desde el atasco de entregas de T-192) habría abierto fila nueva con clave de
+  idempotencia nueva y **pagado dos veces**; un pedido reembolsado también habría transferido, porque
+  `charge.refunded` anula holds `pending` pero no puede des-enviar una transferencia. Solo conduce la
+  entrega que **crea** el pedido. La misma revisión trajo tres correcciones más: ninguna de las dos
+  alertas del drive puede ya afirmar «no se pagó nada» (el handler hermano pudo pagar parte del
+  pedido, así que nombran las filas de `payouts` como autoridad); cada incidente lleva `source`,
+  porque un fallo real alerta una vez por entrega desde dos invocaciones que ningún throttle
+  per-process deduplica; y el email de confirmación al comprador queda acotado a 5 s, ya que ahora
+  precede al movimiento de dinero y Stripe trata una respuesta lenta como entrega fallida. Una sesión
+  autenticada `unpaid` (pago diferido) o `no_payment_required` cede el turno a
+  `payment_intent.succeeded`. Sin migración — PR #307
+
+- **T-249** · Fix/Pagos (P1): el ledger de payouts vive dentro de un `try/catch` + `continue` **a
+  propósito** —un throw haría 500 el webhook y Stripe reentregaría una operación de dinero que quizá
+  ya se hizo—, pero el precio de esa disciplina es que el fallo es **invisible por construcción**. Ya
+  costó una venta real: 28-jul-2026, €0,99, `completed` con **cero filas en `payouts`**, y no se supo
+  hasta auditar producción trece días después. Ahora **toda** salida que puede completar un pedido sin
+  pagar reporta por `reportMoneyIncident` — **rescatado de la rama aparcada de T-215 / PR #290 en vez
+  de reescrito**, para que no existan dos implementaciones que diverjan al retomarla. Dos salidas
+  estaban dentro de `createTransfersForOrderItems` (que lanza `openPayoutRow`; y que lancen
+  `createTransfer` **y** `holdPayoutRow`, que deja la fila `processing` sin `transfer_batch_id` — un
+  estado que **no recoge ninguno** de los dos selectores de recuperación, así que la deuda es real,
+  registrada y para siempre impagable). ⚠️ **Las otras tres las encontró `/code-review`, no el
+  ticket**, y eran más silenciosas todavía porque nunca llegan a abrir fila: la lectura de
+  `order_items` **descartaba su `error`**, caía a `[]` y el bucle de transferencias no hacía nada
+  sobre la lista vacía **sin registrar absolutamente nada** —el mejor candidato al incidente del 28 de
+  julio, y una clase de fallo nada hipotética: T-239 fue un error de caché de esquema en esa misma
+  tabla—; un payment intent sin `chargeId`; y el catch-all del camino de invitado, **más ancho** que
+  el autenticado (envuelve también el retrieve del PaymentIntent, las lecturas de Connect/plan y el
+  reconcile), donde un log pelado escondía más, no menos. **El flujo no cambia: mismo `continue`,
+  mismo 200.** El reporter nunca lanza y no lleva PII del comprador. Dos canales: consola + Sentry
+  siempre (fingerprint por `kind`), y email de ops con el nuevo `MONEY_ALERT_EMAIL` opcional
+  (ausente ⇒ no-op). Solo el email va throttleado, **por `kind`** (una alerta de payout no puede
+  callar una de disputa), **liberado si el envío falla**, y con **timeout de 5 s** para que una alerta
+  colgada no empuje el handler más allá del timeout de entrega de Stripe. ⚠️ `resend.emails.send`
+  resuelve `{ data, error }` y **no lanza**, así que se comprueba explícitamente: sin eso, el único
+  canal cuyo trabajo es no callarse fallaba en silencio. Sin migración — PR #306
+
+- **T-248** · Fix/Pagos (P1): se podía **publicar y poner precio a un evento sin cuenta de cobro
+  conectada** y el producto no lo decía en ningún sitio. Al ejecutarlo se descubrió que la consecuencia
+  era **peor** de lo que suponía el ticket: los dos checkouts devolvían `photographer_not_connected`, así
+  que esos eventos **no se podían comprar** — 5 de los 6 con precio en producción. Ante eso el usuario
+  decidió lo contrario de lo asumido: **que la venta sí ocurra**. ⚠️ **Y el destino ya estaba
+  construido:** T-216 dejó lista la ruta entera — el webhook abre la fila `payouts` con
+  `hold_reason='connect_inactive'` y `retry-pending-payouts` la drena en cuanto `account.updated` marca
+  la cuenta activa. El gate era **anterior** a T-216 y era lo único que impedía usar esa maquinaria;
+  además leía el estado **cacheado**, así que un `pending` de un webhook rezagado bloqueaba las ventas
+  de una cuenta que funcionaba. `photographer_not_connected` se **borra**, no se deja sin usar: un
+  código inalcanzable invita a resucitar el rechazo por accidente. Al comprador **no se le dice nada**
+  — su compra es correcta y completa, y el estado de Connect del fotógrafo no le da nada accionable.
+  El aviso va al fotógrafo y **en proporción**, decidido en un solo sitio
+  (`src/lib/payouts/payout-readiness.ts`): rojo solo cuando hay dinero de verdad retenido
+  (`money_held`, con la cifra de `getTotalPendingPayouts` — la misma que ya usa Ganancias, para que no
+  puedan discrepar), ámbar cuando aún es un pronóstico (`sales_will_hold`), porque vestir un
+  pronóstico de rojo enseña a ignorar el rojo. Consecuencia a saber: `connect_inactive` deja de ser un
+  caso casi imposible y pasa a ser **la vía normal** por la que nace un hold — el worker de reintentos
+  deja de ser un rescate y pasa a ser cómo se completa una venta corriente. Riesgo aceptado: se retiene
+  dinero de quien quizá nunca conecte, sin reembolso automático (el comprador ya tiene sus fotos).
+  Hueco diferido: quien no entra al dashboard no ve nada — hace falta email, capturado aparte.
+  Sin migración; el rollback es revertir, y los holds creados entretanto siguen siendo válidos — PR #305
+
+- **T-247** · Refactor/Pagos (P2): la pestaña de pagos había acumulado **cuatro cifras, y dos no eran
+  saldos**. «Pendiente de enviar» vale €0 en toda cuenta sana —no es una fase por la que pase el dinero,
+  es la excepción que registra T-216 cuando una transferencia no puede salir— y «en tu banco» **no es
+  observable**: en cuanto el dinero deja Stripe deja de verse, así que nunca hubo un total, solo el
+  próximo envío, que es un evento con fecha. Peor aún, el reparto en dos pestañas puso **dos cifras
+  llamadas «pendiente» con significados opuestos**: Ganancias decía €0,00 (lo que nuestro ledger debe y
+  no ha enviado) mientras Pagos decía €1,83 (ya enviado, retenido por Stripe hasta el 13 ago) — y al
+  estar en pantallas distintas **nunca se veían juntas para notar la contradicción**, de modo que la
+  primera que encuentra un fotógrafo es justo la que siempre vale cero. Se repliega a dos pestañas y la
+  cuarta tarjeta de Ganancias pasa a ser el dinero en camino con su fecha. La cifra del ledger no se
+  pierde, **se reclasifica**: aparece solo si es distinta de cero, como alerta con la acción que la
+  resuelve. La decisión vive en `resolveMoneyOnItsWay` (`src/lib/payouts/money-outlook.ts`), fuera del
+  JSX, y sus tres negativas son lo que se testea: sin dinero no hay tarjeta, un pago programado gana a
+  una estimación, y **sin fecha de Stripe no se muestra ninguna** — PR #301 y #302
+
+- **T-246** · Fix/Pagos (P1): las tarjetas de saldo mostraban **dos números y ninguna fecha**, así que la
+  única pregunta que tiene un fotógrafo —*¿cuándo lo cobro?*— no se respondía en ningún sitio. Ese vacío
+  es donde creció el copy inventado: **tres de las cuatro afirmaciones falsas de la jornada** («pagos
+  cada lunes», «mínimo $25», «en revisión de fraude de Stripe») eran intentos de explicar una espera que
+  nadie estaba midiendo. `retrievePayoutOutlook` trae ahora la fecha junto al saldo, de **dos** fuentes
+  porque ninguna basta: el objeto *payout* solo existe cuando los fondos ya están disponibles, así que
+  justo tras una venta no hay ninguno y lo único que puede decir «cuándo» es el `available_on` de la
+  transacción pendiente. ⚠️ **Nada se deriva de `delay_days`, y ese es el punto**: la cuenta real está en
+  7 días y su transferencia trajo `available_on` a **tres**, porque el retraso es una entrada del modelo
+  de riesgo de Stripe, no la fórmula. Calcular la fecha habría impreso «17 de agosto» con total
+  seguridad. **Una frase equivocada parece una opinión; una fecha equivocada parece un cálculo.** Si
+  Stripe no responde, las fechas vuelven nulas y la UI describe la espera en vez de nombrar un día. De
+  paso muere «En revisión de fraude de Stripe» (en español, *«me están investigando por fraude»*), que
+  describía un plazo rutinario de la forma más alarmante posible — PR #299 y #300
+
+- **T-245** · Fix/Descargas (P1): tras una compra real de invitado, el botón de descarga **abría la foto
+  en el navegador** y el comprador —que acababa de pagar— tenía que guardarla a mano desde una URL de
+  Storage. El markup ya llevaba `<a … download>`, que parece suficiente y no lo es: **ese atributo se
+  ignora en URLs de otro origen**, y estas apuntan a Supabase Storage. Se pide ahora al **firmar** la
+  URL (`createSignedUrl(..., { download })` ⇒ `Content-Disposition: attachment`), que sí se respeta cruce
+  de orígenes. Se añade `/api/download/[token]`, hermana de la ZIP de evento pero con **el token como
+  credencial** en vez de sesión: rechaza token caducado, solo sirve pedidos `completed`, y toma las
+  fotos de los ítems del propio pedido, así que ningún dato de la petición puede ampliar el conjunto.
+  ⚠️ **Y se retira una promesa que no se cumplía:** la página invitaba a crear cuenta «para conservarlas
+  para siempre». El claim se ejecutaba (`auth/callback` marca `claimed_by_user_id`) pero **nada lee esa
+  columna para dar acceso** — la biblioteca del talento lee solo `orders`/`order_items`, `guest_orders`
+  no tiene `user_id`, y `getGuestOrdersByEmail` no tiene llamadores. El único efecto visible de
+  registrarse era que el banner desaparecía: la UI **señalaba éxito sin entregar nada**, y al caducar el
+  token el comprador perdía la foto igual. El estado «caducado» era peor: ofrecía «iniciar sesión» y
+  «crear cuenta», ninguno capaz de devolver una compra nunca ligada a una cuenta; ahora apunta a
+  `/contact`. **Ligar de verdad una compra de invitado a una cuenta queda pendiente y tiene trampa**:
+  convertirla en pedido normal duplicaría la venta, porque las ganancias suman `order_items` **y**
+  `guest_order_items` — PR #298
+
+- **T-244** · Feat/Pagos (P1): una cuenta Express **no tiene contraseña ni página de login** — la
+  plataforma tiene que generar el enlace, y nadie lo hacía. `active` era además **el único estado de
+  Connect cuya tarjeta no ofrecía ninguna acción**, así que un fotógrafo conectado no tenía forma de
+  llegar a sus propios pagos, datos bancarios ni frecuencia de cobro. `createStripeDashboardLinkAction`
+  mintea ese enlace **desde el perfil del propio llamante y no acepta ningún argumento**: el enlace
+  autentica a quien lo tenga dentro de esa cuenta, así que un parámetro sería una puerta autoservicio al
+  dinero de cualquier fotógrafo — la **ausencia** de parámetro es la propiedad de seguridad, y un test la
+  fija porque añadirlo compilaría. ⚠️ El botón reclama la pestaña **dentro del clic**: `window.open` con
+  `noopener` devuelve `null` por especificación, lo que dejó la pestaña nueva en blanco y con el foco
+  mientras la actual navegaba a Stripe (shipeado y corregido en la segunda vuelta; el test previo pasaba
+  porque su mock ignoraba los argumentos). Se corrige de paso un **falso estado de carga**: el estado de
+  Connect caía por defecto a `not_connected` mientras cargaba, así que cada visita mostraba «conecta tu
+  cuenta bancaria» a fotógrafos con la cuenta perfectamente activa — **un desconocido no puede resolverse
+  en la afirmación alarmante**. Y mueren dos números inventados que el producto llevaba tiempo contando:
+  «pagos automáticos **cada lunes**» y «**mínimo $25**», ninguno de los cuales existe (la plataforma no
+  fija schedule alguno, y Stripe no tiene tal ajuste) — PR #296 y #297
+
+
+- **T-239** · Fix/Pagos (P0) → **resuelto sin código (2026-08-10)**. El worker `retryPendingPayouts` fallaba con
+  `column payouts.transfer_batch_id does not exist` en su primer paso. Las dos hipótesis del ticket eran
+  «staging sin migrar» y «caché de esquema de PostgREST rancia». **Era la segunda, y se curó sola.**
+  Evidencia recogida hoy: la columna existe en prod **y** en staging (`information_schema`); el cron
+  dispara con normalidad (`inngest/scheduled.timer`, `10,40 * * * *`); los runs recientes están en
+  **`Completed`**; y la venta real de hoy escribió su fila en `payouts` por el **mismo cliente
+  PostgREST**, que es la prueba directa de que la app ve el esquema nuevo. ⚠️ **Si vuelve a ocurrir**, el
+  arreglo barato es que `migrate.yml` emita `NOTIFY pgrst, 'reload schema'` al terminar — mata la clase
+  entera («migración aplicada pero PostgREST no la ve»), no solo este caso. La parte del DoD que sí valía
+  y no dependía del diagnóstico se separa como **T-249**
+
+- **T-236** · Fix/Pagos (P2) → **cerrado sin trabajo (2026-08-10): no hay nada que barrer.** El ticket
+  proponía un barrido de órdenes completadas sin fila en `payouts`. Consultado producción, existen
+  exactamente **dos** pedidos completados y solo **uno** sin payout: la venta de €0,99 del 28 de julio,
+  que fue una **prueba del propio usuario** entre sus dos cuentas (comprador y fotógrafo), bajo el modelo
+  de precios anterior, y cuyo neto (€0,91) además **supera el saldo que quedó tras las comisiones**
+  (€0,59 de €0,99 — un 40% se fue en comisión + conversión de divisa). Se decidió no pagarla. Escribir un
+  barrido para un único objetivo que se ha elegido no pagar es trabajo tirado; si algún día aparecen
+  varadas reales, el ticket se reabre con datos
+
 
 - **T-230** · Diseño/Eventos (P2): en un evento con **reveal gate** (T-177) la galería no es navegable por diseño —las fotos solo se revelan a quien prueba una coincidencia facial—, así que **esa pantalla es el producto**: si el visitante no busca, no ve nada y no compra nada. Renderizaba **una línea gris** en la ranura de la galería mientras el botón real de búsqueda vivía en un banner **aparte y encima**; por eso el copy tenía que decir «sácate una selfie **arriba**». El vacío no era falta de mensaje: **el propósito de la pantalla estaba partido en dos piezas débiles** y ninguna anclaba la vista. `GatedSearchPanel` pasa a ocupar la ranura entera en los **tres** estados previos a la búsqueda (`searchable` / `processing` / `unavailable`) con el CTA dentro — antes un evento gated podía renderizar **tres pesos visuales distintos** según si su índice estaba listo — y sustituye a `GatedFaceSearchNotice`, que se elimina al quedarse sin llamadas. **Decisión de alcance declarada:** el banner **no** se mueve dentro del panel, **se oculta** (`revealGated` → `resolveFindMyPhotos`): moverlo tocaba la composición de `EventGalleryWithFaceSearch`, que comparte el caso **no** gated, y dos botones de búsqueda en una pantalla por lo demás vacía sería peor que el reparto que sustituye. **Apareció un bug vivo en la misma pantalla y se arregló:** el visor público comprobaba `photos.length === 0` **antes** que `faceSearch.matches !== null`, y la cuadrícula de un evento gated está vacía por diseño hasta que una recarga lleva la cookie de prueba — así que una búsqueda **con match** se respondía con el párrafo vacío, escondiendo justo las fotos que el visitante acababa de probar que eran suyas. Ahora ambos visores resuelven la ranura con `resolveEventGalleryView` (los resultados ganan a la vacuidad); el visor de talento ya se comportaba así, de modo que pasan a coincidir **por construcción, no por casualidad**. El panel muestra el **total del evento en los tres estados** —es lo que hace que merezca la pena buscar, o volver— y ambas cabeceras sueltan su propia línea de conteo mientras se pinta, para no imprimir la misma frase dos veces en la pantalla que el ticket viene a arreglar. ⚠️ **El gate no se afloja:** presentación pura, nada derivado de fotos concretas (ni miniaturas, ni IDs, ni conteos por foto); el total ya se mostraba junto a la cabecera en eventos gated y es el único dato reutilizado. Copy: `aiSearch.gatedNotice` → **`aiSearch.gatedPanel`** en ambos diccionarios con cinco claves nuevas, y `events.galleryGatedEmpty` ya no manda «arriba»/«above». Verde: typecheck + lint + **build** + **281 archivos / 2074 tests** — PR #293
 

@@ -113,7 +113,7 @@ export function EventPricingSection({
             </div>
           ) : null}
         </dl>
-        <p className="mt-3 text-xs text-muted-foreground">{labels.ladderHint}</p>
+        <p className="mt-2 text-xs text-muted-foreground">{labels.ladderHint}</p>
       </CardContent>
     </Card>
   );

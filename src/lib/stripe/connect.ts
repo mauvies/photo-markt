@@ -142,6 +142,96 @@ export async function createAccountLink(params: {
   return link.url;
 }
 
+/**
+ * A single-use link into the photographer's own Stripe Express dashboard.
+ *
+ * This is the only way they can reach it: an Express account has no password and
+ * no login page of its own — Stripe expects the platform to mint this link. Until
+ * now nothing did, so a photographer could see a balance in our UI and had no way
+ * to check when it reaches their bank, change their payout schedule, or see the
+ * transfers behind the number.
+ *
+ * ⚠️ The link authenticates the bearer into that account, so the caller MUST have
+ * resolved `accountId` from the authenticated user's own profile — never from
+ * anything the client sent. Expires in a few minutes and cannot be reused, so it
+ * must be minted per click and never stored or logged.
+ *
+ * Throws for an account that has not finished onboarding (Stripe refuses a login
+ * link before then), which is why callers gate on an `active` status.
+ */
+export async function createExpressLoginLink(accountId: string): Promise<string> {
+  const link = await stripe.accounts.createLoginLink(accountId);
+  return link.url;
+}
+
+/** When a photographer's money becomes theirs, straight from Stripe. */
+export interface PayoutOutlook {
+  availableCents: number;
+  pendingCents: number;
+  /**
+   * When the earliest pending money turns available, as an ISO date.
+   *
+   * ⚠️ **Read from Stripe's `available_on`, never computed from `delay_days`.**
+   * The two disagree: an account on `delay_days: 7` had its transfer land with
+   * `available_on` three days out, because the delay is one input to Stripe's
+   * risk model rather than the formula. Deriving the date ourselves would put a
+   * confident wrong answer on the screen — the same mistake as the "every
+   * Monday" copy, only harder to spot because it looks calculated.
+   */
+  nextAvailableOn: string | null;
+  /** A payout already on its way to the bank, if Stripe has scheduled one. */
+  nextPayout: { amountCents: number; arrivalDate: string; status: string } | null;
+}
+
+/**
+ * The balance plus the dates behind it (T-246).
+ *
+ * Two sources, because neither answers alone: a payout only exists once funds
+ * are *available*, so in the ordinary case right after a sale there is none —
+ * and the only thing that can say "when" is the pending balance transaction's
+ * own `available_on`.
+ *
+ * Every field is Stripe's own; nothing here is derived. A failure returns the
+ * balance with null dates rather than a guess, so the UI can go quiet instead of
+ * promising a day.
+ */
+export async function retrievePayoutOutlook(accountId: string): Promise<PayoutOutlook> {
+  const opts = { stripeAccount: accountId };
+
+  const [balance, payouts, transactions] = await Promise.all([
+    stripe.balance.retrieve(undefined, opts),
+    stripe.payouts.list({ limit: 1 }, opts).catch(() => null),
+    stripe.balanceTransactions.list({ limit: 100 }, opts).catch(() => null),
+  ]);
+
+  const sum = (entries: Array<{ amount: number }>) =>
+    entries.reduce((total, entry) => total + entry.amount, 0);
+
+  // The soonest date any pending money becomes available — that is the one the
+  // photographer is waiting on.
+  const pendingDates = (transactions?.data ?? [])
+    .filter((tx) => tx.status === 'pending')
+    .map((tx) => tx.available_on)
+    .sort((a, b) => a - b);
+
+  const payout = payouts?.data?.[0] ?? null;
+  // Only a payout still in flight is news; a paid one is history.
+  const inFlight = payout && (payout.status === 'pending' || payout.status === 'in_transit');
+
+  return {
+    availableCents: sum(balance.available),
+    pendingCents: sum(balance.pending),
+    nextAvailableOn: pendingDates[0] ? new Date(pendingDates[0] * 1000).toISOString() : null,
+    nextPayout: inFlight
+      ? {
+          amountCents: payout.amount,
+          arrivalDate: new Date(payout.arrival_date * 1000).toISOString(),
+          status: payout.status,
+        }
+      : null,
+  };
+}
+
 export async function retrieveConnectBalance(accountId: string): Promise<{
   available: number;
   pending: number;

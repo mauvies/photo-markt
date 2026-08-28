@@ -6,7 +6,7 @@ import {
   getPhotoPreviewUrls,
   getPurchasablePhotoIds,
 } from '@/database/queries/photos';
-import { getPhotographerConnectStatuses, getProfilesByIds } from '@/database/queries/profiles';
+import { getProfilesByIds } from '@/database/queries/profiles';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { type BundleTier, eventSupportsBundles, parseBundleTiers } from '@/lib/bundle-pricing';
 import { priceCartWithBundles } from '@/lib/cart-bundle-pricing';
@@ -246,13 +246,14 @@ export async function createGuestCheckoutSessionAction(
     };
   });
 
-  // Block checkout if any photographer has not connected their Stripe account
-  const photographerIds = [...new Set(validatedItems.map((i) => i.photographerId))];
-  const connectStatuses = await getPhotographerConnectStatuses(supabaseAdmin, photographerIds);
-  const notConnected = connectStatuses.filter((p) => p.stripe_connect_status !== 'active');
-  if (notConnected.length > 0) {
-    return { ok: false, error: 'photographer_not_connected' };
-  }
+  // No Connect gate here, deliberately. Selling and being able to receive the
+  // money are separate readiness states: the webhook reconciles the live status
+  // per photographer and, when it isn't `active`, records their net as a
+  // `connect_inactive` hold that `retry-pending-payouts` drains the moment
+  // `account.updated` reports the account active. Refusing the sale instead made
+  // a priced event unbuyable — the buyer got a dead-end toast and the
+  // photographer no signal at all. It also read the *cached* status, so a
+  // `pending` left by a lagged webhook blocked a working account's sales.
 
   // T-204: price the server-validated set through the shared bundle kernel —
   // the same call the cart page made to display the total.

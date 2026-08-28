@@ -83,7 +83,7 @@ export function GatedSearchPanel({
   const showCount = typeof photoCount === 'number' && photoCount > 0;
 
   return (
-    <div className="flex min-h-[22rem] flex-col items-center justify-center rounded-xl border bg-card px-6 py-12 text-center sm:px-10 sm:py-16">
+    <div className="flex min-h-[22rem] flex-col items-center justify-center rounded-xl border bg-card px-6 py-10 text-center sm:px-8">
       <span
         className="mb-5 flex size-14 items-center justify-center rounded-full bg-muted"
         aria-hidden
@@ -111,7 +111,7 @@ export function GatedSearchPanel({
 
       {isSearchable && onSearch ? (
         <>
-          <div className="my-7 h-px w-full max-w-xs bg-border" />
+          <div className="my-4 h-px w-full max-w-xs bg-border" />
           <Button size="lg" onClick={onSearch}>
             <ScanFace className="mr-2 size-4" aria-hidden />
             {labels.searchCta}

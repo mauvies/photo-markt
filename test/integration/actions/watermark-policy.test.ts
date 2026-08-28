@@ -118,7 +118,6 @@ describe('createEvent — watermark rule', () => {
       buildEventFormData({
         event_type: 'organizer',
         watermark_enabled: 'true',
-        organizer_fee_per_photo: '1.00',
       }),
     );
 
@@ -148,7 +147,6 @@ describe('updateEventAction — watermark rule', () => {
       buildEventFormData({
         event_type: 'organizer',
         watermark_enabled: 'true',
-        organizer_fee_per_photo: '1.00',
       }),
     );
     expect((await readEvent(created.eventId)).watermark_enabled).toBe(true);
@@ -168,7 +166,6 @@ describe('updateEventAction — watermark rule', () => {
       buildEventFormData({
         event_type: 'organizer',
         watermark_enabled: 'true',
-        organizer_fee_per_photo: '1.00',
       }),
     );
 

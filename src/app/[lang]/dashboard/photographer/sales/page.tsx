@@ -24,7 +24,7 @@ export default async function SalesEarningsPage({
   const initialTab = parseTab(tab);
 
   return (
-    <div className="flex flex-1 flex-col gap-4 sm:gap-6">
+    <div className="flex flex-1 flex-col gap-3">
       <div>
         <DashboardHeader title={dict.photographerDashboard.revenueTitle} />
         <p className="text-sm text-muted-foreground">
@@ -36,12 +36,12 @@ export default async function SalesEarningsPage({
           <TabsTrigger value="sales">{dict.photographerDashboard.tabSales}</TabsTrigger>
           <TabsTrigger value="earnings">{dict.photographerDashboard.tabEarnings}</TabsTrigger>
         </TabsList>
-        <TabsContent value="sales" className="mt-6">
+        <TabsContent value="sales" className="mt-4">
           <TranslationsProvider translations={dict.photographerDashboard}>
             <SalesContent lang={lang} />
           </TranslationsProvider>
         </TabsContent>
-        <TabsContent value="earnings" className="mt-6">
+        <TabsContent value="earnings" className="mt-4">
           <TranslationsProvider translations={dict.earnings}>
             <EarningsContent />
           </TranslationsProvider>

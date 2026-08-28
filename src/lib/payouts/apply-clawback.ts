@@ -10,7 +10,6 @@ import {
 } from '@/database/queries/payouts';
 import { getPhotographerConnectStatuses } from '@/database/queries/profiles';
 import type { SupabaseServerClient } from '@/database/queries/types';
-import { sendClawbackAlertEmail } from '@/lib/email/send-clawback-alert';
 import { reportMoneyIncident } from '@/lib/observability/report-money-incident';
 import { payoutTransferGroup } from '@/lib/payouts/batching';
 import {
@@ -78,7 +77,13 @@ export interface ClawbackDeps {
 
 const defaultDeps: ClawbackDeps = { createTransferReversal, findTransferByGroup };
 
-/** Report + email, both best-effort. Never rejects. */
+/**
+ * Thin alias so call sites read as "alert", not "report" — `reportMoneyIncident`
+ * (console + Sentry + a throttled `MONEY_ALERT_EMAIL` email, T-249) is the ONE
+ * channel. A second, untamed email here would duplicate every incident and skip
+ * the 60s-per-kind throttle that exists precisely to stop an outage from
+ * flooding the inbox.
+ */
 async function alert(
   kind: Parameters<typeof reportMoneyIncident>[0]['kind'],
   message: string,
@@ -86,11 +91,6 @@ async function alert(
   cause?: unknown,
 ): Promise<void> {
   await reportMoneyIncident({ kind, message, context, cause });
-  try {
-    await sendClawbackAlertEmail({ kind, summary: message, details: context });
-  } catch (err) {
-    console.error('[money] failed to send clawback alert email', err);
-  }
 }
 
 /**

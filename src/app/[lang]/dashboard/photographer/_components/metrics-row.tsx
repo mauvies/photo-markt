@@ -14,17 +14,29 @@ function formatCurrency(cents: number): string {
 
 interface MetricsRowProps {
   metrics: DashboardData['metrics'];
+  /**
+   * All-time counts (T-251). Every card in this row is a **current-month**
+   * figure, which read as "you have nothing" to a photographer whose only event
+   * and its 35 photos were created last month. The totals were already computed
+   * on every render of this page and used for nothing but the `isBrandNew`
+   * flag; showing them next to the month count is what makes the two
+   * distinguishable at a glance.
+   */
+  totals: DashboardData['totals'];
   t: {
     earningsThisMonth: string;
     salesThisMonth: string;
     photosUploadedThisMonth: string;
     eventsCreatedThisMonth: string;
     vsLastMonth: string;
+    /** Template with `{count}` — the all-time figure under a monthly one. */
+    allTimeTotal: string;
   };
 }
 
-export function MetricsRow({ metrics, t }: MetricsRowProps) {
+export function MetricsRow({ metrics, totals, t }: MetricsRowProps) {
   const iconClass = 'h-4 w-4 sm:h-6 sm:w-6 text-primary';
+  const allTimeTotal = (count: number) => t.allTimeTotal.replace('{count}', count.toLocaleString());
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
@@ -51,6 +63,7 @@ export function MetricsRow({ metrics, t }: MetricsRowProps) {
       <StatCard
         label={t.photosUploadedThisMonth}
         value={metrics.photosUploaded.toLocaleString()}
+        sublabel={allTimeTotal(totals.totalPhotos)}
         icon={<ImageIcon className={iconClass} aria-hidden />}
         trend={
           metrics.trend.photosPct !== null
@@ -61,6 +74,7 @@ export function MetricsRow({ metrics, t }: MetricsRowProps) {
       <StatCard
         label={t.eventsCreatedThisMonth}
         value={metrics.eventsCreated.toLocaleString()}
+        sublabel={allTimeTotal(totals.totalEvents)}
         icon={<Calendar className={iconClass} aria-hidden />}
         trend={
           metrics.trend.eventsPct !== null

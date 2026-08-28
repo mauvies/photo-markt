@@ -1,12 +1,12 @@
 # T-219 · Podar el esquema muerto
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Riesgo:** alto  (BD/migraciones)
 - **Blockers:** ninguno
 - **Rama:** `refactor/prune-dead-schema`  (tipo = refactor)
 - **OpenSpec change:** **sí** — varias tablas y columnas; conviene registrar qué se borra y por qué
-- **PR:** —
+- **PR:** #313
 
 ## Requerimiento
 
@@ -31,13 +31,13 @@ afirme que la columna no existe confirma que la deriva está en marcha.
 
 ## Criterio de aceptación (Definition of Done)
 
-- [ ] Migración que elimina tablas y columnas muertas, con comentario que enlace este ticket
-- [ ] `payment-accounts.ts` borrado y sacado de `index.ts`; `createPayout` deja de aceptar `paymentAccountId`
-- [ ] `profiles.is_admin` eliminada, o —si se conserva— documentada y con un test que impida usarla para autorizar
-- [ ] Decisión explícita sobre `organizer_fee_per_photo_cents`: implementar el reparto o dejar de escribir la columna
-- [ ] `CLAUDE.md` y `ARCHITECTURE.md` actualizados en el mismo PR
-- [ ] Test estilo `dead-billing-routes-removed.test.ts` que impida reintroducir los módulos
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] Migración que elimina tablas y columnas muertas, con comentario que enlace este ticket
+- [x] `payment-accounts.ts` borrado y sacado de `index.ts`; `createPayout` deja de aceptar `paymentAccountId`
+- [x] `profiles.is_admin` eliminada, o —si se conserva— documentada y con un test que impida usarla para autorizar
+- [x] Decisión explícita sobre `organizer_fee_per_photo_cents`: implementar el reparto o dejar de escribir la columna
+- [x] `CLAUDE.md` y `ARCHITECTURE.md` actualizados en el mismo PR
+- [x] Test estilo `dead-billing-routes-removed.test.ts` que impida reintroducir los módulos
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
 

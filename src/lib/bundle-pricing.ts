@@ -641,9 +641,9 @@ export function getEffectivePerPhotoCents(tier: BundleTier): number {
  * Organizer events are excluded: an accepted contributor's uploads carry that
  * contributor's `photos.user_id`, so one event can span several sellers, and a
  * discount set by the organizer would cut another photographer's revenue
- * without their consent. There is also nothing to split it against —
- * `organizer_fee_per_photo_cents` is written at event creation and read by no
- * money path, so organizer revenue sharing does not exist yet.
+ * without their consent. There is also nothing to split it against — organizer
+ * revenue sharing does not exist (T-219 removed the fee field that pretended
+ * otherwise), so a discount has no agreed way to be apportioned.
  *
  * Free events are exempt for the same reason the price floor exempts them:
  * there is nothing to discount.

@@ -73,7 +73,7 @@ flowchart TB
   subgraph AppRouter["Next.js App Router"]
     RSC["React Server Components<br/>page.tsx · layout.tsx"]
     Actions["Server Actions<br/>'use server' files"]
-    ApiRoutes["API Routes<br/>src/app/api/* (Stripe webhook, watermark, admin)"]
+    ApiRoutes["API Routes<br/>src/app/api/* (Stripe webhook, Inngest, watermark)"]
   end
 
   Queries["src/database/queries/*<br/>Domain query layer (events, photos, carts, ...)"]
@@ -105,11 +105,15 @@ flowchart TB
 Conventions enforced by this layout (see `CLAUDE.md`):
 
 - **All mutations go through Server Actions**, not API routes. API routes are
-  reserved for things that must be addressable HTTP endpoints (Stripe
-  webhook, watermark CDN-style URL, admin endpoints).
+  reserved for things that must be addressable HTTP endpoints (Stripe webhook,
+  Inngest worker, watermark CDN-style URL, downloads, health). ⚠️ **There are no
+  admin API routes** — the last one was deleted in T-220; an admin-only surface
+  is a Server Component page gated on `admin_users`
+  (`[lang]/dashboard/admin/status/page.tsx`).
 - **Service role is used only when RLS would block a legitimate operation**
-  (Stripe webhook writes, admin endpoints, watermark API, Inngest face-index writes).
-  Every other path uses the user-scoped client so RLS catches mistakes.
+  (Stripe webhook writes, the admin-gated page, watermark API, Inngest
+  face-index writes). Every other path uses the user-scoped client so RLS
+  catches mistakes.
 
 ### 2.1 Database code layout — two deliberate layers
 
@@ -146,11 +150,11 @@ reads/writes from the app → `src/database/queries/`.
 
 The schema separates clearly into three concerns: identity (`profiles`,
 `admin_users`, `subscriptions`), commerce (`carts → orders → payouts`), and
-AI face matching (`ai_search_profiles`, `photo_faces`). All `*_id` FKs to "users" are
+AI face matching (`photo_faces`). All `*_id` FKs to "users" are
 to Supabase's built-in `auth.users` table (shown collapsed onto `profiles`
 since `profiles.id` is a 1:1 FK to it). Auxiliary tables like
 `talent_photo_tags`, `rate_limit_buckets`, `download_tokens`, `guest_orders`,
-`event_photographers`, `time_sync_tokens`, `user_roles`, `feedback`, and
+`event_photographers`, `user_roles`, `feedback`, and
 `pending_guest_checkouts` exist in the migrations but are omitted here to
 keep the diagram readable — they're described in prose below.
 
@@ -333,31 +337,32 @@ erDiagram
   (`aws_face_id`, `aws_collection_id`, `confidence`, `bounding_box`). Unique on
   `(photo_id, aws_face_id)`. Talent selfie search maps Rekognition face IDs back
   to photos through this table (`src/database/queries/rekognition.ts`).
-- `ai_search_usage` — monthly per-user search counter, unique on
-  `(user_id, period_year, period_month)`. Part of the legacy AI schema and no
-  longer queried from application code; the live per-search/monthly quotas are
-  enforced via `src/lib/rate-limit.ts` + `src/lib/ai/rate-limits.ts`.
 - `download_tokens` — opaque tokens minted on purchase that let guests
   download their photos via `/[lang]/download/[token]` without auth.
 - `guest_orders` / `guest_order_items` / `pending_guest_checkouts` — mirror
   of the authenticated order flow for unauthenticated buyers.
 - `event_photographers` — invitations to additional photographers for
   collaborative "organizer" events.
-- `time_sync_tokens` — backs the camera-time-sync feature.
 - `user_roles` / `user_role_memberships` — set of roles a user may switch
   between (vs `profiles.active_role` which is the *currently selected* role).
 - `feedback` — user-submitted product feedback.
 
-**Legacy AI schema (vestigial):** the original pgvector matching path —
+**Legacy AI schema — gone.** The original pgvector matching path was removed in
+two passes. `20260518000000_drop_legacy_ai_schema.sql` dropped
 `photo_embeddings`, `ai_search_profiles.selfie_embedding`,
-`photos.photo_hash` / `color_signature`, and the
-`search_photos_by_similarity()` RPC — was dropped in migration
-`20260518000000_drop_legacy_ai_schema.sql` and is no longer referenced from
-code. Any remnants that still physically exist (e.g. the `photo_embeddings`
-table or `ai_search_usage` RPCs flagged in `docs/AI_MATCHING_AUDIT.md` for
-permissive `using (true)` policies and un-revoked `SECURITY DEFINER` EXECUTE)
-should be dropped or locked down — they are not part of the live Rekognition
-flow.
+`photos.photo_hash` / `color_signature` and the `search_photos_by_similarity()`
+RPC; `20260820000000_prune_dead_schema.sql` (T-219) finished the job, dropping
+`ai_search_profiles`, `ai_search_usage`, the orphaned
+`set_photo_embeddings_updated_at()` trigger function and the `vector` extension
+itself. The same migration removed the other unfinished features'
+leftovers — `payment_accounts` (superseded by Stripe Connect),
+`time_sync_tokens`, `upload_batches`, `upload_objects`, `profiles.is_admin`
+(authorization is `admin_users`) and the ghost `events` columns
+`start_date` / `end_date` / `time_offset` / `time_sync_enabled` /
+`organizer_fee_per_photo_cents`. Live face matching is AWS Rekognition, which
+stores its embeddings in AWS; the DB keeps only the returned `aws_face_id` per
+photo in `photo_faces`. `test/unit/database/dead-schema-pruned.test.ts` keeps
+any of it from returning.
 
 ---
 
@@ -369,8 +374,16 @@ The cart lives in Postgres for authenticated users. Checkout creates a Stripe
 Checkout Session; the order is **only** written to the DB after Stripe
 confirms via webhook, so abandoned checkouts produce no order rows. The
 `checkout.session.completed` event writes the order and clears the cart; the
-subsequent `payment_intent.succeeded` flips the status to `completed` *and*
-creates the per-photographer Connect transfers in the same handler.
+subsequent `payment_intent.succeeded` flips the status to `completed`. **Both
+events then drive the per-photographer Connect transfers for authenticated
+orders** through the shared `drivePayoutsForOrder` (T-252) — Stripe does not
+guarantee delivery order, and when only the payment event transferred, a delivery
+that arrived first found no order yet and nobody ever paid. Whichever arrives
+first pays; the second no-ops on `openPayoutRow`'s unique index rather than
+paying twice. A *redelivery* of a session whose order already exists stops
+before the drive: that index is partial on `stripe_charge_id is not null`, so
+pre-T-216 rows are outside it and re-driving an old session would pay twice.
+The guest flow (`checkout.session.completed` only) still has a single driver.
 
 ```mermaid
 sequenceDiagram
@@ -391,8 +404,11 @@ sequenceDiagram
   S->>App: webhook: checkout.session.completed
   App->>SB: createOrder(status='completed') + addOrderItems (service role)
   App->>SB: clearCart(cart_id)
+  App->>S: paymentIntents.retrieve (latest_charge)
+  App->>SB: drivePayoutsForOrder → transfers (T-252)
 
   S->>App: webhook: payment_intent.succeeded
+  Note over App,SB: same drive; openPayoutRow returns null if already paid
   App->>SB: SELECT order_items by order_id
   loop For each (photographer, total_price)
     App->>S: stripe.transfers.create(amount, destination=connect_account, idempotency_key)
@@ -443,12 +459,46 @@ sequenceDiagram
 ### 4.3 Photographer payout (via Stripe Connect transfer)
 
 **Correction to CLAUDE.md:** there is no weekly payout cron. Transfers fire
-**synchronously** with `payment_intent.succeeded` in the Stripe webhook,
-one per (order_item, photographer) pair. Since **T-216** there *is* a retry
+**synchronously** in the Stripe webhook, one per (order_item, photographer)
+pair, from whichever of `checkout.session.completed` / `payment_intent.succeeded`
+arrives first (T-252). Since **T-216** there *is* a retry
 cron (`retry-pending-payouts`, `10,40 * * * *`), but it only drains money the
 synchronous path could not send — a recovery path, not the normal one.
-`/api/admin/payouts/[id]` still exists and now refuses ledger-managed rows;
-whether it survives at all is T-220's call.
+**There is no administrative payout endpoint** (T-220 deleted it). Payout rows
+are written by three service-role paths and no other: the webhook's transfer
+path, the retry worker, and `voidHoldsForCharge` on `charge.refunded` — the last
+being the one that *does* cancel holds, which is why "who can cancel a hold?"
+must not be answered from the first two alone.
+
+The endpoint it replaced could set any status on any row, and the reason that
+mattered is narrower than "it was unused": **a status change is not a transfer**
+— it wrote a column and called no Stripe API, so its one distinctive power was
+making the ledger claim a payment that never happened, in a system where the
+`payouts` rows are the authority an operator reconciles Stripe against (T-249).
+The actions an admin UI would have offered are either already automated
+(recoverable holds drain via the retry worker; `charge.refunded` voids them) or
+harmful (cancelling a hold by hand makes it permanently unpayable, because
+`payouts_charge_photographer_key` then blocks a replacement row).
+
+⚠️ **"Holds drain automatically" is not universal, and the deleted endpoint was
+never the answer for the exceptions.** A row stranded `processing` with no
+`transfer_batch_id` matches neither recovery selector, and a lone sub-50¢ hold
+simply accumulates until more sales join it. Surfacing those is **T-254**. The
+endpoint could not have touched either, since it refused every row carrying a
+`stripe_charge_id`. Its only reachable targets were pre-T-216 rows with a null
+charge id — **of which production currently has none** (T-236 was closed in
+August 2026 with nothing to sweep); should one ever appear, it is corrected
+through direct DB access, the same tool this project already prescribes for
+seeding admins.
+
+⚠️ **Since T-248 the checkout no longer filters on Connect status**, so
+`connect_inactive` is the ORDINARY way a hold is born rather than a near-
+impossible edge case: a photographer can sell before finishing onboarding and
+the ledger holds their net until `account.updated` reports the account active.
+That reclassifies the retry worker too — for this reason it is the *completion*
+of a normal sale, not only a recovery path. The checkouts previously returned
+`photographer_not_connected`; that code was deleted rather than left unused, so
+the refusal cannot be reinstated by accident.
 
 **The payout row is created BEFORE the Stripe call, and its id IS the
 idempotency key** (`payout_<row.id>`), used identically by the webhook and the

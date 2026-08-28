@@ -269,14 +269,18 @@ describe('GuestCartContent — typed checkout failure (T-189 / T-117)', () => {
     await waitFor(() => expect(loadGuestCartStateAction).toHaveBeenCalled());
   });
 
-  it('shows the localized reason and does NOT re-validate on photographer_not_connected', async () => {
+  // Was `photographer_not_connected` until that code was retired — an unpayable
+  // photographer no longer blocks the sale, the money is held instead. The
+  // property under test is unchanged: an error that left the cart valid must not
+  // trigger a re-validation round-trip.
+  it('shows the localized reason and does NOT re-validate on rate_limited', async () => {
     loadGuestCartStateAction.mockResolvedValue({
       removedPhotoIds: [],
       previews: { 'photo-1': LIVE_PREVIEW_URL },
     });
     createGuestCheckoutSessionAction.mockResolvedValue({
       ok: false,
-      error: 'photographer_not_connected',
+      error: 'rate_limited',
     });
 
     renderCart();
@@ -286,9 +290,7 @@ describe('GuestCartContent — typed checkout failure (T-189 / T-117)', () => {
     tickWithdrawalConsent();
     fireEvent.click(screen.getAllByText('proceedToCheckout')[0]);
 
-    await waitFor(() =>
-      expect(toastMock.error).toHaveBeenCalledWith('checkoutPhotographerNotConnected'),
-    );
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('checkoutRateLimited'));
     // The cart is still valid → no needless re-validation round-trip.
     expect(loadGuestCartStateAction).not.toHaveBeenCalled();
   });

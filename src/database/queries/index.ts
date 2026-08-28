@@ -25,8 +25,6 @@ export * from './feedback';
 export * from './guest-orders';
 // Re-export order queries
 export * from './orders';
-// Re-export payment account queries
-export * from './payment-accounts';
 // Re-export payout queries
 export * from './payouts';
 // Re-export photographer queries

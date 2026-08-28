@@ -98,7 +98,6 @@ src/app/
     thumb/[...path]     # Baked thumbnail serving
     events/[id]/download # Purchased-photo ZIP
     inngest/            # Background-job worker — every function registered here
-    admin/payouts/[id]  # Vestigial manual payout approval
     health/             # + health/ready (token-gated)
 ```
 
@@ -137,7 +136,12 @@ user why anything failed. Codes and their copy: `src/lib/role-action-error.ts`.
 
 **Server Actions for mutations**
 All data mutations use `"use server"` actions in `actions.ts` files colocated next to their page components. Do not create new API routes for mutations — use server actions instead.
-**Exception:** `api/admin/payouts/[id]` (admin, no page). There is **no `api/billing/*`** — the
+**No exceptions remain:** the last one, `api/admin/payouts/[id]`, was deleted in T-220. What is left
+under `src/app/api/` are routes that must be addressable HTTP endpoints for reasons other than being
+a mutation — the Stripe webhook and the Inngest worker (both of which write heavily, but are called
+by a third party, not by our UI), image serving, downloads and health. ⚠️ "Not a user-facing
+mutation" ≠ "read-only": the webhook creates orders and payouts and moves money, and the Inngest
+route dispatches `retry-pending-payouts`. There is **no `api/billing/*`** — the
 pre-Server-Actions `checkout`/`cancel` routes were deleted in T-202 (zero callers, but live `POST`
 endpoints any authed user could hit to create a Stripe customer + `subscriptions` row through a flow
 that had drifted from the action replacing it). Live billing is
@@ -177,7 +181,6 @@ src/database/queries/
   talent-photo-tags.ts # Talent "this is me" tags
   saved-events.ts     # Talent saved events
   subscriptions.ts    # Stripe subscription data
-  payment-accounts.ts # LEGACY — superseded by Stripe Connect
   payouts.ts          # Payout requests
   storage.ts          # Supabase Storage helpers
   rekognition.ts      # photo_faces read/write
@@ -213,17 +216,18 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
 ### Key Tables
 
 **events**
-`id, user_id, name, date, session_time, session_end_time, city, country, state, activity, is_public, share_code, slug, price_per_photo, bundle_tiers, bundle_all_photos_cents, watermark_enabled, reveal_gate_enabled, cover_path, is_collaborative, allow_guest_upload, require_upload_approval, type, organizer_fee_per_photo_cents, ai_matching_enabled, contains_minors, ai_matching_status, bib_detection_enabled, bib_detection_status, lat, lng, deleted_at, created_at, updated_at`
+`id, user_id, name, date, session_time, session_end_time, city, country, state, activity, is_public, share_code, slug, price_per_photo, bundle_tiers, bundle_all_photos_cents, watermark_enabled, reveal_gate_enabled, cover_path, is_collaborative, allow_guest_upload, require_upload_approval, type, ai_matching_enabled, contains_minors, ai_matching_status, bib_detection_enabled, bib_detection_status, lat, lng, deleted_at, created_at, updated_at`
 (canonical shape: the `Event` interface, `src/database/queries/events.ts:8`)
 - Soft delete via `deleted_at`
 - ⚠️ **`state` is the geographic region** (it pairs with `city`/`country`), NOT a status column.
   `upcoming`/`completed` is **derived from `date`** by `getEventStatus()` (`src/lib/event-status.ts:3`) — nothing is stored
-- `start_date`, `end_date`, `time_offset`, `time_sync_enabled` exist in the DB but are **dead
-  columns** — no application code reads or writes them (camera time-sync is off)
 - `type` (`solo`/`collaborative`/`organizer`) + `require_upload_approval` decide whether uploads
   route through a Pending queue — one predicate, `eventUsesModerationQueue` (`src/lib/event-status.ts`).
-  `organizer_fee_per_photo_cents` is written but read by **no** money path
-- `session_time` (nullable `time`) is a **separate** concept — the manual session start time the photographer types, for display only; naive local time-of-day, not tied to `time_offset`/`time_sync_enabled` (T-106). `session_end_time` (nullable `time`, T-180) is its mirror — the manual session end; when both are set the UI shows a range ("09:30 – 12:00") via `formatSessionTimeRange`. App-level rule: an end requires a start and must be after it (`isValidSessionRange`); the column carries no constraint
+  An organizer event carries **no price of its own** (`price_per_photo` is stored `null`); each
+  contributor sells their own photos. ⚠️ There is **no organizer revenue split** — T-219 dropped the
+  `organizer_fee_per_photo_cents` column *and* the wizard field that wrote it, because the field's own
+  copy promised organizers a cut of every contributor sale and no money path ever applied one
+- `session_time` (nullable `time`) is a **separate** concept — the manual session start time the photographer types, for display only; naive local time-of-day, unrelated to any camera time-sync (T-106; the `time_offset` / `time_sync_enabled` columns that idea left behind were dropped in T-219). `session_end_time` (nullable `time`, T-180) is its mirror — the manual session end; when both are set the UI shows a range ("09:30 – 12:00") via `formatSessionTimeRange`. App-level rule: an end requires a start and must be after it (`isValidSessionRange`); the column carries no constraint
 - `share_code` allows access to private events
 - **`bundle_tiers` (nullable `jsonb`, T-203) — volume pricing.** An optional **ladder** of rungs
   `[{minQuantity, totalPriceCents}]`, ascending; null = no bundle. **A bundle is a PRICE, not a PRODUCT:** the
@@ -254,8 +258,9 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
   it**: `buildEventUpdateFormData(parsed, { includeBundlePricing })` omits the field otherwise, so the scoped
   `info`/`settings` sections and the full `/edit` form stay silent. That is what stopped an unrelated save from
   wiping the ladder AND stopped lowering a price from throwing `total_not_a_discount` about a field the section
-  cannot show. Excluded from **organizer** events (several possible sellers, and `organizer_fee_per_photo_cents`
-  is written but read by no money path, so there is no revenue split to charge a discount against) and from free
+  cannot show. Excluded from **organizer** events (several possible sellers, and organizer revenue sharing
+  does not exist — T-219 dropped the fee column that pretended otherwise — so there is no agreed split to
+  charge a discount against) and from free
   events — but an ineligible event **KEEPS its stored ladder** (T-212; it simply cannot apply, and restoring a
   price restores the packs). Write paths gate on **`eventAcceptsBundleConfig`**, never `eventSupportsBundles`:
   the latter folds in the kill switch, so flipping `BUNDLE_PRICING_ENABLED` for a rollback made the next save of
@@ -354,18 +359,37 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
 `orders: id, user_id, cart_id, stripe_payment_intent_id, stripe_checkout_session_id, status, total_amount_cents`
 - Status: `pending`, `completed`, `failed`, `refunded`
 
-**payment_accounts** (legacy — unused)
-`id, photographer_id, type, account_details, is_default, is_verified`
-- Vestigial table from an earlier payout design. **Superseded by Stripe Connect**, whose account id + status live on `profiles.stripe_connect_account_id` / `profiles.stripe_connect_status` (migration `20260501000000_add_stripe_connect.sql`). No code under `src/app` or `src/components` references this table — do not build on it
+**payment_accounts** — ⚠️ **DROPPED (T-219).** An earlier payout design that stored photographer
+bank/PayPal details in a `jsonb` column with zero readers — held data, no product. Superseded by
+Stripe Connect, whose account id + status live on `profiles.stripe_connect_account_id` /
+`profiles.stripe_connect_status` (migration `20260501000000_add_stripe_connect.sql`). The table, its
+query module and `payouts.payment_account_id` went in `20260820000000_prune_dead_schema.sql`;
+`test/unit/database/dead-schema-pruned.test.ts` keeps them from coming back.
 
 **payouts** — the ledger of money owed to photographers (T-216)
 `id, photographer_id, amount_cents, status, stripe_transfer_id, stripe_charge_id, currency, hold_reason, order_id, order_kind, transfer_batch_id, paid_at`
 - Transfers fire **per order**, synchronously in the Stripe webhook on `payment_intent.succeeded` (one per `(order_item, photographer)`). Since T-216 a **retry cron** (`retry-pending-payouts`, `10,40 * * * *`) drains what the synchronous path could not send — a recovery path, not the normal one.
 - ⚠️ **The row is created BEFORE the Stripe call and its id IS the idempotency key** (`payout_<row.id>`), used identically by the webhook and the retry worker. **And the parameters must match too** — Stripe compares the *whole request body* against the one stored under a key and 400s on divergence, so `transfer_group` comes from `payoutTransferGroup(row.id)` in **both** writers, never from the order id. That mismatch wedges every `transfer_failed` retry for 24h (looking exactly like a Stripe outage in the logs) and then double-pays once the key expires. That is what makes the partial unique index on **`(stripe_charge_id, photographer_id)`** *prevent* a second payment rather than merely record one. Reverse the order and you get the pre-T-216 bug back: the two writers had separate idempotency namespaces, so a redelivery past Stripe's 24h window paid twice and the swallowed `23505` erased the evidence. `UNIQUE(stripe_transfer_id)` is **gone** (one aggregated transfer settles N rows); the plain lookup index stays.
 - **Three exits used to lose money with a `console.warn`** — Connect not active, net < 50¢, `createTransfer` threw. Each now writes a `pending` row with `hold_reason` (`connect_inactive` / `below_minimum` / `transfer_failed`). `processing` = a Stripe call is in flight.
+- **A `connect_inactive` hold emails the photographer (T-250).** Every other warning about that
+  state is in-app (dashboard banner, event notice, Earnings alert) and its owner is by definition the
+  one who has not finished onboarding — the least likely to be looking at a dashboard. Only that hold
+  reason notifies: `below_minimum` and `transfer_failed` drain on their own and need nothing from
+  them. **Anti-spam rule: send only when the row just opened is the ONLY outstanding
+  `connect_inactive` hold** (`countOutstandingConnectInactiveHolds` === 1), so this sale *starts* a
+  streak — 40 sold photos are one email, not 40. It needs no new column and **self-resets**: once the
+  retry worker drains the streak, a later hold is worth telling them about again. DB-derived on
+  purpose — each delivery is its own serverless invocation, so an in-process flag would dedupe
+  nothing (two truly concurrent first sales could send twice; bounded and far better than the
+  reverse). The amount quoted is `getTotalPendingPayouts`, the same query behind the dashboard and
+  Earnings alerts, so the email and the screen it links to cannot disagree.
+  `notifyPhotographerOfHeldSale` (`src/lib/payouts/notify-held-sale.ts`) **never throws** and the
+  webhook additionally bounds it with `EMAIL_TIMEOUT_MS`. ⚠️ Do not merge it with
+  `reportMoneyIncident`: that alerts **us** about a failure, this tells the **photographer** about a
+  normal state — different recipient, different severity.
 - **Only sub-50¢ rows are batched.** Anything that clears the minimum alone transfers individually with `source_transaction`, which both guarantees funding and lets Stripe refuse an over-draw — a double-pay guard that never expires, unlike the 24h key. Batching is grouped `(photographer, currency)` and drops `source_transaction` (Stripe allows one source charge per transfer), so it draws on the *platform* balance; that's tolerable only because those amounts are tiny. Single calc point: `splitPayableRows` in **`src/lib/payouts/batching.ts`**.
 - ⚠️ **The retry worker only considers rows with BOTH `hold_reason` and `stripe_charge_id` set.** That is a security filter: `pending` predates T-216 and an RLS policy used to let photographers INSERT their own rows, which a paying worker would turn into theft.
-- **`payouts` is photographer-read / service-role-write.** The INSERT and pending→cancelled UPDATE policies were dropped in `20260807000000` for exactly that reason; `createPayout` is dead code. Pinned by `test/integration/security/payouts-rls.test.ts`.
+- **`payouts` is photographer-read / service-role-write.** The INSERT and pending→cancelled UPDATE policies were dropped in `20260807000000` for exactly that reason; `createPayout`, the dead self-insert helper, was deleted outright in T-220. Pinned by `test/integration/security/payouts-rls.test.ts`.
 - **Clawback (T-215, absorbing T-237) — `applyClawback` (`src/lib/payouts/apply-clawback.ts`) is
   the ONE path** used by both `charge.refunded` and a lost dispute, so the two can't drift the way
   T-216's two writers did. It unwinds **both** kinds of money: an outstanding hold is **reduced
@@ -378,9 +402,11 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
   amount)`, never `(transfer, charge)`:** that pair is constant across successive partial refunds,
   so the second one would reuse the first's key and Stripe would return the first reversal — the
   photographer silently keeping money the buyer got back. ⚠️ **Nothing on this path throws** — a 500
-  makes Stripe redeliver a *money* operation — so failures become alerts (`reportMoneyIncident` +
-  optional `OPS_ALERT_EMAIL`) and rows left for reconciliation. A `processing` row is **probed**
-  with `findTransferByGroup` before anything happens to it; `unknown` means do nothing
+  makes Stripe redeliver a *money* operation — so failures become alerts through the same
+  `reportMoneyIncident` (T-249) and rows left for reconciliation — there is no separate clawback
+  email channel; a second one would duplicate every incident and skip the T-249 throttle. A
+  `processing` row is **probed** with `findTransferByGroup` before anything happens to it; `unknown`
+  means do nothing
 - **`disputed` order status, and access revocation costs nothing.** `charge.dispute.created` /
   `.closed` were handled by **no case at all** before T-215: a lost chargeback pulled the money back,
   charged a ~€15 fee, and left the buyer with permanent download access. Opening a dispute flips
@@ -392,16 +418,125 @@ Controlled in `src/lib/feature-flags.ts`. `AI_MATCHING` is **enabled** — it po
   the photographer — they control neither the fraud nor the dispute); a won one un-voids exactly the
   holds it froze, scoped by `void_reason = 'dispute'` so a refund-voided hold stays voided. Restoring
   works because the exactly-once index constrains **INSERTs, not UPDATEs** — the row never went away.
-  `/api/admin/payouts/[id]` refuses ledger-managed rows; its future is T-220. See `ARCHITECTURE.md` §4.3
+  There is no admin endpoint that could race this (T-220 already deleted `/api/admin/payouts/[id]`).
+  See `ARCHITECTURE.md` §4.3
+- ⚠️ **The ledger's `try/catch` + `continue` is correct, and that is exactly why it must alert
+  (T-249).** A failure there must not throw — a 500 makes Stripe redeliver a payment we may already
+  have made — so the failure is invisible by construction unless something surfaces it. It already
+  cost a real sale: 2026-07-28, €0.99, `completed` with **zero `payouts` rows**, unnoticed for
+  thirteen days. Seven exits that can complete an order without paying now call
+  **`reportMoneyIncident`** (`src/lib/observability/report-money-incident.ts`) with
+  `kind: 'payout-not-recorded'` — three inside `createTransfersForOrderItems` and four *before* it,
+  which are the quieter ones because they never open a row at all:
+  - `openPayoutRow` throws — no debt, no transfer, no trace.
+  - `createTransfer` throws **and** `holdPayoutRow` throws too, which strands the row `processing`
+    with no `transfer_batch_id` — a state **neither** recovery selector picks up (`listPayableHolds`
+    needs `pending` + a `hold_reason`, `listStaleProcessingBatches` needs a batch id), so the debt is
+    real, recorded and permanently unpayable.
+  - ⚠️ **the `order_items` read errors** — this one used to discard its `error`, fall back to `[]`,
+    and no-op the transfer loop on the empty list, logging *nothing whatsoever*. It is the best
+    candidate for the 2026-07-28 incident, and the failure class is not hypothetical: T-239 was a
+    schema-cache error on this same table.
+  - the `order_items` read **succeeds but returns nothing** — a completed order with a non-zero
+    total and no items is money charged for photos nobody will be paid for.
+  - an order item names a photographer with **no resolvable `profiles` row**: the transfer loop
+    walks `connectStatuses` while the money lives in `totals`, so that share never reaches the loop.
+  - no `chargeId` on the payment intent (authenticated **and** guest), and the guest path's
+    catch-all — which is wider than the authenticated one, since it also wraps the PaymentIntent
+    retrieve, the Connect/plan lookups and the status reconcile. ⚠️ That alert must **never** claim
+    nothing was paid: `createTransfersForOrderItems` can throw part-way through a multi-photographer
+    cart *after* earlier photographers were transferred and settled, so an operator acting on
+    "nothing was paid" would pay them twice. It names the `payouts` rows as the authority instead.
 
-**ai_search_profiles** (legacy — unused)
-`id, user_id, activity_type, country, region, date_from, date_to`
-- ⚠️ **No code references this table anywhere in `src/`** — vestigial like `payment_accounts`; do not build on it. The old `selfie_embedding` column was dropped (migration `20260518000000_drop_legacy_ai_schema.sql`) — selfies are sent to AWS Rekognition per search and never stored. The live per-event gating fields (`ai_matching_enabled`, `contains_minors`, `rekognition_collection_id`, `rekognition_region`, `ai_matching_status`) are on **`events`**, not here
+  ⚠️ **BOTH payment events drive the transfers, and that is deliberate (T-252).** Stripe does not
+  guarantee event ordering. When only `payment_intent.succeeded` transferred, a delivery that beat
+  `checkout.session.completed` found no order (`getOrderByPaymentIntentId` → null), skipped the whole
+  block and returned 200 — and the authenticated `checkout.session.completed` then created a
+  `completed` order **without ever transferring**: buyer charged, photographer unpaid, zero `payouts`
+  rows, not one log line. The same shape as the 2026-07-28 incident, and one that T-249 by
+  construction could not catch, since it alerts the exits that *run*. Both handlers now call the
+  shared **`drivePayoutsForOrder`** (order items → `createTransfersForOrderItems`); whichever arrives
+  first pays, and the second no-ops because `openPayoutRow` reserves the row **before** the Stripe
+  call and hands every later writer a `null` on the `(stripe_charge_id, photographer_id)` unique index
+  (T-216). Re-driving is only safe because of that ordering — reverse it and this becomes a
+  double-pay.
+  - ⚠️ **Only the delivery that CREATES the order drives its payouts.** A redelivery whose order
+    already exists still stops at the already-exists guard, and re-driving there is **not** the free
+    win it looks like: the unique index is partial `where stripe_charge_id is not null`, and every
+    row written before T-216 has a null charge id (the old `createPayoutFromTransfer` stored none),
+    so resending an old session — routine here since the T-192 backlog — would open a fresh row
+    under a new idempotency key and **pay twice**. A refunded order would transfer too
+    (`charge.refunded` voids `pending` holds; it cannot un-send a transfer). An order that exists
+    without payouts is `payment_intent.succeeded`'s to recover. Pinned by the redelivery test in
+    `test/integration/api/stripe-webhook.test.ts`, which asserts the second delivery does not even
+    reach the Stripe read.
+  - **An authenticated session that is `unpaid` (delayed payment method) or `no_payment_required`
+    skips the drive** and waits for `payment_intent.succeeded`; any other/absent `payment_status`
+    falls through and *attempts* the transfer, because a premature attempt is refused by Stripe and
+    parked as a recoverable `transfer_failed` hold, while skipping it would be silence. ⚠️ The
+    **guest** branch has no such check and no second driver at all (`getOrderByPaymentIntentId`
+    reads `orders`, and there is no `getGuestOrderByPaymentIntentId`) — its own hole, not this one's.
+  - **Every incident raised inside the shared drive carries `source`.** A genuine failure now alerts
+    once per delivery, from two serverless invocations no per-process throttle can dedupe, so the
+    field is what lets an operator tell a duplicate from a second loss on the same order. For the
+    same reason neither of the drive's alerts may say "nothing was paid" any more: the sibling
+    handler may already have paid part of the order, and the `payouts` rows are the authority.
+  - **The buyer's confirmation email is bounded (5 s).** It now sits *before* the money moves, and
+    Stripe treats a slow response as a failed delivery — an unbounded Resend could push the
+    invocation past that timeout and strand the transfers, since the redelivery stops at the guard.
+  - ⚠️ **A `payment_intent.succeeded` with no order is reported NOWHERE, on purpose.** Subscriptions
+    (they carry an `invoice`) and guest payments (they live in `guest_orders`) legitimately have no
+    `orders` row, and the out-of-order case is now covered by the other handler — alerting on all
+    three would bury the signal the money incidents exist to carry.
+
+  The alert changes **nothing** about the flow: same `continue`, same 200. The reporter is
+  shared with the parked T-215/PR #290 branch (rescued from it rather than rewritten, so the two can't
+  diverge) and obeys two absolutes — it **never throws**, and it **never carries buyer PII** (ids and
+  amounts only; `sendDefaultPii: false` is set globally). Two channels: `console.error` + Sentry always
+  (fingerprinted on `kind`, so ids in the message don't shard the issue), plus an ops email when
+  `MONEY_ALERT_EMAIL` is set. Only the **email** is throttled (per-process 60 s, the `rate-limit.ts`
+  precedent) — Sentry groups by fingerprint, but email doesn't, and one DB outage fires the catch once
+  per photographer per order. That throttle is keyed **per `kind`** (a payout alert must not silence a
+  dispute alert — different incidents, not duplicates) and is **released when the send fails**, so a
+  transient Resend error can't suppress the retry. The send is also bounded by a 5 s
+  timeout — it rides inside the webhook, and a hung alert must not push the handler past Stripe's
+  delivery timeout and trigger a redelivery.
+- **`purchase-email-not-delivered` (T-253) is the second live kind.** Raised when the **guest**
+  delivery email is not confirmed as sent. That email is the *product*, not a receipt — a guest has
+  no account, so the link it carries is the only route to what they paid for — yet the send must stay
+  non-fatal (a 500 makes Stripe redeliver a payment already taken), which is precisely why it has to
+  alert. Its context is ids only: never the buyer's address (PII) and never the download token (a
+  bearer credential for the photos). It carries its own remediation text and a `subsystem: 'delivery'`
+  Sentry tag — nothing here is reconciled against the `payouts` table. The send is bounded by the
+  same `EMAIL_TIMEOUT_MS` as the authenticated one, because the guest transfers run *after* it.
+- `charge.refunded` **voids outstanding holds** for that charge (a stranded hold used to be accidentally protected *by* being stranded). Refunds still do **not** auto-reverse a transfer already made — T-215. **There is no admin payout endpoint** — T-220 deleted it, because a status flip moves no money: it
+  wrote a column and called no Stripe API, so its one distinctive power was making the ledger claim a
+  payment that never happened. The recoverable holds drain via the retry worker, refunds void them,
+  and cancelling one by hand makes it permanently unpayable (the unique index then blocks a
+  replacement row). ⚠️ **Not every hold self-heals** — a row stranded `processing` with no
+  `transfer_batch_id` is picked up by neither recovery selector, and a lone sub-50¢ hold just
+  accumulates; making that visible is **T-254**, and the deleted endpoint never reached those rows
+  anyway (it refused anything carrying a charge id). `updatePayoutStatus` and `createPayout` went
+  with it; `test/unit/api/dead-admin-payout-route-removed.test.ts` keeps the capability from coming
+  back. ⚠️ **Three writers touch a payout row, not two:** the webhook's transfer path, the retry
+  worker, and `voidHoldsForCharge` (`charge.refunded`), which cancels holds — any "who writes
+  payouts?" answer that names only the first two misses the one that can cancel. See
+  `ARCHITECTURE.md` §4.3
+
+**ai_search_profiles** — ⚠️ **DROPPED (T-219)**, along with `ai_search_usage`, `time_sync_tokens`,
+`upload_batches`, `upload_objects` and the `vector` extension. The last remnant of the abandoned
+CLIP/pgvector matching path (`selfie_embedding` had already gone in
+`20260518000000_drop_legacy_ai_schema.sql`). Face matching is AWS Rekognition: selfies are sent per
+search and never stored, and the live per-event gating fields (`ai_matching_enabled`,
+`contains_minors`, `rekognition_collection_id`, `rekognition_region`, `ai_matching_status`) are on
+**`events`**.
 
 **admin_users**
 `user_id, granted_at, granted_by`
 - Service-role-only access (RLS enabled, no policies — `anon`/`authenticated` cannot read or write)
-- Used by `/api/admin/*` endpoints to gate access. Look up via `supabaseAdmin`, never via the user-scoped client
+- Gates the admin service-status page (`[lang]/dashboard/admin/status/page.tsx`) — the only
+  admin-gated surface left since T-220 removed `/api/admin/*`. Look up via `supabaseAdmin`, never via
+  the user-scoped client
 - Seed admins via direct DB access (Supabase SQL editor): `insert into admin_users (user_id) values ('<uuid>')`
 
 **rate_limit_buckets**
@@ -596,11 +731,59 @@ law is mandatory and cannot be waived by contract — so the consent is collecte
   wording can't drift, and both are English-only (neither receives the buyer's locale — localizing
   them is a separate change).
 
+### Sending email (T-253)
+⚠️ **`resend.emails.send` resolves `{ data, error }` — it does NOT throw on an API error.** An invalid
+key, an unverified sender domain, a rate limit or a malformed `to` all come back as a *resolved*
+promise, so a caller that discards the result reports success for a message that was never sent. Three
+of the four senders did exactly that until T-253, and the guest one is the sharp case: the buyer paid,
+got nothing, and the webhook's `catch` never fired.
+- **Every send goes through `sendEmail` (`src/lib/email/send-email.ts`)**, which checks `error` and
+  throws `EmailDeliveryError`. It also owns the Resend client (constructed lazily, so importing a
+  sender doesn't build one) and the single `EMAIL_FROM`. Do not call `resend.emails.send` directly —
+  that is how the check gets forgotten again.
+- **Only the chrome is shared** (`src/lib/email/layout.ts`): `renderTransactionalEmail` (buyer-facing
+  card) and `renderOpsAlertEmail` (bare, for the money and face-search alerts), plus `escapeHtml`,
+  which had been copied per template. The **messages** stay per sender on purpose — the guest email
+  offers a 30-day token, the signed-in one a permanent library.
+- `escapeHtml` is applied to **event names** in both buyer templates: those are photographer-typed and
+  land in hand-assembled HTML.
+- **`renderTransactionalEmail` takes its footnote as a required argument** (T-250). The buyer wording
+  ("because you purchased photos") is plainly wrong on a message to a photographer about their own
+  sale, and a default is exactly how that ships unnoticed. `BUYER_FOOTNOTE` is shared by the two
+  receipts.
+- **All templates are English-only**, now including the photographer-facing one. The buyer receipts
+  never receive a locale; `profiles` stores no language preference at all, so there is nothing to
+  read even if we wanted to. The held-sale CTA link therefore carries **no locale segment** —
+  `src/proxy.ts` resolves one from the reader's own cookie / `Accept-Language`, so the page lands in
+  their language even though the email does not.
+
 ### Photographer Payouts (Stripe Connect)
 - Photographers connect Stripe Express accounts in `/dashboard/photographer/settings/payout-profile/`
 - Photo Markt absorbs the Stripe Connect fee (0.5%) — photographer always receives exactly their promised net amount
 - Transfers fire per order, synchronously in the `payment_intent.succeeded` webhook handler — there is no cron or minimum threshold (see `ARCHITECTURE.md` §4.3)
 - Sales and earnings share one tabbed page at `/dashboard/photographer/sales/` (`?tab=earnings` selects earnings); `/ventas`, `/ganancias`, `/earnings` are redirect aliases to it
+- **⚠️ NEITHER CHECKOUT LOOKS AT CONNECT STATUS (T-248). Do not re-add that gate.** Selling and being
+  able to receive the money are separate readiness states: a photographer may publish, price and sell
+  before finishing Stripe onboarding, and the webhook records their net as a `connect_inactive` hold
+  that `retry-pending-payouts` drains the moment `account.updated` reports the account active. Both
+  checkouts used to return **`photographer_not_connected`** — that code is **deleted, not unused**, so
+  reinstating the refusal cannot happen by accident. What it cost: a priced event could not be bought
+  at all (5 of 6 priced events in production), the buyer got a dead-end toast, and the photographer's
+  only signal was a buyer asking why nothing worked. It also read the *cached* status, so a `pending`
+  left by a lagged webhook blocked a working account's sales. The buyer is deliberately told **nothing**
+  about the photographer's payout state — their purchase is complete and correct, and the information
+  is not actionable for them.
+- **The photographer is warned instead, in proportion to what is at stake.** One decision point,
+  **`src/lib/payouts/payout-readiness.ts`**, so no two surfaces can disagree. `resolvePayoutReadiness`
+  returns `money_held` (⚠️ **red — earnings are actually stuck**, `heldCents` from
+  `getTotalPendingPayouts`, the same query behind the Earnings alert so the figures cannot diverge),
+  `sales_will_hold` (amber — priced events exist but nothing has sold; a forecast in red trains people
+  to ignore red), `setup_pending` (amber — nothing priced either), or `null` for an active account.
+  `eventEarningsWillBeHeld` is the one-event variant behind the notice the event page renders above its
+  tabs, so it does not depend on which tab is open and outlives the save that caused it. Free events
+  (`null`/`0`) are exempt — they need no account, so warning about one is noise. The warning surfaces
+  (not the checkouts) read the status through `reconcileAndPersistConnectStatus`, never the raw column:
+  a stale `pending` would otherwise tell a working account its money is stuck
 
 ## Shared Components
 
@@ -719,7 +902,7 @@ Use this instead of `JSON.stringify` whenever embedding structured data in an in
 **`src/lib/rate-limit.ts`** — `rateLimit({ key, limit, windowSec })`
 Postgres-backed fixed-window limiter. Apply to:
 - Endpoints that hit external APIs (Stripe, Resend) on every call
-- Endpoints with sequential or guessable id parameters (admin endpoints)
+- Endpoints with sequential or guessable id parameters (e.g. `/api/download/[token]`)
 - Unauthenticated endpoints with side effects (guest uploads)
 
 Helpers: `getClientIp(headers)` for unauthenticated keying, `retryAfterSeconds(result)` for the `Retry-After` response header. Fails open on backend errors. Backend is pluggable via the `RateLimitBackend` type — currently Postgres, swappable to Upstash/Redis later without touching call sites.
@@ -850,12 +1033,14 @@ FACE_SEARCH_GLOBAL_DAILY_CALLS=      # global/day circuit breaker, default 2000 
 FACE_SEARCH_EVENT_DAILY_CALLS=       # per-event/day cap, default 1000
 FACE_SEARCH_ALERT_EMAIL=             # 50%-of-global alert recipient; absent ⇒ no alert
 
+# Money incidents (T-249, T-215)
+MONEY_ALERT_EMAIL=                   # ops recipient for reportMoneyIncident; absent ⇒ log + Sentry only
+
 # Reveal gate (T-177)
 REVEAL_TOKEN_SECRET=                 # optional; falls back to the service-role key
 
 # Ops
 HEALTH_CHECK_TOKEN=                  # optional; /api/health/ready 401s until set
-OPS_ALERT_EMAIL=                     # money-incident alerts (T-215); absent ⇒ email is a no-op
 NEXT_PUBLIC_VERCEL_URL=              # optional; base-URL resolution on previews
 
 # Inngest (background-processing worker for face indexing)
@@ -864,7 +1049,7 @@ INNGEST_SIGNING_KEY=                 # verifies inbound webhook payloads at /api
 
 # Email
 RESEND_API_KEY=
-# Sender is hardcoded ('Photo Markt <noreply@photomarkt.com>') in src/lib/email/*.ts
+# Sender is hardcoded ('Photo Markt <noreply@photomarkt.com>') as EMAIL_FROM in src/lib/email/send-email.ts
 
 # Sentry error monitoring (all optional — SDK is a no-op without a DSN)
 SENTRY_DSN=                          # server/edge DSN; absent ⇒ no server error capture
@@ -925,7 +1110,13 @@ field — keep the two in sync.
 ### Security Conventions
 - File uploads must validate via `src/lib/photo-upload.ts` — never trust client-supplied MIME or extension
 - JSON-LD inside `dangerouslySetInnerHTML` must use `stringifyJsonLd` — never raw `JSON.stringify`
-- Admin endpoints check `admin_users` via `supabaseAdmin` — there is no `profiles.is_admin` column
+- Admin-gated surfaces check `admin_users` via `supabaseAdmin` — there is no `profiles.is_admin`
+  column (dropped by `20260513000000`, re-dropped defensively in T-219), and
+  `test/unit/database/dead-schema-pruned.test.ts` now **fails on any `is_admin` reference under
+  `src/`**. ⚠️ That guard is the point: a column named like a gate that gates nothing is how the next
+  bypass gets written in good faith — `profiles` has a public SELECT policy, which is why the flag was
+  moved out of it. Since T-220 removed `/api/admin/*` the only admin surface is the service-status page
+  (`[lang]/dashboard/admin/status/page.tsx`), which `notFound()`s a non-admin
 - New `SECURITY DEFINER` functions in the `public` schema must explicitly `revoke execute ... from anon, authenticated` — Supabase grants those by default and `revoke from public` doesn't override role-specific grants. ⚠️ **`drop function` throws the grants away and Postgres re-grants `EXECUTE` to `PUBLIC` on the replacement**, so a migration that drops and recreates one must re-apply the revoke in the same file (`20260804000000`); the inventory test in `test/integration/security/security-definer-rpcs.test.ts` fails if it doesn't
 - A `SECURITY DEFINER` **search** RPC is reachable directly through PostgREST with a user JWT, so the Server Action wrapping it guards nothing: the function itself must escape `%`/`_`/`\` before building its `LIKE` pattern (and pass `escape '\'` on every `like`, `order by` included), require a minimum search length, and **cap the row limit server-side** — the caller controls that argument. `search_users_by_text` (`20260804000000`) is the reference shape
 - ⚠️ **Matching a substring of a secret and returning a stable id is an oracle**, even if the secret is not in the returned columns — the caller learns, one probe at a time, whether a given user's value contains a given string. So `search_users_by_text` neither returns **nor substring-matches** email: it matches email by **exact equality**, keeps substring matching for `username`/`display_name`, and keeps email out of the `order by` (ranking by an email prefix is the same channel). Prefer resolving PII server-side from known ids (`get_user_emails_batch`) over exposing it to a text search at all

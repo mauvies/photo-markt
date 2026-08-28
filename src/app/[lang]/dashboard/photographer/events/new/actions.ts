@@ -35,13 +35,6 @@ const SHARE_CODE_LENGTH = 8;
 
 // --- Schema ---
 
-const dollarsToCents = (val: string | undefined): number | null => {
-  if (!val || val.trim() === '') return null;
-  const num = Number.parseFloat(val);
-  if (Number.isNaN(num) || num < 0) return null;
-  return Math.round(num * 100);
-};
-
 const eventSchema = z
   .object({
     name: z.string().trim().min(1, 'Name is required.'),
@@ -98,7 +91,6 @@ const eventSchema = z
         const num = Number.parseFloat(val);
         return Number.isNaN(num) || num < 0 ? null : num;
       }),
-    organizer_fee_per_photo: z.string().optional(),
     ai_matching_enabled: z
       .string()
       .default('false')
@@ -301,7 +293,6 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     allow_guest_upload: formData.get('allow_guest_upload')?.toString() ?? 'true',
     require_upload_approval: formData.get('require_upload_approval')?.toString() ?? 'false',
     price_per_photo: formData.get('price_per_photo')?.toString(),
-    organizer_fee_per_photo: formData.get('organizer_fee_per_photo')?.toString(),
     // Without these, the schema's `'false'` default sticks and AI matching
     // silently never persists — regression from the upload refactor.
     ai_matching_enabled: formData.get('ai_matching_enabled')?.toString() ?? 'false',
@@ -337,9 +328,6 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     isPublic,
     requested: payload.watermark_enabled,
   });
-
-  const organizerFeeCents =
-    eventType === 'organizer' ? dollarsToCents(payload.organizer_fee_per_photo) : null;
 
   // `contains_minors=true` forces AI matching and bib detection off regardless
   // of what the form sent — defense in depth in case the UI was bypassed.
@@ -391,7 +379,6 @@ export const createEvent = async (formData: FormData): Promise<CreateEventResult
     allow_guest_upload: eventType === 'collaborative' ? payload.allow_guest_upload : false,
     require_upload_approval: payload.require_upload_approval,
     type: eventType,
-    organizer_fee_per_photo_cents: organizerFeeCents,
     slug: null,
     ai_matching_enabled: aiMatchingEnabled,
     contains_minors: containsMinors,
