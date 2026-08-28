@@ -6,6 +6,8 @@ import {
   getPayouts,
   getTotalPaidOut,
   getTotalPendingPayouts,
+  releasePayoutReversal,
+  reservePayoutReversal,
 } from '@/database/queries/payouts';
 import {
   createServiceClient,
@@ -182,5 +184,106 @@ describe('database/queries/payouts', () => {
 
       expect(await getTotalPendingPayouts(sb, photographer.id)).toBe(450);
     });
+  });
+});
+
+/**
+ * T-260 — the reversal reserve must be atomic.
+ *
+ * `reservePayoutReversal` used to SELECT `reversed_amount_cents`, add the delta
+ * in JavaScript and UPDATE the result — and the caller's delta is itself derived
+ * from an EARLIER read (`listReversibleRowsForCharge`), so two reads of the same
+ * money column bracketed the arithmetic. Two concurrent deliveries for one charge
+ * (`charge.refunded` racing `charge.dispute.closed`-won, both entering
+ * `applyClawback`) interleaved into recording the delta twice.
+ *
+ * Stripe was never at risk — the reversal idempotency key encodes the CUMULATIVE
+ * target, so both deliveries carry the same key and only one reversal happens.
+ * The damage was ledger-only and permanent: `getTotalPaidOut` is net of
+ * reversals, so an over-reported reversal understates the photographer's balance
+ * forever, and every later delta computes `max(0, target - already)` = 0, so the
+ * next legitimate reversal silently does nothing.
+ */
+describe('reservePayoutReversal / releasePayoutReversal — atomicity (T-260)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  it('never exceeds amount_cents when N reserves race for the same row', async () => {
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    const sb = createServiceClient();
+    const row = await seedPayout(sb, photographer.id, 1000, 'paid');
+
+    // Ten concurrent reserves of 300 each. Summed naively that is 3000; the
+    // clamp must hold it at the row's own amount.
+    await Promise.all(Array.from({ length: 10 }, () => reservePayoutReversal(sb, row.id, 300)));
+
+    const { data } = await sb
+      .from('payouts')
+      .select('reversed_amount_cents, status')
+      .eq('id', row.id)
+      .single();
+
+    expect(data?.reversed_amount_cents).toBe(1000);
+    expect(data?.status).toBe('reversed');
+  });
+
+  it('two concurrent reserves of the same delta both land — the read-modify-write lost one', async () => {
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    const sb = createServiceClient();
+    const row = await seedPayout(sb, photographer.id, 1000, 'paid');
+
+    await Promise.all([
+      reservePayoutReversal(sb, row.id, 200),
+      reservePayoutReversal(sb, row.id, 200),
+    ]);
+
+    const { data } = await sb
+      .from('payouts')
+      .select('reversed_amount_cents')
+      .eq('id', row.id)
+      .single();
+
+    // Both increments are recorded exactly once each. Under the old read-then-write
+    // this could come back as 200 (one write lost) depending on interleaving.
+    expect(data?.reversed_amount_cents).toBe(400);
+  });
+
+  it('release clamps at zero and never goes negative', async () => {
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    const sb = createServiceClient();
+    const row = await seedPayout(sb, photographer.id, 1000, 'paid');
+
+    await reservePayoutReversal(sb, row.id, 300);
+    await releasePayoutReversal(sb, row.id, 900);
+
+    const { data } = await sb
+      .from('payouts')
+      .select('reversed_amount_cents, status')
+      .eq('id', row.id)
+      .single();
+
+    expect(data?.reversed_amount_cents).toBe(0);
+    expect(data?.status).toBe('paid');
+  });
+
+  it('a reserve that fills the row flips it to reversed; a partial one leaves the status alone', async () => {
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    const sb = createServiceClient();
+    const partial = await seedPayout(sb, photographer.id, 1000, 'paid');
+    const full = await seedPayout(sb, photographer.id, 1000, 'paid');
+
+    expect(await reservePayoutReversal(sb, partial.id, 400)).toBe(400);
+    expect(await reservePayoutReversal(sb, full.id, 1000)).toBe(1000);
+
+    const { data: partialRow } = await sb
+      .from('payouts')
+      .select('status')
+      .eq('id', partial.id)
+      .single();
+    const { data: fullRow } = await sb.from('payouts').select('status').eq('id', full.id).single();
+
+    expect(partialRow?.status).toBe('paid');
+    expect(fullRow?.status).toBe('reversed');
   });
 });

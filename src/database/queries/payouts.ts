@@ -777,36 +777,24 @@ export async function reservePayoutReversal(
   payoutId: string,
   reversedCents: number,
 ): Promise<number> {
-  const { data: current, error: readError } = await supabase
-    .from('payouts')
-    .select('amount_cents, reversed_amount_cents')
-    .eq('id', payoutId)
-    .maybeSingle();
+  // ⚠️ ONE statement, in the database (T-260). This used to SELECT the current
+  // total, add the delta in JS and UPDATE the result — and the caller's delta is
+  // itself derived from an earlier read, so two reads bracketed the arithmetic.
+  // Two concurrent deliveries for one charge (`charge.refunded` racing
+  // `charge.dispute.closed`-won) interleaved into recording the delta twice.
+  // Stripe deduped the actual reversal via the cumulative idempotency key, so the
+  // damage was ledger-only — and permanent: `getTotalPaidOut` is net of
+  // reversals, and every later delta computes `target - already` = 0.
+  const { data, error } = await supabase.rpc('reserve_payout_reversal', {
+    p_payout_id: payoutId,
+    p_reversed_cents: reversedCents,
+  });
 
-  if (readError || !current) {
-    throw new Error(`Failed to read payout for reversal: ${getErrorMessage(readError)}`);
-  }
-
-  const row = current as { amount_cents: number; reversed_amount_cents: number | null };
-  const totalReversed = Math.min(
-    row.amount_cents,
-    (row.reversed_amount_cents ?? 0) + Math.max(0, reversedCents),
-  );
-
-  const { error } = await supabase
-    .from('payouts')
-    .update({
-      reversed_amount_cents: totalReversed,
-      reversed_at: new Date().toISOString(),
-      ...(totalReversed >= row.amount_cents ? { status: 'reversed' as const } : {}),
-    })
-    .eq('id', payoutId);
-
-  if (error) {
+  if (error || data === null) {
     throw new Error(`Failed to reserve payout reversal: ${getErrorMessage(error)}`);
   }
 
-  return totalReversed;
+  return data as number;
 }
 
 /**
@@ -820,36 +808,19 @@ export async function releasePayoutReversal(
   payoutId: string,
   reversedCents: number,
 ): Promise<void> {
-  const { data: current, error: readError } = await supabase
-    .from('payouts')
-    .select('amount_cents, reversed_amount_cents, stripe_transfer_id')
-    .eq('id', payoutId)
-    .maybeSingle();
-
-  if (readError || !current) {
-    console.error(`[payouts] could not read payout ${payoutId} to release its reversal`);
-    return;
-  }
-
-  const row = current as {
-    amount_cents: number;
-    reversed_amount_cents: number | null;
-    stripe_transfer_id: string | null;
-  };
-  const released = Math.max(0, (row.reversed_amount_cents ?? 0) - Math.max(0, reversedCents));
-
+  // Same single-statement rule as `reservePayoutReversal` (T-260): the subtraction
+  // and its clamp at 0 happen in the database, so a release racing a reserve for
+  // the same row cannot lose either write.
+  //
   // ⚠️ The status is DERIVED, never restored from a captured value. Taking a
   // `previousStatus` argument wrote back the status read before the row was
   // settled, so a failed reversal on a transfer we had just confirmed rewrote a
   // `paid` row to `processing` — money that provably left the platform stopped
   // counting in `getTotalPaidOut`, overstating the photographer's balance.
-  const { error } = await supabase
-    .from('payouts')
-    .update({
-      reversed_amount_cents: released,
-      status: released >= row.amount_cents ? 'reversed' : 'paid',
-    })
-    .eq('id', payoutId);
+  const { error } = await supabase.rpc('release_payout_reversal', {
+    p_payout_id: payoutId,
+    p_reversed_cents: reversedCents,
+  });
 
   if (error) {
     console.error(`[payouts] failed to release reversal on ${payoutId}:`, error);

@@ -134,6 +134,14 @@ const EXPECTED_EXPOSURE: Record<string, { anon: boolean; authenticated: boolean;
   increment_rate_limit_bucket: { anon: false, authenticated: false, why: 'service-role only' },
   increment_rate_limit_bucket_by: { anon: false, authenticated: false, why: 'service-role only' },
 
+  // Reversal arithmetic on `payouts.reversed_amount_cents` (T-260). Service-role
+  // only for the same reason as the rate-limit counters, but with more at stake:
+  // `payouts` is photographer-read / service-role-write, and these move a money
+  // column. Reachable with the anon key they would let anyone rewrite a
+  // photographer's balance.
+  reserve_payout_reversal: { anon: false, authenticated: false, why: 'service-role only' },
+  release_payout_reversal: { anon: false, authenticated: false, why: 'service-role only' },
+
   // Trigger function: invoked by the trigger, never as an RPC. Triggers do not
   // check EXECUTE on the calling role, so no API role needs it.
   sync_profile_avatar_url: { anon: false, authenticated: false, why: 'trigger only' },
