@@ -1131,6 +1131,22 @@ async function drivePayoutsForCheckoutSession(
   }
 }
 
+/**
+ * This handler moves money, and the work is unbounded in the number of
+ * photographers on the cart: per photographer a Connect status reconcile, an
+ * `openPayoutRow`, a `createTransfer` and a `settlePayoutPaid`, on top of a
+ * Resend send and a PaymentIntent retrieve. On the platform default it could be
+ * killed mid-transfer (T-263).
+ *
+ * 60 s is the same ceiling the ZIP routes use. It does NOT change whether Stripe
+ * considers the delivery successful — Stripe gives up long before — but it lets
+ * the invocation FINISH the work it started rather than dying half way, and the
+ * redelivery that Stripe then sends is idempotent by construction: `openPayoutRow`
+ * reserves before the Stripe call, and neither order type is completed until its
+ * transfers have run.
+ */
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   if (!env.STRIPE_WEBHOOK_SECRET) {
     return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 500 });
@@ -1305,7 +1321,8 @@ export async function POST(request: Request) {
               guestOrderId: guestOrder.id,
             });
 
-            await completeGuestOrder(supabaseAdmin, guestOrder.id);
+            // ⚠️ `completeGuestOrder` is NOT here — it is the last thing this
+            // block does, after the transfers (T-263). See the note there.
           } catch (assemblyErr) {
             // ids and amounts only — never the guest's email, and never the token.
             await reportMoneyIncident({
@@ -1452,6 +1469,33 @@ export async function POST(request: Request) {
               context: { sessionId: session.id, orderId: guestOrder.id },
             });
           }
+
+          // ⚠️ LAST, and that ordering is the whole ticket (T-263).
+          //
+          // `completed` is what stops a redelivery from resuming this order, so
+          // whatever runs after it is unprotected — and `maxDuration` raises the
+          // ceiling, it does not remove it. Between here and the assembly above
+          // sit a Resend send, a PaymentIntent retrieve,
+          // and per photographer a Connect status reconcile, an `openPayoutRow`,
+          // a `createTransfer` and a `settlePayoutPaid`. A multi-photographer
+          // cart with a slow Resend can exhaust that budget.
+          //
+          // With `completed` written before the transfers, a kill in between was
+          // TERMINAL: order delivered, buyer holding their link, zero `payouts`
+          // rows for the photographers not yet reached, and nothing to recover it
+          // — every incident report in that block sits downstream of where the
+          // process died, and the guest path has no second driver
+          // (`payment_intent.succeeded` reads `orders` only).
+          //
+          // Written last, the same kill leaves the order `pending`: the
+          // redelivery resumes it, re-drives the transfers — safe, because
+          // `openPayoutRow` reserves the row before the Stripe call and hands a
+          // second writer a `null` (T-216) — and completes it.
+          //
+          // The buyer is not held hostage by this: the download page reads the
+          // order through `getGuestOrderWithItems`, which does NOT filter on
+          // status, so their link works from the moment the token exists.
+          await completeGuestOrder(supabaseAdmin, guestOrder.id);
 
           console.log(`Guest order created: ${guestOrder.id} for ${guestEmail}`);
           break;
