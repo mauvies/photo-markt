@@ -497,6 +497,18 @@ query module and `payouts.payment_account_id` went in `20260820000000_prune_dead
     parked as a recoverable `transfer_failed` hold, while skipping it would be silence. ⚠️ The
     **guest** branch has no such check and no second driver at all (`getOrderByPaymentIntentId`
     reads `orders`, and there is no `getGuestOrderByPaymentIntentId`) — its own hole, not this one's.
+    Since T-261 the guest branch recovers a different way: **its own redelivery** (see below).
+  - ⚠️ **A guest order is born `pending` and only `completeGuestOrder` marks it delivered (T-261),
+    and the exists-guard breaks ONLY on `completed`.** `createGuestOrder` used to write `completed`
+    before the items and the download token existed — and both of those writes throw. The throw
+    became a 500, Stripe redelivered, and the redelivery returned early at "guest order already
+    exists", so the transfer block ran on **neither** delivery: buyer charged, no items, no token,
+    no `payouts` row, not one log line, and no recovery path (`payment_intent.succeeded` reads
+    `orders` only). Now `pending` means "delivery unfinished", the redelivery resumes the same row
+    (guarded by `guestOrderHasItems`, so items are written once), and the failure calls
+    `reportMoneyIncident` before rethrowing — the rethrow is *wanted*, because the 500 is what
+    triggers the retry that fixes it. ⚠️ Do not "tidy" the guard back to `if (existingGuestOrder)`,
+    and do not make the assembly non-throwing: each alone re-creates the silent loss.
   - **Every incident raised inside the shared drive carries `source`.** A genuine failure now alerts
     once per delivery, from two serverless invocations no per-process throttle can dedupe, so the
     field is what lets an operator tell a duplicate from a second loss on the same order. For the

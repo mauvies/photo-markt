@@ -72,10 +72,12 @@ import { clearCart } from '@/database/queries/carts';
 import { createDownloadToken } from '@/database/queries/download-tokens';
 import {
   addGuestOrderItems,
+  completeGuestOrder,
   createGuestOrder,
   type GuestOrder,
   getGuestOrderByPaymentIntentId,
   getGuestOrderBySessionId,
+  guestOrderHasItems,
   updateGuestOrderStatus,
 } from '@/database/queries/guest-orders';
 import {
@@ -1108,7 +1110,15 @@ export async function POST(request: Request) {
         if (session.metadata?.is_guest === 'true') {
           const existingGuestOrder = await getGuestOrderBySessionId(supabaseAdmin, session.id);
 
-          if (existingGuestOrder) {
+          // ⚠️ Only a COMPLETED order stops the redelivery (T-261). The guard used
+          // to break on the row's mere existence, which turned a half-written
+          // order into a permanent one: `createGuestOrder` wrote the row, one of
+          // the writes below threw, the 500 made Stripe redeliver, and the
+          // redelivery returned here — so the transfer loop never ran on either
+          // delivery and the buyer was charged for photos they could not reach.
+          // A `pending` row now means "delivery unfinished", and this falls
+          // through to finish it.
+          if (existingGuestOrder && existingGuestOrder.status === 'completed') {
             console.log(`Guest order already exists for session ${session.id}`);
             break;
           }
@@ -1159,32 +1169,66 @@ export async function POST(request: Request) {
           // would punish the buyer for our deploy timing.
           const guestWithdrawalConsent = parseWithdrawalConsentMetadata(session.metadata);
 
-          const guestOrder = await createGuestOrder(supabaseAdmin, {
-            guest_email: guestEmail,
-            stripe_checkout_session_id: session.id,
-            stripe_payment_intent_id:
-              typeof session.payment_intent === 'string' ? session.payment_intent : undefined,
-            stripe_customer_id: typeof session.customer === 'string' ? session.customer : undefined,
-            total_amount_cents: totalAmountCents,
-            currency: session.currency ?? PLATFORM_CURRENCY,
-            metadata: { stripe_session_id: session.id },
-            withdrawal_consent: guestWithdrawalConsent,
-          });
+          // Resume a `pending` row rather than minting a second one for the same
+          // session — the session id is what identifies the purchase.
+          const guestOrder =
+            existingGuestOrder ??
+            (await createGuestOrder(supabaseAdmin, {
+              guest_email: guestEmail,
+              stripe_checkout_session_id: session.id,
+              stripe_payment_intent_id:
+                typeof session.payment_intent === 'string' ? session.payment_intent : undefined,
+              stripe_customer_id:
+                typeof session.customer === 'string' ? session.customer : undefined,
+              total_amount_cents: totalAmountCents,
+              currency: session.currency ?? PLATFORM_CURRENCY,
+              metadata: { stripe_session_id: session.id },
+              withdrawal_consent: guestWithdrawalConsent,
+            }));
 
-          await addGuestOrderItems(
-            supabaseAdmin,
-            guestOrder.id,
-            cartItems.map((item) => ({
-              photo_id: item.photoId,
-              photographer_id: item.photographerId,
-              unit_price_cents: item.unitPriceCents,
-              quantity: 1,
-            })),
-          );
+          // ⚠️ Assembling delivery is allowed to throw — a 500 makes Stripe
+          // redeliver, and the guard above now lets the redelivery resume instead
+          // of returning early, so the retry is the recovery. What must NOT happen
+          // is throwing SILENTLY: this is money already taken, and until T-261 the
+          // failure left no console line, no Sentry event and no `payouts` row.
+          let downloadToken: Awaited<ReturnType<typeof createDownloadToken>>;
+          try {
+            if (!(await guestOrderHasItems(supabaseAdmin, guestOrder.id))) {
+              await addGuestOrderItems(
+                supabaseAdmin,
+                guestOrder.id,
+                cartItems.map((item) => ({
+                  photo_id: item.photoId,
+                  photographer_id: item.photographerId,
+                  unit_price_cents: item.unitPriceCents,
+                  quantity: 1,
+                })),
+              );
+            }
 
-          const downloadToken = await createDownloadToken(supabaseAdmin, {
-            guestOrderId: guestOrder.id,
-          });
+            downloadToken = await createDownloadToken(supabaseAdmin, {
+              guestOrderId: guestOrder.id,
+            });
+
+            await completeGuestOrder(supabaseAdmin, guestOrder.id);
+          } catch (assemblyErr) {
+            // ids and amounts only — never the guest's email, and never the token.
+            await reportMoneyIncident({
+              kind: 'payout-not-recorded',
+              message:
+                'A paid guest order could not be assembled; the buyer has been charged and no transfers have run for it yet. It stays `pending` until a Stripe redelivery completes it.',
+              context: {
+                guestOrderId: guestOrder.id,
+                sessionId: session.id,
+                paymentIntentId:
+                  typeof session.payment_intent === 'string' ? session.payment_intent : null,
+                totalAmountCents,
+                itemCount: cartItems.length,
+              },
+              cause: assemblyErr,
+            });
+            throw assemblyErr;
+          }
 
           const baseUrl = env.SITE_URL;
 
