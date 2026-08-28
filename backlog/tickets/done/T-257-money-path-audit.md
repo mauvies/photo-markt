@@ -1,7 +1,7 @@
 # T-257 · Auditoría de la ruta del dinero: buscar los huecos que quedan, no esperar al siguiente incidente
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** alto  (pagos)
 - **Blockers:** ninguno
 - **Rama:** `chore/money-path-audit`  (tipo = chore — la salida son hallazgos y tickets, no código)
