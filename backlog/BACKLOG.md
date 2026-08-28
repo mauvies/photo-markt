@@ -11,21 +11,18 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-259 | `payment_intent.succeeded` resucita un pedido reembolsado o disputado, y le devuelve el acceso al comprador | — | todo |
-| 2 | P1 | T-261 | Un pedido de invitado puede quedar `completed` sin ítems, sin token y sin payouts — en silencio | — | todo |
-| 3 | P1 | T-256 | Deriva entorno↔repo: nada comprueba que lo desplegado sea lo que dice el repo | — | todo |
-| 4 | P1 | T-255 | Nadie reconcilia: un pedido `completed` sin filas en `payouts` no lo detecta nada | — | todo |
-| 5 | P1 | T-257 | Auditoría de la ruta del dinero: buscar los huecos que quedan, no esperar al siguiente incidente | — | todo |
-| 6 | P2 | T-254 | El worker de reintentos de payouts solo escribe en consola — un hold atascado para siempre no avisa a nadie | — | todo |
-| 7 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
-| 8 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
-| 9 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
-| 10 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
-| 11 | P2 | T-258 | `CLAUDE.md` pesa ~29k tokens y se carga entero en cada sesión | — | todo |
-| 12 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
-| 13 | P3 | T-223 | Carrito de invitado sin sincronización entre pestañas | — | todo |
-| — | P1 | T-215 | Clawback: reembolsos y disputas revierten transferencia y acceso | **blocked:** aplazado por el usuario (2026-08-10). **Rebasado sobre `main` el 2026-08-28** (merge `04d50c0`): 6 conflictos resueltos, verde en typecheck/lint/1459 unit/804 integración/build. ⚠️ **No mergear hasta cerrar T-260** (read-modify-write no atómico sobre `reversed_amount_cents`, código nuevo de este PR) y decidir **T-259**. El antiguo bloqueo «falta `/code-review ultra`» ya no aplica: ese gate se descartó por coste (2026-08-27); la revisión del paso 6 de `/work-next` (3 verificadores) ya se corrió y de ahí salen T-259/T-260/T-261 | blocked |
-| — | P1 | T-260 | `reservePayoutReversal` es un read-modify-write sobre una columna de dinero | **blocked:** código nuevo de PR #290 (T-215), aún no en `main`; arreglar **antes** de mergear ese PR. Sin exposición hoy | blocked |
+| 1 | P1 | T-256 | Deriva entorno↔repo: nada comprueba que lo desplegado sea lo que dice el repo | — | todo |
+| 2 | P1 | T-255 | Nadie reconcilia: un pedido `completed` sin filas en `payouts` no lo detecta nada | — | todo |
+| 3 | P1 | T-257 | Auditoría de la ruta del dinero: buscar los huecos que quedan, no esperar al siguiente incidente | — | todo |
+| 4 | P2 | T-254 | El worker de reintentos de payouts solo escribe en consola — un hold atascado para siempre no avisa a nadie | — | todo |
+| 5 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
+| 6 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
+| 7 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
+| 8 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
+| 9 | P2 | T-258 | `CLAUDE.md` pesa ~29k tokens y se carga entero en cada sesión | — | todo |
+| 10 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
+| 11 | P3 | T-223 | Carrito de invitado sin sincronización entre pestañas | — | todo |
+| — | P1 | T-215 | Clawback: reembolsos y disputas revierten transferencia y acceso | **blocked:** solo falta el OK del usuario para mergear. Rebasado sobre `main` el 2026-08-28 (merge `04d50c0`, 6 conflictos) y **T-260 + T-259 arreglados dentro del PR** (`51c8682`, `cba04b1`). CI **verde y CLEAN**: typecheck · lint · 2271 tests · build. Al mergear cierra **T-215 + T-237 + T-259 + T-260**. El antiguo bloqueo «falta `/code-review ultra`» ya no aplica: ese gate se descartó por coste (2026-08-27) | blocked |
 | — | P2 | T-237 | Reembolso parcial: proporcional, y cuadrar el saldo | **blocked:** absorbido en T-215 (PR #290) | blocked |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
@@ -188,6 +185,34 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
   (`events.coverNotForSale`), porque el tooltip existente no dice que la portada no es una foto a la
   venta; el resto se reusa. `/edit` conserva su control: esto **añade** un punto de entrada, no migra
   el existente. Sin migración — PR #311
+
+- **T-261** · Fix/Pagos (P1): un pedido de invitado nacía `completed` **antes** de que existieran sus
+  ítems y su token de descarga — y las dos escrituras lanzan. El throw daba un 500, Stripe reentregaba,
+  y la reentrega cortaba en el guard «guest order already exists»: el bloque de transferencias no
+  corría en **ninguna** de las dos entregas. Comprador cobrado, sin fotos, sin fila en `payouts`, sin
+  una sola línea de log — y sin recuperación (`payment_intent.succeeded` solo lee `orders`). Ahora
+  nace `pending`, `completeGuestOrder` lo marca entregado solo cuando la entrega está montada, el
+  guard corta **solo** en `completed` (así la reentrega **reanuda** la misma fila, con
+  `guestOrderHasItems` evitando ítems duplicados) y el fallo llama a `reportMoneyIncident` **antes**
+  de relanzar — el relanzamiento es deseado: el 500 es lo que dispara el reintento que lo arregla.
+  Hallado revisando el merge de #290; **pre-existente en `main`**. Sin migración — PR #314
+
+- **T-260** · Fix/Pagos (P1): `reservePayoutReversal`/`releasePayoutReversal` eran read-modify-write
+  sobre `reversed_amount_cents`, y el delta del llamante ya venía de una lectura anterior — dos
+  lecturas rodeando la suma. `charge.refunded` compitiendo con `charge.dispute.closed`-won registraba
+  el delta **dos veces**. Stripe quedaba correcto (la clave de idempotencia codifica el objetivo
+  acumulado), el ledger no, y de forma permanente: `getTotalPaidOut` va neto de reversiones.
+  Movido a dos RPC `SECURITY DEFINER` de **una sola sentencia**, service-role only, declarados en el
+  inventario. Migración `20260828000000` — PR #290
+
+- **T-259** · Fix/Pagos (P1): `payment_intent.succeeded` promocionaba a `completed` cualquier pedido
+  que simplemente no lo estuviera. Con las reentregas de Stripe (3 días) y los resends de dashboard
+  (rutinarios desde T-192), un reembolso entre la primera entrega y su reintento dejaba al reintento
+  devolviendo el pedido a `completed`: el comprador reembolsado **recuperaba acceso permanente** al
+  ZIP y a su biblioteca, y la venta reentraba en el `net` del fotógrafo con su payout en `cancelled`.
+  El dinero estaba a salvo (índice exactamente-una-vez); el acceso no. Nuevo
+  `mayPromoteOnPaymentSuccess`, **disjunto a propósito** de `mayWriteOrderStatus` de T-215. Sin
+  migración — PR #290
 
 - **T-250** · Feat/Pagos (P2): T-248 quitó el gate de Connect del checkout, así que la venta de un
   fotógrafo sin cuenta de cobro **sí se cobra** y su neto queda en un hold `connect_inactive` que el
