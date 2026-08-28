@@ -1118,8 +1118,20 @@ export async function POST(request: Request) {
           // delivery and the buyer was charged for photos they could not reach.
           // A `pending` row now means "delivery unfinished", and this falls
           // through to finish it.
-          if (existingGuestOrder && existingGuestOrder.status === 'completed') {
-            console.log(`Guest order already exists for session ${session.id}`);
+          // ⚠️ ONLY `pending` resumes. Breaking on `!== 'pending'` rather than on
+          // `=== 'completed'` is the difference between resuming an unfinished
+          // delivery and RESURRECTING a reversed one: `charge.refunded` moves an
+          // unfinished guest order straight to `refunded` (`mayWriteOrderStatus`
+          // lets every revocation through), and Stripe redelivers for up to three
+          // days — so a `completed`-only guard let a refunded order fall through,
+          // re-mint a download token, write itself back to `completed` and open
+          // fresh payout rows against a charge whose money had already gone back.
+          // Same rule as `mayPromoteOnPaymentSuccess` on the authenticated side
+          // (T-259): a terminal status is never a state to recover from.
+          if (existingGuestOrder && existingGuestOrder.status !== 'pending') {
+            console.log(
+              `Guest order for session ${session.id} is '${existingGuestOrder.status}' — not resuming`,
+            );
             break;
           }
 
