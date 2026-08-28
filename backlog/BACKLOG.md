@@ -11,14 +11,21 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-254 | El worker de reintentos de payouts solo escribe en consola — un hold atascado para siempre no avisa a nadie | — | todo |
-| 2 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
-| 3 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
-| 4 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
-| 5 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
-| 6 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
-| 7 | P3 | T-223 | Carrito de invitado sin sincronización entre pestañas | — | todo |
-| — | P1 | T-215 | Clawback: reembolsos y disputas revierten transferencia y acceso | **blocked:** aplazado por el usuario (2026-08-10) — **implementado y pusheado en PR #290 (draft)**, verde; falta `/code-review ultra` antes de mergear. Sin ventas reales no hay disputas posibles | blocked |
+| 1 | P1 | T-259 | `payment_intent.succeeded` resucita un pedido reembolsado o disputado, y le devuelve el acceso al comprador | — | todo |
+| 2 | P1 | T-261 | Un pedido de invitado puede quedar `completed` sin ítems, sin token y sin payouts — en silencio | — | todo |
+| 3 | P1 | T-256 | Deriva entorno↔repo: nada comprueba que lo desplegado sea lo que dice el repo | — | todo |
+| 4 | P1 | T-255 | Nadie reconcilia: un pedido `completed` sin filas en `payouts` no lo detecta nada | — | todo |
+| 5 | P1 | T-257 | Auditoría de la ruta del dinero: buscar los huecos que quedan, no esperar al siguiente incidente | — | todo |
+| 6 | P2 | T-254 | El worker de reintentos de payouts solo escribe en consola — un hold atascado para siempre no avisa a nadie | — | todo |
+| 7 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
+| 8 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
+| 9 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
+| 10 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
+| 11 | P2 | T-258 | `CLAUDE.md` pesa ~29k tokens y se carga entero en cada sesión | — | todo |
+| 12 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
+| 13 | P3 | T-223 | Carrito de invitado sin sincronización entre pestañas | — | todo |
+| — | P1 | T-215 | Clawback: reembolsos y disputas revierten transferencia y acceso | **blocked:** aplazado por el usuario (2026-08-10). **Rebasado sobre `main` el 2026-08-28** (merge `04d50c0`): 6 conflictos resueltos, verde en typecheck/lint/1459 unit/804 integración/build. ⚠️ **No mergear hasta cerrar T-260** (read-modify-write no atómico sobre `reversed_amount_cents`, código nuevo de este PR) y decidir **T-259**. El antiguo bloqueo «falta `/code-review ultra`» ya no aplica: ese gate se descartó por coste (2026-08-27); la revisión del paso 6 de `/work-next` (3 verificadores) ya se corrió y de ahí salen T-259/T-260/T-261 | blocked |
+| — | P1 | T-260 | `reservePayoutReversal` es un read-modify-write sobre una columna de dinero | **blocked:** código nuevo de PR #290 (T-215), aún no en `main`; arreglar **antes** de mergear ese PR. Sin exposición hoy | blocked |
 | — | P2 | T-237 | Reembolso parcial: proporcional, y cuadrar el saldo | **blocked:** absorbido en T-215 (PR #290) | blocked |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
@@ -43,6 +50,10 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
   `events/[id]/page.tsx` y el tab de fotos; T-231 (rama `fix/stuck-pending-upload-recovery`, en curso)
   primero — T-232 solo añade un bloque de portada encima de la cuadrícula y no quiere pelear con el
   diff de recuperación de subidas. Mergear T-231 antes de empezar T-232.
+- **Alertas de payouts:** **T-254 → T-255**. Los dos añaden productores a
+  `reportMoneyIncident` sobre la misma superficie: T-254 alerta de un hold que **existe** y no drena,
+  T-255 de la deuda que **nunca se abrió**. Acordar entre ambos quién usa el `kind`
+  `needs-reconciliation` (hoy declarado y sin productor) antes de escribir el segundo.
 - **Dinero del fotógrafo (payouts):** **~~T-216~~ (PR #284) → T-215 (PR #290, parada) → ~~T-220~~
   (PR #311)**. Los tres tocan el modelo de estado de `payouts` y el bucle de transferencias del
   webhook. T-216 fue primero porque introduce las filas `pending`.
@@ -114,9 +125,17 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
   marcada como aplicada — corregido el comentario y acotado el peor caso; (3) un comentario stale
   sobre el fee de organizer en `step-3-details.tsx`. Verde: typecheck + lint + **2225 tests / 302
   files** + `pnpm build`; re-aplicar la migración sobre la BD podada bajo `ON_ERROR_STOP=1` es un
-  no-op. ⚠️ **Antes de mergear:** contar filas de `payment_accounts` en **producción** (el borrado es
-  irreversible; «rollback is inert» vale para el código, no para los datos) y, tras el merge,
-  confirmar que `vector` desapareció de verdad. Desbloquea **T-227** — PR #313
+  no-op. **Cerrado el 2026-08-26:** el gate pre-merge (contar filas de `payment_accounts` en
+  **producción**, porque el borrado es irreversible y «rollback is inert» vale para el código, no para
+  los datos) dio **cero en todo** — cero filas, cero `account_details` poblados, cero payouts
+  enlazados: nadie llegó nunca a guardar datos bancarios ahí. Mergeado (`2101768`) y migración
+  aplicada en prod, verificado a posteriori que tablas, columnas y extensión `vector` dan 0.
+  ⚠️ **El merge NO disparó `migrate.yml`** — GitHub no encoló *ninguna* run para el SHA del merge pese
+  a tocar `supabase/migrations/**` (y esta vez **no era billing**: el cron de esa mañana corrió verde).
+  Un tercer modo de fallo, y el peor de leer: en `gh run list` la ausencia de run es indistinguible de
+  «no había nada que aplicar». Resuelto con `gh workflow run migrate.yml --ref main` — idempotente y
+  keyed por basename, así que ya no hace falta el rodeo por MCP. **Chequeo post-merge correcto: ¿existe
+  una run para el SHA del merge?**, no «¿está roja `migrate.yml`?». Desbloquea **T-227** — PR #313
 
 - **T-220** · Refactor/Pagos (P2, `Riesgo: alto` → plan mode + `/code-review max`): **el
   planteamiento del ticket quedó obsoleto al mergearse T-216**, y eso decidió el resultado. De los

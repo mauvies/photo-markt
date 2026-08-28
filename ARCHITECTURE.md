@@ -597,7 +597,8 @@ Accounts v2" — via `process.emitWarning`. We stay on v1 **on purpose**: it is
 fully supported with no sunset date, and migrating to Accounts v2 is a large,
 payment-critical change (different account-creation/onboarding/retrieve/balance/
 transfer shapes) with no functional benefit today. It would be its own ticket
-with OpenSpec + `/code-review ultra`, not done ad hoc. The recommendation is
+with OpenSpec + a `/code-review high` pass plus the money-path verifier
+fan-out (see `.claude/commands/work-next.md` step 6), not done ad hoc. The recommendation is
 informational, so `src/lib/stripe/suppress-accounts-v2-warning.ts` filters that
 one message out of process warnings (installed from `config.ts`); every other
 warning still surfaces.

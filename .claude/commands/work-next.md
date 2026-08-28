@@ -37,7 +37,23 @@ Flujo (no te saltes pasos):
    Si el ticket mueve/renombra rutas documentadas o cambia un patrón de arquitectura, actualiza
    `CLAUDE.md`/`ARCHITECTURE.md` en el mismo PR (si no toca nada documentado, no los toques).
 5. `pnpm typecheck && pnpm lint && pnpm test`. Si algo falla, arréglalo antes de seguir.
-6. **Revisión IA solo en PRs riesgosos:** si el ticket es **`Riesgo: alto`** (mismo campo del paso 3), corre `/code-review` sobre el diff antes de commitear (`/code-review ultra` para pagos) y arregla los findings reales. Para **UI/i18n/bug-fixes**, sáltalo — la revisión humana en el merge del draft alcanza.
+6. **Revisión IA solo en PRs riesgosos:** si el ticket es **`Riesgo: alto`** (mismo campo del paso 3),
+   revisa el diff antes de commitear. ⚠️ **Nunca `/code-review ultra`** — es una revisión multi-agente en
+   la nube que se factura aparte; está descartada por coste. Usa lo de abajo, que corre en la sesión.
+   - **Por defecto:** `/code-review high` sobre el diff local. Arregla los findings reales.
+   - **Si el ticket toca dinero** (webhook de Stripe, `payouts`, checkout, precios), además lanza
+     **3 subagentes independientes en paralelo** (Agent tool, una sola tanda), cada uno con una lente
+     distinta y con el encargo de **refutar**, no de confirmar:
+     1. «¿Por dónde puede completarse este flujo SIN que se pague al fotógrafo?»
+     2. «¿Por dónde puede pagarse DOS veces?» — idempotencia, reintentos, redelivery de Stripe,
+        orden de eventos no garantizado.
+     3. «¿Qué falla en silencio?» — `catch` que no alerta, salidas sin log, filas que ningún
+        selector de recuperación recoge.
+     Cada uno devuelve `archivo:línea` + escenario de fallo concreto, o «ninguno». **Un finding solo
+     cuenta si describe un escenario reproducible** — descarta lo que suene plausible sin mecanismo.
+     Estas tres lentes salen de incidentes reales: T-252 (cobrado sin pagar), T-216 (doble pago),
+     T-249 (pérdida silenciosa). No las cambies sin motivo.
+   Para **UI/i18n/bug-fixes**, sáltalo todo — la revisión humana en el merge del draft alcanza.
 7. Commit con Conventional Commits. **NUNCA** añadas el trailer `Co-Authored-By` (rompe el plan Vercel Hobby; un hook `PreToolUse` lo bloquea, pero igual no lo escribas).
 8. `git push -u origin <rama>`.
 9. `gh pr create --draft --base main`. **Título y cuerpo del PR SIEMPRE en inglés** (aunque el ticket esté en español):
