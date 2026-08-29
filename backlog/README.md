@@ -9,6 +9,7 @@ plantilla, los tickets activos y el archivo de los completados.
 backlog/
   README.md          # este archivo — el flujo completo en un sitio
   BACKLOG.md         # la cola priorizada (tabla) + lista de Archivo (done)
+  DECISIONS.md       # el porqué de las reglas de CLAUDE.md (historia de incidentes, por ticket)
   TEMPLATE.md        # plantilla para tickets nuevos
   tickets/           # tickets activos (todo / blocked / doing)
     T-XXX-<slug>.md

@@ -466,8 +466,9 @@ cron (`retry-pending-payouts`, `10,40 * * * *`), but it only drains money the
 synchronous path could not send — a recovery path, not the normal one.
 **There is no administrative payout endpoint** (T-220 deleted it). Payout rows
 are written by three service-role paths and no other: the webhook's transfer
-path, the retry worker, and `voidHoldsForCharge` on `charge.refunded` — the last
-being the one that *does* cancel holds, which is why "who can cancel a hold?"
+path, the retry worker, and the clawback path (`applyReversalToHolds` on
+`charge.refunded`, `freezeHoldsForCharge` / `restoreHoldsForCharge` on a dispute)
+— the last being the one that *does* void holds, which is why "who can cancel a hold?"
 must not be answered from the first two alone.
 
 The endpoint it replaced could set any status on any row, and the reason that
@@ -828,7 +829,9 @@ Status snapshot:
 
 ## Cross-references
 
-- `CLAUDE.md` — engineering conventions, security utilities, code style.
+- `CLAUDE.md` — engineering conventions, security utilities, code style. It
+  carries the rules; `backlog/DECISIONS.md` carries the incidents behind them
+  (keyed by ticket id), and this document carries the flows.
 - `docs/deployment.md` — production go-live checklist: env vars, migrations,
   Stripe live-mode, Resend domain, security headers/CSP, post-deploy smoke test.
 - `docs/AI_MATCHING_AUDIT.md` — detailed reusability assessment of the AI
