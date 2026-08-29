@@ -19,11 +19,10 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 | 6 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
 | 7 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
 | 8 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
-| 9 | P2 | T-258 | `CLAUDE.md` pesa ~29k tokens y se carga entero en cada sesión | — | todo |
-| 10 | P2 | T-266 | El canal de alertas de dinero es opcional, no verificado, y degrada en silencio | — | todo |
-| 11 | P2 | T-267 | Un carrito de invitado de más de ~46 fotos no puede pagar, y nadie se entera | — | todo |
-| 12 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
-| 13 | P3 | T-223 | Carrito de invitado sin sincronización entre pestañas | — | todo |
+| 9 | P2 | T-266 | El canal de alertas de dinero es opcional, no verificado, y degrada en silencio | — | todo |
+| 10 | P2 | T-267 | Un carrito de invitado de más de ~46 fotos no puede pagar, y nadie se entera | — | todo |
+| 11 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
+| 12 | P3 | T-223 | Carrito de invitado sin sincronización entre pestañas | — | todo |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |
@@ -103,6 +102,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 ## Archivo (done)
 
+- **T-258** · Docs (P2): `CLAUDE.md` pesaba **1.208 líneas / 118 KB / ~29k tokens** y se carga entero al empezar cada sesión. Separadas las **reglas** (invariantes y prohibiciones — lo que impide reintroducir el bug, tiene que estar cargado siempre) de la **arqueología** (qué pasó en T-219/T-249/T-252, cuánto costó y en qué orden — se consulta al tocar esa zona). Nuevo **`backlog/DECISIONS.md`** (898 líneas, 10 áreas) con la historia de incidentes **indexada por ticket**, de modo que un `(T-249)` en `CLAUDE.md` es el ancla que se busca allí; `CLAUDE.md` conserva **todas** las reglas con puntero de sección; `ARCHITECTURE.md` sigue siendo el dueño de flujos y diagramas. **Verificación del criterio 4:** los **54 ⚠️** del original recorridos uno a uno y confirmados vivos (incluidas las trampas caras que nombra el ticket: `user_roles` vacío, `active_role`, `eventAcceptsBundleConfig` vs `eventSupportsBundles`), más un barrido de **187 símbolos** y **132 rutas** contra `src/`/`test/`/disco y validación de anclas y enlaces. **Ese barrido encontró una referencia muerta real:** `voidHoldsForCharge` no existe — los holds los anula el camino de clawback (`applyReversalToHolds`; `freezeHoldsForCharge`/`restoreHoldsForCharge` en disputa) — y una disputa **ganada** restaura acotando por **`frozen_by_dispute_id`**, no por `void_reason = 'dispute'` (acotar por el motivo resucitaba holds que un reembolso real había anulado); corregido en `CLAUDE.md`, `DECISIONS.md` y `ARCHITECTURE.md`. **Resultado: 118 KB → 84 KB (~20,7k tokens, −29%)**, por debajo del objetivo `<12k` del DoD y **a propósito**: retirada toda la narrativa, lo que queda es invariante tras invariante, y las Notas del ticket mandan sobre el número ("un recorte que deje `CLAUDE.md` bonito pero pierda un ⚠️ es un fracaso"); la única palanca que queda sería quitar la cláusula de *porqué* de cada regla (~15k tokens) a costa de su disuasorio. Detectado y **no** tocado por alcance: el diagrama ER de `ARCHITECTURE.md` aún muestra `PAYMENT_ACCOUNTS`, `AI_SEARCH_PROFILES` y `user_roles`, eliminadas en T-219 — material de T-256. Sin cambios de código: solo documentación — PR #321
 - **T-219** · Refactor/BD (P2, `Riesgo: alto` → plan mode + OpenSpec + `/code-review high`): capa
   arqueológica documentada como muerta y nunca eliminada, que **no era inerte**. `payment_accounts`
   guardaba datos bancarios/PayPal de fotógrafos en un `jsonb` con **cero lectores** (superseded por
