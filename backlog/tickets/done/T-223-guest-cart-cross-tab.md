@@ -1,12 +1,12 @@
 # T-223 · Carrito de invitado sin sincronización entre pestañas
 
 - **Prioridad:** P3
-- **Estado:** todo
+- **Estado:** done
 - **Riesgo:** normal
 - **Blockers:** ninguno
 - **Rama:** `fix/guest-cart-cross-tab`  (tipo = fix)
 - **OpenSpec change:** —
-- **PR:** —
+- **PR:** #322
 
 ## Requerimiento
 
