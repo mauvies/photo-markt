@@ -1,12 +1,12 @@
 # T-258 · `CLAUDE.md` pesa ~29k tokens y se carga entero en cada sesión
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Riesgo:** normal  (solo documentación)
 - **Blockers:** ninguno
 - **Rama:** `docs/slim-claude-md`  (tipo = chore)
 - **OpenSpec change:** —
-- **PR:** —
+- **PR:** #321
 
 ## Requerimiento
 
