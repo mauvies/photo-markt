@@ -323,6 +323,13 @@ History: DECISIONS.md §3.
 **carts / cart_items**
 `carts: id, user_id` — `cart_items: id, cart_id, photo_id, photographer_id, unit_price_cents, allocated_price_cents, access_share_code`
 - Guest cart in `localStorage` under `photo-markt_guest_cart`; merged on login via `src/components/guest-cart-merge.tsx`
+- ⚠️ **The guest cart is shared state between tabs (T-223).** `GuestCartProvider` listens for `storage` and
+  adopts what another tab wrote — without it two tabs diverge and the next write from the stale one clobbers
+  the other's cart wholesale, since each serializes its own array over the one key. **Every read of the
+  stored value goes through `parseGuestCart` (`src/lib/guest-cart.ts`)**, which fails closed to an empty
+  cart: the value is user-writable, and one entry without a numeric `unitPriceCents` turns `subtotalCents`
+  into `NaN`. The listener must never touch `hydrated` — consumers treat an empty cart as real only once it
+  is true (T-176)
 - **`allocated_price_cents` (T-204) — the COMMITTED bundle allocation.** The discounted total is split
   across the photos exactly (`allocateBundleTotalCents`, largest remainder) and written **before** the
   Stripe session is created. ⚠️ **The webhook READS it (`allocated_price_cents ?? unit_price_cents`) and

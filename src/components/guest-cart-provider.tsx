@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { GUEST_CART_KEY, type GuestCartItem } from '@/lib/guest-cart';
+import { GUEST_CART_KEY, type GuestCartItem, parseGuestCart } from '@/lib/guest-cart';
 
 interface GuestCartContextValue {
   items: GuestCartItem[];
@@ -34,16 +34,28 @@ export function GuestCartProvider({ children }: { children: React.ReactNode }) {
 
   // Load from localStorage on mount
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(GUEST_CART_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setItems(parsed);
-      }
-    } catch {
-      // ignore parse errors
-    }
+    setItems(parseGuestCart(localStorage.getItem(GUEST_CART_KEY)));
     setHydrated(true);
+  }, []);
+
+  // Adopt what another tab wrote (T-223). Without this the two tabs diverge and
+  // the next write from the stale one clobbers the other's cart wholesale, since
+  // each serializes its own array over the same key. The `storage` event only
+  // fires in the OTHER tabs, so this can't loop with the persist effect below.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      // `key === null` is `localStorage.clear()` — it carries no `newValue`, so
+      // re-read the key instead of assuming the cart is gone.
+      if (event.key !== null && event.key !== GUEST_CART_KEY) return;
+      const raw = event.key === null ? localStorage.getItem(GUEST_CART_KEY) : event.newValue;
+      const next = parseGuestCart(raw);
+      // Keep the previous reference when nothing actually changed: a plain
+      // setItems would re-render every consumer (cart badge, every gallery
+      // add-button) on a write that said the same thing.
+      setItems((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   // Persist to localStorage on every change (after hydration)

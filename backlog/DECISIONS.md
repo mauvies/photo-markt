@@ -197,6 +197,25 @@ it existed, an event that was public when the photo was added and private at che
 charged for. Never treat the display-only `event_share_code` (the event's *current* code, joined for
 the `/events/[shareCode]` link) as the access proof.
 
+### T-223 — the guest cart is shared state between tabs
+
+`GuestCartProvider` read `localStorage` on mount and wrote on every change, but never listened for
+`storage`. Two open tabs diverged: adding a photo in tab A never appeared in B, and B's next write
+clobbered A's cart wholesale, because each tab serializes its own array over the one key. It is a real
+shape for this product — buyers browse an event and open photos in new tabs.
+
+Convergence is last-writer-wins on the key: the tab that receives the event adopts the value the event
+carries, rather than merging. A merge would have to distinguish "not added here yet" from "removed
+there", which the stored array cannot express. What the fix removes is the clobber — a tab that is
+current cannot overwrite work it never saw.
+
+Two details the listener has to get right: `event.key === null` is `localStorage.clear()` and carries no
+`newValue`, so the key is re-read rather than assumed gone; and `hydrated` is never touched, or the empty
+state flashes again (T-176).
+
+`parseGuestCart` came out of the same change. The mount path used to `setItems(JSON.parse(stored))`
+unguarded, so a non-array payload reached `items` and broke every consumer that maps over it.
+
 ### T-211 — who may set `watermark_enabled`
 
 The rule had drifted into four hand-written copies and two disagreed: `updateEventAction` had lost
