@@ -33,16 +33,21 @@
  * the stack with cron triggers on its free plan. No new infra.
  */
 
+import { getGuestOrderStatusById } from '@/database/queries/guest-orders';
+import { getOrderStatusById } from '@/database/queries/orders';
 import {
   claimPayoutForTransfer,
   claimPayoutsForBatch,
+  clearDisputeFreezeMarks,
   holdPayoutRow,
   listPayableHolds,
+  listStaleDisputeFreezes,
   listStaleProcessingBatches,
   listStaleProcessingSingles,
   listUnconfirmedReversals,
   type Payout,
   releaseClaimedPayouts,
+  restoreHoldsForCharge,
   settleBatchAsPaid,
   settlePayoutPaid,
 } from '@/database/queries/payouts';
@@ -64,6 +69,7 @@ import {
   findTransferByGroup,
   reconcileAndPersistConnectStatus,
 } from '@/lib/stripe/connect';
+import { retrieveChargeRefundState, retrieveDisputeOutcome } from '@/lib/stripe/disputes';
 import { inngest } from '../client';
 import type { InngestStepRunner } from '../step';
 
@@ -101,6 +107,32 @@ const UNCONFIRMED_REVERSAL_AGE_MS = 60 * 60 * 1000; // 1 hour
  */
 const UNCONFIRMED_REVERSAL_ALERT_WINDOW_SEC = 24 * 60 * 60;
 
+/**
+ * How long a payout may carry a dispute freeze before the sweep asks Stripe what
+ * happened to that dispute (T-265).
+ *
+ * Six hours: far above any Stripe redelivery interval (so a `closed` event still
+ * in flight is never raced) and far below a dispute's own lifetime — which does
+ * not matter anyway, because "still open" is answered by Stripe rather than by
+ * age. That is the whole reason this window can be hours instead of the ~90 days
+ * a purely local sweep would have needed.
+ */
+const STALE_FREEZE_AGE_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+/** Same reasoning as the unconfirmed-reversal window: a state, not a pass. */
+const FREEZE_STUCK_ALERT_WINDOW_SEC = 24 * 60 * 60;
+
+/**
+ * How many distinct disputes the freeze sweep may ask Stripe about in one pass.
+ *
+ * Each one is a sequential round-trip inside a single Inngest step, on a cron
+ * that runs 48×/day. Unbounded, the loop grows until the step outlives its
+ * invocation — and because this step runs before the paying steps, its failure
+ * would stop every payout. Whatever does not fit is carried in the alert as
+ * `deferredDisputes` rather than dropped quietly.
+ */
+const MAX_FREEZE_DISPUTES_PER_TICK = 25;
+
 export interface RetryPayoutsResult {
   transfersCreated: number;
   rowsPaid: number;
@@ -112,6 +144,10 @@ export interface RetryPayoutsResult {
   /** Stale batches recovered from an existing Stripe transfer instead of re-sent. */
   batchesRecovered: number;
   releasedClaims: number;
+  /** Dispute freezes released because Stripe says the dispute closed without loss. */
+  freezesReleased: number;
+  /** Frozen rows whose dispute Stripe could not settle — reported, never guessed. */
+  freezesUnresolved: number;
 }
 
 /** Injected so the integration test can drive the flow without Stripe. */
@@ -119,12 +155,16 @@ export interface RetryPayoutsDeps {
   createTransfer: typeof createTransfer;
   findTransferByGroup: typeof findTransferByGroup;
   reconcileAndPersistConnectStatus: typeof reconcileAndPersistConnectStatus;
+  retrieveDisputeOutcome: typeof retrieveDisputeOutcome;
+  retrieveChargeRefundState: typeof retrieveChargeRefundState;
 }
 
 const defaultDeps: RetryPayoutsDeps = {
   createTransfer,
   findTransferByGroup,
   reconcileAndPersistConnectStatus,
+  retrieveDisputeOutcome,
+  retrieveChargeRefundState,
 };
 
 export const retryPendingPayouts = inngest.createFunction(
@@ -169,6 +209,31 @@ function toPayableRow(row: Payout): PayableRow {
   };
 }
 
+/**
+ * Is any of these rows' orders still revoked? `true` / `false` / `null` for "could
+ * not tell", which the caller must treat exactly like `true` (T-265).
+ *
+ * `payouts.order_kind` says which table to ask; a row with no order reference
+ * cannot be checked and so cannot be cleared.
+ */
+async function isAnyOrderStillDisputed(rows: Payout[]): Promise<boolean | null> {
+  for (const row of rows) {
+    if (!row.order_id || !row.order_kind) return null;
+    try {
+      const status =
+        row.order_kind === 'guest_order'
+          ? await getGuestOrderStatusById(adminClient, row.order_id)
+          : await getOrderStatusById(adminClient, row.order_id);
+      if (status === null) return null;
+      if (status === 'disputed') return true;
+    } catch (err) {
+      console.error(`[retry-payouts] could not read order ${row.order_id}:`, err);
+      return null;
+    }
+  }
+  return false;
+}
+
 /** What is still owed on a row after any clawback. */
 function payableCents(row: Pick<Payout, 'amount_cents' | 'reversed_amount_cents'>): number {
   return Math.max(0, row.amount_cents - (row.reversed_amount_cents ?? 0));
@@ -192,6 +257,8 @@ export async function runRetryPendingPayoutsFlow(
     photographersNotActive: 0,
     batchesRecovered: 0,
     releasedClaims: 0,
+    freezesReleased: 0,
+    freezesUnresolved: 0,
   };
 
   // ── 0. Recover batches abandoned mid-flight ──────────────────────────────
@@ -377,6 +444,197 @@ export async function runRetryPendingPayoutsFlow(
     });
     return null;
   });
+
+  // ── 1b. Release dispute freezes that outlived their dispute ─────────────
+  // A freeze is a MARK, not a status: `listPayableHolds` refuses every row
+  // carrying `frozen_by_dispute_id`, and `restoreHoldsForCharge` — reachable only
+  // from the `charge.dispute.closed` branch of the webhook — is its only writer.
+  // One failed unfreeze therefore strands the row permanently, and the
+  // photographer is still shown a balance for it (T-265).
+  //
+  // ⚠️ Unlike the reversal sweep above, this one REPAIRS, and the difference is a
+  // property of the question rather than a change of policy. There the question
+  // was "does this transfer exist?", answered by a listing whose `has_more` makes
+  // `unknown` unavoidable. Here it is `disputes.retrieve(dp_x)` — by id,
+  // conclusive, and a failed read is distinguishable from an answer.
+  //
+  // ⚠️ Releasing is NOT just `restoreHoldsForCharge`. The webhook follows its own
+  // restore with `applyClawback({ reason: 'refund' })`, and that second half is
+  // load-bearing: a chargeback freeze leaves the row `cancelled`, which BOTH
+  // clawback selectors skip, so a refund landing while it is frozen records
+  // nothing on it and a later restore would hand back the FULL original amount
+  // for a sale the buyer got back. This sweep refuses to release any charge that
+  // shows a refund instead of reconciling one from a cron — the same protection,
+  // without moving money on a schedule.
+  //
+  // Runs BEFORE the payable-holds step so a row released here is paid this pass.
+  const freezeSweep = await step.run('release-stale-dispute-freezes', async () => {
+    const empty = { released: 0, unresolved: 0, deferred: 0 };
+    let frozen: Payout[];
+    try {
+      frozen = await listStaleDisputeFreezes(
+        adminClient,
+        new Date(nowMs - STALE_FREEZE_AGE_MS).toISOString(),
+        MAX_STALE_ROWS_PER_TICK,
+      );
+    } catch (err) {
+      // ⚠️ Recovery must not gate the money. This step runs before the paying
+      // steps, so letting a read error propagate would stop every payout in the
+      // run — a strictly worse outcome than skipping one recovery pass.
+      console.error('[retry-payouts] could not list stale dispute freezes:', err);
+      return empty;
+    }
+    if (frozen.length === 0) return empty;
+
+    // One Stripe read per DISPUTE, not per row: a dispute freezes every hold on
+    // its charge, so a multi-photographer order would otherwise ask the same
+    // question once per photographer.
+    const byDispute = new Map<string, { disputeId: string; chargeId: string; rows: Payout[] }>();
+    const unresolvable: Payout[] = [];
+    for (const row of frozen) {
+      const disputeId = row.frozen_by_dispute_id;
+      // A freeze with no charge id cannot be acted on by charge — reported rather
+      // than silently skipped.
+      if (!disputeId || !row.stripe_charge_id) {
+        unresolvable.push(row);
+        continue;
+      }
+      const key = `${disputeId}::${row.stripe_charge_id}`;
+      const group = byDispute.get(key);
+      if (group) group.rows.push(row);
+      else byDispute.set(key, { disputeId, chargeId: row.stripe_charge_id, rows: [row] });
+    }
+
+    // ⚠️ Bounded, and the overflow is REPORTED rather than dropped silently. Every
+    // examined dispute costs a sequential Stripe read on a cron that runs 48×/day,
+    // so an unbounded loop grows until the step outlives its invocation — and this
+    // step failing would take the paying steps with it.
+    const groups = [...byDispute.values()];
+    const examined = groups.slice(0, MAX_FREEZE_DISPUTES_PER_TICK);
+    const deferred = groups.length - examined.length;
+    let released = 0;
+
+    for (const { disputeId, chargeId, rows } of examined) {
+      const verdict = await deps.retrieveDisputeOutcome(disputeId);
+
+      // Still open: a chargeback legitimately runs for weeks. Not stuck, not news.
+      if (verdict.outcome === 'open') continue;
+
+      if (verdict.outcome === 'lost') {
+        // Terminal and correct — the buyer took the money back. The row must NOT
+        // be restored, but the MARK must go, or this set never drains: a lost
+        // dispute's rows are never updated again, so they sit at the head of the
+        // `updated_at ASC` window forever and eventually hide every genuinely
+        // stranded freeze behind them.
+        //
+        // Safe to clear only where the clawback is already recorded: a voided row
+        // stays unpayable by status, and a reduced one is payable for exactly the
+        // remainder it is owed. A `pending` row with nothing reversed means the
+        // clawback never ran at all — releasing that would pay a lost chargeback,
+        // so it is reported instead.
+        const settled = rows.filter(
+          (row) => row.status !== 'pending' || (row.reversed_amount_cents ?? 0) > 0,
+        );
+        const unsettled = rows.filter((row) => !settled.includes(row));
+        if (settled.length > 0) {
+          try {
+            await clearDisputeFreezeMarks(
+              adminClient,
+              settled.map((row) => row.id),
+            );
+          } catch (err) {
+            console.error(`[retry-payouts] could not clear freeze for lost ${disputeId}:`, err);
+          }
+        }
+        if (unsettled.length > 0) unresolvable.push(...unsettled);
+        continue;
+      }
+
+      // `missing` / `unknown`: never conclude from a failed or absent read.
+      if (verdict.outcome !== 'closed-not-lost') {
+        unresolvable.push(...rows);
+        continue;
+      }
+
+      // ⚠️ The order half. If `charge.dispute.closed` never ran at all, the order
+      // is still `disputed` — the sale is out of the photographer's `net` and the
+      // buyer is locked out. Paying the hold then breaks the invariant that a hold
+      // sits in `pending` exactly while its sale sits in `net`, and pays for a sale
+      // nobody can download. Restoring access is the webhook's job, not a cron's.
+      const orderStillDisputed = await isAnyOrderStillDisputed(rows);
+      if (orderStillDisputed !== false) {
+        unresolvable.push(...rows);
+        continue;
+      }
+
+      // ⚠️ Any refund on the charge means the released amount would be wrong (see
+      // the note above `retrieveChargeRefundState`). Fail closed: a null read is
+      // "cannot tell", never "no refunds".
+      const refunds = await deps.retrieveChargeRefundState(chargeId);
+      if (!refunds || refunds.amountRefundedCents > 0) {
+        unresolvable.push(...rows);
+        continue;
+      }
+
+      try {
+        // The webhook's own operation: idempotent, scoped to this dispute id, and
+        // it will not resurrect a hold that a real refund voided.
+        const count = await restoreHoldsForCharge(adminClient, chargeId, disputeId);
+        released += count;
+        console.log(
+          `[retry-payouts] released ${count} hold(s) frozen by dispute ${disputeId} (closed '${verdict.status}')`,
+        );
+      } catch (err) {
+        console.error(`[retry-payouts] failed to release freeze for dispute ${disputeId}:`, err);
+        unresolvable.push(...rows);
+      }
+    }
+
+    if (unresolvable.length === 0 && deferred === 0)
+      return { released, unresolved: 0, deferred: 0 };
+
+    // One alert per rolling day for the whole set — the cron runs 48×/day and a
+    // stuck freeze does not fix itself. `rateLimit` fails OPEN, so a limiter
+    // outage costs a duplicate alert rather than a missed one.
+    const claim = await rateLimit({
+      key: 'money-alert:dispute-freeze-stuck',
+      limit: 1,
+      windowSec: FREEZE_STUCK_ALERT_WINDOW_SEC,
+    });
+    if (!claim.ok) return { released, unresolved: unresolvable.length, deferred };
+
+    // Sorted, because the alert names "the oldest" and the array was built in
+    // grouping order — naming a newer row in the one alert throttled to once a day
+    // would send an operator to the wrong place.
+    const oldest = [...unresolvable].sort((a, b) =>
+      (a.updated_at ?? '').localeCompare(b.updated_at ?? ''),
+    )[0];
+    await reportMoneyIncident({
+      kind: 'dispute-freeze-stuck',
+      message:
+        `${unresolvable.length} payout row(s) are still frozen by a dispute this sweep could not ` +
+        'safely release. Every payout selector refuses a frozen row, so each one is money the ' +
+        'photographer is owed and nothing will ever send. Reconcile the dispute, the refunds on ' +
+        'its charge and the order status by hand, then clear the freeze.',
+      context: {
+        rowCount: unresolvable.length,
+        deferredDisputes: deferred,
+        oldestPayoutId: oldest?.id ?? null,
+        oldestChargeId: oldest?.stripe_charge_id ?? null,
+        oldestFrozenByDisputeId: oldest?.frozen_by_dispute_id ?? null,
+        oldestFrozenSince: oldest?.updated_at ?? null,
+        payoutIds: unresolvable
+          .slice(0, 20)
+          .map((row) => row.id)
+          .join(','),
+      },
+    });
+    return { released, unresolved: unresolvable.length, deferred };
+  });
+  // Assigned OUTSIDE the step: on an Inngest replay the body does not re-run, so
+  // a counter mutated inside it would come back 0 in the function's result.
+  result.freezesReleased += freezeSweep.released;
+  result.freezesUnresolved += freezeSweep.unresolved;
 
   // ── 2. Load outstanding holds and resolve who can be paid ────────────────
   const { payableRows, notActive } = await step.run('resolve-payable-holds', async () => {

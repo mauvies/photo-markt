@@ -469,6 +469,38 @@ recovery path, not the normal one.
   un-voids exactly the holds THAT dispute froze, scoped by `frozen_by_dispute_id`** — scoping on
   `void_reason` alone resurrected holds a real refund had voided, paying the photographer for a sale the
   buyer got back.
+- ⚠️ **A freeze is a MARK, not a status, and one failed unfreeze strands the row forever (T-265).**
+  `listPayableHolds` refuses every row carrying `frozen_by_dispute_id`, and `restoreHoldsForCharge` —
+  reachable only from `charge.dispute.closed` — is its only writer. Both `catch` blocks therefore
+  alert (`dispute-freeze-failed` when the freeze fails, so the cron may pay a disputed charge;
+  `dispute-unfreeze-failed` when the release fails, so the money is unpayable) — **still no throw, no
+  status change, same 200**.
+- ⚠️ **A failed FREEZE has no automatic recovery — the alert is it.** The row carries no mark, so the
+  sweep below cannot find it either, and nothing guarantees a later `charge.dispute.updated` (a
+  dispute can go straight from `needs_response` to `closed`).
+- ⚠️ **`release-stale-dispute-freezes` (in `retry-pending-payouts`) is the ONLY exit for a stranded
+  freeze, and it REPAIRS where the reversal sweep does not (T-265).** It asks Stripe per dispute
+  (`disputes.retrieve` — by id, conclusive, unlike `findTransferByGroup`) and **releases only what is
+  unambiguous**. Four refusals, each of which pays real money if dropped:
+  - **`open`** — a chargeback runs for 60–90 days. Not stuck, not news.
+  - **`lost`** — never restored. But the **mark is cleared** on rows the clawback already settled
+    (not `pending`, or `pending` with `reversed_amount_cents > 0`), because otherwise the set never
+    drains: those rows are never updated again, so they sit at the head of the sweep's
+    `updated_at ASC` window forever, hiding genuinely stranded freezes behind the row cap and costing
+    a Stripe read per pass. A `pending` row with nothing reversed means the clawback never ran —
+    reported, never cleared.
+  - ⚠️ **any refund on the charge** — a chargeback freeze leaves the row `cancelled`, which **both**
+    clawback selectors skip (`applyReversalToHolds` takes `pending`, `listReversibleRowsForCharge`
+    takes `paid`/`processing`/`reversed`), so a refund landing while it is frozen records **nothing**
+    on it. Releasing would hand back the FULL amount for a refunded sale. The webhook solves this by
+    following its restore with `applyClawback({ reason: 'refund' })`; the sweep refuses instead, so a
+    cron never moves money.
+  - ⚠️ **an order still `disputed`** — that sale is out of the photographer's `net` and the buyer is
+    locked out, so paying breaks "a hold sits in `pending` exactly while its sale sits in `net`".
+    Restoring access is the webhook's job, not a cron's.
+  A failed or missing read is **never** a verdict. Everything unresolved is reported once a day under
+  `dispute-freeze-stuck`, and the Stripe reads are bounded per pass with the overflow named in the
+  alert (`deferredDisputes`) rather than dropped silently.
 
 ### Driving the transfers, and the silent failures
 

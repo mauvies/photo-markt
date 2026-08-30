@@ -869,6 +869,84 @@ export async function listUnconfirmedReversals(
 }
 
 /**
+ * Clear the dispute-freeze mark on rows whose dispute is over, WITHOUT touching
+ * their status (T-265).
+ *
+ * ⚠️ Not {@link restoreHoldsForCharge}, and the difference is the whole point:
+ * that one un-voids a `cancelled`/`void_reason='dispute'` row back to `pending`,
+ * which is exactly right for a dispute we WON and catastrophic for one we lost —
+ * it would make a chargeback's money payable again. This only removes the mark,
+ * so a voided row stays voided and unpayable by status, while a row the clawback
+ * merely reduced becomes payable for the remainder it is genuinely owed.
+ *
+ * It exists so the sweep's input set DRAINS. A lost dispute keeps its mark
+ * forever otherwise, and since those rows are never updated again they sort to
+ * the head of the sweep's `updated_at ASC` window permanently — eventually
+ * hiding every genuinely stranded freeze behind them, and costing one Stripe
+ * read each, on every pass, forever.
+ */
+export async function clearDisputeFreezeMarks(
+  supabase: SupabaseServerClient,
+  payoutIds: string[],
+): Promise<number> {
+  if (payoutIds.length === 0) return 0;
+
+  const { data, error } = await supabase
+    .from('payouts')
+    .update({ frozen_by_dispute_id: null })
+    .in('id', payoutIds)
+    .not('frozen_by_dispute_id', 'is', null)
+    .select('id');
+
+  if (error) {
+    throw new Error(`Failed to clear dispute freeze marks: ${getErrorMessage(error)}`);
+  }
+
+  return (data ?? []).length;
+}
+
+/**
+ * Payout rows whose dispute freeze has outlived any plausible resolution (T-265).
+ *
+ * A freeze is a mark, not a status: `listPayableHolds` refuses every row carrying
+ * `frozen_by_dispute_id`, and {@link restoreHoldsForCharge} — reachable only from
+ * the `charge.dispute.closed` branch of the webhook — is its ONLY writer. So a
+ * single failed unfreeze strands the row permanently, and nothing else would ever
+ * look at it again. This is what looks at it.
+ *
+ * ⚠️ Matching rows are **not** proof of a problem. A lost chargeback keeps its
+ * mark forever (the `lost` path never restores, and must not), and an open
+ * chargeback legitimately stays open for 60–90 days. Both match here. The caller
+ * resolves each dispute against Stripe before touching anything — see
+ * `retrieveDisputeOutcome`.
+ *
+ * `updated_at` is the freeze clock: the `payouts_set_updated_at` trigger
+ * (`20250218000000_create_payouts.sql`) stamps it on every UPDATE, and for a
+ * frozen row the freeze is the last write. Deliberately no `frozen_at` column —
+ * this needs no migration, and the partial index `payouts_frozen_by_dispute_idx`
+ * (`20260809000000`) already covers the predicate.
+ */
+export async function listStaleDisputeFreezes(
+  supabase: SupabaseServerClient,
+  frozenBeforeIso: string,
+  limit = 100,
+): Promise<Payout[]> {
+  const { data, error } = await supabase
+    .from('payouts')
+    .select('*')
+    .not('frozen_by_dispute_id', 'is', null)
+    .lt('updated_at', frozenBeforeIso)
+    .order('updated_at', { ascending: true })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(`Failed to list stale dispute freezes: ${getErrorMessage(error)}`);
+  }
+
+  return (data ?? []) as Payout[];
+}
+
+/**
  * Confirm a reserved reversal by attaching Stripe's reversal id (T-215).
  *
  * The amount was already committed by {@link reservePayoutReversal}; this only

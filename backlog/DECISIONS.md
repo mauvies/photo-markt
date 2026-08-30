@@ -424,6 +424,71 @@ restoring permanent ZIP + library access for a refunded buyer and putting the sa
 photographer's `net` while its payout row sat `cancelled`. The money was safe (the exactly-once index
 blocks the re-drive); the access was not.
 
+### T-265 — a freeze that outlives its dispute
+
+Two `catch` blocks on the dispute path wrote to the console and nothing else, and the selector
+exclusion in `listPayableHolds` made the first of them terminal.
+
+A failed **unfreeze** is the expensive one: the row keeps `frozen_by_dispute_id`, every payout
+selector refuses it, and `restoreHoldsForCharge` — reachable only from `charge.dispute.closed` — is
+its only writer. The debt is real, recorded and permanently unpayable, and the photographer is still
+shown a balance for it: an inquiry-frozen row stays `pending` and keeps counting in
+`getTotalPendingPayouts`, while a chargeback-frozen row leaves `pending` just as the won dispute
+returns the sale to their `net`. A failed **freeze** is the mirror: the row keeps its `hold_reason`
+and charge id with no mark, so the retry cron pays a charge that is under dispute.
+
+**Why the sweep asks Stripe, when T-264's sweep deliberately does not.** Two facts about the data
+decide it, not a change of policy:
+
+- A **lost** dispute leaves the row `cancelled` + `void_reason='dispute'` + `frozen_by_dispute_id`
+  **forever** — the `lost` path never restores, and must not. That is byte-for-byte the same local
+  state as "won, but the unfreeze failed". A purely local sweep would alert on every lost chargeback,
+  every day, and bury the real ones.
+- A chargeback legitimately stays open for 60–90 days, so an age-based local sweep could not call
+  anything stale for three months. "Still open at Stripe" is a definitive non-alert, which is what
+  lets the staleness window be six hours.
+
+The question is also different in kind from T-264's. There it was "does this transfer exist?",
+answered by a listing whose `has_more` makes `unknown` unavoidable; here it is
+`disputes.retrieve(dp_x)` — by id, where a failed read is distinguishable from an answer. And the
+repair moves no money at Stripe: `restoreHoldsForCharge` clears a mark, is idempotent, is scoped to
+one dispute id, and hands the row back to the ordinary payout path with all its guards intact.
+
+**Rejected:** having the `lost` branch clear the mark so a local sweep would be unambiguous. It
+changes the webhook's money flow, it needs a new rule for what to do when the clawback itself failed
+(clearing the mark there would make a lost dispute payable), and it does nothing about the 90-day
+problem.
+
+**What the review changed.** The first cut released a freeze with `restoreHoldsForCharge` alone.
+Four independent reviewers found the same hole, and it is worth recording because the shape recurs:
+**a chargeback freeze leaves the row `cancelled`, and both clawback selectors skip that status** —
+`applyReversalToHolds` takes only `pending`, `listReversibleRowsForCharge` only
+`paid`/`processing`/`reversed`. So a refund landing while the row is frozen records nothing on it
+(`reversed_amount_cents` stays 0), and a later restore hands back the **full original amount** for a
+sale the buyer got back — the exact loss the webhook's post-restore `applyClawback({reason:'refund'})`
+exists to prevent, and which the sweep had silently dropped. Because the step runs before the paying
+step, the money would go out in the same pass.
+
+The fix is a refusal rather than a reconcile: the sweep declines to release any charge with refunds,
+any charge it cannot read, and any row whose order is still `disputed` (paying there would break
+"a hold sits in `pending` exactly while its sale sits in `net`", and pay for a sale the buyer cannot
+access). That keeps the property that made the design defensible — **a cron never moves money** — at
+the cost of leaving those cases to the daily alert.
+
+The same review found that the selector never drained: a lost dispute keeps its mark forever, those
+rows are never updated again, so under `updated_at ASC` they occupy the head of the row cap
+permanently and eventually hide every genuinely stranded freeze — a row no selector picks up, which is
+the precise failure this ticket exists to remove. Hence `clearDisputeFreezeMarks` on a confirmed-lost
+dispute whose clawback is already recorded, plus an explicit per-pass bound on the Stripe reads with
+the overflow named in the alert.
+
+**Known gap, accepted.** A successful release logs rather than alerting — the failure that stranded
+the row already alerted. So if `charge.dispute.closed` never arrives at all (the T-192 shape, where
+the production endpoint 307-redirected and every delivery died), the sweep repairs silently and
+nobody learns events are being dropped. The counts are assigned **outside** `step.run` (a counter
+mutated inside it reads 0 after an Inngest replay), so the run result really does carry them; T-256 is
+the ticket about that class of drift.
+
 ### T-249 — the invisible `continue`
 
 The ledger's `try/catch` + `continue` is correct — a failure there must not throw, because a 500

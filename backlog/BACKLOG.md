@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-265 | Un freeze/restore de disputa que falla deja la fila impagable para siempre, en silencio | — | todo |
+| 1 | P1 | T-265 | Un freeze/restore de disputa que falla deja la fila impagable para siempre, en silencio | — | doing |
 | 2 | P1 | T-256 | Deriva entorno↔repo: nada comprueba que lo desplegado sea lo que dice el repo | — | todo |
 | 3 | P1 | T-255 | Nadie reconcilia: un pedido `completed` sin filas en `payouts` no lo detecta nada | — | todo |
 | 4 | P2 | T-254 | El worker de reintentos de payouts solo escribe en consola — un hold atascado para siempre no avisa a nadie | — | todo |

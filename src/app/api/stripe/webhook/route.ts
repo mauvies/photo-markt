@@ -1756,7 +1756,32 @@ export async function POST(request: Request) {
             { revokesAccess: chargeback },
           );
         } catch (err) {
-          console.error(`[payouts] failed to freeze holds for disputed charge ${chargeId}:`, err);
+          // ⚠️ The failure is invisible from here on (T-265). The rows keep their
+          // `hold_reason` and charge id with no freeze mark, so `listPayableHolds`
+          // still selects them and the retry cron may pay a charge that is under
+          // dispute within 30 minutes.
+          //
+          // ⚠️ **The alert IS the recovery path — there is no automatic second
+          // chance.** A freeze that failed and a charge that was never disputed
+          // are the same row, so the stale-freeze sweep cannot find it either. A
+          // later `charge.dispute.updated` would re-run this idempotent body, but
+          // nothing guarantees one arrives: a dispute can go straight from
+          // `needs_response` to `closed`. Act on this alert. No throw all the
+          // same: a 500 makes Stripe redeliver a money operation.
+          await reportMoneyIncident({
+            kind: 'dispute-freeze-failed',
+            message:
+              'Payout holds for a disputed charge could not be frozen, so they are still payable. ' +
+              'The retry worker may transfer money that is under dispute; freeze or cancel them by hand.',
+            context: {
+              chargeId,
+              disputeId: dispute.id,
+              disputeStatus: dispute.status,
+              orderId: orderRef,
+              chargeback: chargeback ? 'yes' : 'no',
+            },
+            cause: err,
+          });
         }
 
         await reportMoneyIncident({
@@ -1870,7 +1895,27 @@ export async function POST(request: Request) {
               );
             }
           } catch (err) {
-            console.error(`[payouts] failed to unfreeze holds for dispute ${dispute.id}:`, err);
+            // ⚠️ The expensive half of T-265. `listPayableHolds` refuses every row
+            // carrying `frozen_by_dispute_id` and this call is its only writer, so
+            // the rows are now recorded, real and permanently unpayable — while
+            // the photographer is still shown a balance for them. Recovery is the
+            // `release-stale-dispute-freezes` sweep in `retry-pending-payouts`,
+            // which is why this alert says so rather than demanding immediate
+            // hands. No throw: a 500 makes Stripe redeliver.
+            await reportMoneyIncident({
+              kind: 'dispute-unfreeze-failed',
+              message:
+                'Payout holds frozen by a dispute could not be released after it closed, so they ' +
+                'are unpayable. The stale-freeze sweep retries this; it is a problem only if the ' +
+                'sweep then reports them as stuck.',
+              context: {
+                chargeId,
+                disputeId: dispute.id,
+                disputeStatus: dispute.status,
+                orderId: orderRef,
+              },
+              cause: err,
+            });
           }
 
           // ⚠️ Unfreezing is not the end of it: a refund may have landed WHILE the

@@ -225,6 +225,36 @@ export async function getOrder(
 /**
  * Get order by Stripe PaymentIntent ID
  */
+/**
+ * The status of one order, by id — nothing else (T-265).
+ *
+ * Deliberately not {@link getOrder}: that one loads items and enforces a caller
+ * identity. The freeze sweep runs as the service role and only needs to know
+ * whether the sale is still revoked, because releasing a payout for an order
+ * still sitting on `disputed` would pay a photographer for a sale the buyer
+ * cannot access — and break the invariant that a hold sits in `pending` exactly
+ * while its sale sits in `net`.
+ *
+ * Returns `null` when there is no such row, which the caller must treat as "I
+ * cannot tell", never as "not disputed".
+ */
+export async function getOrderStatusById(
+  supabase: SupabaseServerClient,
+  orderId: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('status')
+    .eq('id', orderId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to read order status: ${getErrorMessage(error)}`);
+  }
+
+  return data?.status ?? null;
+}
+
 export async function getOrderByPaymentIntentId(
   supabase: SupabaseServerClient,
   paymentIntentId: string,

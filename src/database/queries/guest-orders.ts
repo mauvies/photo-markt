@@ -271,6 +271,27 @@ export async function getGuestOrderBySessionId(
  * and a charge with no guest order behind it (the authenticated case) is an
  * ordinary outcome the caller branches on, not an error.
  */
+/**
+ * The status of one guest order, by id — the guest twin of `getOrderStatusById`
+ * (T-265). `payouts.order_kind` says which table to ask.
+ */
+export async function getGuestOrderStatusById(
+  supabase: SupabaseServerClient,
+  guestOrderId: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('guest_orders')
+    .select('status')
+    .eq('id', guestOrderId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to read guest order status: ${getErrorMessage(error)}`);
+  }
+
+  return data?.status ?? null;
+}
+
 export async function getGuestOrderByPaymentIntentId(
   supabase: SupabaseServerClient,
   paymentIntentId: string,
