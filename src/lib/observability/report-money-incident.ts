@@ -54,24 +54,27 @@ const lastEmailAlertMsByKind = new Map<MoneyIncidentKind, number>();
 const EMAIL_SEND_TIMEOUT_MS = 5_000;
 
 /**
- * ⚠️ Only `payout-not-recorded` (T-249) and `purchase-email-not-delivered`
- * (T-253) have producers on `main` today. The five
- * dispute/reversal kinds are **inherited deliberately** from the parked T-215 /
- * PR #290 branch, which this file was rescued from rather than rewritten:
- * deleting them would guarantee a conflict when that branch resumes, and would
- * split the reporter into two divergent implementations — the exact thing
- * keeping one file avoids. Do not treat them as dead code to prune.
+ * Every kind has a producer: the webhook raises the dispute, refund and
+ * order-assembly ones, `apply-clawback.ts` raises `reversal-failed`, and
+ * `retry-pending-payouts.ts` raises the two sweep kinds.
+ *
+ * ⚠️ **A kind is never shared to save one.** The Sentry fingerprint is
+ * `['money-incident', kind]` and the email throttle is keyed on `kind`, so two
+ * distinct problems under one kind collapse into a single issue and the first to
+ * fire silences the other for the window (T-264). Add a kind whenever the
+ * remediation differs — especially for a recovery sweep, which alerts about a
+ * STATE and would otherwise mask its neighbours.
  */
 export type MoneyIncidentKind =
-  /** A dispute was opened against a purchase. (T-215 — no producer yet.) */
+  /** A dispute was opened against a purchase (T-215). */
   | 'dispute-opened'
-  /** A dispute was lost — money and access are gone. (T-215 — no producer yet.) */
+  /** A dispute was lost — money and access are gone (T-215). */
   | 'dispute-lost'
-  /** A dispute was won — access restored. (T-215 — no producer yet.) */
+  /** A dispute was won — access restored (T-215). */
   | 'dispute-won'
-  /** A reversal could not be created (insufficient balance, API error). (T-215 — no producer yet.) */
+  /** A reversal could not be created (insufficient balance, API error) — T-215. */
   | 'reversal-failed'
-  /** A payout needs a human to resolve it. (T-215 — no producer yet.) */
+  /** A payout needs a human to resolve it (T-215). */
   | 'needs-reconciliation'
   /**
    * A sale skipped the photographer's transfer and left no recoverable debt
@@ -105,7 +108,46 @@ export type MoneyIncidentKind =
    * sharing one kind across the sweeps would collapse four distinct problems into
    * one issue and let whichever fires first silence the others.
    */
-  | 'reversal-unconfirmed';
+  | 'reversal-unconfirmed'
+  /**
+   * A dispute opened and the charge's outstanding holds could NOT be frozen
+   * (T-265).
+   *
+   * The rows keep their `hold_reason` and charge id with no freeze mark, so
+   * `listPayableHolds` still selects them and the retry cron will pay money that
+   * is under dispute. Nothing local can retry it — a freeze that failed and a
+   * charge that was never disputed look identical from the ledger — so the only
+   * honest retry is a later `charge.dispute.updated`, which re-runs the same
+   * idempotent body.
+   */
+  | 'dispute-freeze-failed'
+  /**
+   * A dispute closed without loss and the freeze could NOT be released (T-265).
+   *
+   * The mirror of `dispute-freeze-failed`, and the more expensive one:
+   * `listPayableHolds` refuses every row carrying `frozen_by_dispute_id` and
+   * `restoreHoldsForCharge` is its only writer, so the debt is real, recorded and
+   * permanently unpayable — while the photographer is still shown a balance for
+   * it. The `release-stale-dispute-freezes` sweep is the recovery path.
+   *
+   * ⚠️ Its OWN kind, opposite to the one above: one leaves money payable that
+   * must not be paid, the other leaves money unpayable that must be. Sharing a
+   * kind would let a burst of one silence the other (the fingerprint and the
+   * email throttle are both keyed on `kind`).
+   */
+  | 'dispute-unfreeze-failed'
+  /**
+   * Payout holds are still frozen long after their dispute should have resolved,
+   * and the sweep could not establish why (T-265).
+   *
+   * Raised only for what the sweep could NOT resolve: a dispute Stripe would not
+   * return, or one that no longer exists there. A dispute Stripe reports as still
+   * open is not stuck, and one it reports as lost is correctly frozen forever —
+   * neither is reported. Aggregated over the whole set and claimed once per
+   * rolling day, because the cron runs 48×/day and this state does not fix
+   * itself.
+   */
+  | 'dispute-freeze-stuck';
 
 export interface MoneyIncident {
   kind: MoneyIncidentKind;

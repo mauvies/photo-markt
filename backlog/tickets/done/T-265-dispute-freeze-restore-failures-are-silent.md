@@ -1,12 +1,12 @@
 # T-265 · Un freeze/restore de disputa que falla deja la fila impagable para siempre, en silencio
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Riesgo:** alto  (pagos)
 - **Blockers:** ninguno
 - **Rama:** `fix/alert-on-dispute-freeze-failures`  (tipo = fix)
-- **OpenSpec change:** —
-- **PR:** —
+- **OpenSpec change:** `alert-on-dispute-freeze-failures`
+- **PR:** #323
 
 ## Requerimiento
 

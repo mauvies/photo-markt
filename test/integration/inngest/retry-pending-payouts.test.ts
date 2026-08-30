@@ -33,6 +33,8 @@ vi.mock('@/lib/observability/report-money-incident', () => ({
 const MINUTE_MS = 60 * 1000;
 /** An hour ahead makes anything written "now" older than the 30-minute window. */
 const FUTURE_NOW = Date.now() + 60 * MINUTE_MS;
+/** Seven hours ahead clears the 6-hour dispute-freeze window too (T-265). */
+const FREEZE_FUTURE_NOW = Date.now() + 7 * 60 * MINUTE_MS;
 
 const passthroughStep: InngestStepRunner = {
   async run<T>(_name: string, fn: () => Promise<T>): Promise<T> {
@@ -63,6 +65,13 @@ function makeDeps(overrides: Partial<RetryPayoutsDeps> = {}): {
       return { id: `tr_stub_${counter}` } as never;
     }),
     findTransferByGroup: vi.fn(async () => ({ outcome: 'none' }) as never),
+    // T-265: inert by default — an OPEN dispute is "not stuck", so a test that
+    // seeds no freeze can never trip the sweep. Tests that care override it.
+    retrieveDisputeOutcome: vi.fn(
+      async () => ({ outcome: 'open', status: 'needs_response' }) as never,
+    ),
+    // A charge with no refunds is the only shape the sweep may release.
+    retrieveChargeRefundState: vi.fn(async () => ({ amountRefundedCents: 0 })),
     // The webhook's live-reconcile helper: pass the stored status straight
     // through so the DB row is what decides.
     reconcileAndPersistConnectStatus: vi.fn(
@@ -94,8 +103,30 @@ async function seedHold(opts: {
   holdReason?: PayoutHoldReason;
   status?: string;
   transferBatchId?: string | null;
+  frozenByDisputeId?: string | null;
+  voidReason?: string | null;
+  reversedCents?: number;
+  /** The sweep refuses to release a hold whose order is still revoked (T-265). */
+  orderStatus?: string;
 }) {
   const sb = createServiceClient();
+
+  // Production always opens a payout row against an order (`openPayoutRow` is
+  // called with `order_id`/`order_kind`), and the freeze sweep reads that order's
+  // status before releasing anything — so the fixture seeds a real one.
+  const buyer = await createTestUser('TALENT');
+  const { data: order, error: orderError } = await sb
+    .from('orders')
+    .insert({
+      user_id: buyer.id,
+      total_amount_cents: opts.amountCents,
+      currency: opts.currency ?? 'eur',
+      status: opts.orderStatus ?? 'completed',
+    })
+    .select('id')
+    .single();
+  if (orderError || !order) throw new Error(`order seed failed: ${orderError?.message}`);
+
   const { data, error } = await sb
     .from('payouts')
     .insert({
@@ -106,6 +137,10 @@ async function seedHold(opts: {
       hold_reason: opts.holdReason ?? 'connect_inactive',
       status: opts.status ?? 'pending',
       transfer_batch_id: opts.transferBatchId ?? null,
+      frozen_by_dispute_id: opts.frozenByDisputeId ?? null,
+      void_reason: opts.voidReason ?? null,
+      reversed_amount_cents: opts.reversedCents ?? 0,
+      order_id: order.id,
       order_kind: 'order',
     })
     .select()
@@ -117,7 +152,9 @@ async function seedHold(opts: {
 async function readPayout(id: string) {
   const { data } = await createServiceClient()
     .from('payouts')
-    .select('status, amount_cents, stripe_transfer_id, hold_reason, transfer_batch_id')
+    .select(
+      'status, amount_cents, stripe_transfer_id, hold_reason, transfer_batch_id, frozen_by_dispute_id, void_reason',
+    )
     .eq('id', id)
     .single();
   return data;
@@ -798,5 +835,376 @@ describe('runRetryPendingPayoutsFlow — unconfirmed reversals (T-264)', () => {
       .mocked(reportMoneyIncident)
       .mock.calls.filter(([incident]) => incident.kind === 'reversal-unconfirmed');
     expect(reversalAlerts).toHaveLength(1);
+  });
+});
+
+/**
+ * T-265: a dispute freeze is a MARK, not a status — `listPayableHolds` refuses
+ * every row carrying `frozen_by_dispute_id`, and `restoreHoldsForCharge` (only
+ * reachable from `charge.dispute.closed`) is its only writer. One failed unfreeze
+ * therefore strands the row permanently. This sweep is its only way out.
+ *
+ * ⚠️ It repairs where the reversal sweep above deliberately does not, and these
+ * tests pin why that is safe: it acts ONLY on a dispute Stripe reports as closed
+ * and not lost, and treats every other answer — including a failed read — as
+ * "touch nothing".
+ */
+describe('runRetryPendingPayoutsFlow — stale dispute freezes (T-265)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    vi.clearAllMocks();
+  });
+
+  async function freezeAlerts() {
+    const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+    return vi
+      .mocked(reportMoneyIncident)
+      .mock.calls.filter(([incident]) => incident.kind === 'dispute-freeze-stuck');
+  }
+
+  it('releases a freeze whose dispute closed without loss, and pays the row in the same pass', async () => {
+    // The failure this recovers: the webhook's `restoreHoldsForCharge` threw, so
+    // the won dispute never released the mark.
+    const photographer = await makePhotographer({});
+    const hold = await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_won',
+      frozenByDisputeId: 'dp_won',
+    });
+
+    const { deps, calls } = makeDeps({
+      retrieveDisputeOutcome: vi.fn(
+        async () => ({ outcome: 'closed-not-lost', status: 'won' }) as never,
+      ),
+    });
+    const result = await runRetryPendingPayoutsFlow(passthroughStep, FREEZE_FUTURE_NOW, deps);
+
+    expect(result.freezesReleased).toBe(1);
+    expect(result.freezesUnresolved).toBe(0);
+    expect(await freezeAlerts()).toHaveLength(0);
+
+    const after = await readPayout(hold.id);
+    expect(after?.frozen_by_dispute_id).toBeNull();
+    // The step runs before the payable-holds step precisely so this happens now
+    // rather than 30 minutes later.
+    expect(calls).toHaveLength(1);
+    expect(after?.status).toBe('paid');
+  });
+
+  it('restores a chargeback-voided hold, but not one a real refund voided', async () => {
+    // `restoreHoldsForCharge` is the webhook's own operation, so the sweep
+    // inherits its scoping: a refund really did take that money back.
+    // Two photographers on one charge: the exactly-once index is
+    // `(stripe_charge_id, photographer_id)`, so one charge cannot hold two rows
+    // for the same photographer anyway.
+    const frozenPhotographer = await makePhotographer({});
+    const refundedPhotographer = await makePhotographer({});
+    const byDispute = await seedHold({
+      photographerId: frozenPhotographer.id,
+      amountCents: 900,
+      chargeId: 'ch_mixed',
+      status: 'cancelled',
+      voidReason: 'dispute',
+      frozenByDisputeId: 'dp_mixed',
+    });
+    const byRefund = await seedHold({
+      photographerId: refundedPhotographer.id,
+      amountCents: 700,
+      chargeId: 'ch_mixed',
+      status: 'cancelled',
+      voidReason: 'refund',
+      frozenByDisputeId: 'dp_mixed',
+    });
+
+    const { deps } = makeDeps({
+      retrieveDisputeOutcome: vi.fn(
+        async () => ({ outcome: 'closed-not-lost', status: 'warning_closed' }) as never,
+      ),
+    });
+    await runRetryPendingPayoutsFlow(passthroughStep, FREEZE_FUTURE_NOW, deps);
+
+    // Un-voided and released — and then paid in the same pass, which is the
+    // point of running this step before `resolve-payable-holds`.
+    const restored = await readPayout(byDispute.id);
+    expect(restored?.void_reason).toBeNull();
+    expect(restored?.frozen_by_dispute_id).toBeNull();
+    expect(restored?.status).toBe('paid');
+
+    const refunded = await readPayout(byRefund.id);
+    expect(refunded?.status).toBe('cancelled');
+    expect(refunded?.void_reason).toBe('refund');
+  });
+
+  it('never restores a LOST dispute, but clears its mark so the set drains', async () => {
+    // A lost chargeback keeps its mark forever, and locally it is
+    // indistinguishable from a stuck row — which is why the sweep has to ask
+    // Stripe at all. Clearing the mark is what stops those rows sitting at the
+    // head of the `updated_at ASC` window forever, hiding genuinely stranded
+    // freezes behind them and costing a Stripe read on every pass.
+    const photographer = await makePhotographer({});
+    const hold = await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_lost',
+      status: 'cancelled',
+      voidReason: 'dispute',
+      frozenByDisputeId: 'dp_lost',
+    });
+
+    const { deps, calls } = makeDeps({
+      retrieveDisputeOutcome: vi.fn(async () => ({ outcome: 'lost', status: 'lost' }) as never),
+    });
+    const result = await runRetryPendingPayoutsFlow(passthroughStep, FREEZE_FUTURE_NOW, deps);
+
+    expect(result.freezesReleased).toBe(0);
+    expect(result.freezesUnresolved).toBe(0);
+    expect(await freezeAlerts()).toHaveLength(0);
+
+    const after = await readPayout(hold.id);
+    // The mark goes; the void stays, so the row is still unpayable by STATUS.
+    expect(after?.frozen_by_dispute_id).toBeNull();
+    expect(after?.status).toBe('cancelled');
+    expect(after?.void_reason).toBe('dispute');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('reports a LOST dispute whose clawback never ran, instead of clearing it', async () => {
+    // `pending` with nothing reversed means the money was never clawed back.
+    // Clearing the mark there would hand a lost chargeback to the payout path.
+    const photographer = await makePhotographer({});
+    const hold = await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_lost_unsettled',
+      frozenByDisputeId: 'dp_lost_unsettled',
+    });
+
+    const { deps, calls } = makeDeps({
+      retrieveDisputeOutcome: vi.fn(async () => ({ outcome: 'lost', status: 'lost' }) as never),
+    });
+    const result = await runRetryPendingPayoutsFlow(passthroughStep, FREEZE_FUTURE_NOW, deps);
+
+    expect(result.freezesUnresolved).toBe(1);
+    expect((await readPayout(hold.id))?.frozen_by_dispute_id).toBe('dp_lost_unsettled');
+    expect(calls).toHaveLength(0);
+    expect(await freezeAlerts()).toHaveLength(1);
+  });
+
+  it('refuses to release a charge that has any refund', async () => {
+    // ⚠️ The failure four reviewers found. A chargeback freeze leaves the row
+    // `cancelled`, and BOTH clawback selectors skip it (`applyReversalToHolds`
+    // takes `pending`, `listReversibleRowsForCharge` takes paid/processing/
+    // reversed) — so a refund landing while it is frozen records nothing on it.
+    // Releasing would then hand back the FULL amount for a refunded sale, and the
+    // step deliberately runs before the paying step, so it would go out at once.
+    const photographer = await makePhotographer({});
+    const hold = await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_refunded_won',
+      status: 'cancelled',
+      voidReason: 'dispute',
+      frozenByDisputeId: 'dp_refunded_won',
+    });
+
+    const { deps, calls } = makeDeps({
+      retrieveDisputeOutcome: vi.fn(
+        async () => ({ outcome: 'closed-not-lost', status: 'won' }) as never,
+      ),
+      retrieveChargeRefundState: vi.fn(async () => ({ amountRefundedCents: 900 })),
+    });
+    const result = await runRetryPendingPayoutsFlow(passthroughStep, FREEZE_FUTURE_NOW, deps);
+
+    expect(result.freezesReleased).toBe(0);
+    expect(result.freezesUnresolved).toBe(1);
+    expect(calls).toHaveLength(0);
+    const after = await readPayout(hold.id);
+    expect(after?.status).toBe('cancelled');
+    expect(after?.frozen_by_dispute_id).toBe('dp_refunded_won');
+    expect(await freezeAlerts()).toHaveLength(1);
+  });
+
+  it('refuses to release when the charge cannot be read', async () => {
+    const photographer = await makePhotographer({});
+    const hold = await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_unreadable',
+      frozenByDisputeId: 'dp_unreadable',
+    });
+
+    const { deps, calls } = makeDeps({
+      retrieveDisputeOutcome: vi.fn(
+        async () => ({ outcome: 'closed-not-lost', status: 'won' }) as never,
+      ),
+      retrieveChargeRefundState: vi.fn(async () => null),
+    });
+    const result = await runRetryPendingPayoutsFlow(passthroughStep, FREEZE_FUTURE_NOW, deps);
+
+    expect(result.freezesReleased).toBe(0);
+    expect(result.freezesUnresolved).toBe(1);
+    expect(calls).toHaveLength(0);
+    expect((await readPayout(hold.id))?.frozen_by_dispute_id).toBe('dp_unreadable');
+  });
+
+  it('refuses to release while the order is still revoked', async () => {
+    // If `charge.dispute.closed` never ran at all, the order is still `disputed`:
+    // the sale is out of the photographer's `net` and the buyer is locked out.
+    // Paying the hold there breaks the invariant that a hold sits in `pending`
+    // exactly while its sale sits in `net`. Restoring access is the webhook's job.
+    const photographer = await makePhotographer({});
+    const hold = await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_still_disputed',
+      status: 'cancelled',
+      voidReason: 'dispute',
+      frozenByDisputeId: 'dp_still_disputed',
+      orderStatus: 'disputed',
+    });
+
+    const { deps, calls } = makeDeps({
+      retrieveDisputeOutcome: vi.fn(
+        async () => ({ outcome: 'closed-not-lost', status: 'won' }) as never,
+      ),
+    });
+    const result = await runRetryPendingPayoutsFlow(passthroughStep, FREEZE_FUTURE_NOW, deps);
+
+    expect(result.freezesReleased).toBe(0);
+    expect(result.freezesUnresolved).toBe(1);
+    expect(calls).toHaveLength(0);
+    expect((await readPayout(hold.id))?.frozen_by_dispute_id).toBe('dp_still_disputed');
+  });
+
+  it('leaves an OPEN dispute frozen and raises no alert', async () => {
+    // A chargeback legitimately runs for 60-90 days. Age alone is not evidence.
+    const photographer = await makePhotographer({});
+    const hold = await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_open',
+      frozenByDisputeId: 'dp_open',
+    });
+
+    const { deps, calls } = makeDeps();
+    const result = await runRetryPendingPayoutsFlow(passthroughStep, FREEZE_FUTURE_NOW, deps);
+
+    expect(result.freezesReleased).toBe(0);
+    expect(await freezeAlerts()).toHaveLength(0);
+    expect((await readPayout(hold.id))?.frozen_by_dispute_id).toBe('dp_open');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('never concludes from a failed read: reports and touches nothing', async () => {
+    const photographer = await makePhotographer({});
+    const hold = await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_unknown',
+      frozenByDisputeId: 'dp_unknown',
+    });
+
+    const { deps, calls } = makeDeps({
+      retrieveDisputeOutcome: vi.fn(async () => ({ outcome: 'unknown' }) as never),
+    });
+    const result = await runRetryPendingPayoutsFlow(passthroughStep, FREEZE_FUTURE_NOW, deps);
+
+    expect(result.freezesReleased).toBe(0);
+    expect(result.freezesUnresolved).toBe(1);
+    expect((await readPayout(hold.id))?.frozen_by_dispute_id).toBe('dp_unknown');
+    expect(calls).toHaveLength(0);
+
+    const alerts = await freezeAlerts();
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]?.[0].context?.rowCount).toBe(1);
+    expect(alerts[0]?.[0].context?.oldestPayoutId).toBe(hold.id);
+  });
+
+  it('reports a dispute Stripe no longer has, rather than releasing it', async () => {
+    const photographer = await makePhotographer({});
+    const hold = await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_missing',
+      frozenByDisputeId: 'dp_missing',
+    });
+
+    const { deps } = makeDeps({
+      retrieveDisputeOutcome: vi.fn(async () => ({ outcome: 'missing' }) as never),
+    });
+    const result = await runRetryPendingPayoutsFlow(passthroughStep, FREEZE_FUTURE_NOW, deps);
+
+    expect(result.freezesUnresolved).toBe(1);
+    expect((await readPayout(hold.id))?.frozen_by_dispute_id).toBe('dp_missing');
+    expect(await freezeAlerts()).toHaveLength(1);
+  });
+
+  it('alerts once per day, not once per cron pass', async () => {
+    // The cron runs 48x/day and a stuck freeze does not fix itself.
+    const photographer = await makePhotographer({});
+    await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_repeat',
+      frozenByDisputeId: 'dp_repeat',
+    });
+
+    const { deps } = makeDeps({
+      retrieveDisputeOutcome: vi.fn(async () => ({ outcome: 'unknown' }) as never),
+    });
+    await runRetryPendingPayoutsFlow(passthroughStep, FREEZE_FUTURE_NOW, deps);
+    await runRetryPendingPayoutsFlow(passthroughStep, FREEZE_FUTURE_NOW, deps);
+    await runRetryPendingPayoutsFlow(passthroughStep, FREEZE_FUTURE_NOW, deps);
+
+    expect(await freezeAlerts()).toHaveLength(1);
+  });
+
+  it('leaves a freshly frozen hold alone — no Stripe read, no alert', async () => {
+    // The staleness window is what stops the sweep racing a `closed` event that
+    // is still in flight.
+    const photographer = await makePhotographer({});
+    const hold = await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_fresh_freeze',
+      frozenByDisputeId: 'dp_fresh',
+    });
+
+    const { deps } = makeDeps({
+      retrieveDisputeOutcome: vi.fn(async () => ({ outcome: 'closed-not-lost' }) as never),
+    });
+    const result = await runRetryPendingPayoutsFlow(passthroughStep, Date.now(), deps);
+
+    expect(deps.retrieveDisputeOutcome).not.toHaveBeenCalled();
+    expect(result.freezesReleased).toBe(0);
+    expect(await freezeAlerts()).toHaveLength(0);
+    expect((await readPayout(hold.id))?.frozen_by_dispute_id).toBe('dp_fresh');
+  });
+
+  it('reads Stripe once per dispute, not once per frozen row', async () => {
+    // One dispute freezes every hold on its charge, so a multi-photographer order
+    // would otherwise ask Stripe the same question once per photographer.
+    const a = await makePhotographer({});
+    const b = await makePhotographer({});
+    await seedHold({
+      photographerId: a.id,
+      amountCents: 900,
+      chargeId: 'ch_shared',
+      frozenByDisputeId: 'dp_shared',
+    });
+    await seedHold({
+      photographerId: b.id,
+      amountCents: 800,
+      chargeId: 'ch_shared',
+      frozenByDisputeId: 'dp_shared',
+    });
+
+    const { deps } = makeDeps({
+      retrieveDisputeOutcome: vi.fn(async () => ({ outcome: 'lost', status: 'lost' }) as never),
+    });
+    await runRetryPendingPayoutsFlow(passthroughStep, FREEZE_FUTURE_NOW, deps);
+
+    expect(deps.retrieveDisputeOutcome).toHaveBeenCalledTimes(1);
   });
 });

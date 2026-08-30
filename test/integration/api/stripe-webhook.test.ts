@@ -59,6 +59,11 @@ vi.mock('@/database/queries/payouts', async () => {
     ...actual,
     openPayoutRow: vi.fn(actual.openPayoutRow),
     holdPayoutRow: vi.fn(actual.holdPayoutRow),
+    // T-265: same trick for the dispute freeze/unfreeze, so the two
+    // silent-failure tests can force a throw without changing behaviour anywhere
+    // else in the file.
+    freezeHoldsForCharge: vi.fn(actual.freezeHoldsForCharge),
+    restoreHoldsForCharge: vi.fn(actual.restoreHoldsForCharge),
   };
 });
 
@@ -2712,6 +2717,131 @@ describe('app/api/stripe/webhook — clawback (T-215)', () => {
       .eq('id', guestOrder.id)
       .single();
     expect(after?.status).toBe('refunded');
+  });
+
+  /**
+   * T-265: freezing and unfreezing were the only two dispute operations that
+   * failed into a `console.error`, and the selector exclusion made the failure
+   * terminal. Neither may throw — a 500 makes Stripe redeliver a money event —
+   * so the alert is the whole surface.
+   */
+  describe('a freeze or unfreeze that fails is reported (T-265)', () => {
+    it('reports a failed freeze, and the hold really is still payable', async () => {
+      const { sb, payout } = await seedCharge({
+        chargeId: 'ch_freeze_fail',
+        paymentIntentId: 'pi_freeze_fail',
+        amountCents: 500,
+        payoutStatus: 'pending',
+        payoutAmountCents: 460,
+      });
+      await stubStripeReads({
+        chargeId: 'ch_freeze_fail',
+        amount: 500,
+        disputes: [{ status: 'needs_response', amount: 500 }],
+      });
+
+      const payouts = await import('@/database/queries/payouts');
+      vi.mocked(payouts.freezeHoldsForCharge).mockRejectedValueOnce(new Error('db blip'));
+
+      // Still a 200: a redelivered money event is worse than the failure.
+      expect(
+        (
+          await POST(
+            disputeRequest({
+              type: 'charge.dispute.created',
+              chargeId: 'ch_freeze_fail',
+              paymentIntentId: 'pi_freeze_fail',
+              amountCents: 500,
+              status: 'needs_response',
+            }),
+          )
+        ).status,
+      ).toBe(200);
+
+      const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+      expect(vi.mocked(reportMoneyIncident)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'dispute-freeze-failed',
+          context: expect.objectContaining({ chargeId: 'ch_freeze_fail' }),
+        }),
+      );
+
+      // The consequence the alert exists to describe: with no freeze mark the row
+      // is still selected by the only thing that pays holds, so the retry cron
+      // would transfer money that is under dispute.
+      const { data: row } = await sb
+        .from('payouts')
+        .select('frozen_by_dispute_id')
+        .eq('id', payout.id)
+        .single();
+      expect(row?.frozen_by_dispute_id).toBeNull();
+      expect((await listPayableHolds(sb)).map((r) => r.id)).toContain(payout.id);
+    });
+
+    it('reports a failed unfreeze, and the hold really is stranded', async () => {
+      const { sb, payout } = await seedCharge({
+        chargeId: 'ch_unfreeze_fail',
+        paymentIntentId: 'pi_unfreeze_fail',
+        amountCents: 500,
+        payoutStatus: 'pending',
+        payoutAmountCents: 460,
+      });
+      await stubStripeReads({
+        chargeId: 'ch_unfreeze_fail',
+        amount: 500,
+        disputes: [{ status: 'warning_needs_response', amount: 500 }],
+      });
+
+      expect(
+        (
+          await POST(
+            disputeRequest({
+              type: 'charge.dispute.created',
+              chargeId: 'ch_unfreeze_fail',
+              paymentIntentId: 'pi_unfreeze_fail',
+              amountCents: 500,
+              status: 'warning_needs_response',
+            }),
+          )
+        ).status,
+      ).toBe(200);
+
+      await stubStripeReads({ chargeId: 'ch_unfreeze_fail', amount: 500, disputes: [] });
+      const payouts = await import('@/database/queries/payouts');
+      vi.mocked(payouts.restoreHoldsForCharge).mockRejectedValueOnce(new Error('db blip'));
+
+      expect(
+        (
+          await POST(
+            disputeRequest({
+              type: 'charge.dispute.closed',
+              chargeId: 'ch_unfreeze_fail',
+              paymentIntentId: 'pi_unfreeze_fail',
+              amountCents: 500,
+              status: 'warning_closed',
+            }),
+          )
+        ).status,
+      ).toBe(200);
+
+      const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+      expect(vi.mocked(reportMoneyIncident)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'dispute-unfreeze-failed',
+          context: expect.objectContaining({ chargeId: 'ch_unfreeze_fail' }),
+        }),
+      );
+
+      // Recorded, real and unpayable: the mark survives and no selector will ever
+      // pick the row up again. Only the T-265 sweep can.
+      const { data: row } = await sb
+        .from('payouts')
+        .select('status, frozen_by_dispute_id')
+        .eq('id', payout.id)
+        .single();
+      expect(row?.frozen_by_dispute_id).toBe('dp_ch_unfreeze_fail');
+      expect((await listPayableHolds(sb)).map((r) => r.id)).not.toContain(payout.id);
+    });
   });
 });
 

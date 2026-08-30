@@ -471,6 +471,13 @@ path, the retry worker, and the clawback path (`applyReversalToHolds` on
 — the last being the one that *does* void holds, which is why "who can cancel a hold?"
 must not be answered from the first two alone.
 
+A dispute freeze is a **mark** (`frozen_by_dispute_id`), not a status, and
+`listPayableHolds` refuses every row carrying one — so a `restoreHoldsForCharge`
+that fails strands the row permanently. The retry worker's
+`release-stale-dispute-freezes` step (T-265) is its only exit: it asks Stripe for
+each dispute's real status and releases only the ones closed without loss,
+reporting — never guessing — whatever it cannot establish.
+
 The endpoint it replaced could set any status on any row, and the reason that
 mattered is narrower than "it was unused": **a status change is not a transfer**
 — it wrote a column and called no Stripe API, so its one distinctive power was
