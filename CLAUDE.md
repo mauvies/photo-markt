@@ -42,7 +42,20 @@ pnpm db:reset     # supabase db reset (re-runs migrations + seed.sql)
 pnpm db:seed      # Re-run supabase/seed.sql via psql
 pnpm spell        # Spell check .ts/.tsx files
 pnpm advisors:check # Supabase security advisors vs. the accepted baseline (needs SUPABASE_ACCESS_TOKEN)
+pnpm ops:drift    # Does each environment run what the repo says? (migrations · Inngest · Stripe webhook)
 ```
+
+**`pnpm ops:drift` (T-256) answers the question no test can:** the repo and an environment can disagree
+with nothing to notice, and the four times that happened here cost more than any code bug — a Stripe
+webhook on the apex host (307, every delivery dead, T-192), 5 of 13 Inngest functions synced (T-125), a
+migration never applied (Actions minutes ran out mid-merge), and a migration applied and then **edited**
+(T-204). It is **read-only** — it applies nothing, re-syncs nothing, reconfigures nothing — and exits
+non-zero on drift. Pinned environments live in `scripts/ops-drift-environments.ts`; each credential is
+named per environment and **never falls back**, because a fallback is how a run reads the local test-mode
+Stripe key while claiming to report on production. A missing credential SKIPs its check, loudly.
+⚠️ Its env vars are deliberately **not** in `env.mjs`: that validates the *app's* runtime environment, and
+adding ops-only credentials there would make the app refuse to boot without them (same reason
+`SUPABASE_ACCESS_TOKEN` is not there either).
 
 **`pnpm build` is not optional** when touching `src/lib/` or `src/database/queries/`: typecheck,
 lint and test do not bundle, so only the build catches server-only code (e.g. `sharp`) pulled into

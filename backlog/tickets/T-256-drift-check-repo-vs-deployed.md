@@ -1,7 +1,7 @@
 # T-256 · Deriva entorno↔repo: nada comprueba que lo desplegado sea lo que dice el repo
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** normal  (script de ops, solo lectura — no toca el código de la app)
 - **Blockers:** ninguno
 - **Rama:** `chore/ops-drift-check`  (tipo = chore)
