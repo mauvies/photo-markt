@@ -1,12 +1,12 @@
 # T-255 · Nadie reconcilia: un pedido `completed` sin filas en `payouts` no lo detecta nada
 
 - **Prioridad:** P1
-- **Estado:** doing
+- **Estado:** done
 - **Riesgo:** alto  (pagos)
 - **Blockers:** ninguno
 - **Rama:** `feat/reconcile-orders-without-payouts`  (tipo = feat)
 - **OpenSpec change:** —
-- **PR:** —
+- **PR:** #325
 
 ## Requerimiento
 
@@ -27,16 +27,16 @@ Y lo mismo para `guest_orders`.
 
 ## Criterio de aceptación (Definition of Done)
 
-- [ ] Una función Inngest con cron detecta pedidos completados sin filas en `payouts` y alerta vía
+- [x] Una función Inngest con cron detecta pedidos completados sin filas en `payouts` y alerta vía
       `reportMoneyIncident`
-- [ ] **Cuarto slot de cron**, sin solaparse con los tres existentes (`0,30` limpieza de storage ·
+- [x] **Cuarto slot de cron**, sin solaparse con los tres existentes (`0,30` limpieza de storage ·
       `15,45` reconciliación de indexado · `10,40` reintentos de payouts) — regla de CLAUDE.md
-- [ ] Cubre `orders` **y** `guest_orders`
-- [ ] Ventana de gracia (N horas) para no alertar de pedidos cuya entrega aún está en vuelo
-- [ ] No re-alerta del mismo pedido en cada pasada
-- [ ] Sin PII del comprador — solo ids e importes
-- [ ] Test de regresión: un pedido `completed` sin payouts dispara el incidente; uno con payouts, no
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] Cubre `orders` **y** `guest_orders`
+- [x] Ventana de gracia (N horas) para no alertar de pedidos cuya entrega aún está en vuelo
+- [x] No re-alerta del mismo pedido en cada pasada
+- [x] Sin PII del comprador — solo ids e importes
+- [x] Test de regresión: un pedido `completed` sin payouts dispara el incidente; uno con payouts, no
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
 
