@@ -22,6 +22,7 @@ import { disableEventIndexing } from '@/lib/inngest/functions/disable-event-inde
 import { generatePhotoThumbnails } from '@/lib/inngest/functions/generate-photo-thumbnails';
 import { indexPhotoFaces } from '@/lib/inngest/functions/index-photo-faces';
 import { reconcileIndexingState } from '@/lib/inngest/functions/reconcile-indexing';
+import { reconcileOrderPayouts } from '@/lib/inngest/functions/reconcile-order-payouts';
 import { retryPendingPayouts } from '@/lib/inngest/functions/retry-pending-payouts';
 
 export const { GET, POST, PUT } = serve({
@@ -37,6 +38,7 @@ export const { GET, POST, PUT } = serve({
     cleanupOrphanedStorageFiles,
     cleanupOrphanedStorageFromMigration,
     reconcileIndexingState,
+    reconcileOrderPayouts,
     retryPendingPayouts,
   ],
 });

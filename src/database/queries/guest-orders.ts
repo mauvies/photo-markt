@@ -5,6 +5,7 @@
 
 import { PLATFORM_CURRENCY } from '@/lib/currency';
 import type { WithdrawalConsentRecord } from '@/lib/withdrawal-consent';
+import type { ReconcilableOrder, ReconciliationWindow } from './orders';
 import type { SupabaseServerClient } from './types';
 import { getErrorMessage } from './types';
 
@@ -373,4 +374,48 @@ export async function getGuestOrdersByEmail(
   }
 
   return (data ?? []) as GuestOrder[];
+}
+
+/**
+ * The `guest_orders` half of the payout-reconciliation candidate set (T-255).
+ * Same shape, same window and same paging as {@link listCompletedOrdersInWindow}.
+ *
+ * ⚠️ **`guest_email` must never be selected here.** This row feeds a
+ * `reportMoneyIncident`, and that reporter carries ids and amounts only — the app
+ * runs with `sendDefaultPii: false` and a buyer's address has no business in an
+ * ops alert. The narrow projection is the guard; there is no filtering step
+ * downstream that would catch a `select('*')` slipping in.
+ *
+ * ⚠️ **`pending` is included, and that is not an oversight.** A `guest_orders` row
+ * is only ever created by the webhook AFTER Stripe reports the session complete
+ * (`createGuestOrder`), and `completeGuestOrder` is the LAST thing that branch
+ * does, after the transfers (T-263). So a `pending` guest order past the grace
+ * window is the T-261/T-263 kill itself: the buyer was charged, the delivery
+ * never finished, and NOTHING else selects the row — buyer-facing reads gate on
+ * `completed`, and the retry worker needs a payout row that was never opened.
+ * Filtering on `completed` alone would inherit the very status write this sweep
+ * exists to distrust.
+ */
+export async function listCompletedGuestOrdersInWindow(
+  supabase: SupabaseServerClient,
+  params: ReconciliationWindow,
+): Promise<ReconcilableOrder[]> {
+  const { data, error } = await supabase
+    .from('guest_orders')
+    .select('id, status, total_amount_cents, currency, created_at, stripe_payment_intent_id')
+    .in('status', ['completed', 'pending'])
+    .gt('total_amount_cents', 0)
+    .gte('created_at', params.fromIso)
+    .lt('created_at', params.toIso)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+    .range(params.offset, params.offset + params.limit - 1);
+
+  if (error) {
+    throw new Error(
+      `Failed to list completed guest orders for reconciliation: ${getErrorMessage(error)}`,
+    );
+  }
+
+  return (data ?? []) as ReconcilableOrder[];
 }

@@ -1,7 +1,7 @@
 # T-255 · Nadie reconcilia: un pedido `completed` sin filas en `payouts` no lo detecta nada
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** alto  (pagos)
 - **Blockers:** ninguno
 - **Rama:** `feat/reconcile-orders-without-payouts`  (tipo = feat)

@@ -444,3 +444,80 @@ export async function getPurchasedPhotoIdsForEvent(
   if (error || !data) return new Set<string>();
   return new Set((data as Array<{ photo_id: string }>).map((row) => row.photo_id));
 }
+
+/**
+ * A paid order, reduced to what the payout-reconciliation sweep needs (T-255).
+ *
+ * ⚠️ **Explicit columns, never `*`.** The mirror of this on `guest_orders`
+ * selects from a table that carries `guest_email`, and the whole point of the
+ * sweep is to end in a `reportMoneyIncident` — which must never carry buyer PII.
+ * Keeping both projections narrow, and identical, is what makes that a property
+ * of the query rather than a rule the alert has to remember.
+ */
+export interface ReconcilableOrder {
+  id: string;
+  status: string;
+  total_amount_cents: number;
+  currency: string;
+  created_at: string;
+  stripe_payment_intent_id: string | null;
+}
+
+/** One page of a reconciliation window. */
+export interface ReconciliationWindow {
+  fromIso: string;
+  toIso: string;
+  limit: number;
+  offset: number;
+}
+
+const RECONCILABLE_ORDER_COLUMNS =
+  'id, status, total_amount_cents, currency, created_at, stripe_payment_intent_id';
+
+/**
+ * Completed, non-free orders created inside a window — the candidate set for the
+ * "cobrado sin deuda registrada" sweep (T-255).
+ *
+ * The caller subtracts the orders that DO have `payouts` rows; what is left is
+ * an order the buyer paid for that opened no debt to any photographer. That is
+ * the state T-249 and T-252 can only alert about *while the code runs through
+ * them* — this asks the question of the resulting rows instead, so an eighth
+ * silent exit is still caught.
+ *
+ * ⚠️ **The window is bounded on BOTH sides, and the upper bound is what makes the
+ * set drain.** Orders older than the ledger (pre-T-216) can legitimately have no
+ * `payouts` rows; with no lookback limit they would sit permanently at the head
+ * of an `ORDER BY created_at ASC` window, alerting forever and hiding real
+ * incidents behind the row cap — the same failure mode T-265 had to design around
+ * for stale dispute freezes.
+ *
+ * ⚠️ **Paged, not capped.** A bare `LIMIT` on `created_at ASC` would pin the sweep
+ * to the OLDEST N orders of the window — overwhelmingly healthy ones — so a break
+ * last week becomes invisible the moment steady-state volume exceeds N. The
+ * caller walks `offset` until a short page comes back.
+ *
+ * `total_amount_cents > 0` excludes free events, which owe nobody anything.
+ */
+export async function listCompletedOrdersInWindow(
+  supabase: SupabaseServerClient,
+  params: ReconciliationWindow,
+): Promise<ReconcilableOrder[]> {
+  const { data, error } = await supabase
+    .from('orders')
+    .select(RECONCILABLE_ORDER_COLUMNS)
+    .eq('status', 'completed')
+    .gt('total_amount_cents', 0)
+    .gte('created_at', params.fromIso)
+    .lt('created_at', params.toIso)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+    .range(params.offset, params.offset + params.limit - 1);
+
+  if (error) {
+    throw new Error(
+      `Failed to list completed orders for reconciliation: ${getErrorMessage(error)}`,
+    );
+  }
+
+  return (data ?? []) as ReconcilableOrder[];
+}
