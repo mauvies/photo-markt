@@ -11,13 +11,14 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | todo |
-| 2 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
-| 3 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
-| 4 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
-| 5 | P2 | T-266 | El canal de alertas de dinero es opcional, no verificado, y degrada en silencio | — | todo |
-| 6 | P2 | T-267 | Un carrito de invitado de más de ~46 fotos no puede pagar, y nadie se entera | — | todo |
-| 7 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
+| 1 | P1 | T-268 | `profiles`: cualquier usuario logueado lee los datos sensibles de cualquier fotógrafo, y puede reescribir los suyos | Dep T-227 | todo |
+| 2 | P2 | T-227 | Cobertura de tests RLS: 7 de 30 tablas | Dep T-219 | doing |
+| 3 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
+| 4 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
+| 5 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
+| 6 | P2 | T-266 | El canal de alertas de dinero es opcional, no verificado, y degrada en silencio | — | todo |
+| 7 | P2 | T-267 | Un carrito de invitado de más de ~46 fotos no puede pagar, y nadie se entera | — | todo |
+| 8 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |
 | — | P3 | T-160 | Actualizar TypeScript 6 → 7 (nativo) cuando Next lo soporte — follow-up de T-153 | **blocked:** Next estable (16.2.10) sin soporte TS 7; re-probar en el próximo bump de Next (16.3+) | blocked |
 | — | P2 | T-076 | Interleave el nombre/handle del fotógrafo en el watermark (parte diferida de T-067) | **blocked:** on-hold — aplazado por el usuario | blocked |
 | — | P3 | T-108 | [DISEÑO] Auto-rellenar campos del evento desde portada/EXIF de las fotos | **blocked:** decisión de diseño (EXIF vs. visión) · Dep T-105/T-106/T-107 | blocked |

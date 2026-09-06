@@ -1,7 +1,7 @@
 # T-227 · Cobertura de tests RLS: 7 de 30 tablas
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** alto  (seguridad)
 - **Blockers:** ninguno
 - **Rama:** `test/rls-coverage-sweep`  (tipo = chore)

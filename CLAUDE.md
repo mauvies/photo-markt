@@ -1244,6 +1244,31 @@ in sync.
   given string. So `search_users_by_text` neither returns **nor substring-matches** email: it matches email
   by **exact equality**, keeps substring matching for `username`/`display_name`, and keeps email out of the
   `order by`. Prefer resolving PII server-side from known ids (`get_user_emails_batch`)
+- ⚠️ **Every table in `public` must be declared in `test/integration/security/rls-table-inventory.test.ts`
+  (T-227)** as `policies-tested` or `total-denial`, with a reason. A new table fails the suite until
+  someone decides which it is. Sibling gate to the `SECURITY DEFINER` inventory, and for the same
+  reason: **RLS is the ONLY barrier** — all 26 tables grant SELECT/INSERT/UPDATE/DELETE to `anon` and
+  `authenticated` (Supabase's default, re-applied locally by `supabase/seed.sql`). The same test pins
+  three properties an allow-list cannot fake: RLS enabled everywhere, no `USING (true)`, and **no
+  TRUNCATE for the API roles** (TRUNCATE is not subject to RLS).
+- ⚠️ **`profiles` is read by `anon` through an explicit COLUMN allow-list, not the whole row (T-227).**
+  `photographer_profiles_public_select` is `USING (active_role = 'PHOTOGRAPHER')` and RLS is row-level,
+  so before the fix an unauthenticated `GET /rest/v1/profiles` returned the photographer's legal name,
+  postal address, Stripe ids and payout jsonb — and `active_role` DEFAULTS to `PHOTOGRAPHER`. The grant
+  in `20260906000000` is now the allow-list: **a new public column must be added there, a sensitive one
+  never is**, and the same list must be repeated in `supabase/seed.sql` (its blanket grant runs after
+  the migrations and would otherwise restore the exposure locally) — the inventory test compares the
+  granted set against one declared constant, so the three copies cannot drift silently.
+  ⚠️ **Two halves are deliberately still open, both pinned as KNOWN GAP tests and tracked in T-268:**
+  `authenticated` keeps table-wide SELECT (a column grant cannot tell "my row" from "another's"), and
+  the allow-list is **SELECT only** — `profiles_self_update` restricts the row but not the columns, so
+  a photographer can still PATCH their own `stripe_connect_*` / `payout_*`. Bounded because every money
+  path re-derives Connect status from Stripe before transferring.
+- ⚠️ **A policy's nested table reads are RLS-filtered too.** `photo_faces` / `photo_bib_numbers` read as
+  if `e.is_public = true` granted public access; it never fires, because the `EXISTS` over
+  `photos`/`events` is itself subject to those tables' owner-only policies. That is why `orders` uses
+  the `order_has_photographer_items` SECURITY DEFINER helper for its photographer branch — a plain
+  nested `EXISTS` could not express it.
 - Tables with no public access pattern: enable RLS with no policies, use `supabaseAdmin` only — see
   `admin_users` and `rate_limit_buckets`
 - Redirect destinations from user input must go through `safeNext()`

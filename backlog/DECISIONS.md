@@ -1021,6 +1021,73 @@ known ids (`get_user_emails_batch`).
 replacement, so a migration that drops and recreates one must re-apply the revoke in the same file
 (`20260804000000`). `revoke from public` does not override role-specific grants.
 
+### T-227 — the profiles column grant, and what measuring RLS found
+
+The ticket was "add RLS tests for the 19 untested tables". Measuring the surface found a live data
+exposure, which is why the ticket said *"solo tests… salvo que aparezca un agujero"*.
+
+**What leaked.** `photographer_profiles_public_select` is `using (active_role = 'PHOTOGRAPHER')`, and
+RLS is ROW-level: a policy that admits the row admits every COLUMN of it. With Supabase's default
+`grant all` to `anon`, one unauthenticated request returned the photographer's legal name, full postal
+address, `stripe_customer_id`, `stripe_connect_account_id` and `payout_details_json`. `active_role`
+DEFAULTS to `PHOTOGRAPHER`, so it reached almost every row. Verified over HTTP against the local stack
+with the anon key, not inferred from the policy text; the policy ships in a migration, so production
+had it too.
+
+**Why a column grant.** RLS cannot restrict columns, so the options were a public view, moving the
+columns to a second table, or column-level GRANTs. Only the last closes the hole without touching
+application code, and it has a second benefit: the grant list becomes the allow-list, so a column
+added to `profiles` is no longer public by default. The granted set was derived from the code that
+actually reads `profiles` as anon (`getPhotographerBySlug`, plus `active_role` because Postgres
+requires SELECT on a column to filter by it) — not from a judgement about what "looks" public.
+
+**Why `authenticated` is still open.** A column grant is per-role and cannot distinguish "my row" from
+"someone else's", so restricting `authenticated` would break a photographer reading their own address
+in settings. Closing that half needs the columns moved out of `profiles`; it is a separate ticket, and
+`profiles-rls.test.ts` asserts the gap so it stays a recorded decision rather than a rediscovery.
+
+**Why `supabase/seed.sql` repeats the grant.** Its blanket `grant select … on all tables in schema
+public` runs AFTER the migrations on `db reset`. Without repeating the revoke + column grant there,
+the fix would not exist locally, and the new RLS tests would be asserting a posture no deployed
+environment has. The asymmetry matters more generally: **revoking TRUNCATE survives the seed** (the
+seed re-grants only SELECT/INSERT/UPDATE/DELETE), while revoking any DML would be silently undone on
+every reset — which is what makes one half of the grant tightening cheap and the other a trap.
+
+**TRUNCATE.** Not subject to RLS, held by `anon` and `authenticated` on all 26 tables purely as the
+bootstrap default. Not exploitable today — PostgREST exposes no TRUNCATE verb and no persisted
+function in `public` builds dynamic SQL — so this is defence in depth, revoked along with REFERENCES
+and TRIGGER, plus an `alter default privileges` so a future table cannot re-arm it.
+
+**Two things the sweep discovered that were not bugs.** First, the `is_public` branch of the
+`photo_faces` / `photo_bib_numbers` policies is UNREACHABLE: a policy expression is evaluated as the
+calling role, so its `EXISTS` over `photos`/`events` is itself RLS-filtered, and both are owner-only.
+Those tables are stricter than they read — harmless, because face search goes through `supabaseAdmin`,
+but pinned, because the policy invites the opposite conclusion. It is also why `orders` needs the
+`order_has_photographer_items` SECURITY DEFINER helper. Second, `user_role_memberships` lets a user
+self-grant a role through PostgREST; that is safe **because the `user_role` enum holds only
+PHOTOGRAPHER and TALENT** (both self-service in the product) and admin lives in `admin_users`. Adding a
+privileged value to that enum would turn the policy into privilege escalation — asserted where it
+would be noticed.
+
+**What the code review added.** The column allow-list is **SELECT only**: `authenticated` keeps
+table-wide INSERT/UPDATE and `profiles_self_update` restricts the row but not the columns, so a
+photographer can still `PATCH` their own `stripe_connect_account_id`. Left open here because the app
+writes those columns with the USER's client (`settings/payout-profile/actions.ts`), so a column-level
+UPDATE grant needs that call site moved to `supabaseAdmin` first — and because every money path
+re-derives Connect status from Stripe before transferring, and redirecting one's own payout account is
+self-harm rather than theft. Folded into T-268 with the read half, and pinned by a test that fails the
+day it is closed. The same pass widened the inventory beyond `relkind = 'r'` (a `public` VIEW without
+`security_invoker` bypasses the base table's RLS entirely, and T-268's own option 2 is "serve it by
+view"), and replaced the hand-copied column list with one read from `information_schema` so the
+migration, the seed and the test cannot drift apart. It also established that
+`alter default privileges` cannot be applied to the `supabase_admin` grantor from a migration —
+`postgres` gets "permission denied" — so that half of the TRUNCATE posture is asserted locally and
+unverified in production.
+
+**The advisors gate could not have caught any of this.** Supabase's linter has no table-privilege or
+column-grant rule; its `rls_enabled_no_policy` findings are already baselined. That is the argument
+for the in-repo inventory test rather than a reason to trust CI.
+
 ### T-225 — the advisors CI gate
 
 It runs against **staging**, pinned by the `projectRef` in `scripts/advisors-baseline.ts`: a Supabase
