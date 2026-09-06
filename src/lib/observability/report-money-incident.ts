@@ -56,7 +56,7 @@ const EMAIL_SEND_TIMEOUT_MS = 5_000;
 /**
  * Every kind has a producer: the webhook raises the dispute, refund and
  * order-assembly ones, `apply-clawback.ts` raises `reversal-failed`,
- * `retry-pending-payouts.ts` raises the two sweep kinds, and
+ * `retry-pending-payouts.ts` raises the three sweep kinds, and
  * `reconcile-order-payouts.ts` raises `order-without-payouts` plus, from its
  * `onFailure`, `payout-reconciliation-failed`.
  *
@@ -150,6 +150,49 @@ export type MoneyIncidentKind =
    * itself.
    */
   | 'dispute-freeze-stuck'
+  /**
+   * A payout hold has been outstanding beyond its window and the retry worker
+   * cannot drain it (T-254).
+   *
+   * The worker's failure exits deliberately never throw — a `transfer_failed`
+   * hold whose transfer fails on every pass, or a row wedged `processing` by a
+   * perpetually inconclusive probe, is retried every 30 minutes forever with
+   * nothing but a console line. This kind is the state those exits cannot
+   * surface themselves: raised by a sweep, aggregated over the whole set, and
+   * claimed at most once per rolling day (the cron runs 48×/day and a stuck
+   * hold does not fix itself). It also covers recorded debt that has been
+   * waiting on an external condition (`connect_inactive`, `below_minimum`) for
+   * over a month — legitimate short-term, but past that it is money nothing
+   * will ever move on its own.
+   *
+   * Reported, never repaired, and the alert must never instruct a manual
+   * transfer: zero drained rows proves nothing is *about* to be paid — the
+   * `payouts` ledger stays the authority (same rule as T-249/T-255).
+   *
+   * ⚠️ Its OWN kind, per T-264 (explicitly binding on T-254): the fingerprint
+   * and the email throttle are keyed on `kind`, so folding this into
+   * `needs-reconciliation` or a neighbouring sweep would collapse distinct
+   * problems into one issue and let the first firing silence the rest.
+   */
+  | 'payout-hold-stuck'
+  /**
+   * The stuck-hold sweep itself could not read the ledger (T-254).
+   *
+   * ⚠️ An alert about a **missing check**, not about a row — the same shape as
+   * `payout-reconciliation-failed`, and needed for a sharper reason. That sweep
+   * lets its queries throw, which at least fails the Inngest run; this one runs
+   * BEFORE the paying steps, so it must swallow read errors or a statement
+   * timeout would stop every payout in the run. The cost of swallowing is that
+   * the step then *succeeds*: a wedged query (timeout on the window scan, a
+   * schema-cache blip, a revoked grant) would silence the stuck-hold alert
+   * permanently while every dashboard looked healthy — the T-125 shape, where
+   * production quietly ran 5 of 13 registered functions.
+   *
+   * Its OWN kind, per T-264: the remediation is "go fix the sweep", which shares
+   * nothing with "go reconcile this hold". Claimed once per rolling day like the
+   * state it guards, because the cron runs 48×/day.
+   */
+  | 'payout-hold-sweep-failed'
   /**
    * A paid order left NO row in `payouts` at all (T-255).
    *

@@ -473,6 +473,86 @@ export async function listStaleProcessingSingles(
   return (data ?? []) as Payout[];
 }
 
+/**
+ * Rows the retry worker has been failing to drain past the stuck window (T-254).
+ *
+ * Two shapes, one question — "is the worker itself wedged on this row?":
+ * a `pending` hold whose reason is `transfer_failed` (its transfer throws or its
+ * recovery probe stays inconclusive on every pass), and ANY `processing` row
+ * (the recovery steps skip it silently when the probe answers `unknown`, when a
+ * batch re-drive keeps throwing, or when the photographer has no Connect
+ * destination at all).
+ *
+ * ⚠️ The cutoff is on **`created_at`**, not `updated_at`: the
+ * `payouts_set_updated_at` trigger re-stamps `updated_at` on every failed retry
+ * (`holdPayoutRow` runs each tick), so `updated_at` measures the last attempt
+ * while `created_at` measures how long the debt has been unpaid — which is the
+ * state this selector exists to expose.
+ *
+ * ⚠️ Deliberately NO `stripe_charge_id` filter, unlike `listPayableHolds`: that
+ * filter is what makes a charge-less row structurally unpayable, so such a row is
+ * *more* stuck, not less, and this is the only thing that would ever surface it.
+ * Legacy pre-T-216 rows carry no `hold_reason` and stay excluded. Frozen rows are
+ * excluded whatever their age — `listStaleDisputeFreezes` owns that state and
+ * reports it under its own kind (T-265).
+ *
+ * Read-only: the caller reports and never repairs.
+ */
+export async function listStuckRetryableRows(
+  supabase: SupabaseServerClient,
+  createdBeforeIso: string,
+  limit = 100,
+): Promise<Payout[]> {
+  const { data, error } = await supabase
+    .from('payouts')
+    .select('*')
+    .or('and(status.eq.pending,hold_reason.eq.transfer_failed),status.eq.processing')
+    .is('frozen_by_dispute_id', null)
+    .lt('created_at', createdBeforeIso)
+    .order('created_at', { ascending: true })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(`Failed to list stuck retryable payouts: ${getErrorMessage(error)}`);
+  }
+
+  return (data ?? []) as Payout[];
+}
+
+/**
+ * Holds waiting on an external condition for longer than anyone intended (T-254).
+ *
+ * `connect_inactive` and `below_minimum` are legitimate states short-term — the
+ * photographer was emailed about the first (T-250) and the second accumulates by
+ * design — which is why they do not belong in {@link listStuckRetryableRows}'s
+ * 24-hour window. But past the long-outstanding cutoff they are recorded money
+ * that nothing will ever move on its own, and no other selector reports them.
+ *
+ * Same clock (`created_at`) and same frozen-row exclusion as the stuck selector,
+ * for the same reasons. Read-only.
+ */
+export async function listAgedOutstandingHolds(
+  supabase: SupabaseServerClient,
+  createdBeforeIso: string,
+  limit = 100,
+): Promise<Payout[]> {
+  const { data, error } = await supabase
+    .from('payouts')
+    .select('*')
+    .eq('status', 'pending')
+    .in('hold_reason', ['connect_inactive', 'below_minimum'])
+    .is('frozen_by_dispute_id', null)
+    .lt('created_at', createdBeforeIso)
+    .order('created_at', { ascending: true })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(`Failed to list aged outstanding holds: ${getErrorMessage(error)}`);
+  }
+
+  return (data ?? []) as Payout[];
+}
+
 export interface HoldReductionOutcome {
   /** Holds moved to their reversal target (a full reversal voids the row). */
   applied: number;

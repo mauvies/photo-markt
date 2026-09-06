@@ -429,8 +429,22 @@ recovery path, not the normal one.
 - ⚠️ **Three writers touch a payout row, not two:** the webhook's transfer path, the retry worker, and the
   clawback path (`applyReversalToHolds` on `charge.refunded`; `freezeHoldsForCharge` /
   `restoreHoldsForCharge` on a dispute) — the only one that can void a hold.
-- ⚠️ **Not every hold self-heals:** a row stranded `processing` with no `transfer_batch_id` is picked up by
-  neither recovery selector, and a lone sub-50¢ hold just accumulates (visibility = T-254).
+- ⚠️ **Not every hold self-heals, and `report-stuck-holds` (T-254) is the visibility for those.** The
+  worker's failure exits deliberately never throw, so it raises `payout-hold-stuck` — one aggregated
+  incident, claimed once per rolling day — for rows outstanding beyond their window: **24 h** for
+  `pending`/`transfer_failed` or any `processing` row (the worker itself is wedged — transfer throwing
+  every pass, probe `unknown` forever, no Connect destination), **30 days** for
+  `connect_inactive`/`below_minimum` (legitimate states short-term; recorded money nothing will move
+  after a month). The clock is **`created_at`** — `updated_at` re-stamps on every failed retry — and
+  frozen rows are excluded (T-265 owns those). The step runs **before** `resolve-payable-holds`, because
+  the nothing-payable early return (a revoked capability) is exactly the stranding it reports.
+  **Reports, never repairs**, and the alert never instructs a manual transfer (T-249/T-255 rule).
+- ⚠️ **That sweep swallows its read errors *because* it runs before the paying steps — so it alerts
+  `payout-hold-sweep-failed` from the `catch`.** Swallowing makes the step *succeed*, so a wedged query
+  would otherwise silence the watchdog permanently with nothing red in Inngest either (T-255 gets this
+  from an `onFailure`; this one cannot, since it never throws). Its row caps are read at **`limit + 1`**
+  and the overflow travels as `countsTruncatedAtRows` — a silently capped count reads as "this is everything",
+  which is how a mass failure looks small.
 - **There is no admin payout endpoint (T-220), and re-adding one is not a fix:** a status flip moves no
   money, and cancelling a hold by hand makes it permanently unpayable.
 

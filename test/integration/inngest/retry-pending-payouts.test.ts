@@ -30,6 +30,30 @@ vi.mock('@/lib/observability/report-money-incident', () => ({
   reportMoneyIncident: vi.fn(async () => undefined),
 }));
 
+/**
+ * T-254: the two stuck-hold selectors are the only thing between a stranded
+ * payout and silence, so their failure and truncation branches need covering —
+ * and neither is reachable through the real database without a broken schema or
+ * 500 seeded rows. Everything else in the module stays REAL: the hook delegates
+ * to the actual query unless a test installs an override.
+ */
+const stuckSelectorOverrides = vi.hoisted(() => ({
+  listStuckRetryableRows: null as null | (() => Promise<unknown>),
+  listAgedOutstandingHolds: null as null | (() => Promise<unknown>),
+}));
+
+vi.mock('@/database/queries/payouts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/database/queries/payouts')>();
+  return {
+    ...actual,
+    listStuckRetryableRows: (...args: Parameters<typeof actual.listStuckRetryableRows>) =>
+      stuckSelectorOverrides.listStuckRetryableRows?.() ?? actual.listStuckRetryableRows(...args),
+    listAgedOutstandingHolds: (...args: Parameters<typeof actual.listAgedOutstandingHolds>) =>
+      stuckSelectorOverrides.listAgedOutstandingHolds?.() ??
+      actual.listAgedOutstandingHolds(...args),
+  };
+});
+
 const MINUTE_MS = 60 * 1000;
 /** An hour ahead makes anything written "now" older than the 30-minute window. */
 const FUTURE_NOW = Date.now() + 60 * MINUTE_MS;
@@ -1206,5 +1230,262 @@ describe('runRetryPendingPayoutsFlow — stale dispute freezes (T-265)', () => {
     await runRetryPendingPayoutsFlow(passthroughStep, FREEZE_FUTURE_NOW, deps);
 
     expect(deps.retrieveDisputeOutcome).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * T-254: the worker's failure exits deliberately never throw, so a hold whose
+ * every retry fails — `createTransfer` throwing on an invalid destination, a
+ * probe answering `unknown` forever — was retried every 30 minutes indefinitely
+ * with nothing but a console line. These tests pin the sweep that surfaces the
+ * STATE: aggregated, once per rolling day, clocked on `created_at` (the
+ * `payouts_set_updated_at` trigger re-stamps `updated_at` on every failed
+ * attempt), and changing nothing about what the worker pays.
+ */
+describe('runRetryPendingPayoutsFlow — stuck holds (T-254)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    vi.clearAllMocks();
+    stuckSelectorOverrides.listStuckRetryableRows = null;
+    stuckSelectorOverrides.listAgedOutstandingHolds = null;
+  });
+
+  /** 25 hours ahead: rows seeded "now" clear the 24-hour stuck window. */
+  const STUCK_FUTURE_NOW = Date.now() + 25 * 60 * MINUTE_MS;
+  /** 31 days ahead: rows seeded "now" clear the 30-day outstanding window. */
+  const AGED_FUTURE_NOW = Date.now() + 31 * 24 * 60 * MINUTE_MS;
+
+  async function stuckAlerts() {
+    const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+    return vi
+      .mocked(reportMoneyIncident)
+      .mock.calls.filter(([incident]) => incident.kind === 'payout-hold-stuck');
+  }
+
+  it('reports a transfer_failed hold whose transfer fails on every retry, and leaves it retryable', async () => {
+    const photographer = await makePhotographer({});
+    const hold = await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_stuck',
+      holdReason: 'transfer_failed',
+    });
+
+    const { deps } = makeDeps({
+      createTransfer: vi.fn(async () => {
+        throw new Error('destination account is invalid');
+      }),
+    });
+    await runRetryPendingPayoutsFlow(passthroughStep, STUCK_FUTURE_NOW, deps);
+
+    const alerts = await stuckAlerts();
+    expect(alerts).toHaveLength(1);
+    const incident = alerts[0]?.[0];
+    expect(incident?.context?.stuckRowCount).toBe(1);
+    expect(incident?.context?.agedRowCount).toBe(0);
+    expect(String(incident?.context?.payoutIds)).toContain(hold.id);
+    expect(incident?.context?.oldestPayoutId).toBe(hold.id);
+    // The sweep reports and does not repair: the row is exactly where the
+    // normal retry path expects it.
+    expect((await readPayout(hold.id))?.status).toBe('pending');
+    expect((await readPayout(hold.id))?.hold_reason).toBe('transfer_failed');
+  });
+
+  it('does NOT alert on a fresh failure — the alert is about a state, not an attempt', async () => {
+    const photographer = await makePhotographer({});
+    await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_fresh',
+      holdReason: 'transfer_failed',
+    });
+
+    const { deps } = makeDeps({
+      createTransfer: vi.fn(async () => {
+        throw new Error('destination account is invalid');
+      }),
+    });
+    await runRetryPendingPayoutsFlow(passthroughStep, FUTURE_NOW, deps);
+
+    expect(await stuckAlerts()).toHaveLength(0);
+  });
+
+  it('still alerts when nothing is payable — the revoked-capability early return', async () => {
+    // Connect no longer active: `resolve-payable-holds` filters every hold out
+    // and the flow returns early. The report must have run before that.
+    const photographer = await makePhotographer({ connectStatus: 'pending' });
+    const hold = await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_revoked',
+      holdReason: 'transfer_failed',
+    });
+
+    const { deps, calls } = makeDeps();
+    const result = await runRetryPendingPayoutsFlow(passthroughStep, STUCK_FUTURE_NOW, deps);
+
+    expect(calls).toHaveLength(0);
+    expect(result.holdsStuck).toBe(1);
+    const alerts = await stuckAlerts();
+    expect(alerts).toHaveLength(1);
+    expect(String(alerts[0]?.[0]?.context?.payoutIds)).toContain(hold.id);
+  });
+
+  it('does NOT report a connect_inactive hold inside the outstanding window', async () => {
+    // A day-old connect_inactive hold is a photographer who has not onboarded
+    // yet — a legitimate state with its own channel (T-250), not a stuck row.
+    const photographer = await makePhotographer({ connectStatus: 'pending' });
+    await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_waiting',
+      holdReason: 'connect_inactive',
+    });
+
+    const { deps } = makeDeps();
+    await runRetryPendingPayoutsFlow(passthroughStep, STUCK_FUTURE_NOW, deps);
+
+    expect(await stuckAlerts()).toHaveLength(0);
+  });
+
+  it('reports a connect_inactive hold past the 30-day outstanding window', async () => {
+    const photographer = await makePhotographer({ connectStatus: 'pending' });
+    const hold = await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_aged',
+      holdReason: 'connect_inactive',
+    });
+
+    const { deps } = makeDeps();
+    await runRetryPendingPayoutsFlow(passthroughStep, AGED_FUTURE_NOW, deps);
+
+    const alerts = await stuckAlerts();
+    expect(alerts).toHaveLength(1);
+    const incident = alerts[0]?.[0];
+    expect(incident?.context?.agedRowCount).toBe(1);
+    expect(incident?.context?.stuckRowCount).toBe(0);
+    expect(String(incident?.context?.payoutIds)).toContain(hold.id);
+  });
+
+  it('never reports a frozen row — the dispute sweep owns that state (T-265)', async () => {
+    const photographer = await makePhotographer({});
+    await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_frozen_stuck',
+      holdReason: 'transfer_failed',
+      frozenByDisputeId: 'dp_open_long',
+    });
+
+    // Default dispute outcome is 'open': the freeze sweep leaves it alone too.
+    const { deps } = makeDeps();
+    await runRetryPendingPayoutsFlow(passthroughStep, STUCK_FUTURE_NOW, deps);
+
+    expect(await stuckAlerts()).toHaveLength(0);
+  });
+
+  it('reports a processing row wedged by a perpetually inconclusive probe', async () => {
+    const photographer = await makePhotographer({});
+    const hold = await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_limbo',
+      holdReason: 'transfer_failed',
+      status: 'processing',
+      transferBatchId: null,
+    });
+
+    const { deps } = makeDeps({
+      findTransferByGroup: vi.fn(async () => ({ outcome: 'unknown' }) as never),
+    });
+    await runRetryPendingPayoutsFlow(passthroughStep, STUCK_FUTURE_NOW, deps);
+
+    const alerts = await stuckAlerts();
+    expect(alerts).toHaveLength(1);
+    expect(String(alerts[0]?.[0]?.context?.payoutIds)).toContain(hold.id);
+    // Left in limbo for the recovery step, exactly as before.
+    expect((await readPayout(hold.id))?.status).toBe('processing');
+  });
+
+  it('alerts that the CHECK is down when the ledger cannot be read, and still pays', async () => {
+    // The watchdog's own failure mode: the catch keeps the paying steps alive,
+    // which makes the step SUCCEED — so without this alert a wedged query
+    // (statement timeout, schema-cache blip) would silence the sweep forever
+    // with nothing red in Inngest either.
+    const photographer = await makePhotographer({});
+    const payable = await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_still_paid',
+      holdReason: 'connect_inactive',
+    });
+    stuckSelectorOverrides.listStuckRetryableRows = () => {
+      throw new Error('canceling statement due to statement timeout');
+    };
+
+    const { deps, calls } = makeDeps();
+    await runRetryPendingPayoutsFlow(passthroughStep, STUCK_FUTURE_NOW, deps);
+
+    const { reportMoneyIncident } = await import('@/lib/observability/report-money-incident');
+    const failureAlerts = vi
+      .mocked(reportMoneyIncident)
+      .mock.calls.filter(([incident]) => incident.kind === 'payout-hold-sweep-failed');
+    expect(failureAlerts).toHaveLength(1);
+    // No row-level claim about a set it could not read.
+    expect(await stuckAlerts()).toHaveLength(0);
+    // ⚠️ The whole reason the read error is swallowed: the money still moves.
+    expect(calls).toHaveLength(1);
+    expect((await readPayout(payable.id))?.status).toBe('paid');
+  });
+
+  it('says so when more rows matched than the pass lists', async () => {
+    // A silently capped count reads as "this is everything", which is exactly
+    // how a mass failure looks small. Synthetic rows: seeding 501 is minutes of
+    // inserts to exercise one branch.
+    const photographer = await makePhotographer({});
+    const seeded = await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_overflow',
+      holdReason: 'transfer_failed',
+    });
+    stuckSelectorOverrides.listStuckRetryableRows = async () =>
+      Array.from({ length: 501 }, (_, i) => ({ ...seeded, id: `${i}-${seeded.id}` }));
+
+    const { deps } = makeDeps({
+      createTransfer: vi.fn(async () => {
+        throw new Error('destination account is invalid');
+      }),
+    });
+    await runRetryPendingPayoutsFlow(passthroughStep, STUCK_FUTURE_NOW, deps);
+
+    const alerts = await stuckAlerts();
+    expect(alerts).toHaveLength(1);
+    const incident = alerts[0]?.[0];
+    expect(incident?.context?.countsTruncatedAtRows).toBe(500);
+    expect(incident?.context?.stuckRowCount).toBe(500);
+    expect(incident?.message).toContain('At least');
+  });
+
+  it('alerts once per rolling day, not once per cron pass', async () => {
+    const photographer = await makePhotographer({});
+    await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_daily',
+      holdReason: 'transfer_failed',
+    });
+
+    const { deps } = makeDeps({
+      createTransfer: vi.fn(async () => {
+        throw new Error('destination account is invalid');
+      }),
+    });
+    await runRetryPendingPayoutsFlow(passthroughStep, STUCK_FUTURE_NOW, deps);
+    await runRetryPendingPayoutsFlow(passthroughStep, STUCK_FUTURE_NOW, deps);
+    await runRetryPendingPayoutsFlow(passthroughStep, STUCK_FUTURE_NOW, deps);
+
+    expect(await stuckAlerts()).toHaveLength(1);
   });
 });

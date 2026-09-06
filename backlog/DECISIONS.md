@@ -660,6 +660,54 @@ reversal happened, and `findTransferByGroup` already documents why that answer c
 (`has_more`). Concluding wrongly reverses twice or releases a real reversal, and the next pass cannot
 undo either.
 
+### T-254 — a hold stuck beyond its window alerts, it does not just retry
+
+The worker's failure exits deliberately never throw (a throw fails the Inngest run, not the payout),
+so a `transfer_failed` hold whose `createTransfer` always fails — invalid destination, revoked
+capability — was retried every 30 minutes **forever** with nothing but a console line: real, recorded
+debt that never pays and that nobody hears about. Found by `/code-review xhigh` on T-249's PR #306,
+whose alerts point at this very path as the recovery.
+
+`report-stuck-holds` follows the T-264 shape (own kind `payout-hold-stuck`, one aggregated incident,
+claimed once per rolling day; the ticket's DoD predates T-264 and named `needs-reconciliation`, which
+that decision reserves for the clawback path). Two windows, because "stuck" has two causes:
+
+- **24 h** for rows the worker itself is failing to drain — `pending`/`transfer_failed` (≈ 48 failed
+  attempts) and ANY `processing` row (perpetual `unknown` probe, batch re-drive that keeps throwing,
+  or no Connect destination, which the recovery steps skip with a bare `continue`). Deliberately no
+  `stripe_charge_id` filter: `listPayableHolds` requires one as a security filter, so a charge-less
+  hold is *more* stuck, not less.
+- **30 days** for `connect_inactive` / `below_minimum` — legitimate states short-term (T-250 already
+  emails the photographer; sub-minimum accumulates by design), but past a month they are recorded
+  money nothing will ever move on its own.
+
+The clock is **`created_at`**: the `payouts_set_updated_at` trigger re-stamps `updated_at` on every
+failed retry, so `updated_at` measures the last attempt while `created_at` measures the age of the
+debt. Frozen rows are excluded at any age — T-265's `dispute-freeze-stuck` owns that state.
+
+The step runs **before** `resolve-payable-holds` because the flow's nothing-payable early return is
+itself the sharpest stranding: a revoked capability deactivates the account, every hold is filtered
+out, and the paying steps never run — reporting after them would go silent in exactly the case the
+alert exists for. Reports, never repairs, and the alert names the ledger as the authority instead of
+instructing a manual transfer (T-249/T-255 rule: zero drained rows proves nothing is *about* to be
+paid).
+
+**The watchdog needed its own watchdog** (found by the silent-failure refutation pass on this PR).
+Because the step runs before the paying steps, its read errors must be swallowed — a statement
+timeout on the window scan cannot be allowed to stop every payout in the run. But swallowing makes
+the step *succeed*, so a query that fails on every pass would silence the sweep permanently with
+nothing red in the Inngest dashboard either. T-255 gets this protection from an `onFailure`, which is
+unavailable here precisely because nothing throws; so the `catch` raises
+`payout-hold-sweep-failed` — its own kind (the remediation is "fix the sweep", not "reconcile a
+hold"), claimed daily like the state it guards. Both calls in that catch are structurally
+non-throwing (`rateLimit` fails open, `reportMoneyIncident` never throws), so the guard cannot turn a
+read error into a failed run.
+
+Same pass: the 500-row cap is read at **`limit + 1`** and the overflow reported as `countsTruncatedAtRows`,
+with the message downgraded to "At least N". The freeze sweep carries `deferredDisputes` for exactly
+this reason — a silently capped count reads as "this is everything", which is how a Connect-wide
+outage looks like 500 tidy rows.
+
 ### T-253 — the guest delivery email is the product
 
 A guest has no account, so the link that email carries is the only route to what they paid for — yet
