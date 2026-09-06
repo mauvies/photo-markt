@@ -47,6 +47,9 @@
       silent-failure) ran on the diff before committing. No-pay and double-pay returned "ninguno";
       silent-failure found two real gaps, both fixed here (the sweep's own failure was
       console-only despite the step succeeding → `payout-hold-sweep-failed`; the 500-row cap
-      truncated silently → `limit + 1` and `countsTruncatedAtRows`). ⚠️ `/code-review high` was
-      launched but **stopped by the user before it reported**, so that half of the gate did not
-      run — worth re-running on the PR if desired.
+      truncated silently → `limit + 1` and `countsTruncatedAtRows`). `/code-review high` then ran
+      on the branch and returned five findings, all four real ones fixed in a follow-up commit:
+      the sweep moved after the transfers (it was reporting rows the same pass paid), per-read
+      error guards, per-currency amounts, and a jsdoc correction; the fifth (the sweep-failed
+      daily claim degrading during a total database outage) is documented as best-effort rather
+      than changed, since failing open beats silence about a broken watchdog.
