@@ -668,136 +668,179 @@ export async function runRetryPendingPayoutsFlow(
   result.freezesReleased += freezeSweep.released;
   result.freezesUnresolved += freezeSweep.unresolved;
 
-  // ── 1c. Report holds stuck beyond their window (T-254) ───────────────────
-  // Every failure exit below and in the webhook is deliberately non-throwing, so
-  // a row that bounces off them on every pass — a `transfer_failed` hold whose
-  // transfer always throws, a `processing` row whose probe stays inconclusive —
-  // is retried every 30 minutes forever with nothing but a console line. This is
-  // the surface those exits cannot be: it asks the ledger for rows outstanding
-  // beyond their window and raises ONE aggregated incident, claimed once per
-  // rolling day (the reference shape is `report-unconfirmed-reversals` above).
+  // ── 1c. The stuck-hold sweep, defined here and run at BOTH exits (T-254) ──
+  // Every failure exit in this worker and in the webhook is deliberately
+  // non-throwing, so a row that bounces off them on every pass — a
+  // `transfer_failed` hold whose transfer always throws, a `processing` row whose
+  // probe stays inconclusive — is retried every 30 minutes forever with nothing
+  // but a console line. This is the surface those exits cannot be: it asks the
+  // ledger for rows outstanding beyond their window and raises ONE aggregated
+  // incident, claimed once per rolling day (reference shape:
+  // `report-unconfirmed-reversals` above).
   //
-  // ⚠️ It must run BEFORE `resolve-payable-holds`: the flow returns early when
-  // nothing is payable, and "capability revoked ⇒ account no longer active ⇒
-  // every hold filtered out ⇒ empty ⇒ return" is precisely the scenario that
-  // strands a `transfer_failed` row forever. Reporting after the paying steps
-  // would go silent in the exact case it exists for.
+  // ⚠️ It runs AFTER the transfers, not before them. A row this pass pays is not
+  // stuck: a `transfer_failed` hold whose photographer just finished onboarding
+  // becomes payable in `resolve-payable-holds`, and step 0b hands a recovered
+  // stale claim back as `transfer_failed` — both are older than the window and
+  // both get paid moments later. An alert that names a row it just paid teaches
+  // the reader to distrust the next one.
+  //
+  // ⚠️ But it must ALSO run when NOTHING was payable, which is the sharpest
+  // stranding there is: a revoked capability deactivates the account, every hold
+  // is filtered out, and the paying steps never run. Hence one function and two
+  // call sites — exactly one executes per invocation, and they share a step id,
+  // so a replay memoizes either the same way.
   //
   // ⚠️ REPORTS and does not repair — re-driving money from a sweep is what T-265
-  // refuses to do, and the same line holds here. The rows are left exactly as
-  // they are for the normal selectors.
-  const stuckSweep = await step.run('report-stuck-holds', async () => {
-    const empty = { stuck: 0, aged: 0 };
-    let stuckRows: Payout[];
-    let agedRows: Payout[];
-    try {
+  // refuses to do, and the same line holds here.
+  const reportStuckHolds = async () => {
+    const sweep = await step.run('report-stuck-holds', async () => {
+      let readError: unknown;
+      // ⚠️ Each read is guarded on its OWN. Sharing one `try` means a persistent
+      // failure in the second discards a set the first read successfully, and a
+      // genuinely stranded hold then goes unreported for as long as the other
+      // query stays broken. Reporting must also never gate the money: this runs
+      // in the same invocation as the transfers, so an error must not propagate.
+      const readSet = async (read: () => Promise<Payout[]>): Promise<Payout[]> => {
+        try {
+          return await read();
+        } catch (err) {
+          console.error('[retry-payouts] could not list stuck holds:', err);
+          readError = err;
+          return [];
+        }
+      };
+
       // ⚠️ One row OVER the cap, deliberately: the extra row is how truncation is
       // detected. A silently capped count reads as "this is everything", which is
       // the failure `deferredDisputes` exists to prevent in the freeze sweep.
-      stuckRows = await listStuckRetryableRows(
-        adminClient,
-        new Date(nowMs - STUCK_HOLD_AGE_MS).toISOString(),
-        MAX_STALE_ROWS_PER_TICK + 1,
+      let stuckRows = await readSet(() =>
+        listStuckRetryableRows(
+          adminClient,
+          new Date(nowMs - STUCK_HOLD_AGE_MS).toISOString(),
+          MAX_STALE_ROWS_PER_TICK + 1,
+        ),
       );
-      agedRows = await listAgedOutstandingHolds(
-        adminClient,
-        new Date(nowMs - OUTSTANDING_HOLD_AGE_MS).toISOString(),
-        MAX_STALE_ROWS_PER_TICK + 1,
+      let agedRows = await readSet(() =>
+        listAgedOutstandingHolds(
+          adminClient,
+          new Date(nowMs - OUTSTANDING_HOLD_AGE_MS).toISOString(),
+          MAX_STALE_ROWS_PER_TICK + 1,
+        ),
       );
-    } catch (err) {
-      // Reporting must not gate the money: this step runs before the paying
-      // steps, so a read error propagating would stop every payout in the run.
-      console.error('[retry-payouts] could not list stuck holds:', err);
 
-      // ⚠️ But swallowing makes the step SUCCEED, so a query that fails on every
-      // pass would silence this sweep permanently with nothing red anywhere —
-      // the very silence T-254 exists to end. Alert that the CHECK is down under
-      // its own kind, claimed daily like the state it guards. Neither call can
-      // throw (`rateLimit` fails open, `reportMoneyIncident` never throws), so
-      // this cannot turn a read error into a failed run.
+      if (readError !== undefined) {
+        // ⚠️ Swallowing a read error makes the step SUCCEED, so a query that fails
+        // on every pass would silence this sweep permanently with nothing red
+        // anywhere — the very silence T-254 exists to end. Alert that the CHECK is
+        // down, under its own kind. Neither call can throw (`rateLimit` fails
+        // open, `reportMoneyIncident` never throws), so this cannot turn a read
+        // error into a failed run.
+        //
+        // ⚠️ The daily claim is best-effort HERE and nowhere else: `rateLimit` is
+        // Postgres-backed and fails OPEN, so in the one scenario that takes the
+        // database down entirely the claim fails too and this fires once per pass.
+        // That is the right direction — a flood of alerts during an outage beats
+        // silence about a broken watchdog — but it is not a once-a-day guarantee.
+        const claim = await rateLimit({
+          key: 'money-alert:payout-hold-sweep-failed',
+          limit: 1,
+          windowSec: STUCK_HOLD_ALERT_WINDOW_SEC,
+        });
+        if (claim.ok) {
+          await reportMoneyIncident({
+            kind: 'payout-hold-sweep-failed',
+            message:
+              'The stuck-payout-hold sweep could not read the ledger, so it cannot tell whether ' +
+              'any photographer debt is stranded. Payouts themselves are unaffected — this alert ' +
+              'is about the check being down, not about a row.',
+            cause: readError,
+          });
+        }
+        // Whatever the other read DID return is still reported below: a set we
+        // hold in hand is signal, and dropping it would hide real stranded money
+        // behind an alert that only says the check is unwell.
+      }
+
+      // Trim back to the cap and remember that there was more. `created_at ASC`
+      // keeps the oldest debt visible; what is dropped is named in the alert.
+      const stuckTruncated = stuckRows.length > MAX_STALE_ROWS_PER_TICK;
+      const agedTruncated = agedRows.length > MAX_STALE_ROWS_PER_TICK;
+      if (stuckTruncated) stuckRows = stuckRows.slice(0, MAX_STALE_ROWS_PER_TICK);
+      if (agedTruncated) agedRows = agedRows.slice(0, MAX_STALE_ROWS_PER_TICK);
+
+      const empty = { stuck: 0, aged: 0 };
+      if (stuckRows.length === 0 && agedRows.length === 0) return empty;
+      const counts = { stuck: stuckRows.length, aged: agedRows.length };
+
+      // One alert per rolling day for the whole set — the cron runs 48×/day and a
+      // stuck hold does not fix itself. `rateLimit` fails OPEN, so a limiter
+      // outage costs a duplicate alert rather than a missed one.
       const claim = await rateLimit({
-        key: 'money-alert:payout-hold-sweep-failed',
+        key: 'money-alert:payout-hold-stuck',
         limit: 1,
         windowSec: STUCK_HOLD_ALERT_WINDOW_SEC,
       });
-      if (claim.ok) {
-        await reportMoneyIncident({
-          kind: 'payout-hold-sweep-failed',
-          message:
-            'The stuck-payout-hold sweep could not read the ledger, so it cannot tell whether any ' +
-            'photographer debt is stranded. Payouts themselves are unaffected — this alert is ' +
-            'about the check being down, not about a row.',
-          cause: err,
-        });
+      if (!claim.ok) return counts;
+
+      // The two selectors are disjoint (status/hold_reason split), so this union
+      // never double-counts a row. Sorted so "the oldest" in the once-a-day alert
+      // really is the oldest debt across both tiers.
+      const rows = [...stuckRows, ...agedRows].sort((a, b) =>
+        (a.created_at ?? '').localeCompare(b.created_at ?? ''),
+      );
+      const oldest = rows[0];
+
+      // ⚠️ Per CURRENCY, never one total. `payouts.currency` is per row and
+      // `splitPayableRows` groups on it precisely because the amounts are not
+      // comparable; adding EUR and USD cents produces a figure that means nothing
+      // while looking authoritative.
+      const payableByCurrency = new Map<string, number>();
+      for (const row of rows) {
+        const currency = row.currency ?? 'unknown';
+        payableByCurrency.set(currency, (payableByCurrency.get(currency) ?? 0) + payableCents(row));
       }
-      return empty;
-    }
 
-    // Trim back to the cap and remember that there was more. `created_at ASC`
-    // keeps the oldest debt visible; what is dropped is named in the alert.
-    const stuckTruncated = stuckRows.length > MAX_STALE_ROWS_PER_TICK;
-    const agedTruncated = agedRows.length > MAX_STALE_ROWS_PER_TICK;
-    if (stuckTruncated) stuckRows = stuckRows.slice(0, MAX_STALE_ROWS_PER_TICK);
-    if (agedTruncated) agedRows = agedRows.slice(0, MAX_STALE_ROWS_PER_TICK);
-
-    if (stuckRows.length === 0 && agedRows.length === 0) return empty;
-    const counts = { stuck: stuckRows.length, aged: agedRows.length };
-
-    // One alert per rolling day for the whole set — the cron runs 48×/day and a
-    // stuck hold does not fix itself. `rateLimit` fails OPEN, so a limiter outage
-    // costs a duplicate alert rather than a missed one.
-    const claim = await rateLimit({
-      key: 'money-alert:payout-hold-stuck',
-      limit: 1,
-      windowSec: STUCK_HOLD_ALERT_WINDOW_SEC,
+      const truncated = stuckTruncated || agedTruncated;
+      await reportMoneyIncident({
+        kind: 'payout-hold-stuck',
+        message:
+          `${truncated ? 'At least ' : ''}${rows.length} payout row(s) have been outstanding ` +
+          `beyond their window and the retry worker cannot drain them (${counts.stuck} failing ` +
+          `their transfer or recovery probe for over a day, ${counts.aged} waiting over a month ` +
+          'on Connect onboarding or the transfer minimum)' +
+          (truncated
+            ? `. More rows matched than this pass lists (capped at ${MAX_STALE_ROWS_PER_TICK} per ` +
+              'set), so the counts and totals below are a floor, not the whole set'
+            : '') +
+          '. The `payouts` ledger is the authority on what was actually sent — resolve each row ' +
+          'there; a manual transfer on top of a pending retry is a double payment.',
+        context: {
+          stuckRowCount: counts.stuck,
+          agedRowCount: counts.aged,
+          // ⚠️ Named, never dropped silently: a capped count reads as "this is all
+          // of it", which is exactly how a mass failure looks small. Absent when
+          // the whole set fit, a row cap when it did not.
+          countsTruncatedAtRows: truncated ? MAX_STALE_ROWS_PER_TICK : undefined,
+          payableCentsByCurrency: [...payableByCurrency.entries()]
+            .map(([currency, cents]) => `${currency}:${cents}`)
+            .join(','),
+          oldestPayoutId: oldest?.id ?? null,
+          oldestCreatedAt: oldest?.created_at ?? null,
+          oldestStatus: oldest?.status ?? null,
+          oldestHoldReason: oldest?.hold_reason ?? null,
+          payoutIds: rows
+            .slice(0, 20)
+            .map((row) => row.id)
+            .join(','),
+        },
+      });
+      return counts;
     });
-    if (!claim.ok) return counts;
-
-    // The two selectors are disjoint (status/hold_reason split), so this union
-    // never double-counts a row. Sorted so "the oldest" in the once-a-day alert
-    // really is the oldest debt across both tiers.
-    const rows = [...stuckRows, ...agedRows].sort((a, b) =>
-      (a.created_at ?? '').localeCompare(b.created_at ?? ''),
-    );
-    const oldest = rows[0];
-    const totalPayableCents = rows.reduce((sum, row) => sum + payableCents(row), 0);
-    const truncated = stuckTruncated || agedTruncated;
-    await reportMoneyIncident({
-      kind: 'payout-hold-stuck',
-      message:
-        `${truncated ? 'At least ' : ''}${rows.length} payout row(s) have been outstanding beyond ` +
-        `their window and the retry worker cannot drain them (${counts.stuck} failing their ` +
-        `transfer or recovery probe for over a day, ${counts.aged} waiting over a month on Connect ` +
-        'onboarding or the transfer minimum)' +
-        (truncated
-          ? `. More rows matched than this pass lists (capped at ${MAX_STALE_ROWS_PER_TICK} per ` +
-            'set), so the counts and total below are a floor, not the whole set'
-          : '') +
-        '. The `payouts` ledger is the authority on what was actually sent — resolve each row ' +
-        'there; a manual transfer on top of a pending retry is a double payment.',
-      context: {
-        stuckRowCount: counts.stuck,
-        agedRowCount: counts.aged,
-        // ⚠️ Named, never dropped silently: a capped count reads as "this is all
-        // of it", which is exactly how a mass failure looks small. Absent when
-        // the whole set fit, a row cap when it did not.
-        countsTruncatedAtRows: truncated ? MAX_STALE_ROWS_PER_TICK : undefined,
-        totalPayableCents,
-        oldestPayoutId: oldest?.id ?? null,
-        oldestCreatedAt: oldest?.created_at ?? null,
-        oldestStatus: oldest?.status ?? null,
-        oldestHoldReason: oldest?.hold_reason ?? null,
-        payoutIds: rows
-          .slice(0, 20)
-          .map((row) => row.id)
-          .join(','),
-      },
-    });
-    return counts;
-  });
-  // Assigned OUTSIDE the step for the same replay reason as the freeze sweep.
-  result.holdsStuck = stuckSweep.stuck;
-  result.holdsLongOutstanding = stuckSweep.aged;
+    // Assigned OUTSIDE the step for the same replay reason as the freeze sweep.
+    result.holdsStuck = sweep.stuck;
+    result.holdsLongOutstanding = sweep.aged;
+  };
 
   // ── 2. Load outstanding holds and resolve who can be paid ────────────────
   const { payableRows, notActive } = await step.run('resolve-payable-holds', async () => {
@@ -832,7 +875,10 @@ export async function runRetryPendingPayoutsFlow(
   });
 
   result.photographersNotActive = notActive;
-  if (payableRows.length === 0) return result;
+  if (payableRows.length === 0) {
+    await reportStuckHolds();
+    return result;
+  }
 
   const destinations = await step.run('resolve-destinations', async () => {
     const ids = [...new Set(payableRows.map((r) => r.photographer_id))];
@@ -1008,5 +1054,6 @@ export async function runRetryPendingPayoutsFlow(
     });
   }
 
+  await reportStuckHolds();
   return result;
 }

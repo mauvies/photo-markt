@@ -1291,6 +1291,28 @@ describe('runRetryPendingPayoutsFlow — stuck holds (T-254)', () => {
     expect((await readPayout(hold.id))?.hold_reason).toBe('transfer_failed');
   });
 
+  it('does NOT report a row this same pass pays', async () => {
+    // The false positive the sweep's placement exists to avoid: a
+    // `transfer_failed` hold older than the window whose photographer just
+    // finished onboarding becomes payable in `resolve-payable-holds` and is paid
+    // moments later. Naming it as money nothing can move — in the one alert
+    // throttled to once a day — teaches the reader to distrust the next one.
+    const photographer = await makePhotographer({});
+    const hold = await seedHold({
+      photographerId: photographer.id,
+      amountCents: 900,
+      chargeId: 'ch_paid_this_pass',
+      holdReason: 'transfer_failed',
+    });
+
+    const { deps, calls } = makeDeps();
+    await runRetryPendingPayoutsFlow(passthroughStep, STUCK_FUTURE_NOW, deps);
+
+    expect(calls).toHaveLength(1);
+    expect((await readPayout(hold.id))?.status).toBe('paid');
+    expect(await stuckAlerts()).toHaveLength(0);
+  });
+
   it('does NOT alert on a fresh failure — the alert is about a state, not an attempt', async () => {
     const photographer = await makePhotographer({});
     await seedHold({

@@ -492,9 +492,14 @@ export async function listStaleProcessingSingles(
  * ⚠️ Deliberately NO `stripe_charge_id` filter, unlike `listPayableHolds`: that
  * filter is what makes a charge-less row structurally unpayable, so such a row is
  * *more* stuck, not less, and this is the only thing that would ever surface it.
- * Legacy pre-T-216 rows carry no `hold_reason` and stay excluded. Frozen rows are
- * excluded whatever their age — `listStaleDisputeFreezes` owns that state and
- * reports it under its own kind (T-265).
+ * Frozen rows are excluded whatever their age — `listStaleDisputeFreezes` owns
+ * that state and reports it under its own kind (T-265).
+ *
+ * ⚠️ The `hold_reason` predicate belongs to the `pending` arm ALONE, so a legacy
+ * pre-T-216 row (photographer-inserted, no `hold_reason`) is excluded only while
+ * it is `pending`. A `processing` row is selected whatever its reason, and that
+ * is deliberate: nothing writes `processing` except this worker's own claims, so
+ * such a row is stuck by definition — there is no legacy shape to exclude.
  *
  * Read-only: the caller reports and never repairs.
  */

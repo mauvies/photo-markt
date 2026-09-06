@@ -436,9 +436,13 @@ recovery path, not the normal one.
   every pass, probe `unknown` forever, no Connect destination), **30 days** for
   `connect_inactive`/`below_minimum` (legitimate states short-term; recorded money nothing will move
   after a month). The clock is **`created_at`** — `updated_at` re-stamps on every failed retry — and
-  frozen rows are excluded (T-265 owns those). The step runs **before** `resolve-payable-holds`, because
-  the nothing-payable early return (a revoked capability) is exactly the stranding it reports.
-  **Reports, never repairs**, and the alert never instructs a manual transfer (T-249/T-255 rule).
+  frozen rows are excluded (T-265 owns those). ⚠️ **It runs AFTER the transfers, at BOTH exits** — one
+  function, two call sites: after the paying steps, so a row this pass pays is never named as stranded
+  (a `transfer_failed` hold whose photographer just onboarded, or one step 0b released from a stale
+  claim, is older than the window and paid moments later), **and** on the nothing-payable early return,
+  which is the sharpest stranding there is. **Reports, never repairs**, and the alert never instructs a
+  manual transfer (T-249/T-255 rule). Amounts are quoted **per currency** — `payouts.currency` is per
+  row and one summed figure means nothing.
 - ⚠️ **That sweep swallows its read errors *because* it runs before the paying steps — so it alerts
   `payout-hold-sweep-failed` from the `catch`.** Swallowing makes the step *succeed*, so a wedged query
   would otherwise silence the watchdog permanently with nothing red in Inngest either (T-255 gets this

@@ -685,12 +685,25 @@ The clock is **`created_at`**: the `payouts_set_updated_at` trigger re-stamps `u
 failed retry, so `updated_at` measures the last attempt while `created_at` measures the age of the
 debt. Frozen rows are excluded at any age — T-265's `dispute-freeze-stuck` owns that state.
 
-The step runs **before** `resolve-payable-holds` because the flow's nothing-payable early return is
-itself the sharpest stranding: a revoked capability deactivates the account, every hold is filtered
-out, and the paying steps never run — reporting after them would go silent in exactly the case the
-alert exists for. Reports, never repairs, and the alert names the ledger as the authority instead of
-instructing a manual transfer (T-249/T-255 rule: zero drained rows proves nothing is *about* to be
-paid).
+**Where the step runs took two passes to get right.** The first version put it *before*
+`resolve-payable-holds`, reasoning that the flow's nothing-payable early return is itself the sharpest
+stranding — a revoked capability deactivates the account, every hold is filtered out, and the paying
+steps never run, so reporting after them would go silent in exactly the case the alert exists for.
+True, but incomplete: running first also means reporting rows the same pass is about to pay. A
+`transfer_failed` hold whose photographer just finished onboarding becomes payable in
+`resolve-payable-holds` (which live-reconciles Connect status), and step 0b hands a recovered stale
+claim back as `transfer_failed` — both are older than the window, both are paid moments later, and
+naming them in the one alert throttled to once a day is precisely the cry-wolf the ticket warned
+about. So the sweep is one function called at **both** exits: after the transfers, and on the
+early-return path. Exactly one runs per invocation and they share a step id, so a replay memoizes
+either the same way.
+
+Reports, never repairs, and the alert names the ledger as the authority instead of instructing a
+manual transfer (T-249/T-255 rule: zero drained rows proves nothing is *about* to be paid).
+
+Amounts are quoted **per currency**: `payouts.currency` is per row and `splitPayableRows` groups on it
+precisely because the amounts are not comparable, so one summed figure would look authoritative and
+mean nothing.
 
 **The watchdog needed its own watchdog** (found by the silent-failure refutation pass on this PR).
 Because the step runs before the paying steps, its read errors must be swallowed — a statement
@@ -707,6 +720,14 @@ Same pass: the 500-row cap is read at **`limit + 1`** and the overflow reported 
 with the message downgraded to "At least N". The freeze sweep carries `deferredDisputes` for exactly
 this reason — a silently capped count reads as "this is everything", which is how a Connect-wide
 outage looks like 500 tidy rows.
+
+A later `/code-review high` pass added the placement fix above plus two more: the two ledger reads are
+guarded **separately**, because sharing one `try` let a persistent failure in the second discard a set
+the first had already read — real stranded money hidden behind an alert that only says the check is
+unwell; and the sweep-failed alert's daily claim is documented as **best-effort**, since `rateLimit` is
+Postgres-backed and fails open, so the one outage that takes the database down also defeats the claim
+and the alert fires per pass. That is the right direction (a flood during an outage beats silence about
+a broken watchdog) but it is not the once-a-day guarantee the neighbouring sweeps have.
 
 ### T-253 — the guest delivery email is the product
 

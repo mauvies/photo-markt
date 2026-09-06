@@ -269,6 +269,13 @@ and SHALL change nothing about what the worker pays or when.
   failing, its probe stays inconclusive, or its photographer has no Connect destination
 - **THEN** it is included in the same aggregated incident
 
+#### Scenario: A row the same pass pays is not reported
+
+- **WHEN** a row older than its window becomes payable during the pass — its photographer's Connect
+  account is reconciled to active, or a stale claim is handed back for retry — and the transfer
+  succeeds
+- **THEN** it is not named in the report, because it was drained rather than stranded
+
 #### Scenario: The alert fires even when nothing is payable
 
 - **WHEN** every outstanding hold belongs to photographers whose Connect account is no longer
@@ -303,8 +310,10 @@ and SHALL change nothing about what the worker pays or when.
 - **WHEN** reading the stuck set fails
 - **THEN** the worker's paying steps run unaffected — the read error never propagates
 - **AND** an incident of its own kind is raised stating that the CHECK is down rather than that a
-  row is stranded, at most once per rolling day
+  row is stranded
 - **AND** raising it cannot itself fail the run
+- **AND** any set that WAS read successfully is still reported, rather than discarded along with the
+  one that failed
 
 #### Scenario: More rows match than the pass can list
 
