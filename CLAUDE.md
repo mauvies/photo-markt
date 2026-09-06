@@ -582,6 +582,44 @@ Channels: `console.error` + Sentry always (fingerprinted on `kind`), plus an ops
 - ⚠️ **`listUnconfirmedReversals` must filter `status in ('paid','reversed')` (T-264)** — a hold stamped
   `reversed_at` by `applyReversalToHolds` will never carry a `stripe_reversal_id`, so without the filter it
   matches forever. That sweep **reports and does not repair**, deliberately.
+- ⚠️ **`reconcile-order-payouts` (T-255, cron `25,55`) is the only alert that asks the RESULTING ROWS**
+  instead of the code path — every other producer fires as the webhook walks past a known exit, so an
+  eighth exit is silent by construction. It reports a paid order (`total_amount_cents > 0`) past a
+  **6 h grace**, inside a **30-day lookback**, with **no** `payouts` row for its `(order_id, order_kind)`
+  — kind `order-without-payouts`, aggregated, claimed once a day. Covers `orders` **and** `guest_orders`.
+  **Reports, never repairs**: a cron moves no money (same line T-265 draws).
+  - ⚠️ **The alert must never tell anyone to transfer by hand.** Zero rows proves nothing was paid
+    *yet*, not that nothing is *about to be*: Stripe redelivers for up to three days and T-262's
+    itemless order is resumed by exactly that redelivery, so a manual transfer on top is a double
+    payment. Name the ledger as the authority — same rule as T-249.
+  - ⚠️ **Guest orders are swept in `pending` too, not just `completed`.** A `guest_orders` row only
+    exists once Stripe reported the session complete, and `completeGuestOrder` runs **last** (T-263) —
+    so a `pending` guest order past the grace IS the T-261/T-263 kill, and **nothing else selects it**
+    (buyer reads gate on `completed`; the retry worker needs a payout row that was never opened).
+  - ⚠️ **The authenticated side MUST probe the PaymentIntent; a `completed` guest order must NOT.**
+    `orders` is written `completed` *before* the payment is confirmed, so an `unpaid` session (delayed
+    method, e.g. SEPA) is a legitimate zero-payout order for days; only `succeeded` is a verdict, and a
+    failed/missing read is never one (`retrievePaymentSettlement`, `src/lib/stripe/payment-intents.ts`).
+    A guest order reaching `completed` is already conclusive.
+  - ⚠️ **An unverifiable candidate is still reported** (as `unverifiableOrderIds`, never as settled
+    debt). Exiting quietly when every probe fails is how a Stripe outage turns the sweep off for good.
+  - ⚠️ **The window is PAGED, not `LIMIT`-ed, and the probe cap ROTATES.** A bare limit on
+    `created_at ASC` pins the sweep to the oldest N orders — all healthy — so a break last week is never
+    examined once volume grows; an unrotated probe cap starves candidate N+1 forever, because the list
+    is rebuilt identically each pass and nothing is repaired.
+  - ⚠️ **Every completeness counter is computed OUTSIDE the `step.run` bodies.** On an Inngest replay a
+    completed step returns memoized output without re-running its closure, so a counter mutated in-step
+    reads 0 in production — and these fields exist to stop the alert claiming it saw everything.
+    `retry-pending-payouts.ts` documents the same rule; a pass-through test step cannot catch a breach.
+  - ⚠️ **Both order queries project explicit columns, never `select('*')`** — `guest_orders.guest_email`
+    is buyer PII and every row here ends in an alert. `listOrderIdsWithPayouts` **pages** its lookup:
+    PostgREST truncates at `max_rows` (1000) **without an error**, and a truncated answer there reads as
+    "this order has no payout rows" — inventing a money incident. `order_kind` is not optional in the
+    anti-join: the two tables have independent uuid spaces (no FK, T-216).
+  - **Scope boundaries, deliberate:** it does not see a **partially**-paid order (existence-only
+    anti-join; the partial case alerts from `createTransfersForOrderItems`), nor an exit that never
+    created an order row at all. `payout-reconciliation-failed` (its `onFailure`) is what surfaces the
+    sweep being down — otherwise a failed run shows only in the Inngest dashboard.
 - **`purchase-email-not-delivered` (T-253)** is the second live kind: the **guest** delivery email is the
   *product*, yet the send must stay non-fatal — hence the alert. Context is ids only: **never the buyer's
   address (PII), never the download token** (a bearer credential). `subsystem: 'delivery'`.
@@ -1022,8 +1060,9 @@ path (removed in `20260518000000_drop_legacy_ai_schema.sql`).
   - A **1-hour staleness gate** on `events.updated_at` / `photos.created_at` keeps it from clobbering live
     re-indexes; the T-092 ready-guard stops a re-emit from re-baking an already-`ready` thumbnail.
 - **Worker route:** all Inngest functions are registered at `/src/app/api/inngest/route.ts`.
-- ⚠️ **Cron slots are deliberately offset** so the three never contend: `0,30` storage cleanup · `15,45`
-  indexing reconciliation · `10,40` payout retries. **Pick a fourth slot for any new cron.**
+- ⚠️ **Cron slots are deliberately offset** so the four never contend: `0,30` storage cleanup · `15,45`
+  indexing reconciliation · `10,40` payout retries · `25,55` order-payout reconciliation (T-255).
+  **Pick a fifth slot for any new cron.**
   ⚠️ `retry-pending-payouts` is **one** function with a cron trigger *and* a `payouts.retry-requested` event
   trigger — Inngest scopes `concurrency` per function id, so splitting it into two registrations would give
   two independent limits and allow concurrent payout runs for the same photographer.

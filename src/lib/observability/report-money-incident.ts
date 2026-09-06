@@ -55,8 +55,10 @@ const EMAIL_SEND_TIMEOUT_MS = 5_000;
 
 /**
  * Every kind has a producer: the webhook raises the dispute, refund and
- * order-assembly ones, `apply-clawback.ts` raises `reversal-failed`, and
- * `retry-pending-payouts.ts` raises the two sweep kinds.
+ * order-assembly ones, `apply-clawback.ts` raises `reversal-failed`,
+ * `retry-pending-payouts.ts` raises the two sweep kinds, and
+ * `reconcile-order-payouts.ts` raises `order-without-payouts` plus, from its
+ * `onFailure`, `payout-reconciliation-failed`.
  *
  * ⚠️ **A kind is never shared to save one.** The Sentry fingerprint is
  * `['money-incident', kind]` and the email throttle is keyed on `kind`, so two
@@ -147,7 +149,42 @@ export type MoneyIncidentKind =
    * rolling day, because the cron runs 48×/day and this state does not fix
    * itself.
    */
-  | 'dispute-freeze-stuck';
+  | 'dispute-freeze-stuck'
+  /**
+   * A paid order left NO row in `payouts` at all (T-255).
+   *
+   * The mirror image of `payout-not-recorded`, and the reason both exist: that
+   * one fires from inside a known exit as the code walks past it, this one is
+   * raised by a sweep that asks the resulting rows instead. A sale that
+   * completes with an empty ledger through an exit nobody enumerated is
+   * invisible to every path-based alert — which is precisely how the €0.99 sale
+   * of 2026-07-28 went unnoticed for thirteen days.
+   *
+   * Nothing self-heals it: with no row there is no `hold_reason` and no charge
+   * id, so `listPayableHolds` cannot see it and `retry-pending-payouts` has
+   * nothing to drain. Reported, never repaired — re-driving transfers from a
+   * cron is what T-265 refuses to do.
+   *
+   * ⚠️ Its OWN kind, not `needs-reconciliation` (T-264). Sharing one would let
+   * this collapse into the clawback path's issue and let whichever fires first
+   * silence the other for the email window.
+   */
+  | 'order-without-payouts'
+  /**
+   * The order-payout reconciliation sweep itself failed every retry (T-255).
+   *
+   * ⚠️ This is an alert about a **missing check**, not about an order. The sweep
+   * is the only thing that sees a charged order which opened no payout row at
+   * all, and every query on its path throws; a throw inside `step.run` fails the
+   * Inngest RUN, which shows up in that dashboard and nowhere else. So a
+   * statement timeout on the window scan would silence T-255 permanently while
+   * the app looked healthy — the T-125 shape, where production quietly ran 5 of
+   * 13 registered functions.
+   *
+   * Its OWN kind, per the rule above: the remediation is "go fix the sweep",
+   * which shares nothing with "go reconcile this charge".
+   */
+  | 'payout-reconciliation-failed';
 
 export interface MoneyIncident {
   kind: MoneyIncidentKind;

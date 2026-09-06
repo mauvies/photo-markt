@@ -471,6 +471,41 @@ path, the retry worker, and the clawback path (`applyReversalToHolds` on
 — the last being the one that *does* void holds, which is why "who can cancel a hold?"
 must not be answered from the first two alone.
 
+**Nothing above notices a sale that opened no debt at all.** Every alert on this
+path — the seven exits of T-249, both drivers of T-252 — fires *as the webhook
+walks past it*, so a failure through an exit nobody enumerated leaves a charged
+buyer, an empty ledger and total silence. That is literally what happened on
+2026-07-28, for thirteen days. `reconcile-order-payouts` (T-255, cron `25,55`,
+the fourth slot) asks the resulting rows instead: a `completed` order with
+`total_amount_cents > 0`, past a 6-hour grace and inside a 30-day lookback, with
+no `payouts` row for its `(order_id, order_kind)`. It **reports and does not
+repair** — a cron moves no money — with one aggregated incident
+(`order-without-payouts`) claimed once per rolling day. ⚠️ And the alert never
+asks for a manual transfer: zero rows proves nothing was paid *yet*, not that
+nothing is *about to be*, and a hand transfer on top of a webhook redelivery is a
+double payment.
+
+Its reach is bounded on purpose. It anti-joins **from** the order tables, so an
+exit that never wrote an order row at all is still path-alert territory, and the
+join is existence-only, so a cart that paid one of two photographers reads as
+healthy (that case alerts from `createTransfersForOrderItems` instead).
+
+The two order tables are asked differently, and the asymmetry is a property of
+the webhook rather than an inconsistency: `guest_orders` reaches `completed` only
+in `completeGuestOrder`, which runs **after** the transfers (T-263), so zero
+payout rows there is already conclusive. `orders` is written `completed` the
+moment the session completes — *before* the payment is confirmed — so an `unpaid`
+session (a delayed method such as SEPA) is a legitimate zero-payout order for
+days. Each authenticated candidate is therefore probed with
+`paymentIntents.retrieve`, and only `succeeded` is a verdict; a failed or absent
+read never is — but it is still *reported*, as unverifiable rather than as debt,
+so a Stripe outage cannot quietly switch the sweep off. Guest orders are swept in
+`pending` as well: that row only exists once Stripe reported the session
+complete, so a `pending` one past the grace is the T-261/T-263 kill itself, which
+nothing else selects. The 30-day upper bound is what makes the input set drain: orders
+older than the ledger itself (pre-T-216) have no payout rows by construction and
+would otherwise sit at the head of the window forever.
+
 A dispute freeze is a **mark** (`frozen_by_dispute_id`), not a status, and
 `listPayableHolds` refuses every row carrying one — so a `restoreHoldsForCharge`
 that fails strands the row permanently. The retry worker's

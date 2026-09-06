@@ -1078,3 +1078,87 @@ export async function countOutstandingConnectInactiveHolds(
 
   return count ?? 0;
 }
+
+/**
+ * How many order ids go into one `in(...)` filter. PostgREST puts the whole list
+ * in the query string, and a uuid costs ~37 characters — 500 of them is an 18 KB
+ * URL, which proxies start refusing. Chunking keeps the request shape bounded
+ * regardless of how big the sweep's window gets.
+ */
+const ORDER_ID_LOOKUP_CHUNK = 100;
+
+/**
+ * Rows per page when reading a chunk's payout rows.
+ *
+ * ⚠️ **This must be paged, not merely limited.** PostgREST caps an unbounded
+ * response at `max_rows` (1000, `supabase/config.toml`) and truncates **without
+ * an error**. One payout row exists per (order, photographer), so a chunk of 100
+ * multi-photographer orders can exceed that — and a truncated answer here means
+ * "this order has no payout rows", which is exactly the money incident the caller
+ * reports. Silent truncation would therefore invent a false alarm about money.
+ * Paging until a short page comes back is the only answer that cannot be wrong.
+ */
+const PAYOUT_LOOKUP_PAGE = 500;
+
+/**
+ * Which of these orders already have at least one row in the ledger (T-255).
+ *
+ * The complement — a paid order with NO payout row — is the state this exists to
+ * expose: the buyer was charged and no debt to any photographer was ever
+ * recorded, so there is nothing for `retry-pending-payouts` to drain and nothing
+ * that will ever self-heal. T-249's alerts fire on the *paths* that can cause it;
+ * this answers the question from the rows themselves, so a cause nobody
+ * enumerated is still visible.
+ *
+ * ⚠️ **Existence, not sufficiency.** An order whose cart spans two photographers
+ * and paid only one has a row here and is reported as healthy. That is the
+ * ticket's stated scope (T-255 asks for orders with *no* rows) and the partial
+ * case is already covered from the other side: both exits that can skip one
+ * photographer mid-loop raise `payout-not-recorded` at the time
+ * (`createTransfersForOrderItems`). Widening this to "every photographer on the
+ * order is represented" is a separate ticket, not a tweak — it needs
+ * `order_items` and a per-photographer comparison.
+ *
+ * ⚠️ `order_kind` is not optional. `orders` and `guest_orders` are separate tables
+ * with independent uuid spaces, which is why `payouts.order_id` carries no
+ * foreign key (T-216) — matching on the id alone would let a guest order's id
+ * vouch for an authenticated one.
+ */
+export async function listOrderIdsWithPayouts(
+  supabase: SupabaseServerClient,
+  orderKind: PayoutOrderKind,
+  orderIds: string[],
+): Promise<Set<string>> {
+  const found = new Set<string>();
+  if (orderIds.length === 0) return found;
+
+  for (let i = 0; i < orderIds.length; i += ORDER_ID_LOOKUP_CHUNK) {
+    const chunk = orderIds.slice(i, i + ORDER_ID_LOOKUP_CHUNK);
+
+    for (let offset = 0; ; offset += PAYOUT_LOOKUP_PAGE) {
+      const { data, error } = await supabase
+        .from('payouts')
+        .select('order_id')
+        .eq('order_kind', orderKind)
+        .in('order_id', chunk)
+        .order('id', { ascending: true })
+        .range(offset, offset + PAYOUT_LOOKUP_PAGE - 1);
+
+      if (error) {
+        // ⚠️ Throw rather than return what was gathered so far. A short read here
+        // reads as "these orders have no payout rows", which is exactly the
+        // incident this sweep reports — a partial answer would invent one.
+        throw new Error(`Failed to list order ids with payouts: ${getErrorMessage(error)}`);
+      }
+
+      const rows = (data ?? []) as Array<{ order_id: string | null }>;
+      for (const row of rows) {
+        if (row.order_id) found.add(row.order_id);
+      }
+
+      if (rows.length < PAYOUT_LOOKUP_PAGE) break;
+    }
+  }
+
+  return found;
+}
