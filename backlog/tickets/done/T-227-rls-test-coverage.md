@@ -1,12 +1,12 @@
 # T-227 · Cobertura de tests RLS: 7 de 30 tablas
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Riesgo:** alto  (seguridad)
 - **Blockers:** ninguno
 - **Rama:** `test/rls-coverage-sweep`  (tipo = chore)
-- **OpenSpec change:** —  (solo tests, sin cambio de comportamiento… salvo que aparezca un agujero)
-- **PR:** —
+- **OpenSpec change:** `rls-coverage-and-profile-exposure`  (apareció un agujero: ver PR)
+- **PR:** #327
 
 ## Requerimiento
 
@@ -24,15 +24,15 @@ Sin probar hoy, entre otras: `events`, `photos`, `cart_items`, `carts`, `event_p
 
 ## Criterio de aceptación (Definition of Done)
 
-- [ ] Cada tabla con RLS activo tiene un test que verifica, como mínimo, que `anon` no lee lo que no
+- [x] Cada tabla con RLS activo tiene un test que verifica, como mínimo, que `anon` no lee lo que no
       debe y que un `authenticated` ajeno no lee ni escribe filas de otro usuario
-- [ ] Las tablas con RLS activo y **cero políticas** (denegación total intencional) tienen un test que
+- [x] Las tablas con RLS activo y **cero políticas** (denegación total intencional) tienen un test que
       pin ea esa propiedad: `admin_users`, `rate_limit_buckets`, `subscriptions`, `guest_orders`,
       `guest_order_items`, `pending_guest_checkouts`, `photos_orphan_storage_pending_cleanup`
-- [ ] Un test de inventario, en la línea del de `SECURITY DEFINER` del PR #279: toda tabla de `public`
+- [x] Un test de inventario, en la línea del de `SECURITY DEFINER` del PR #279: toda tabla de `public`
       debe estar declarada en una allow-list como "tiene políticas probadas" o "denegación total
       intencional". Una tabla nueva sin declarar falla la suite
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
 
