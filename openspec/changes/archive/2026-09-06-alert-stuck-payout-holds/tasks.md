@@ -43,5 +43,10 @@
       describe the new sweep; add the kind to the sweeps section.
 - [x] 4.2 Add a brief T-254 entry to `backlog/DECISIONS.md` §5 (two windows, `created_at` clock).
 - [x] 4.3 `pnpm typecheck && pnpm lint && pnpm test` green (integration via local Supabase).
-- [ ] 4.4 Money-path review per /work-next step 6: `/code-review high` on the diff + 3 refutation
-      subagents (no-pay / double-pay / silent-failure) before committing.
+- [x] 4.4 Money-path review per /work-next step 6: 3 refutation subagents (no-pay / double-pay /
+      silent-failure) ran on the diff before committing. No-pay and double-pay returned "ninguno";
+      silent-failure found two real gaps, both fixed here (the sweep's own failure was
+      console-only despite the step succeeding → `payout-hold-sweep-failed`; the 500-row cap
+      truncated silently → `limit + 1` and `countsTruncatedAtRows`). ⚠️ `/code-review high` was
+      launched but **stopped by the user before it reported**, so that half of the gate did not
+      run — worth re-running on the PR if desired.

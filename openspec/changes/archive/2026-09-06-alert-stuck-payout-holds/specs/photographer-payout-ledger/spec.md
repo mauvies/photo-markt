@@ -63,7 +63,17 @@ and SHALL change nothing about what the worker pays or when.
 - **WHEN** the sweep runs repeatedly while the same rows remain stuck
 - **THEN** one aggregated incident is raised for the whole set at most once per rolling day
 
-#### Scenario: A listing failure does not gate the money
+#### Scenario: A listing failure does not gate the money, but is itself reported
 
 - **WHEN** reading the stuck set fails
-- **THEN** the error is logged and the worker's paying steps run unaffected
+- **THEN** the worker's paying steps run unaffected — the read error never propagates
+- **AND** an incident of its own kind is raised stating that the CHECK is down rather than that a
+  row is stranded, at most once per rolling day
+- **AND** raising it cannot itself fail the run
+
+#### Scenario: More rows match than the pass can list
+
+- **WHEN** more rows match than the per-pass row cap
+- **THEN** the incident states that its counts and total are a floor rather than the whole set, and
+  names the cap
+- **AND** the oldest rows are the ones listed

@@ -1,12 +1,12 @@
 # T-254 · El worker de reintentos de payouts solo escribe en consola — un hold atascado para siempre no avisa a nadie
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Riesgo:** alto  (pagos)
 - **Blockers:** ninguno
 - **Rama:** `fix/alert-on-stuck-payout-retries`  (tipo = fix)
-- **OpenSpec change:** —
-- **PR:** —
+- **OpenSpec change:** `alert-stuck-payout-holds`
+- **PR:** #326
 
 ## Requerimiento
 
@@ -25,12 +25,12 @@ Hallado por `/code-review xhigh` sobre el PR #306.
 
 ## Criterio de aceptación (Definition of Done)
 
-- [ ] Un hold que agota N reintentos alerta por `reportMoneyIncident` (`needs-reconciliation` ya
+- [x] Un hold que agota N reintentos alerta por `reportMoneyIncident` (`needs-reconciliation` ya
       existe en el tipo y hoy no tiene productor)
-- [ ] No alerta en cada pasada del cron — la alerta es «esto lleva atascado», no «este intento falló»
-- [ ] Sin PII del comprador
-- [ ] Test de regresión
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] No alerta en cada pasada del cron — la alerta es «esto lleva atascado», no «este intento falló»
+- [x] Sin PII del comprador
+- [x] Test de regresión
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
 
