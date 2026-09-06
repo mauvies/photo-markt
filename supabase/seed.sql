@@ -38,3 +38,36 @@ grant select, insert, update, delete on all tables in schema public
 alter default privileges in schema public
   grant select, insert, update, delete on tables
   to anon, authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- T-227: re-apply the `profiles` column restriction that the blanket grant above
+-- just undid.
+--
+-- The grants above are deliberately wholesale, and they run AFTER the migrations
+-- on `supabase db reset`. So `20260906000000_restrict_anon_profile_columns.sql`
+-- — which revokes table-wide SELECT on `profiles` from `anon` and grants an
+-- explicit column list instead — is silently reversed locally unless it is
+-- repeated here.
+--
+-- That is not a cosmetic divergence: without this block, local would expose the
+-- photographer's postal address, legal name and Stripe ids to `anon` while
+-- production does not, and the RLS tests would be asserting a posture that no
+-- deployed environment has. Keep this list byte-identical to the migration's.
+--
+-- TRUNCATE needs no such repetition: the grants above never include it.
+-- ---------------------------------------------------------------------------
+
+revoke select on public.profiles from anon;
+
+grant select (
+  id,
+  username,
+  slug,
+  display_name,
+  bio,
+  avatar_url,
+  city,
+  country_code,
+  created_at,
+  active_role
+) on public.profiles to anon;

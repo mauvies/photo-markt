@@ -163,9 +163,22 @@ export async function resetDatabase(client?: SupabaseClient): Promise<void> {
   //    belt-and-suspenders cleanup). RPC `truncate_all_test_tables` is not
   //    defined yet; we do it explicitly via deletes against an always-true
   //    predicate so the helper works without extra DB-side setup.
-  const tablesToTruncate = ['rate_limit_buckets'];
-  for (const table of tablesToTruncate) {
-    const { error } = await sb.from(table).delete().neq('bucket_key', '__never__');
+  //
+  // ⚠️ Each entry names its OWN filter column. The loop above filters on
+  // `created_at`, and its error guard swallows "does not exist" — so adding a
+  // table without that column there would silently do nothing (T-227).
+  const tablesToTruncate: { table: string; column: string; sentinel: string }[] = [
+    { table: 'rate_limit_buckets', column: 'bucket_key', sentinel: '__never__' },
+    // No FK to auth.users, so step 1 does not cascade it: without this, its rows
+    // survive every reset and leak into the next test's assertions (T-227).
+    {
+      table: 'photos_orphan_storage_pending_cleanup',
+      column: 'original_url',
+      sentinel: '__never__',
+    },
+  ];
+  for (const { table, column, sentinel } of tablesToTruncate) {
+    const { error } = await sb.from(table).delete().neq(column, sentinel);
     // Swallow "no matching column" errors for tables that don't have the
     // hand-picked filter column — the table may not exist yet on older
     // branches. Other errors propagate.

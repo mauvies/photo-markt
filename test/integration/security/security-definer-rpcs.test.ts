@@ -26,86 +26,19 @@
  *      looked at them again. Adding a new SECURITY DEFINER function now fails this
  *      test until its exposure is declared deliberately.
  *
- * The inventory reads privileges by running psql INSIDE the local Supabase db
- * container, because supabase-js cannot execute arbitrary SQL and `psql` is not
- * reliably on PATH (this repo has no local Postgres install — `pnpm db:seed`
- * happens to work only where one exists). The integration suite already requires
- * Docker + `supabase start`, so the container is guaranteed to be there in both
- * local runs and CI.
+ * The inventory reads privileges through `test/helpers/db-catalog.ts`, which runs
+ * psql inside the local Supabase db container — supabase-js cannot execute
+ * arbitrary SQL. The RLS table inventory (T-227) shares that helper.
  */
 
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { execSql, queryJson } from '../../helpers/db-catalog';
 import {
   createAnonClient,
   createTestUser,
   resetDatabase,
   signInAs,
 } from '../../helpers/supabase-test-client';
-
-const execFileAsync = promisify(execFile);
-
-/** Resolved once — the running `supabase_db_<project>` container. */
-let dbContainer: string | null = null;
-
-async function resolveDbContainer(): Promise<string> {
-  if (dbContainer) return dbContainer;
-  const { stdout } = await execFileAsync('docker', [
-    'ps',
-    '--filter',
-    'name=supabase_db',
-    '--format',
-    '{{.Names}}',
-  ]);
-  const name = stdout.trim().split('\n').filter(Boolean)[0];
-  if (!name) {
-    throw new Error(
-      'No running supabase_db container found. Start the local stack with `pnpm db:start`.',
-    );
-  }
-  dbContainer = name;
-  return name;
-}
-
-/**
- * Run SQL for its side effect. Used to seed `auth.users` in bulk — the admin API
- * needs one HTTP round-trip per user, which makes a 60-user roster too slow to
- * assert the server-side limit ceiling against.
- */
-async function execSql(sql: string): Promise<void> {
-  const container = await resolveDbContainer();
-  await execFileAsync('docker', [
-    'exec',
-    container,
-    'psql',
-    '-U',
-    'postgres',
-    '-d',
-    'postgres',
-    '-v',
-    'ON_ERROR_STOP=1',
-    '-c',
-    sql,
-  ]);
-}
-
-/** Run a scalar-returning query in the local DB and parse its JSON result. */
-async function queryJson<T>(sql: string): Promise<T> {
-  const container = await resolveDbContainer();
-  const { stdout } = await execFileAsync('docker', [
-    'exec',
-    container,
-    'psql',
-    '-U',
-    'postgres',
-    '-d',
-    'postgres',
-    '-tAc',
-    sql,
-  ]);
-  return JSON.parse(stdout.trim() || 'null') as T;
-}
 
 /**
  * Declared exposure of every SECURITY DEFINER function in `public`.
