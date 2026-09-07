@@ -1,7 +1,7 @@
 # T-222 · Activar el gate de cobertura
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** normal
 - **Blockers:** ninguno
 - **Rama:** `chore/enable-coverage-thresholds`  (tipo = chore)

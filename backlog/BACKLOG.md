@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |
+| 1 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | doing |
 | 2 | P2 | T-266 | El canal de alertas de dinero es opcional, no verificado, y degrada en silencio | — | todo |
 | 3 | P2 | T-267 | Un carrito de invitado de más de ~46 fotos no puede pagar, y nadie se entera | — | todo |
 | 4 | P3 | T-224 | Unit tests en serie: 4,8 s de test dentro de una corrida de 39,5 s | — | todo |

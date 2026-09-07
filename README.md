@@ -203,6 +203,7 @@ and the webhook stays just as dead.
 | `pnpm test:integration` | `supabase start` → run `test/integration` → `supabase stop` |
 | `pnpm test:watch` | Vitest watch mode |
 | `pnpm test:coverage` | Run + write a coverage report under `coverage/` |
+| `pnpm test:coverage:unit` | Unit tests + the coverage gate CI runs on every PR |
 | `pnpm db:start` / `db:stop` | Boot / stop the local Supabase stack (Docker) |
 | `pnpm db:reset` | Reset the local DB — re-runs migrations + `seed.sql` |
 | `pnpm db:seed` | Re-run `supabase/seed.sql` via `psql` |
@@ -366,14 +367,17 @@ Conventions (full version in [test/README.md](test/README.md)):
 - Mass `permission denied for table …` (`42501`) means the local API roles lost their grants — run
   `pnpm db:reset` once to re-apply `supabase/seed.sql`.
 
-Coverage target is 60% on lines/branches/functions/statements; thresholds are informational until the
-suite clears the bar.
+Coverage thresholds are enforced as a **ratchet** (T-222) — the measured floor minus ~2 points, raised
+by whichever PR lifts the real number. Two floors, because the per-PR gate cannot boot Postgres:
+`pnpm test:coverage` (full suite, measured 54.25% lines) is a local gate, and `pnpm test:coverage:unit`
+(measured 20.23% lines) is what CI enforces. The unit figure is low because the queries layer, the
+Stripe webhook and the Inngest workers are integration-tested — it is not the project's coverage.
 
 ## CI
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `test.yml` | every code PR (docs/backlog/specs ignored) | typecheck + lint + unit tests — no Docker |
+| `test.yml` | every code PR (docs/backlog/specs ignored) | typecheck + lint + unit tests + the unit coverage gate — no Docker |
 | `test-integration.yml` | merge to `main`, daily 04:17 UTC, manual | boots local Supabase, runs `test/integration` |
 | `migrate.yml` | merge to `main` touching `supabase/migrations/**` | applies pending migrations |
 | `supabase-advisors.yml` | PRs touching `supabase/migrations/**` | fails on any advisor finding not in `scripts/advisors-baseline.ts` |

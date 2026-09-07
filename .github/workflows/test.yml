@@ -1,6 +1,7 @@
 name: test
 
-# Fast, Docker-free gate: typecheck + lint + unit tests. Runs on every code PR.
+# Fast, Docker-free gate: typecheck + lint + unit tests + the unit coverage
+# ratchet (T-222). Runs on every code PR.
 # Integration tests (which boot local Supabase) live in test-integration.yml and
 # only run when DB/query/API/lib code changes — most PRs (UI, i18n, components)
 # never pay the Supabase image pull. The full suite still runs locally before
@@ -50,5 +51,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Unit tests
-        run: pnpm test:unit
+      # Unit tests WITH the coverage ratchet (T-222). Same tests as
+      # `pnpm test:unit`, ~10s more for the v8 instrumentation, and it is the
+      # only coverage check that can block a PR — the full-suite floor needs
+      # Postgres and so is enforced locally by `pnpm test:coverage`.
+      - name: Unit tests + coverage gate
+        run: pnpm test:coverage:unit
