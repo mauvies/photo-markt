@@ -22,8 +22,6 @@ export interface Profile {
   address_line2?: string | null;
   state_or_region?: string | null;
   postal_code?: string | null;
-  payout_method?: 'bank_transfer' | 'paypal' | 'other' | null;
-  payout_details_json?: Record<string, unknown> | null;
   is_payout_profile_complete?: boolean;
   stripe_connect_account_id?: string | null;
   stripe_connect_status?: 'not_connected' | 'pending' | 'active' | 'restricted';
@@ -45,8 +43,6 @@ export interface ProfileSelect {
   address_line2?: string | null;
   state_or_region?: string | null;
   postal_code?: string | null;
-  payout_method?: 'bank_transfer' | 'paypal' | 'other' | null;
-  payout_details_json?: Record<string, unknown> | null;
   is_payout_profile_complete?: boolean;
 }
 
@@ -308,31 +304,52 @@ function isMissingSlugColumn(error: { code?: string; message?: string }): boolea
 /**
  * Update profile fields
  */
+/**
+ * The columns a user may write on their own profile (T-268).
+ *
+ * ⚠️ This is a RUNTIME allow-list, and it has to be. `updateProfile`'s `Pick<>`
+ * is erased at compile time, and `updatePayoutProfileAction` passes its
+ * client-supplied argument straight through — so before this existed, a
+ * hand-crafted Server Action request could set ANY column, including
+ * `stripe_connect_account_id`, the transfer destination.
+ *
+ * The database enforces the same list as column-level grants
+ * (`20260907000000`). Two layers on purpose: the grant is the real barrier, this
+ * one still holds if a future migration relaxes it, and it fails politely
+ * (the key is dropped) rather than as a 42501 from PostgREST.
+ */
+const USER_WRITABLE_PROFILE_COLUMNS = [
+  'display_name',
+  'username',
+  'slug',
+  'bio',
+  'avatar_url',
+  'full_name',
+  'country_code',
+  'city',
+  'address_line1',
+  'address_line2',
+  'state_or_region',
+  'postal_code',
+  'is_payout_profile_complete',
+] as const;
+
+type UserWritableProfileColumn = (typeof USER_WRITABLE_PROFILE_COLUMNS)[number];
+
 export async function updateProfile(
   supabase: SupabaseServerClient,
   userId: string,
-  updates: Partial<
-    Pick<
-      Profile,
-      | 'display_name'
-      | 'username'
-      | 'slug'
-      | 'bio'
-      | 'avatar_url'
-      | 'full_name'
-      | 'country_code'
-      | 'city'
-      | 'address_line1'
-      | 'address_line2'
-      | 'state_or_region'
-      | 'postal_code'
-      | 'payout_method'
-      | 'payout_details_json'
-      | 'is_payout_profile_complete'
-    >
-  >,
+  updates: Partial<Pick<Profile, UserWritableProfileColumn>>,
 ): Promise<void> {
-  const { error } = await supabase.from('profiles').update(updates).eq('id', userId);
+  // Keep only known keys. `updates` reaches here as deserialized JSON from a
+  // Server Action argument in every user-facing call site.
+  const safeUpdates: Record<string, unknown> = {};
+  for (const column of USER_WRITABLE_PROFILE_COLUMNS) {
+    if (column in updates) safeUpdates[column] = (updates as Record<string, unknown>)[column];
+  }
+  if (Object.keys(safeUpdates).length === 0) return;
+
+  const { error } = await supabase.from('profiles').update(safeUpdates).eq('id', userId);
 
   if (error) {
     throw new Error(`Failed to update profile: ${getErrorMessage(error)}`);

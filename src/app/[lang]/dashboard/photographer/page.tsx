@@ -2,7 +2,9 @@ import { DashboardHeader } from '@/components/dashboard-header';
 import { countPricedEvents } from '@/database/queries/events';
 import { getTotalPendingPayouts } from '@/database/queries/payouts';
 import { getProfile } from '@/database/queries/profiles';
+import type { SupabaseServerClient } from '@/database/queries/types';
 import { createClient } from '@/database/server';
+import { supabaseAdmin } from '@/database/supabase-admin';
 import { requireUser } from '@/lib/auth/require-user';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
@@ -57,7 +59,12 @@ export default async function PhotographerDashboardPage({
   // helper only checks Stripe when the cached value is non-active, so the
   // common active case adds no Stripe call to this hot page.
   const connectStatus = await reconcileAndPersistConnectStatus({
-    client: supabase,
+    // ⚠️ `supabaseAdmin` (T-268): the heal writes `stripe_connect_status`, which
+    // `authenticated` no longer holds UPDATE on. The value comes from Stripe, not
+    // from user input, and it touches only this user's own row — and the write
+    // sits inside a `.catch()` that only logs, so on the user's client it would
+    // fail SILENTLY and the cached status would never refresh.
+    client: supabaseAdmin as unknown as SupabaseServerClient,
     userId: user.id,
     accountId: profile?.stripe_connect_account_id,
     storedStatus,

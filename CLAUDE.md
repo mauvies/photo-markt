@@ -1251,19 +1251,27 @@ in sync.
   `authenticated` (Supabase's default, re-applied locally by `supabase/seed.sql`). The same test pins
   three properties an allow-list cannot fake: RLS enabled everywhere, no `USING (true)`, and **no
   TRUNCATE for the API roles** (TRUNCATE is not subject to RLS).
-- ⚠️ **`profiles` is read by `anon` through an explicit COLUMN allow-list, not the whole row (T-227).**
-  `photographer_profiles_public_select` is `USING (active_role = 'PHOTOGRAPHER')` and RLS is row-level,
-  so before the fix an unauthenticated `GET /rest/v1/profiles` returned the photographer's legal name,
-  postal address, Stripe ids and payout jsonb — and `active_role` DEFAULTS to `PHOTOGRAPHER`. The grant
-  in `20260906000000` is now the allow-list: **a new public column must be added there, a sensitive one
-  never is**, and the same list must be repeated in `supabase/seed.sql` (its blanket grant runs after
-  the migrations and would otherwise restore the exposure locally) — the inventory test compares the
-  granted set against one declared constant, so the three copies cannot drift silently.
-  ⚠️ **Two halves are deliberately still open, both pinned as KNOWN GAP tests and tracked in T-268:**
-  `authenticated` keeps table-wide SELECT (a column grant cannot tell "my row" from "another's"), and
-  the allow-list is **SELECT only** — `profiles_self_update` restricts the row but not the columns, so
-  a photographer can still PATCH their own `stripe_connect_*` / `payout_*`. Bounded because every money
-  path re-derives Connect status from Stripe before transferring.
+- ⚠️ **`profiles` is SELF-ONLY, and public profile data comes from the `public_profiles` view
+  (T-227 → T-268).** `photographer_profiles_public_select` was `USING (active_role = 'PHOTOGRAPHER')`
+  and RLS is row-level, so it exposed every column of every photographer row — legal name, postal
+  address, Stripe ids — first to `anon`, then (after T-227's column grants) still to any signed-in
+  account. The policy is gone: **no policy admits another user's row, for any role.**
+  - **Reads:** `public_profiles` is the only public projection. It runs with **owner rights (no
+    `security_invoker`) on purpose** — an invoker view would return nothing now that the base table is
+    self-only — which makes **its select list the security boundary**: a column added there is
+    world-readable with no policy left to catch it. It keeps the `active_role = 'PHOTOGRAPHER'` filter
+    so nothing widened. `getPhotographerBySlug` / `getTopPhotographers` / `searchPhotographers` and
+    the event-search photographer filter read it. ⚠️ The **talent-side** photographer search stays on
+    `profiles` with `supabaseAdmin` because it must NOT filter `active_role`.
+  - **Writes:** `authenticated` holds column-level INSERT/UPDATE on the editable columns only;
+    `stripe_connect_account_id` / `stripe_connect_status` are withheld, and the four call sites that
+    wrote them with the user's client now use `supabaseAdmin` (three wrote inside a `.catch()` that
+    only logs, so they would have failed **silently**). `updateProfile` also filters to
+    `USER_WRITABLE_PROFILE_COLUMNS` at runtime, because its `Pick<>` is erased and
+    `updatePayoutProfileAction` passes a client-supplied object straight through.
+  - ⚠️ **`supabase/seed.sql` reproduces this whole posture** — its blanket grant runs after the
+    migrations and would otherwise undo it locally. The inventory test reads both column sets back out
+    of the catalog and compares them to declared constants, so the three copies cannot drift.
 - ⚠️ **A policy's nested table reads are RLS-filtered too.** `photo_faces` / `photo_bib_numbers` read as
   if `e.is_public = true` granted public access; it never fires, because the `EXISTS` over
   `photos`/`events` is itself subject to those tables' owner-only policies. That is why `orders` uses

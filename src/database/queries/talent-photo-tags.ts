@@ -2,6 +2,7 @@
  * Talent photo tag-related database queries
  */
 
+import { supabaseAdmin } from '@/database/supabase-admin';
 import { needsProtectedPreview } from '@/lib/preview-protection';
 import { createPhotoUrls } from './storage';
 import type { SupabaseServerClient } from './types';
@@ -333,7 +334,14 @@ export async function getTagsForPhotos(
   // Fetch profiles for all talent users
   const profilesMap: Record<string, { display_name: string | null; username: string | null }> = {};
   if (talentUserIds.length > 0) {
-    const { data: profiles, error: profilesError } = await supabase
+    // ⚠️ `supabaseAdmin`, not the caller's client (T-268). `profiles` is
+    // SELF-ONLY, so reading the TAGGED TALENT's profiles on the caller's client
+    // now returns [] with no error and silently blanks every tag name. The ids
+    // come from tag rows the caller was already authorized to read, and only
+    // public columns are selected.
+    const { data: profiles, error: profilesError } = await (
+      supabaseAdmin as unknown as SupabaseServerClient
+    )
       .from('profiles')
       .select('id, display_name, username')
       .in('id', talentUserIds);

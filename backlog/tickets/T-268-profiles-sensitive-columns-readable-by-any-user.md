@@ -1,7 +1,7 @@
 # T-268 · `profiles`: cualquier usuario logueado lee los datos sensibles de cualquier fotógrafo, y puede reescribir los suyos
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** alto  (seguridad · BD/migraciones)
 - **Blockers:** ninguno  (Dep T-227, ya mergeado)
 - **Rama:** `fix/profiles-private-columns`  (tipo = fix)

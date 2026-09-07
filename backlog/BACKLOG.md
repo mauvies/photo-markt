@@ -11,7 +11,7 @@ ticket a [`tickets/done/`](./tickets/done/)). · **Dep:** ejecutar después de e
 
 | # | Pri | ID | Título | Dep | Estado |
 |---|-----|------|--------|-----|--------|
-| 1 | P1 | T-268 | `profiles`: cualquier usuario logueado lee los datos sensibles de cualquier fotógrafo, y puede reescribir los suyos | Dep T-227 | todo |
+| 1 | P1 | T-268 | `profiles`: cualquier usuario logueado lee los datos sensibles de cualquier fotógrafo, y puede reescribir los suyos | Dep T-227 | doing |
 | 2 | P2 | T-221 | `/api/thumb` sin `maxDuration` ni rate limit | — | todo |
 | 3 | P2 | T-218 | `rate_limit_buckets` crece sin límite — no hay purga | — | todo |
 | 4 | P2 | T-222 | Activar el gate de cobertura y regenerar el informe obsoleto | — | todo |

@@ -40,34 +40,42 @@ alter default privileges in schema public
   to anon, authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
--- T-227: re-apply the `profiles` column restriction that the blanket grant above
+
+-- ---------------------------------------------------------------------------
+-- T-227 / T-268: re-apply the `profiles` posture that the blanket grant above
 -- just undid.
 --
 -- The grants above are deliberately wholesale, and they run AFTER the migrations
--- on `supabase db reset`. So `20260906000000_restrict_anon_profile_columns.sql`
--- — which revokes table-wide SELECT on `profiles` from `anon` and grants an
--- explicit column list instead — is silently reversed locally unless it is
--- repeated here.
+-- on `supabase db reset`. So everything `20260907000000` does to `profiles` is
+-- silently reversed locally unless it is repeated here.
 --
--- That is not a cosmetic divergence: without this block, local would expose the
--- photographer's postal address, legal name and Stripe ids to `anon` while
--- production does not, and the RLS tests would be asserting a posture that no
--- deployed environment has. Keep this list byte-identical to the migration's.
+-- That is not cosmetic: without this block, local would let `anon` read the
+-- table `profiles` has become self-only about, and let any signed-in user
+-- rewrite their own Stripe payout destination — while production does neither,
+-- and the RLS tests would be asserting a posture no deployed environment has.
 --
--- TRUNCATE needs no such repetition: the grants above never include it.
+-- Keep these lists byte-identical to the migration's. The inventory test
+-- (`test/integration/security/rls-table-inventory.test.ts`) reads them back out
+-- of the catalog and compares them against one declared constant, so a drift
+-- between the two files fails the suite rather than diverging quietly.
 -- ---------------------------------------------------------------------------
 
-revoke select on public.profiles from anon;
+-- Reads: anon has no business on the table at all — it reads `public_profiles`.
+revoke select, insert, update, delete on public.profiles from anon;
+grant select on public.public_profiles to anon, authenticated;
 
-grant select (
-  id,
-  username,
-  slug,
-  display_name,
-  bio,
-  avatar_url,
-  city,
-  country_code,
-  created_at,
-  active_role
-) on public.profiles to anon;
+-- Writes: `authenticated` may edit its own profile, never the system's fields.
+-- `stripe_connect_account_id` / `stripe_connect_status` are withheld.
+revoke insert, update on public.profiles from authenticated;
+
+grant insert (
+  id, username, slug, display_name, bio, avatar_url, active_role,
+  full_name, country_code, city, address_line1, address_line2,
+  state_or_region, postal_code, is_payout_profile_complete, updated_at
+) on public.profiles to authenticated;
+
+grant update (
+  username, slug, display_name, bio, avatar_url, active_role,
+  full_name, country_code, city, address_line1, address_line2,
+  state_or_region, postal_code, is_payout_profile_complete, updated_at
+) on public.profiles to authenticated;

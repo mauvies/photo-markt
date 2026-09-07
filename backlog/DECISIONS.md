@@ -1088,6 +1088,67 @@ unverified in production.
 column-grant rule; its `rls_enabled_no_policy` findings are already baselined. That is the argument
 for the in-repo inventory test rather than a reason to trust CI.
 
+### T-268 — a view, not a private table
+
+T-227 closed the `anon` half of the `profiles` exposure and left two halves open on purpose. This
+closed both: `photographer_profiles_public_select` is **gone**, so `profiles` is self-only and no
+policy admits another user's row for any role; and `authenticated` lost table-wide INSERT/UPDATE in
+favour of a column grant, so the payout destination is unwritable by the user.
+
+**Why a view and not the private table the ticket proposed.** The census killed that option on its
+own terms: such a table would hold user-editable fields (`full_name`, the postal address,
+`is_payout_profile_complete` — all written by the payout-profile form) next to system-only fields
+(`stripe_connect_*`). A self-write policy on it would reintroduce exactly the column problem, so it
+would need splitting in **two** tables to be genuinely structural — and it would have repointed the
+query functions the Stripe webhook and the retry worker depend on. The view keeps the money path
+untouched and still makes the read surface an allow-list.
+
+⚠️ **`public_profiles` runs with OWNER rights (no `security_invoker`), and that is load-bearing.** An
+invoker view would be evaluated as the caller and would return nothing now that the base table is
+self-only. Owner rights are what let it project rows the base RLS hides — which is precisely why **its
+select list is the security boundary**: a column added there is world-readable immediately, with no
+policy left to catch it. It keeps the dropped policy's `active_role = 'PHOTOGRAPHER'` filter, so
+nothing widened; talent profiles were not public before and are not now.
+
+**Reads and writes get different mechanisms on purpose.** Reads are closed structurally (the policy is
+gone; there is no list to maintain). Writes need a column grant, because the same table legitimately
+takes user writes on other columns — there is no way around a list there. So the list is backed twice:
+the grant is the real barrier, and `USER_WRITABLE_PROFILE_COLUMNS` in `queries/profiles.ts` filters
+the object at runtime. That second layer is not redundant: `updateProfile`'s `Pick<>` is erased at
+compile time and `updatePayoutProfileAction` passes its client-supplied argument straight through, so
+before this a hand-crafted Server Action request could set any column, including
+`stripe_connect_account_id`, whatever the grants said.
+
+**Four write call sites moved to `supabaseAdmin`.** `connectStripeAccountAction` had no `catch`, so
+without the move Connect onboarding would have broken hard; the three
+`reconcileAndPersistConnectStatus` callers write inside a `.catch()` that only logs, so they would
+have failed **silently** — the UI would have stayed correct (the helper returns the reconciled status
+either way) while the cached column was never updated again. All three write the caller's own row with
+a value that comes from Stripe, never from user input, which is what makes the service role right
+there rather than a shortcut.
+
+⚠️ **Making `profiles` self-only turned three display-name lookups into silent blanks**, and that is
+the failure mode to remember: a user-scoped read of somebody else's row now returns `[]` **with no
+error**, so nothing breaks loudly — the UI just loses the name. Found by the review pass, not by the
+suite. `getEventPhotographers` (the contributor list on an organizer event),
+`getPendingInvitationsForPhotographer` (who invited you) and `getTagsForPhotos` (the tagged athlete on
+your own photo) all enrich with `.in('id', otherPeoplesIds)` on the caller's client. They now read
+through `supabaseAdmin` inside the query layer — the ids come from rows the caller was already
+authorized to see, and only public columns are selected. ⚠️ `public_profiles` is **not** usable for
+these: it filters `active_role = 'PHOTOGRAPHER'`, and the subjects may be in TALENT mode. Pinned by a
+regression test in `test/integration/queries/talent-photo-tags.test.ts` that asserts the NAME rather
+than the row — the row was always there; only the name went missing.
+
+**Six dead columns dropped rather than protected** (`payout_method`, `payout_details_json`,
+`stripe_customer_id`, `default_city`, `default_country`, `default_province`): no reader, no writer, no
+UI, and four were not even in the TypeScript types. The first two hold bank details per their own
+migration comment and are the DB half of the pre-Connect payout design whose table, `payment_accounts`,
+T-219 already dropped — their dictionary UI has sat orphaned ever since. ⚠️ `profiles.stripe_customer_id`
+is not the live one; the customer ids the app reads live on `subscriptions`, `orders` and
+`guest_orders`. `is_payout_profile_complete` was NOT dropped despite being equally vestigial (its only
+live reader is a cosmetic badge, and its migration's "gates payout requests" claim is false today) —
+it drives visible UI, and removing visible behaviour does not belong in a security fix.
+
 ### T-225 — the advisors CI gate
 
 It runs against **staging**, pinned by the `projectRef` in `scripts/advisors-baseline.ts`: a Supabase

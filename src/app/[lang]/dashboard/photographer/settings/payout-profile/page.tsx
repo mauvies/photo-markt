@@ -1,6 +1,8 @@
 import { DashboardHeader } from '@/components/dashboard-header';
 import { getProfile } from '@/database/queries/profiles';
+import type { SupabaseServerClient } from '@/database/queries/types';
 import { createClient } from '@/database/server';
+import { supabaseAdmin } from '@/database/supabase-admin';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/get-dictionary';
 import { TranslationsProvider } from '@/lib/i18n/translations-provider';
@@ -33,7 +35,12 @@ export default async function PayoutProfilePage({
     // Live check from Stripe to avoid a stale DB-cached status (the webhook can
     // lag or miss events), healing the stored value when it differs.
     connectStatus = await reconcileAndPersistConnectStatus({
-      client: supabase,
+      // ⚠️ `supabaseAdmin` (T-268): the heal writes `stripe_connect_status`, which
+      // `authenticated` no longer holds UPDATE on. The value comes from Stripe, not
+      // from user input, and it touches only this user's own row — and the write
+      // sits inside a `.catch()` that only logs, so on the user's client it would
+      // fail SILENTLY and the cached status would never refresh.
+      client: supabaseAdmin as unknown as SupabaseServerClient,
       userId: user.id,
       accountId: existingProfile?.stripe_connect_account_id,
       storedStatus: connectStatus,
