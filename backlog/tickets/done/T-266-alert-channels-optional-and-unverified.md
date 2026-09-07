@@ -1,12 +1,12 @@
 # T-266 · El canal de alertas de dinero es opcional, no verificado, y degrada en silencio
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Riesgo:** normal  (observabilidad; no toca dinero directamente)
 - **Blockers:** ninguno
 - **Rama:** `chore/assert-money-alert-channels`  (tipo = chore)
 - **OpenSpec change:** —
-- **PR:** —
+- **PR:** #332
 
 ## Requerimiento
 
@@ -28,13 +28,13 @@ ellas. Lo que falta es que **producción** lo afirme.
 
 ## Criterio de aceptación (Definition of Done)
 
-- [ ] `/api/health/ready` reporta el estado de los canales de alerta como un check más (el endpoint ya
+- [x] `/api/health/ready` reporta el estado de los canales de alerta como un check más (el endpoint ya
       devuelve `{ status, environment, checks: [...] }` y el alerting se basa en el campo `status`)
-- [ ] O bien `env.mjs` los exige cuando el entorno es producción — decidir cuál en el ticket, no las
+- [x] O bien `env.mjs` los exige cuando el entorno es producción — decidir cuál en el ticket, no las
       dos a medias
-- [ ] Dev / test / preview siguen arrancando sin ellas
-- [ ] Test que cubra la decisión que se tome
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] Dev / test / preview siguen arrancando sin ellas
+- [x] Test que cubra la decisión que se tome
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
 
