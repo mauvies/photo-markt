@@ -1,12 +1,12 @@
 # T-221 · `/api/thumb` sin `maxDuration` ni rate limit
 
 - **Prioridad:** P2
-- **Estado:** doing
+- **Estado:** done
 - **Riesgo:** normal
 - **Blockers:** ninguno
 - **Rama:** `fix/thumb-route-limits`  (tipo = fix)
 - **OpenSpec change:** —
-- **PR:** —
+- **PR:** #329
 
 ## Requerimiento
 
@@ -22,11 +22,11 @@ hace que la próxima ruta de bytes nazca también sin límites.
 
 ## Criterio de aceptación (Definition of Done)
 
-- [ ] `maxDuration` en `/api/thumb` acorde a su trabajo (más bajo que watermark: no hay Sharp)
-- [ ] Rate limit por IP con límite generoso — es camino caliente de galería, **medir antes de fijar el número**
-- [ ] Test que verifique que **ambas** rutas de bytes declaran las dos protecciones, para que la
+- [x] `maxDuration` en `/api/thumb` acorde a su trabajo (más bajo que watermark: no hay Sharp)
+- [x] Rate limit por IP con límite generoso — es camino caliente de galería, **medir antes de fijar el número**
+- [x] Test que verifique que **ambas** rutas de bytes declaran las dos protecciones, para que la
       próxima no nazca sin ellas
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
 
