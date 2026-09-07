@@ -36,10 +36,21 @@ Vitest discovers any file under `test/` matching `*.test.ts(x)`.
 | `pnpm test` | One-shot run of every test |
 | `pnpm test:watch` | Watch mode |
 | `pnpm test:coverage` | Run + write HTML/lcov coverage report under `coverage/` |
+| `pnpm test:coverage:unit` | Unit tests + the Docker-free coverage gate CI runs on every PR |
 
-Coverage thresholds are **not enforced** yet — the report is informational.
-The target is 60% on lines/branches/functions/statements; we'll flip the
-gate on in `vitest.config.ts` once we've written enough tests to clear it.
+Coverage thresholds are **enforced** (T-222), as a ratchet set at the measured
+floor minus ~2 points — not as a quality claim. There are two floors because
+there are two runs:
+
+| Run | Measured 2026-09-07 | Floor | Enforced where |
+|---|---|---|---|
+| `pnpm test:coverage` (full suite, needs Supabase) | 54.25% lines · 48.35% branches | 52 / 46 / 50 / 51 | locally — no CI job runs the whole suite in one process |
+| `pnpm test:coverage:unit` (`test/unit` only) | 20.23% lines · 20.59% branches | 18 / 18 / 20 / 18 | the `test` workflow, every PR |
+
+The unit number is low because `src/database/queries/**`, the Stripe webhook and
+the Inngest workers are covered by integration tests that need Postgres — it is
+**not** the project's coverage and must not be quoted as such. Raising a floor is
+the job of the PR that lifts the real number.
 
 ## Local Supabase
 

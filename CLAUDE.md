@@ -35,7 +35,8 @@ pnpm test         # Run all Vitest tests once (assumes local Supabase already up
 pnpm test:unit    # Unit tests only (test/unit) — no Docker needed, fast
 pnpm test:integration # supabase start → run test/integration → supabase stop (auto-managed)
 pnpm test:watch   # Vitest watch mode
-pnpm test:coverage # Vitest run + coverage report
+pnpm test:coverage # Vitest run + coverage report (enforces the full-suite floor)
+pnpm test:coverage:unit # Unit tests + the coverage gate CI runs on every PR
 pnpm db:start     # supabase start (Docker; local Supabase for integration tests)
 pnpm db:stop      # supabase stop
 pnpm db:reset     # supabase db reset (re-runs migrations + seed.sql)
@@ -1000,6 +1001,7 @@ Vitest + Supabase local (Docker) for integration. Conventions and debugging tips
 | `pnpm test:unit` | Unit tests only (`test/unit`) — no Docker, fast inner loop |
 | `pnpm test:integration` | Boots Supabase, runs `test/integration`, stops it |
 | `pnpm test:watch` / `test:coverage` | Watch mode / coverage report under `coverage/` |
+| `pnpm test:coverage:unit` | Unit tests + the Docker-free coverage gate CI runs per PR |
 | `pnpm db:start` / `db:stop` / `db:reset` | Boot or reset the local Supabase stack |
 
 ```
@@ -1022,8 +1024,22 @@ test/
   anon/user-scoped to assert *RLS behavior*.
 - **Use `beforeEach(resetDatabase)`** so ordering can't quietly pass or fail one.
 - **Keep helpers pure where possible.**
-- Coverage target is **60%** on lines/branches/functions/statements; thresholds are not enforced in
-  `vitest.config.ts` yet (uncomment `thresholds:` when ready).
+- ⚠️ **Coverage thresholds are ENFORCED, and there are TWO floors (T-222)** — a ratchet at the measured
+  floor minus ~2 points, never a quality claim. `vitest.config.ts` carries the **full-suite** floor
+  (52/46/50/51; measured 54.25% lines) which only `pnpm test:coverage` can clear; `vitest.unit.config.ts`
+  carries the **unit** floor (18/18/20/18; measured 20.23%) that the Docker-free `test` workflow enforces
+  on every PR via `pnpm test:coverage:unit`. Two, because **no CI job runs the whole suite in one
+  process** (`test.yml` runs unit, `test-integration.yml` runs `test/integration`), so the full floor is
+  a local gate by construction.
+  - ⚠️ **Never quote the unit number as the project's coverage** — it is low because
+    `src/database/queries/**`, the Stripe webhook and the Inngest workers are integration-tested, not
+    because they are untested.
+  - ⚠️ **The unit config overrides `coverage.thresholds` ONLY.** `mergeConfig` **concatenates** arrays, so
+    overriding `include` there would union the globs and pull the integration suite into a "unit" run —
+    which then needs Postgres in the Docker-free workflow. The unit scope is the CLI path filter.
+  - Raising a floor is the job of the PR that lifts the real number. `test/unit/config/coverage-gate.test.ts`
+    pins both halves, including that CI still runs the enforcing script — a gate removable by deleting one
+    YAML line is a gate that eventually gets deleted.
 - **Troubleshooting:** integration tests failing en masse with `permission denied for table …` (`42501`)
   means the local API roles are missing their DML grants — a known Supabase CLI provisioning fallout. The
   grants live in `supabase/seed.sql` (local-only); run `pnpm db:reset` once. The pre-flight in

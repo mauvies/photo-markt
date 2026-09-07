@@ -53,10 +53,24 @@ export default defineConfig({
         // Re-exports
         'src/database/queries/index.ts',
       ],
-      // Target floor — NOT enforced yet. The thresholds block is omitted on
-      // purpose so coverage is reported but the build doesn't fail. Once we
-      // have enough tests to clear 60%, add:
-      //   thresholds: { lines: 60, branches: 60, functions: 60, statements: 60 }
+      // RATCHET, not a quality claim (T-222). Set at the measured floor minus
+      // ~2 points: ordinary growth (a new module landing before its tests)
+      // stays under the buffer, a cliff (a deleted suite, a `describe.skip`
+      // left in) trips it. Raising these is the job of the PR that lifts the
+      // real number — that is the whole mechanism.
+      //
+      // Measured 2026-09-07 over the FULL suite (2484 tests, Supabase up):
+      //   lines 54.25 · branches 48.35 · functions 52.41 · statements 53.58
+      // The 60% aspiration this block used to defer to is ~6 points away on
+      // lines; it stopped being a reason to enforce nothing.
+      //
+      // ⚠️ Thresholds apply to whatever run invokes `--coverage`, and only the
+      // full suite can clear these — `src/database/queries/**`, the Stripe
+      // webhook and the Inngest workers are covered by integration tests that
+      // need Postgres, so a unit-only run measures ~20% and would fail here.
+      // These belong to `pnpm test:coverage`. The Docker-free PR gate carries
+      // its own, much lower floor in `vitest.unit.config.ts`.
+      thresholds: { lines: 52, branches: 46, functions: 50, statements: 51 },
     },
   },
 });

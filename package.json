@@ -14,6 +14,7 @@
     "test:integration": "supabase start && (vitest run test/integration; ec=$?; supabase stop; exit $ec)",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:coverage:unit": "vitest run test/unit --config vitest.unit.config.ts --coverage",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",

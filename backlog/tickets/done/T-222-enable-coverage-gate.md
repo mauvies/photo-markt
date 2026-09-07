@@ -1,12 +1,12 @@
 # T-222 · Activar el gate de cobertura
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Riesgo:** normal
 - **Blockers:** ninguno
 - **Rama:** `chore/enable-coverage-thresholds`  (tipo = chore)
 - **OpenSpec change:** —
-- **PR:** —
+- **PR:** #331
 
 ## Requerimiento
 
@@ -19,11 +19,11 @@ Lo peor de ambos mundos: un objetivo declarado que nadie mide y un informe versi
 
 ## Criterio de aceptación (Definition of Done)
 
-- [ ] `pnpm test:coverage` corrido de nuevo y cifra real anotada en el PR
-- [ ] `thresholds` activado en el suelo real menos ~2 puntos (ratchet), **no** en 60 % de golpe
-- [ ] `coverage/` añadido a `.gitignore` — un informe versionado se vuelve obsoleto por construcción
-- [ ] El gate corre en el workflow `test` (rápido, sin Docker)
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] `pnpm test:coverage` corrido de nuevo y cifra real anotada en el PR
+- [x] `thresholds` activado en el suelo real menos ~2 puntos (ratchet), **no** en 60 % de golpe
+- [x] `coverage/` añadido a `.gitignore` — un informe versionado se vuelve obsoleto por construcción
+- [x] El gate corre en el workflow `test` (rápido, sin Docker)
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
 
