@@ -21,13 +21,25 @@ Runs cheap, read-only probes against each external service in parallel (3s timeo
     { "service": "resend",          "status": "ok",      "latencyMs": 80 },
     { "service": "inngest",         "status": "ok",      "latencyMs": 30 },
     { "service": "sentry",          "status": "ok",      "latencyMs": 0 },
+    { "service": "money-alerts",    "status": "ok",      "latencyMs": 0 },
     { "service": "google-places",   "status": "skipped", "latencyMs": 0 }
   ]
 }
 ```
 
-- **Global `status`:** `down` if a **critical** probe (Supabase, Stripe, AWS Rekognition, Resend) is down; `degraded` if only a non-critical one (Inngest) is down; otherwise `ok`. The HTTP code is always `200` on a successful auth so the monitor can read the body — **alert on the `status` field, not the HTTP code**.
-- **Per-service `status`:** `ok` | `down` | `skipped`. Caveats where a true connectivity check isn't possible: `inngest` reports `ok`/`skipped` by **key presence** (the worker route requires a signed request, so an unsigned health GET would 401 in cloud mode); `sentry` by DSN presence (no read API); `google-places` is always `skipped` (the browser key is HTTP-referrer-restricted and can't be validated server-side).
+- **Global `status`:** `down` if a **critical** probe (Supabase, Stripe, AWS Rekognition, Resend) is down; `degraded` if only a non-critical one (Inngest, money-alerts) is down; otherwise `ok`. The HTTP code is always `200` on a successful auth so the monitor can read the body — **alert on the `status` field, not the HTTP code**.
+- **Per-service `status`:** `ok` | `down` | `skipped`. Caveats where a true connectivity check isn't possible: `inngest` reports `ok`/`skipped` by **key presence** (the worker route requires a signed request, so an unsigned health GET would 401 in cloud mode); `sentry` by DSN presence (no read API); `money-alerts` by whether **either** channel is live (see below); `google-places` is always `skipped` (the browser key is HTTP-referrer-restricted and can't be validated server-side).
+- **`money-alerts` (T-266):** answers *"would a money incident still reach a human?"* — `reportMoneyIncident`
+  has two optional channels (Sentry, `MONEY_ALERT_EMAIL`) and with **both** off every T-249 / T-253 / T-255
+  alert collapses to a `console.error` nobody reads, silently. `ok` when either is configured, `down` when
+  neither is **on the Vercel production deployment**, `skipped` everywhere else (dev, test and preview are
+  *supposed* to run without ops alerting). It is deliberately **non-critical**: `degraded` already triggers
+  the alert below, and reporting the site as `down` over unconfigured alerting is a false outage — the
+  fastest way to teach whoever is on call to ignore this endpoint. Production is detected from
+  `VERCEL_ENV`, never `NODE_ENV` (which is `'production'` on previews and in a local `pnpm build`).
+  ⚠️ The channels stay optional in `env.mjs` on purpose: *an optional alert recipient must never be able to
+  take the site down*. This check is the assertion that replaces that requirement — **if it reports `down`,
+  no money alert is reaching anyone and that is a P0**, not a config nit.
 - **Caching:** the probe sweep is cached for ~15s process-wide, so repeated monitor hits / dashboard reloads / a fail-open rate-limiter can't hammer the paid upstreams.
 - **Security:** probe error detail is **never** returned (it can carry secrets) — only `service`/`status`/`latencyMs`. `Cache-Control: no-store`.
 

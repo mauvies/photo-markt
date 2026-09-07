@@ -15,6 +15,7 @@ import { Resend } from 'resend';
 import { supabaseAdmin } from '@/database/supabase-admin';
 import { env } from '@/env.mjs';
 import { getRekognitionClient } from '@/lib/aws/rekognition-client';
+import { assessMoneyAlertChannels } from '@/lib/observability/money-alert-channels';
 import { stripe } from '@/lib/stripe/config';
 
 export type CheckStatus = 'ok' | 'down' | 'skipped';
@@ -125,6 +126,38 @@ export function defaultProbes(): Probe[] {
       service: 'sentry',
       critical: false,
       run: async () => (env.SENTRY_DSN ? 'ok' : 'skipped'),
+    },
+    {
+      // T-266: does a money incident still reach a human? `reportMoneyIncident`
+      // has two optional channels, and with both off every T-249/T-253/T-255
+      // alert degrades to a console line nobody reads — silently, because
+      // nothing else in the app changes. The `sentry` probe above reports one
+      // half; only this one asserts the DISJUNCTION, which is the property that
+      // actually matters.
+      //
+      // `critical: false` is deliberate and sufficient: the external monitor
+      // alerts on any status that is not `ok` (docs/monitoring.md), so
+      // `degraded` already pages. Marking it critical would report the SITE as
+      // down because its ops alerting is unconfigured — a false outage, and the
+      // fastest way to teach whoever is on call to ignore this endpoint.
+      //
+      // Off outside Vercel production, where having no ops alerting is correct:
+      // that case reports `skipped`, which never moves the global status.
+      service: 'money-alerts',
+      critical: false,
+      run: async () => {
+        const verdict = assessMoneyAlertChannels({
+          sentryDsn: env.SENTRY_DSN,
+          alertEmail: env.MONEY_ALERT_EMAIL,
+          vercelEnv: process.env.VERCEL_ENV,
+        });
+        if (verdict === 'unconfigured-in-production') {
+          // `runProbe` turns a rejection into `down` and never surfaces the
+          // detail; the message is for a local stack trace only.
+          throw new Error('no money-alert channel configured');
+        }
+        return verdict === 'live' ? 'ok' : 'skipped';
+      },
     },
     {
       // The browser key is HTTP-referrer-restricted, so it can't be validated

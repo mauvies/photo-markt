@@ -1,7 +1,7 @@
 # T-266 · El canal de alertas de dinero es opcional, no verificado, y degrada en silencio
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** normal  (observabilidad; no toca dinero directamente)
 - **Blockers:** ninguno
 - **Rama:** `chore/assert-money-alert-channels`  (tipo = chore)
