@@ -1,7 +1,7 @@
 # T-221 · `/api/thumb` sin `maxDuration` ni rate limit
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** normal
 - **Blockers:** ninguno
 - **Rama:** `fix/thumb-route-limits`  (tipo = fix)

@@ -9,12 +9,14 @@
  *   - Path traversal / invalid path → 400
  *   - Path without 'thumbs' segment → 400
  *   - Path with wrong final segment → 400
+ *   - T-221: over the per-IP hourly cap → 429 with Retry-After, never cached
  */
 
 import { NextRequest } from 'next/server';
 import sharp from 'sharp';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GET } from '@/app/api/thumb/[...path]/route';
+import { computeWindow } from '@/lib/rate-limit';
 import {
   createServiceClient,
   LOCAL_SERVICE_ROLE_KEY,
@@ -37,8 +39,12 @@ vi.mock('next/cache', () => ({
 const BUCKET = 'photos';
 const TEST_THUMB_PATH = 'test-user/test-event/thumbs/test-photo/small.webp';
 
-async function makeRequest(pathSegments: string[]) {
-  const req = new NextRequest(`http://localhost/api/thumb/${pathSegments.join('/')}`);
+// A fresh IP per request keeps each test in its own rate-limit bucket, so they
+// don't consume one another's budget (buckets persist in the local DB).
+async function makeRequest(pathSegments: string[], ip = crypto.randomUUID()) {
+  const req = new NextRequest(`http://localhost/api/thumb/${pathSegments.join('/')}`, {
+    headers: { 'x-real-ip': ip },
+  });
   return GET(req, { params: Promise.resolve({ path: pathSegments }) });
 }
 
@@ -117,5 +123,49 @@ describe('/api/thumb route', () => {
   it('returns 400 for a non-webp final segment', async () => {
     const res = await makeRequest(['test-user', 'test-event', 'thumbs', 'uuid', 'original.jpg']);
     expect(res.status).toBe(400);
+  });
+
+  describe('per-IP rate limit (T-221)', () => {
+    // Mirrors the watermark suite: `THUMB_RATE_LIMIT.limit` is module-private,
+    // so the cap is restated here — a change to it must be a deliberate edit in
+    // both places.
+    const LIMIT = 6000;
+
+    // Freeze the clock so the window the seed writes and the one the route
+    // computes are identical — otherwise a seed + request straddling a
+    // top-of-hour boundary would land in different windows and flake.
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-07-10T12:30:00.000Z'));
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    async function seedBucket(ip: string, count: number) {
+      const { start } = computeWindow(Date.now(), 3600);
+      await createServiceClient()
+        .from('rate_limit_buckets')
+        .insert({ bucket_key: `thumb:${ip}`, window_start: start.toISOString(), count });
+    }
+
+    it('answers 429 with Retry-After (never cached) once over the cap', async () => {
+      const ip = crypto.randomUUID();
+      await seedBucket(ip, LIMIT); // route increments to LIMIT+1 → over the cap
+
+      const res = await makeRequest(TEST_THUMB_PATH.split('/'), ip);
+
+      expect(res.status).toBe(429);
+      expect(Number(res.headers.get('retry-after'))).toBeGreaterThan(0);
+      expect(res.headers.get('cache-control') ?? '').toContain('no-store');
+    });
+
+    it('serves normally while under the per-IP cap', async () => {
+      const ip = crypto.randomUUID();
+      await seedBucket(ip, LIMIT - 1); // route increments to LIMIT → still within
+
+      const res = await makeRequest(TEST_THUMB_PATH.split('/'), ip);
+      expect(res.status).toBe(200);
+    });
   });
 });

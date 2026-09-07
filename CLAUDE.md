@@ -1277,6 +1277,17 @@ in sync.
   `photos`/`events` is itself subject to those tables' owner-only policies. That is why `orders` uses
   the `order_has_photographer_items` SECURITY DEFINER helper for its photographer branch — a plain
   nested `EXISTS` could not express it.
+- ⚠️ **Every route under `src/app/api/` must be declared in
+  `test/unit/api/byte-route-limits-inventory.test.ts` (T-221)** as `bytes` or `exempt`, with a reason.
+  A **byte route** — one that streams stored objects out of the private bucket on a cache miss
+  (`thumb`, `watermark`, both download ZIPs) — must carry **both** `maxDuration` and a `rateLimit`
+  keyed on `getClientIp`. `/api/thumb` had neither for two releases *because its sibling had both*:
+  the fix is not the pair of exports, it is the inventory that makes the next byte route declare
+  itself. ⚠️ **An unguessable UUID path is not a rate limit** — thumb URLs carry a `?v=` cache-buster
+  and the CDN keys on the query string, so one leaked path replays into unbounded Supabase egress.
+  Over the cap thumb answers **429, never its fail-closed 404** (which means "no such thumbnail" and
+  would hide the throttle from the logs), `no-store` so the CDN never pins it. The webhook's
+  exemption is deliberate: throttling Stripe drops a money event.
 - Tables with no public access pattern: enable RLS with no policies, use `supabaseAdmin` only — see
   `admin_users` and `rate_limit_buckets`
 - Redirect destinations from user input must go through `safeNext()`
