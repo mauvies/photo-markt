@@ -388,7 +388,14 @@ are sent per search and never stored, and the live per-event gating fields (`ai_
 `bucket_key, window_start, count`
 - Service-role-only (RLS enabled, no policies). Backs `src/lib/rate-limit.ts`. Atomic increments via the
   `increment_rate_limit_bucket` `SECURITY DEFINER` function — EXECUTE explicitly revoked from `anon` and
-  `authenticated`. One row per `(bucket_key, window_start)`; no automatic cleanup yet
+  `authenticated`. One row per `(bucket_key, window_start)`.
+- **Purged hourly by `cleanup-rate-limit-buckets` (T-218, cron `20`)**: rows whose window started more
+  than `2 × MAX_RATE_LIMIT_WINDOW_SEC` (48 h) ago go, in bounded batches (1000 × 50 per tick, `truncated`
+  reported when the valve trips). ⚠️ **`MAX_RATE_LIMIT_WINDOW_SEC` (`src/lib/rate-limit.ts`, 24 h) is a
+  CONTRACT, not documentation** — `computeWindow` throws on a wider window, because a limiter the purge
+  cuts through restarts its counter at 1 and is bypassed silently. Need a longer window? Raise the
+  constant; the retention follows. The purge matters because `rateLimit` **fails open**: a degraded
+  table switches every throttle off at the moment traffic arrives.
 
 ## The money path — `payouts`, orders, clawbacks
 
@@ -1078,9 +1085,9 @@ path (removed in `20260518000000_drop_legacy_ai_schema.sql`).
   - A **1-hour staleness gate** on `events.updated_at` / `photos.created_at` keeps it from clobbering live
     re-indexes; the T-092 ready-guard stops a re-emit from re-baking an already-`ready` thumbnail.
 - **Worker route:** all Inngest functions are registered at `/src/app/api/inngest/route.ts`.
-- ⚠️ **Cron slots are deliberately offset** so the four never contend: `0,30` storage cleanup · `15,45`
-  indexing reconciliation · `10,40` payout retries · `25,55` order-payout reconciliation (T-255).
-  **Pick a fifth slot for any new cron.**
+- ⚠️ **Cron slots are deliberately offset** so the five never contend: `0,30` storage cleanup · `15,45`
+  indexing reconciliation · `10,40` payout retries · `25,55` order-payout reconciliation (T-255) ·
+  `20` (hourly) rate-limit bucket purge (T-218). **Pick a sixth slot for any new cron.**
   ⚠️ `retry-pending-payouts` is **one** function with a cron trigger *and* a `payouts.retry-requested` event
   trigger — Inngest scopes `concurrency` per function id, so splitting it into two registrations would give
   two independent limits and allow concurrent payout runs for the same photographer.

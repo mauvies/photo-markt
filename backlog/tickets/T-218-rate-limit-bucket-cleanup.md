@@ -1,7 +1,7 @@
 # T-218 · `rate_limit_buckets` crece sin límite
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** doing
 - **Riesgo:** normal  (BD)
 - **Blockers:** ninguno
 - **Rama:** `chore/rate-limit-bucket-cleanup`  (tipo = chore)

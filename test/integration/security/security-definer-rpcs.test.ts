@@ -66,6 +66,10 @@ const EXPECTED_EXPOSURE: Record<string, { anon: boolean; authenticated: boolean;
   // 20260514000001 and are the control case proving the mechanism works.
   increment_rate_limit_bucket: { anon: false, authenticated: false, why: 'service-role only' },
   increment_rate_limit_bucket_by: { anon: false, authenticated: false, why: 'service-role only' },
+  // Bounded purge of expired buckets (T-218), called by the hourly cron. Same
+  // posture: reachable from the API roles it would let anyone wipe a live
+  // counter — a rate limit reset on demand.
+  purge_rate_limit_buckets: { anon: false, authenticated: false, why: 'service-role only' },
 
   // Reversal arithmetic on `payouts.reversed_amount_cents` (T-260). Service-role
   // only for the same reason as the rate-limit counters, but with more at stake:

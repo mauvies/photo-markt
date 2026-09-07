@@ -7,6 +7,21 @@ export type RateLimitResult = {
   resetAt: Date;
 };
 
+/**
+ * The longest fixed window any limiter in the app may use (24 h — the
+ * face-search daily cost tiers and the once-a-day money-alert claims).
+ *
+ * This is not documentation, it is the contract the purge cron relies on
+ * (T-218): `cleanup-rate-limit-buckets` deletes every bucket whose window
+ * started more than `2 × MAX_RATE_LIMIT_WINDOW_SEC` ago. A limiter with a
+ * longer window would have its live counter deleted mid-window — the count
+ * restarts at 1 and the limit is silently bypassed. So `rateLimit` and
+ * `rateLimitCost` refuse a wider window up front, loudly, instead of letting
+ * the purge fail it open later. Raising this constant raises the retention
+ * with it; nothing else needs to move.
+ */
+export const MAX_RATE_LIMIT_WINDOW_SEC = 24 * 60 * 60;
+
 export type RateLimitConfig = {
   /**
    * Identity-scoped key. Compose action and identity, e.g.
@@ -39,8 +54,22 @@ export type RateLimitCostBackend = (
   amount: number,
 ) => Promise<number>;
 
-/** Pure: compute the fixed window aligned to epoch for a given (now, size). */
+/**
+ * Pure: compute the fixed window aligned to epoch for a given (now, size).
+ *
+ * Throws on a window wider than `MAX_RATE_LIMIT_WINDOW_SEC` — a programming
+ * error, not a runtime condition, so it is deliberately NOT covered by the
+ * fail-open in `rateLimit`: every call site runs in the integration suite and
+ * a misconfigured limiter must fail the build, not quietly lose its counter to
+ * the purge cron in production (T-218).
+ */
 export function computeWindow(nowMs: number, windowSec: number): { start: Date; resetAt: Date } {
+  if (windowSec > MAX_RATE_LIMIT_WINDOW_SEC) {
+    throw new Error(
+      `rate-limit window of ${windowSec}s exceeds MAX_RATE_LIMIT_WINDOW_SEC (${MAX_RATE_LIMIT_WINDOW_SEC}s); ` +
+        'the purge cron would delete its bucket mid-window — raise the constant or shorten the window',
+    );
+  }
   const sizeMs = windowSec * 1000;
   const startMs = Math.floor(nowMs / sizeMs) * sizeMs;
   return { start: new Date(startMs), resetAt: new Date(startMs + sizeMs) };
