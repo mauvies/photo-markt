@@ -1,12 +1,12 @@
 # T-218 · `rate_limit_buckets` crece sin límite
 
 - **Prioridad:** P2
-- **Estado:** todo
+- **Estado:** done
 - **Riesgo:** normal  (BD)
 - **Blockers:** ninguno
 - **Rama:** `chore/rate-limit-bucket-cleanup`  (tipo = chore)
 - **OpenSpec change:** —
-- **PR:** —
+- **PR:** #330
 
 ## Requerimiento
 
@@ -23,11 +23,11 @@ cerrado, así que ese degrada a "temporalmente no disponible" en vez de destapar
 
 ## Criterio de aceptación (Definition of Done)
 
-- [ ] Cron de Inngest que borra filas con `window_start` anterior a la ventana más larga en uso × 2
-- [ ] El slot del cron no contiende con los existentes (`0,30` limpieza de storage, `15,45` reconciliación)
-- [ ] Índice sobre `window_start` si el plan de borrado lo requiere
-- [ ] Test de integración: las filas antiguas se borran, la ventana vigente sobrevive
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] Cron de Inngest que borra filas con `window_start` anterior a la ventana más larga en uso × 2
+- [x] El slot del cron no contiende con los existentes (`0,30` limpieza de storage, `15,45` reconciliación)
+- [x] Índice sobre `window_start` si el plan de borrado lo requiere
+- [x] Test de integración: las filas antiguas se borran, la ventana vigente sobrevive
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
 

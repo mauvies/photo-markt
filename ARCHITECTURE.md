@@ -332,7 +332,9 @@ erDiagram
   in-app tagging; talent side for "my photos" view). Composite-unique on
   `(photo_id, talent_user_id)`.
 - `rate_limit_buckets` — fixed-window counter table backing `src/lib/rate-limit.ts`.
-  Composite PK `(bucket_key, window_start)`. Service-role-only access.
+  Composite PK `(bucket_key, window_start)`. Service-role-only access. Purged hourly by
+  the `cleanup-rate-limit-buckets` Inngest cron (T-218) — rows older than twice the
+  longest permitted window (`MAX_RATE_LIMIT_WINDOW_SEC`, enforced at every call).
 - `photo_faces` — one row per face AWS Rekognition indexes in a photo
   (`aws_face_id`, `aws_collection_id`, `confidence`, `bounding_box`). Unique on
   `(photo_id, aws_face_id)`. Talent selfie search maps Rekognition face IDs back

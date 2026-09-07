@@ -33,6 +33,8 @@ export * from './photographers';
 export * from './photos';
 // Re-export profile queries
 export * from './profiles';
+// Re-export rate-limit bucket maintenance (T-218)
+export * from './rate-limit-buckets';
 // Re-export AWS Rekognition queries (event AI state + photo_faces)
 export * from './rekognition';
 // Re-export sales queries
