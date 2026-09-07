@@ -593,6 +593,16 @@ The reporter changes **nothing** about the flow: same `continue`, same 200. Two 
 throws**, and it **never carries buyer PII** (ids and amounts only; `sendDefaultPii: false` globally).
 Channels: `console.error` + Sentry always (fingerprinted on `kind`), plus an ops email when
 `MONEY_ALERT_EMAIL` is set.
+- ⚠️ **Both channels are optional, so both can be off at once — and then the reporter is a `console.error`
+  (T-266).** That stays true on purpose: `env.mjs` refuses to make an alert recipient able to take the site
+  down. The assertion is a readiness check instead — the **`money-alerts`** probe
+  (`src/lib/health/probes.ts`) reports `down` when **neither** channel is configured **on Vercel
+  production**, which the external monitor already alerts on (it pages on any status that is not `ok`, so
+  `critical: false` is enough and avoids claiming a false outage). `skipped` in dev/test/preview, where
+  running without alerting is correct. Production is detected from **`VERCEL_ENV`, never `NODE_ENV`** —
+  the latter is `'production'` on previews and in a local `pnpm build`. The "is it configured" predicate is
+  shared with the sender (`src/lib/observability/money-alert-channels.ts`): a probe that disagrees with the
+  sender about what counts as configured would green-light a channel that never sends.
 
 - Only the **email** is throttled (per-process 60 s), keyed **per `kind`** (a payout alert must not silence a
   dispute alert) and **released when the send fails**. Bounded by 5 s — it rides inside the webhook.
@@ -1171,6 +1181,10 @@ FACE_SEARCH_ALERT_EMAIL=             # 50%-of-global alert recipient; absent ⇒
 
 # Money incidents (T-249, T-215)
 MONEY_ALERT_EMAIL=                   # ops recipient for reportMoneyIncident; absent ⇒ log + Sentry only
+                                     # ⚠️ absent AND no SENTRY_DSN ⇒ every money incident is a console
+                                     # line only. Optional by design (an alert recipient must never be
+                                     # able to 500 the app), so the assertion lives in the `money-alerts`
+                                     # readiness probe instead — `down` there is a P0 (T-266)
 
 # Reveal gate (T-177)
 REVEAL_TOKEN_SECRET=                 # optional; falls back to the service-role key

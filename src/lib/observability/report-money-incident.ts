@@ -1,4 +1,5 @@
 import { env } from '@/env.mjs';
+import { resolveMoneyAlertRecipient } from './money-alert-channels';
 
 /**
  * Report something that went wrong on a money path (T-215, T-249).
@@ -316,8 +317,10 @@ async function sendEmailAlert(
   context: MoneyIncident['context'],
   cause: unknown,
 ): Promise<void> {
-  const to = env.MONEY_ALERT_EMAIL;
-  // `''` is a configured-but-empty value (see env.mjs) and means "not set".
+  // Shared with the readiness probe (T-266) so the check and the sender can
+  // never disagree about what "configured" means. `''` is a configured-but-empty
+  // value (see env.mjs) and means "not set".
+  const to = resolveMoneyAlertRecipient(env.MONEY_ALERT_EMAIL);
   if (!to) return;
 
   const now = Date.now();
