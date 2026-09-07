@@ -37,19 +37,14 @@ import { queryJson } from '../../helpers/db-catalog';
 type Posture = 'policies-tested' | 'total-denial' | 'view-declares-security-invoker';
 
 /**
- * The only `profiles` columns `anon` may read (T-227).
+ * The only columns the public projection exposes (T-268).
  *
- * `photographer_profiles_public_select` admits every photographer ROW, and RLS
- * cannot restrict columns — so this grant is what keeps the postal address, legal
- * name, Stripe ids and payout details off the public internet. Derived from what
- * the code actually reads as anon: `getPhotographerBySlug`, `getTopPhotographers`,
- * the event-search photographer filter, plus `active_role` because Postgres
- * requires SELECT on a column to filter by it.
- *
- * ⚠️ Adding a column to `profiles` does NOT expose it. Adding it HERE does — and
- * to the migration and to `supabase/seed.sql`, which this test keeps in step.
+ * ⚠️ `public_profiles` runs with OWNER rights (no `security_invoker`), which is
+ * what lets it project rows the self-only policy on `profiles` hides. That makes
+ * this list the security boundary: a private column added to the view is world
+ * readable the moment it is added, with no policy left to catch it.
  */
-const ANON_READABLE_PROFILE_COLUMNS = [
+const PUBLIC_PROFILE_COLUMNS = [
   'active_role',
   'avatar_url',
   'bio',
@@ -59,6 +54,32 @@ const ANON_READABLE_PROFILE_COLUMNS = [
   'display_name',
   'id',
   'slug',
+  'username',
+] as const;
+
+/**
+ * The only `profiles` columns a signed-in user may write (T-268).
+ *
+ * `profiles_self_update` restricts the ROW, not the columns, so without this
+ * grant a photographer could repoint their own `stripe_connect_account_id` — the
+ * transfer destination — straight through PostgREST. Mirrored at runtime by
+ * `USER_WRITABLE_PROFILE_COLUMNS` in `src/database/queries/profiles.ts`.
+ */
+const USER_WRITABLE_PROFILE_COLUMNS = [
+  'active_role',
+  'address_line1',
+  'address_line2',
+  'avatar_url',
+  'bio',
+  'city',
+  'country_code',
+  'display_name',
+  'full_name',
+  'is_payout_profile_complete',
+  'postal_code',
+  'slug',
+  'state_or_region',
+  'updated_at',
   'username',
 ] as const;
 
@@ -95,10 +116,16 @@ const EXPECTED_POSTURE: Record<string, { posture: Posture; why: string }> = {
     why: 'internal queue for the storage-cleanup cron',
   },
 
+  // ── The public projection (T-268) ────────────────────────────────────────
+  public_profiles: {
+    posture: 'view-declares-security-invoker',
+    why: 'T-268: the ONLY public projection of profiles, owner rights ON PURPOSE (profiles is self-only, so an invoker view would return nothing). Its column list is the allow-list — see the column test below',
+  },
+
   // ── Policy-protected, with behavioural tests ─────────────────────────────
   profiles: {
     posture: 'policies-tested',
-    why: 'public photographer read is column-restricted for anon (T-227) — see profiles-rls.test.ts',
+    why: 'SELF-ONLY since T-268 — no policy admits another row; public data is served by the public_profiles view, and writes are column-granted',
   },
   events: {
     posture: 'policies-tested',
@@ -249,33 +276,53 @@ describe('RLS table inventory — every public table declares a tested posture',
     expect(truncatable).toEqual([]);
   });
 
-  it('the anon column allow-list on profiles is exactly what was declared', async () => {
-    // ⚠️ The list lives in THREE places — the migration, `supabase/seed.sql` (whose
-    // blanket grant runs after migrations and would otherwise restore table-wide
-    // SELECT), and the public-column constant in `profiles-rls.test.ts`. Prose
-    // saying "keep these identical" is not a mechanism; this is.
-    //
-    // Reading it from the catalog means the local DB — migrations THEN seed — is
-    // what gets compared, so a seed that forgets a column the migration granted
-    // shows up here instead of as a silent local/production divergence.
-    const granted = await queryJson<string[]>(`
-      select coalesce(json_agg(column_name order by column_name), '[]')
-      from information_schema.column_privileges
-      where table_schema = 'public' and table_name = 'profiles'
-        and grantee = 'anon' and privilege_type = 'SELECT';`);
+  it('the public projection exposes exactly the declared columns', async () => {
+    // ⚠️ The list lives in the migration (the view's select), `supabase/seed.sql`
+    // and this constant. Prose saying "keep these identical" is not a mechanism;
+    // reading it back from the catalog is. The local DB is migrations THEN seed,
+    // so a seed that drifts shows up here rather than as a silent local/prod
+    // divergence.
+    const columns = await queryJson<string[]>(`
+      select coalesce(json_agg(attname order by attname), '[]')
+      from pg_attribute
+      where attrelid = 'public.public_profiles'::regclass and attnum > 0 and not attisdropped;`);
 
-    expect(granted).toEqual([...ANON_READABLE_PROFILE_COLUMNS].sort());
+    expect(columns).toEqual([...PUBLIC_PROFILE_COLUMNS].sort());
   });
 
-  it('anon holds no table-wide SELECT on profiles', async () => {
-    // The column grants above are only a restriction while the table-level grant
-    // is gone: a later `grant select on all tables in schema public to anon`
-    // would silently re-open every withheld column, and the column list would
-    // still look right.
-    const tableWide = await queryJson<boolean>(
-      `select to_json(has_table_privilege('anon', 'public.profiles', 'SELECT'));`,
-    );
+  it('anon holds no privilege on profiles at all', async () => {
+    // T-268 retired T-227's column grants: anon reads the view, so it has no
+    // business on the table. A later `grant … on all tables to anon` would
+    // re-open every private column, and this is what catches it.
+    const privileges = await queryJson<string[]>(`
+      select coalesce(json_agg(distinct privilege_type order by privilege_type), '[]')
+      from information_schema.table_privileges
+      where table_schema = 'public' and table_name = 'profiles' and grantee = 'anon';`);
 
-    expect(tableWide).toBe(false);
+    expect(privileges).toEqual([]);
+  });
+
+  it('a signed-in user may write only the editable profile columns', async () => {
+    const writable = await queryJson<string[]>(`
+      select coalesce(json_agg(distinct column_name order by column_name), '[]')
+      from information_schema.column_privileges
+      where table_schema = 'public' and table_name = 'profiles'
+        and grantee = 'authenticated' and privilege_type = 'UPDATE';`);
+
+    expect(writable).toEqual([...USER_WRITABLE_PROFILE_COLUMNS].sort());
+  });
+
+  it('the payout destination columns are writable by nobody but the service role', async () => {
+    // Stated as the property rather than as the absence of a grant, so it holds
+    // however the allow-list above is edited.
+    const grantees = await queryJson<string[]>(`
+      select coalesce(json_agg(distinct grantee order by grantee), '[]')
+      from information_schema.column_privileges
+      where table_schema = 'public' and table_name = 'profiles'
+        and column_name in ('stripe_connect_account_id', 'stripe_connect_status')
+        and privilege_type in ('INSERT', 'UPDATE')
+        and grantee in ('anon', 'authenticated');`);
+
+    expect(grantees).toEqual([]);
   });
 });

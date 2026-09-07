@@ -154,6 +154,12 @@ export async function searchPhotographersAction(
   // Find profiles matching the query that have at least one public event.
   // We don't restrict by active_role because a user may currently be in
   // TALENT mode but still have photographer events.
+  //
+  // ⚠️ Deliberately still on `profiles` with the service role, NOT the
+  // `public_profiles` view T-268 introduced: that view filters
+  // `active_role = 'PHOTOGRAPHER'`, which is exactly the restriction the comment
+  // above says this search must not apply. The columns read here are the public
+  // ones either way.
   const { data: profileMatches } = await supabaseAdmin
     .from('profiles')
     .select('id, username, slug, display_name, avatar_url')

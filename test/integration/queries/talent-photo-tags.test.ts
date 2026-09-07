@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   getTaggedPhotosCountForTalent,
   getTaggedPhotosForTalent,
+  getTagsForPhotos,
   isPhotoTaggedForTalent,
   tagPhotoForTalent,
   tagPhotosForTalent,
@@ -14,6 +15,7 @@ import {
   createTestPhoto,
   createTestUser,
   resetDatabase,
+  signInAs,
 } from '../../helpers/supabase-test-client';
 
 async function setupTagFixtures() {
@@ -149,5 +151,44 @@ describe('database/queries/talent-photo-tags', () => {
       expect(tagged.map((t) => t.photo_id)).toEqual([livePhoto.id]);
       expect(await getTaggedPhotosCountForTalent(sb, talent.id)).toBe(1);
     });
+  });
+});
+
+/**
+ * T-268 regression: `profiles` became SELF-ONLY, so any read of somebody else's
+ * profile row on the CALLER's client returns `[]` with no error — a silent blank
+ * rather than a failure. These enrichment lookups are always for other people
+ * (the tagged talent, a contributor, the organizer who invited you), so they run
+ * on `supabaseAdmin` inside the query layer.
+ *
+ * Without that, the UI silently loses every name and nothing fails.
+ */
+describe('profile enrichment survives the self-only profiles policy (T-268)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+  });
+
+  it('getTagsForPhotos returns the tagged talent name on the OWNER client', async () => {
+    const photographer = await createTestUser('PHOTOGRAPHER');
+    const talent = await createTestUser('TALENT', { display_name: 'Tagged Athlete' });
+    const event = await createTestEvent(photographer.id);
+    const photo = await createTestPhoto(event.id, { user_id: photographer.id });
+
+    await createServiceClient().from('talent_photo_tags').insert({
+      photo_id: photo.id,
+      talent_user_id: talent.id,
+      tagged_by_user_id: photographer.id,
+    });
+
+    // The photographer's own client — exactly what `events/[id]/actions.ts` passes.
+    const ownerClient = await signInAs(photographer.email);
+    const tags = await getTagsForPhotos(ownerClient, [photo.id]);
+
+    expect(tags[photo.id]).toHaveLength(1);
+    // The assertion that matters is the NAME, not the row. Before the fix the
+    // profile lookup came back empty and these fell through to the `'unknown'` /
+    // `null` fallbacks — a blank chip, with nothing failing anywhere.
+    expect(tags[photo.id]?.[0]?.talent_display_name).toBe('Tagged Athlete');
+    expect(tags[photo.id]?.[0]?.talent_username).not.toBe('unknown');
   });
 });

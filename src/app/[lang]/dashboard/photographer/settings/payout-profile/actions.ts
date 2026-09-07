@@ -8,7 +8,9 @@ import {
   updateProfile,
   updateProfileStripeConnect,
 } from '@/database/queries/profiles';
+import type { SupabaseServerClient } from '@/database/queries/types';
 import { createClient } from '@/database/server';
+import { supabaseAdmin } from '@/database/supabase-admin';
 import { env } from '@/env.mjs';
 import { createAccountLink, createExpressAccount } from '@/lib/stripe/connect';
 
@@ -107,7 +109,12 @@ export async function connectStripeAccountAction(lang: string): Promise<void> {
     const country = profile?.country_code ?? 'US';
 
     accountId = await createExpressAccount({ email, country });
-    await updateProfileStripeConnect(supabase, user.id, {
+    // ⚠️ `supabaseAdmin`, not the caller's client (T-268). `stripe_connect_*` is
+    // system-managed: `authenticated` no longer holds UPDATE on those columns,
+    // precisely so a photographer cannot repoint their own payout destination
+    // through PostgREST. The value here comes from Stripe's answer, never from
+    // user input, and it writes only the caller's own row.
+    await updateProfileStripeConnect(supabaseAdmin as unknown as SupabaseServerClient, user.id, {
       stripe_connect_account_id: accountId,
       stripe_connect_status: 'pending',
     });

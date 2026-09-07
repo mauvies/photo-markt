@@ -40,8 +40,13 @@ export async function getPhotographerBySlug(
   slug: string,
 ): Promise<PhotographerWithStats | null> {
   // Try slug column first, then fall back to username (handles profiles where slug is not set).
+  //
+  // ⚠️ Reads `public_profiles`, not `profiles` (T-268). `profiles` is self-only —
+  // no policy admits another user's row — so this is the ONLY way to serve a
+  // public profile page without the service role. The view's column list is the
+  // allow-list; a private column simply is not in it.
   const { data, error } = await supabase
-    .from('profiles')
+    .from('public_profiles')
     .select('id, username, slug, display_name, bio, avatar_url, city, country_code, created_at')
     .or(`slug.eq.${slug},username.eq.${slug}`)
     .maybeSingle();
@@ -91,8 +96,11 @@ export async function searchPhotographers(
   if (!query.trim()) return [];
 
   const term = `%${query.trim()}%`;
+  // ⚠️ `public_profiles` (T-268). This is the one public read that runs on the
+  // CALLER's client rather than the service role — the collaborator-invite dialog
+  // — so with `profiles` self-only it would return nothing but the caller.
   const { data: profiles, error } = await supabase
-    .from('profiles')
+    .from('public_profiles')
     .select('id, username, slug, display_name, avatar_url')
     .eq('active_role', 'PHOTOGRAPHER')
     .or(`username.ilike.${term},display_name.ilike.${term}`)
@@ -131,9 +139,9 @@ export async function getTopPhotographers(
   supabase: SupabaseServerClient,
   limit = 50,
 ): Promise<{ slug: string }[]> {
-  // Fetch photographers that have a slug set
+  // Fetch photographers that have a slug set. `public_profiles` (T-268).
   const { data: profiles } = await supabase
-    .from('profiles')
+    .from('public_profiles')
     .select('id, slug, username')
     .eq('active_role', 'PHOTOGRAPHER')
     .not('slug', 'is', null)

@@ -5,8 +5,19 @@
  * Accepted rows grant upload permission for the event.
  */
 
+import { supabaseAdmin } from '@/database/supabase-admin';
 import type { SupabaseServerClient } from './types';
 import { getErrorMessage } from './types';
+
+/**
+ * Read profiles for display-name enrichment (T-268).
+ *
+ * `profiles` is self-only, so these lookups — always for OTHER people's rows —
+ * must not run on the caller's client. Precedent: `queries/sales.ts`.
+ */
+function profileReader(): SupabaseServerClient {
+  return supabaseAdmin as unknown as SupabaseServerClient;
+}
 
 // PostgREST returns this when the schema cache hasn't been reloaded after a
 // migration adds the table. We treat it as "feature not yet provisioned" and
@@ -178,7 +189,14 @@ export async function getEventPhotographers(
   if (rows.length === 0) return [];
 
   const photographerIds = Array.from(new Set(rows.map((r) => r.photographer_id)));
-  const { data: profiles, error: profilesError } = await supabase
+  // ⚠️ `supabaseAdmin`, not the caller's client (T-268). `profiles` is SELF-ONLY —
+  // no policy admits another user's row — so a user-scoped read of somebody
+  // else's profile now returns [] with NO error, which would silently blank
+  // these names in the UI. This is a display-name lookup over ids the caller was
+  // already authorized to see, and it selects public columns only.
+  // `public_profiles` is NOT usable here: it filters `active_role =
+  // 'PHOTOGRAPHER'`, and these subjects may be in TALENT mode.
+  const { data: profiles, error: profilesError } = await profileReader()
     .from('profiles')
     .select('id, username, slug, display_name, avatar_url')
     .in('id', photographerIds);
@@ -241,7 +259,14 @@ export async function getPendingInvitationsForPhotographer(
   }
 
   const ownerIds = Array.from(new Set((events ?? []).map((e) => e.user_id as string)));
-  const { data: organizers, error: organizersError } = await supabase
+  // ⚠️ `supabaseAdmin`, not the caller's client (T-268). `profiles` is SELF-ONLY —
+  // no policy admits another user's row — so a user-scoped read of somebody
+  // else's profile now returns [] with NO error, which would silently blank
+  // these names in the UI. This is a display-name lookup over ids the caller was
+  // already authorized to see, and it selects public columns only.
+  // `public_profiles` is NOT usable here: it filters `active_role =
+  // 'PHOTOGRAPHER'`, and these subjects may be in TALENT mode.
+  const { data: organizers, error: organizersError } = await profileReader()
     .from('profiles')
     .select('id, display_name, username, slug')
     .in('id', ownerIds);

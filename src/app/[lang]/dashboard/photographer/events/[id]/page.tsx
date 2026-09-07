@@ -253,7 +253,12 @@ export default async function EventDetailPage({
   if (isPricedEvent(event.price_per_photo)) {
     const connect = await getProfileStripeConnect(supabase, user.id);
     const connectStatus = await reconcileAndPersistConnectStatus({
-      client: supabase,
+      // ⚠️ `supabaseAdmin` (T-268): the heal writes `stripe_connect_status`,
+      // which `authenticated` no longer holds UPDATE on. The value comes from
+      // Stripe, not from user input, and it touches only this user's own row —
+      // and the write sits inside a `.catch()` that only logs, so on the user's
+      // client it would fail SILENTLY and the cached status would never refresh.
+      client: adminClient,
       userId: user.id,
       accountId: connect?.stripe_connect_account_id,
       storedStatus: connect?.stripe_connect_status ?? 'not_connected',

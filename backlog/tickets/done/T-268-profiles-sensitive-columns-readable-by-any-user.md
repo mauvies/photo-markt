@@ -1,12 +1,12 @@
 # T-268 · `profiles`: cualquier usuario logueado lee los datos sensibles de cualquier fotógrafo, y puede reescribir los suyos
 
 - **Prioridad:** P1
-- **Estado:** todo
+- **Estado:** done
 - **Riesgo:** alto  (seguridad · BD/migraciones)
 - **Blockers:** ninguno  (Dep T-227, ya mergeado)
 - **Rama:** `fix/profiles-private-columns`  (tipo = fix)
-- **OpenSpec change:** —
-- **PR:** —
+- **OpenSpec change:** `profiles-private-columns`
+- **PR:** #328
 
 ## Requerimiento
 
@@ -53,17 +53,17 @@ esquema, no un grant — por eso es un ticket con su propio plan mode.
 
 ## Criterio de aceptación (Definition of Done)
 
-- [ ] Un usuario autenticado **no** puede leer `full_name`, dirección, `stripe_*` ni `payout_*` de otro
-- [ ] Un usuario **no** puede escribir `stripe_*`, `payout_*` ni `is_payout_profile_complete`, ni
+- [x] Un usuario autenticado **no** puede leer `full_name`, dirección, `stripe_*` ni `payout_*` de otro
+- [x] Un usuario **no** puede escribir `stripe_*`, `payout_*` ni `is_payout_profile_complete`, ni
       siquiera en su propia fila (mover antes `updateProfileStripeConnect` a `supabaseAdmin`)
-- [ ] Un fotógrafo **sí** sigue leyendo y editando los suyos (ajustes, perfil de pagos)
-- [ ] El perfil público (`/photographer/[slug]`) y el buscador de fotógrafos siguen funcionando para
+- [x] Un fotógrafo **sí** sigue leyendo y editando los suyos (ajustes, perfil de pagos)
+- [x] El perfil público (`/photographer/[slug]`) y el buscador de fotógrafos siguen funcionando para
       `anon` y para `authenticated`
-- [ ] Actualizados **los dos** tests de brecha conocida de `profiles-rls.test.ts` (lectura ajena y
+- [x] Actualizados **los dos** tests de brecha conocida de `profiles-rls.test.ts` (lectura ajena y
       escritura propia) para afirmar las propiedades nuevas
-- [ ] `supabase/seed.sql` coherente con la migración (misma trampa que T-227: su grant en bloque corre
+- [x] `supabase/seed.sql` coherente con la migración (misma trampa que T-227: su grant en bloque corre
       después de las migraciones)
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` en verde
+- [x] `pnpm typecheck && pnpm lint && pnpm test` en verde
 
 ## Notas
 

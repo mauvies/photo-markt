@@ -441,8 +441,10 @@ export async function searchPublicEvents(
   let photographerUserIds: string[] | null = null;
   if (filters.photographerQuery?.trim()) {
     const term = `%${filters.photographerQuery.trim()}%`;
+    // ⚠️ `public_profiles` (T-268): `profiles` is self-only, so a search for
+    // OTHER people's names has to go through the public projection.
     const { data: profileData } = await supabase
-      .from('profiles')
+      .from('public_profiles')
       .select('id')
       .or(`username.ilike.${term},display_name.ilike.${term}`);
     photographerUserIds = (profileData ?? []).map((p: { id: string }) => p.id);

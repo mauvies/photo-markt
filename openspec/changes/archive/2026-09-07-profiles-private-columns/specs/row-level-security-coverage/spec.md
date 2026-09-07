@@ -1,73 +1,4 @@
-# row-level-security-coverage Specification
-
-## Purpose
-
-Every table in `public` grants all privileges to `anon` and `authenticated`, so RLS is the only thing
-between an unauthenticated request and the data. This capability makes that barrier measurable: each
-table declares the posture it is meant to have, the suite proves the barrier actually holds, and a
-table added without a declaration fails the build rather than quietly shipping untested.
-
-## Requirements
-
-### Requirement: Every table in `public` declares a tested RLS posture
-
-The system SHALL maintain an inventory test enumerating every table in the `public` schema from the
-live catalog and requiring each one to be declared, with a reason, as either **policy-protected** (it
-has policies and behavioural tests) or **total denial** (RLS enabled with no policies, service-role
-only).
-
-The inventory SHALL assert that nothing undeclared is present, rather than that everything declared
-exists, because the local schema and production have drifted before.
-
-#### Scenario: A new table is added without a declaration
-
-- **WHEN** a migration adds a table to `public` and the inventory allow-list is not updated
-- **THEN** the inventory test fails, naming the undeclared table
-
-#### Scenario: A table ships without RLS
-
-- **WHEN** any table in `public` has row-level security disabled
-- **THEN** the inventory test fails, independently of any allow-list
-
-#### Scenario: A policy is written as permissive-to-all
-
-- **WHEN** any policy's expression is a bare `true`
-- **THEN** the inventory test fails
-
-### Requirement: RLS is exercised from the perspectives it defends against
-
-For every policy-protected table, the system SHALL prove, using a client that carries the relevant
-identity rather than the service role, that an unauthenticated caller reads nothing it must not read
-and that an authenticated caller cannot read or write another user's rows.
-
-Seeding SHALL be done with the service role and verification SHALL be done with an anon or
-user-scoped client, since the service role bypasses RLS and would make such a test pass vacuously.
-Each area SHALL also assert a positive control: the legitimate path still works.
-
-#### Scenario: Another user's rows are invisible
-
-- **WHEN** a user reads a table containing another user's rows
-- **THEN** only their own rows come back
-
-#### Scenario: Writing another user's row is refused
-
-- **WHEN** a user attempts to insert, update or delete a row belonging to someone else
-- **THEN** the write is refused or matches nothing
-- **AND** re-reading with the service role shows the row unchanged
-
-#### Scenario: A table with RLS and no policies denies everyone
-
-- **WHEN** an anon or authenticated caller reads or writes a total-denial table, even a row keyed to
-  their own id
-- **THEN** they receive no rows and no write takes effect
-- **AND** the service role can still read and write it
-
-#### Scenario: Public visibility that is intentional is pinned
-
-- **WHEN** a policy deliberately exposes rows to unauthenticated callers — face and bib rows belonging
-  to a public, non-deleted event
-- **THEN** a test asserts both sides of that condition, so the exposure is a recorded decision rather
-  than a later discovery
+## MODIFIED Requirements
 
 ### Requirement: A public read policy exposes only the columns it means to
 
@@ -138,21 +69,7 @@ holds even if a grant is later relaxed.
   status against the payment processor
 - **THEN** the resulting status is still persisted
 
-### Requirement: The API roles hold no privilege that bypasses RLS
-
-The system SHALL NOT grant `TRUNCATE` to `anon` or `authenticated` on any table in `public`, because
-`TRUNCATE` is not subject to row-level security, and SHALL apply the same restriction to tables
-created later.
-
-#### Scenario: No API role can truncate
-
-- **WHEN** the inventory checks table privileges for `anon` and `authenticated`
-- **THEN** no table in `public` grants either role `TRUNCATE`
-
-#### Scenario: A future table does not re-arm it
-
-- **WHEN** a migration creates a new table in `public`
-- **THEN** it does not grant `TRUNCATE` to the API roles by default
+## ADDED Requirements
 
 ### Requirement: Dead profile columns are removed rather than protected
 
